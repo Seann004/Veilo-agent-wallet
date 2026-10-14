@@ -170,3 +170,6 @@ test-ledger/
 circuits/build/
 *.ptau
 *.zkey
+
+# Next.js regenerates this per machine
+next-env.d.ts

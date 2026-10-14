@@ -1,0 +1,43 @@
+{
+  "name": "veilo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=22.14.0 <23",
+    "pnpm": "10.34.6"
+  },
+  "scripts": {
+    "setup:local": "tsx scripts/setup-local.ts",
+    "dev": "tsx scripts/dev.ts",
+    "check": "pnpm run typecheck && pnpm run lint",
+    "typecheck": "tsc -p tsconfig.json --noEmit && pnpm -r --workspace-concurrency=4 run typecheck",
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run",
+    "test:circuits": "node scripts/not-implemented.mjs test:circuits T06",
+    "test:integration": "node scripts/not-implemented.mjs test:integration T15",
+    "deploy:devnet": "node scripts/not-implemented.mjs deploy:devnet T09",
+    "demo:seed": "node scripts/not-implemented.mjs demo:seed T10-T13",
+    "demo:run": "node scripts/not-implemented.mjs demo:run T15",
+    "evidence:export": "node scripts/not-implemented.mjs evidence:export T16",
+    "backup": "node scripts/not-implemented.mjs backup T15",
+    "restore": "node scripts/not-implemented.mjs restore T15",
+    "check:devnet": "tsx scripts/check-devnet.ts",
+    "toolchain:build": "node scripts/toolchain.mjs --build",
+    "tc": "node scripts/toolchain.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "22.20.5",
+    "@veilo/contracts": "workspace:*",
+    "concurrently": "10.0.6",
+    "eslint": "10.12.0",
+    "globals": "17.13.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.2",
+    "vite": "8.3.4",
+    "vitest": "5.0.4"
+  }
+}
