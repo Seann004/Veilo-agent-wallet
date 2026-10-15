@@ -6,6 +6,17 @@
     "allowJs": false,
     "plugins": [{ "name": "next" }]
   },
-  "include": ["app/**/*.ts", "app/**/*.tsx", "scripts/**/*.ts", "test/**/*.ts", "vitest.config.ts", "next.config.ts"],
+  "include": [
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "lib/**/*.ts",
+    "scripts/**/*.ts",
+    "test/**/*.ts",
+    "test/**/*.tsx",
+    "vitest.config.ts",
+    "next.config.ts"
+  ],
   "exclude": ["node_modules", ".next"]
 }

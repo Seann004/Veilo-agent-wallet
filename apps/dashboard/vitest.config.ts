@@ -4,6 +4,6 @@ export default defineProject({
   test: {
     name: "dashboard",
     environment: "node",
-    include: ["test/**/*.test.ts"],
+    include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
   },
 });
