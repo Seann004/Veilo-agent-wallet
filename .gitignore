@@ -173,3 +173,4 @@ circuits/build/
 
 # Next.js regenerates this per machine
 next-env.d.ts
+*funding*.json

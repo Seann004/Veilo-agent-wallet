@@ -2,6 +2,7 @@ packages:
   - apps/*
   - services/*
   - packages/*
+  - circuits
 
 # Native/install scripts are blocked unless listed here.
 onlyBuiltDependencies:

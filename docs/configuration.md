@@ -87,6 +87,33 @@ Relative paths resolve against the repository root.
 
 Every process serves `GET /health`.
 
+### Control service
+
+| Variable | Default | Description |
+|---|---|---|
+| `VEILO_OWNER_PUBKEY` | empty | Owner wallet address. When set, control seeds the workspace once with **draft** default policies (activation is an owner action). Owner login is unavailable until the workspace exists. |
+| `VEILO_DASHBOARD_ORIGIN` | `http://localhost:<DASHBOARD_PORT>` | Exact browser origin. Its host is bound into the sign-in challenge, and mutating owner requests from any other Origin are rejected. An `https:` origin enables the Secure cookie attribute. |
+
+Wallet note secrets and fresh-wallet keys use a separate SQLite file, `<VEILO_SECRETS_DIR>/wallet-secrets.sqlite`, which only the wallet service opens. The control ledger refuses to open it (role check) and refuses to live inside the secrets directory. The runner receives only `toRunnerConfig`: network, control URL, its own worker-credential path and planner model. Every path in `RUNNER_WITHHELD_ENV` is deleted from its environment: provider key, sponsor/funding/owner-secret key paths, other services' credentials, both database paths and the secrets directory.
+
+### Gateway service
+
+| Variable | Default | Description |
+|---|---|---|
+| `GATEWAY_IDENTITY` | `veilo-gateway-devnet` | Gateway identity: `resource.serviceName` in challenges and the required `aud` of usage permits. |
+| `GATEWAY_PUBLIC_ORIGIN` | `http://<bind>:<GATEWAY_PORT>` | Origin used in quote execute URLs and x402 resource URLs. |
+| `GATEWAY_MERCHANT_ADDRESS` | empty | Merchant wallet (`payTo`). The recipient ATA is derived from it and the pinned mint. Unset: x402 acceptance disabled. |
+| `GATEWAY_MERCHANT_ATA` | empty | Optional pin; must equal the derived ATA or acceptance stays disabled. |
+| `GATEWAY_FACILITATOR_FEE_PAYER` | empty | The only facilitator fee payer named in requirements; must be advertised for x402 v2 `exact` on the devnet CAIP-2 by `FACILITATOR_URL/supported`. |
+| `GATEWAY_QUOTE_TTL_SECONDS` | `600` | Quote lifetime (60-3600). |
+| `GATEWAY_PROVIDER_TIMEOUT_MS` | `60000` | Timeout of the single provider attempt; a timeout is recorded as uncertain and never retried. |
+| `GATEWAY_PRICING_MAX_AGE_SECONDS` | `21600` | Live pricing older than this disables dispatch. |
+| `GATEWAY_SETTLEMENT_WAIT_MS` | `40000` | How long one execute request waits for finality before returning 202. |
+| `USAGE_PERMIT_PUBLIC_KEY_PATH` | empty | PEM Ed25519 public key of the control service's usage-permit signer. Unset: prepaid usage disabled. |
+| `GATEWAY_PLANNING_CREDENTIAL_PATH` | empty | File holding the runner's planning bearer token (only its SHA-256 is kept in memory). |
+
+The deployment manifest may carry `{"gateway": {"merchantAddress", "merchantAta", "facilitatorFeePayer"}}`; when the manifest and the environment both set a value they must agree. The gateway keeps its own SQLite ledger at `GATEWAY_DATABASE_PATH`. Accounts are created with `pnpm --filter @veilo/gateway account:create -- --workspace <id> --out <token-file>`; the token is written to a new owner-only file and never printed.
+
 ### Diagnostics
 
 | Variable | Description |
