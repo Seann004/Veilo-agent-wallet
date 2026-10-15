@@ -174,3 +174,6 @@ circuits/build/
 # Next.js regenerates this per machine
 next-env.d.ts
 *funding*.json
+
+# Schema-only migrations for the wallet secrets database (no secret values).
+!packages/db/migrations/secrets/
