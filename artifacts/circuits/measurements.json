@@ -1,0 +1,64 @@
+{
+  "measuredAt": "2026-10-14T14:24:14.105Z",
+  "host": {
+    "platform": "win32 10.0.22631",
+    "cpu": "12th Gen Intel(R) Core(TM) i5-1235U",
+    "logicalCpus": 12,
+    "memoryGiB": 16,
+    "node": "v22.14.0",
+    "prover": "snarkjs 0.7.6 groth16.fullProve (WASM witness, JS prover)"
+  },
+  "circuits": {
+    "spend": {
+      "constraints": 9181,
+      "publicInputs": 6,
+      "proofBytes": 256,
+      "publicInputBytes": 192,
+      "zkeyBytes": 5646062,
+      "wasmBytes": 2269472,
+      "runs": 3,
+      "witnessMsMedian": 57,
+      "fullProveMsMedian": 697,
+      "fullProveMsAll": [
+        1361,
+        647,
+        697
+      ],
+      "snarkjsVerifyMsMedian": 18
+    },
+    "insert": {
+      "constraints": 7745,
+      "publicInputs": 4,
+      "proofBytes": 256,
+      "publicInputBytes": 128,
+      "zkeyBytes": 4373670,
+      "wasmBytes": 1822077,
+      "runs": 3,
+      "witnessMsMedian": 47,
+      "fullProveMsMedian": 512,
+      "fullProveMsAll": [
+        561,
+        496,
+        512
+      ],
+      "snarkjsVerifyMsMedian": 11
+    },
+    "exit": {
+      "constraints": 4678,
+      "publicInputs": 4,
+      "proofBytes": 256,
+      "publicInputBytes": 128,
+      "zkeyBytes": 2865894,
+      "wasmBytes": 2199458,
+      "runs": 3,
+      "witnessMsMedian": 49,
+      "fullProveMsMedian": 387,
+      "fullProveMsAll": [
+        371,
+        397,
+        387
+      ],
+      "snarkjsVerifyMsMedian": 12
+    }
+  }
+}

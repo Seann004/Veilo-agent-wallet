@@ -330,15 +330,19 @@ Public inputs, in order (4): `stateRoot`, `label`, `value`, `nullifierHash`. Pri
 
 There is no approved-root input and no context. The payout destination is fixed by the program to the refund signer's ATA, and the label is program-derived from that signer, so a copied exit proof cannot be redirected.
 
-### 7.4 Expected sizes (estimates, **M2** measure)
+### 7.4 Sizes (measured M2, T06)
 
-| Circuit | Main costs | Estimate | ptau power |
-|---|---|---|---|
-| spend | 32 × H2 path + 2 × H3 + 3 × H2 + 3 × Num2Bits(64) | ~11k constraints | 2^15 |
-| insert | 32 × H2 | ~8k | 2^15 |
-| exit | 16 × H2 + H3 + H2 + Num2Bits(64) | ~5k | 2^15 |
+Sources: `circuits/src/{spend,insert,exit}.circom`, shared `circuits/src/lib/{merkle,note}.circom`, circom 2.2.3 `--O2`, circomlib 2.0.5. Hashes and counts are in `artifacts/circuits/manifest.json`; timings in `artifacts/circuits/measurements.json`.
 
-**Veilo decision (v1):** All three use one power-15 Phase 1 file from the public Hermez/perpetual powers-of-tau. Phase 2 is a recorded development contribution plus a beacon, labeled "development setup, not a trusted ceremony" in the manifest.
+| Circuit | Main costs | Estimate | Measured constraints (non-linear; 0 linear) | Public / private inputs | ptau power |
+|---|---|---|---|---|---|
+| spend | 32 × H2 path + 2 × H3 + 3 × H2 + 3 × Num2Bits(64) | ~11k | 9,181 | 6 / 40 | 2^15 |
+| insert | 32 × H2 | ~8k | 7,745 | 4 / 16 | 2^15 |
+| exit | 16 × H2 + H3 + H2 + Num2Bits(64) | ~5k | 4,678 | 4 / 19 | 2^15 |
+
+All three fit 2^14; power 15 is kept for headroom. Proving with snarkjs 0.7.6 `groth16.fullProve` (WASM witness, JS prover) on the development host (Intel i5-1235U, 12 logical CPUs, 16 GiB, Windows 11, Node 22.14), median of 3: spend 697 ms, insert 512 ms, exit 387 ms; witness generation alone 47–57 ms; snarkjs verification 11–18 ms. Proof bytes: 256 (a 64 + b 128 + c 64). Public-input bytes: spend 192, insert and exit 128. Proving files: spend zkey 5.6 MB, insert 4.4 MB, exit 2.9 MB; each WASM about 2 MB. Depth 16 for both trees is confirmed as feasible.
+
+**Veilo decision (v1, revised in T06):** All three use one power-15 Phase 1 file generated locally with snarkjs (`powersoftau new bn128 15`, a public beacon `sha256("veilo/dev-setup/v1/phase1")` with 2^10 iterations, `prepare phase2`) instead of the Hermez file. Phase 2 per circuit is `zkey new` plus a public beacon `sha256("veilo/dev-setup/v1/phase2/<circuit>")` and is checked with `zkey verify`. This default is deterministic: anyone can rebuild byte-identical files and compare them with the manifest hashes, and anyone can also derive the toxic waste and forge proofs. It is labeled "development setup, not a trusted ceremony" in the manifest and is acceptable only for devnet test funds. `circuits/scripts/build.ts --secret-contribution` adds an OS-entropy contribution before each beacon. That output is not reproducible, so its .ptau/.zkey files must be archived with the manifest. Scripts: `circuits/scripts/build.ts` (compile, setup, manifest, VK export) and `circuits/scripts/groth16-vectors.ts` (sample proofs, measurements).
 
 ---
 
@@ -564,7 +568,7 @@ Off-chain services map these to PRD 11 API codes (e.g. `InvalidMint` → `WRONG_
 
 ### 9.1 Library
 
-`groth16-solana` (Lightprotocol, Apache-2.0) pinned to crates.io `0.2.0` (the latest published version on 2026-10-14; T01 pins the exact version in `Cargo.lock`). API:
+`groth16-solana` (Lightprotocol; the crates.io 0.2.0 package metadata declares MIT) pinned to crates.io `0.2.0` (the latest published version on 2026-10-14; T01 pins the exact version in `Cargo.lock`). API:
 
 ```rust
 Groth16Verifier::<NR_INPUTS>::new(&proof_a: &[u8;64], &proof_b: &[u8;128], &proof_c: &[u8;64],
@@ -593,11 +597,21 @@ The VK uses the same rules: G1 is `x || y` and G2 is `c1 || c0` per coordinate. 
 
 ### 9.3 Verifying keys
 
-VKs are embedded in the binary as `pub const SPEND_VK / INSERT_VK / EXIT_VK: Groth16Verifyingkey` in `programs/privacy-pool/src/vk/{spend,insert,exit}.rs`. They are generated from snarkjs `verification_key.json` by a repository script (T06), never edited by hand. No instruction accepts a VK. The manifest records the SHA-256 of each `verification_key.json`, each generated `.rs` file, `.zkey`, `.wasm` and `.r1cs`. A circuit change requires a new program build and a new manifest (PRD 7.2b, 24.1).
+VKs are embedded in the binary as `pub const SPEND_VK / INSERT_VK / EXIT_VK: Groth16Verifyingkey<'static>` in `programs/veilo-crypto/src/vk/{spend,insert,exit}.rs`, re-exported as `veilo_crypto::vk::{SPEND_VK, INSERT_VK, EXIT_VK}` with `{SPEND,INSERT,EXIT}_NR_INPUTS`, and wrapped by `veilo_crypto::{verify_spend, verify_insert, verify_exit}` (which call `verify()`). The `privacy-pool` program depends on the `veilo-crypto` crate. `nr_pubinputs` holds the number of public inputs; groth16-solana 0.2.0 does not read it. They are generated from snarkjs `verification_key.json` by a repository script (T06), never edited by hand. No instruction accepts a VK. The manifest records the SHA-256 of each `verification_key.json`, each generated `.rs` file, `.zkey`, `.wasm` and `.r1cs`. A circuit change requires a new program build and a new manifest (PRD 7.2b, 24.1).
 
-### 9.4 Compute budget (estimates, **M2** measure)
+### 9.4 Compute budget (verifier measured M2; full instructions measured in T07)
 
 The `groth16-solana` README reports 82,704 CU for 2 inputs, 91,448 for 4 and 108,762 for 8 (its benchmark, not ours). Pairing syscall costs are 36,364 + 12,121 per additional pair.
+
+Measured in T06 (`pnpm tc -- sh circuits/scripts/measure-cu.sh`; LiteSVM 0.17.0 with the Agave 4.3 runtime; SBF program `programs/veilo-crypto/cu-bench` built with platform-tools v1.57 that calls `veilo_crypto::verify_*` once; results in `artifacts/circuits/verifier-cu.json`). Verifier instruction alone, excluding the 150 CU compute-budget instruction:
+
+| Verifier | Public inputs | CU | Instruction data in the bench (1 + 256 + 32n) |
+|---|---|---|---|
+| spend | 6 | 108,399 | 449 B |
+| insert | 4 | 97,098 | 385 B |
+| exit | 4 | 97,101 | 385 B |
+
+The same harness rejects every mutated case in `groth16-v1.json` on-chain (input + 1, input + r, non-negated A, swapped G2 halves).
 
 | Instruction | Estimate | Client compute-unit limit |
 |---|---|---|
@@ -685,7 +699,7 @@ The manifest is generated by `deploy:devnet` and verified at startup. A mismatch
 
 File: `artifacts/vectors/v1.json` (encoding version `v1`). Field elements are decimal strings, bytes are lowercase hex, and u64 values are decimal strings. The file is generated by the TypeScript reference in `packages/privacy-sdk` and is never hand-edited. Its SHA-256 goes into the manifest.
 
-Commands (to be implemented in T05/T06; not yet present):
+Commands:
 
 - `pnpm vectors:generate`: writes `artifacts/vectors/v1.json`. It refuses to overwrite a differing committed file unless `--force-protocol-change` is passed.
 - `pnpm vectors:check`: runs every checker below and fails on any mismatch.
@@ -698,11 +712,22 @@ Commands (to be implemented in T05/T06; not yet present):
 | `intent` | ≥3 cases (section 5 drafts + max u64 amounts): fields, `intent_bytes` hex, SHA-256, context; negative cases for rule violations | TS, Rust, Python |
 | `note` | secrets, value, label → precommitment, commitment, nullifier_hash; a change derivation with remainder 0 and > 0 | TS, circom, Rust (commitment via `hashv`) |
 | `zeros` | `Z[0..16]`; `emptyRoot = Z[16]` | TS, circom, Rust (program `EMPTY_ROOT`) |
-| `merkle` | trees with leaves at indices 0, 1 and 5: siblings, path bits, root; an approved-tree path for a label | TS, circom |
-| `insert` | oldRoot, newRoot, leafIndex, leaf, siblings for 3 sequential appends incl. one after a skipped refunded deposit | TS, circom |
+| `merkle` | trees with leaves at indices 0, 1 and 5: siblings, path bits, root; an approved-tree path for a label | TS, circom, Rust |
+| `insert` | oldRoot, newRoot, leafIndex, leaf, siblings for 3 sequential appends incl. one after a skipped refunded deposit | TS, circom, Rust |
 | `keys` | HKDF outputs for seeds `00..1f` and `ff`×32 at indices 0, 1, 7, 1000000 (all four info strings) | TS, Python |
 | `pda` | seeds and expected addresses/bumps for every section 8.1 account under a fixed test program id whose raw bytes are `aa`×32, with `pool_id = 01`×32 | TS (@solana/kit), Rust |
 | `groth16` (separate file `artifacts/vectors/groth16-v1.json`, generated after setup) | per circuit: snarkjs proof + publicSignals, converted `proof_a/b/c` bytes, `public_inputs` bytes, expected valid; mutated cases (signal+1, signal+r, non-negated A, swapped G2 halves) expected invalid | snarkjs verify, Rust `groth16-solana` in program tests |
+
+Checkers (all run by `pnpm vectors:check`; `pnpm test:circuits` also runs the `groth16` file):
+
+| Language | Location |
+|---|---|
+| TypeScript reference | `packages/privacy-sdk/src/vectors.ts`, `packages/privacy-sdk/scripts/vectors.ts` (byte-identical regeneration) |
+| Python stdlib | `packages/privacy-sdk/scripts/check_vectors.py` (label, intent, keys) |
+| circom | `circuits/test/vectors.test.ts` with test harnesses `circuits/test/harness/{hashes,merkle16}.circom` and the main circuits |
+| Rust | `programs/veilo-crypto/tests/vectors.rs` (`solana-sha256-hasher`, `solana-poseidon` off-chain path cross-checked against `light-poseidon` `new_circom`, `solana-pubkey` PDAs) and `tests/groth16.rs` (`groth16-solana` 0.2.0 `verify()`) |
+
+The section 4 and 5 draft known answers and `poseidon[0]` were reproduced exactly by all checkers; no hand-computed value needed correction. snarkjs 0.7.6 `groth16.verify` also rejects a public signal `x + r` (it does not reduce modulo r). The SDK still checks canonicality before verifying.
 
 Rule: an implementation is correct only if it reproduces every vector. Vectors are never edited to make a test pass (CLAUDE.md, PRD 15).
 
@@ -735,17 +760,29 @@ The reference's Cardano validators, byte orders, NFT genesis, BLS artifacts and 
 
 ## 13. Open items (M2 measure or decide before trusted artifacts)
 
-1. Actual CU for spend/insert/exit and whether 400k suffices. Transaction size with all accounts. Whether an address lookup table is needed.
-2. Constraint counts, proving time (wasm and native witness) and ptau power. Confirm depth 16 for both trees.
+1. Verifier CU is measured (section 9.4: spend 108.4k, insert and exit 97.1k). Still open for T07: full-instruction CU and whether 400k suffices, transaction size with all accounts, and whether an address lookup table is needed.
+2. ~~Constraint counts, proving time and ptau power; depth 16.~~ Measured in T06 (section 7.4). Native (C++) witness generation was not measured; WASM witness generation takes about 50 ms.
 3. Rent cost of never-closed PDAs (PendingDeposit 234 B, PendingChange 130 B, SpentNullifier 50 B, SeenPrecommitment 49 B) against the sponsor budget. A later closure design would need a protocol revision.
 4. `QUEUE_MAX_LIVE_DEPOSITS = 64` and `CHANGE_RESERVE = 1024` under concurrency tests.
-5. Confirm circom public-signal order via the compiled `.sym`/`public.json` test (section 7).
+5. ~~Confirm circom public-signal order.~~ Done in T06: `circuits/test/artifacts.test.ts` asserts that wires 1..n of each compiled `.sym` are the declared public inputs in order, and every proof test asserts that snarkjs `publicSignals` equal the witness's expected order.
 6. `groth16-solana` 0.2.0 has no audit claim in its README (it is provided "as-is"). light-poseidon reports a Veridise audit. Record this in docs/security.md.
 7. The program cannot read the genesis hash on-chain. Binding relies on the compile-time `EXPECTED_GENESIS`, the stored value and off-chain RPC checks. Program-id reuse on another cluster is mitigated only by those checks.
 8. Devnet USDC freeze authority can freeze the vault. Disclose this, or use a demo mint without a freeze authority (labeled, PRD 8.1).
 9. The insert crank is a single submitter. Concurrent insert proofs race on `current_root`, and the loser must re-prove.
 10. Event log truncation: switch to `emit_cpi!` if logs prove unreliable for the indexer.
 11. If the Poseidon syscall misbehaves on the target runtime, fall back to computing the deposit leaf `H3(v, l, x)` in the insert circuit, with `leaf` replaced by `value, label, precommitment` and 6 public inputs. That fallback is a protocol revision.
+
+---
+
+## 14. Changelog
+
+| Date | Change | Kind |
+|---|---|---|
+| 2026-10-15 (T05/T06) | `artifacts/vectors/v1.json` generated; the TypeScript, Python, circom and Rust checkers reproduce it; draft known answers confirmed unchanged | vectors (no semantic change) |
+| 2026-10-15 (T06) | Section 7.4: Phase 1 is a locally generated, deterministic development ptau (power 15) instead of the Hermez file; Phase 2 is a public beacon per circuit, with an optional secret contribution. Measured sizes and timings recorded | setup provenance and M2 measurements; v1 semantics unchanged |
+| 2026-10-15 (T06) | Section 9.3: verifying keys are generated into the `veilo-crypto` crate (`programs/veilo-crypto/src/vk/`) rather than `programs/privacy-pool/src/vk/`, and the program uses them through that crate | code location only |
+| 2026-10-15 (T06) | Section 9.1: groth16-solana 0.2.0 is MIT-licensed per its crates.io metadata (the draft said Apache-2.0) | fact correction |
+| 2026-10-15 (T06) | Section 9.4: verifier compute units measured in LiteSVM | M2 measurement |
 
 ---
 
@@ -761,7 +798,7 @@ The reference's Cardano validators, byte orders, NFT genesis, BLS artifacts and 
 - Agave feature IDs (`enable_poseidon_syscall`, `enable_alt_bn128_syscall`): https://github.com/anza-xyz/agave/blob/v2.0/sdk/src/feature_set.rs
 - Agave syscall costs (Poseidon 61·n²+542, SHA-256 85+1/byte, bn128 pairing 36,364 + 12,121): https://github.com/anza-xyz/agave/blob/master/program-runtime/src/execution_budget.rs
 - Devnet feature accounts and genesis hash: JSON-RPC `getMultipleAccounts` / `getGenesisHash` / `getAccountInfo` against https://api.devnet.solana.com, 2026-10-14 (slot ≈ 511,003,583)
-- groth16-solana repository and README (CU benchmarks, big-endian inputs, Apache-2.0): https://github.com/Lightprotocol/groth16-solana
+- groth16-solana repository and README (CU benchmarks, big-endian inputs; crates.io 0.2.0 declares MIT): https://github.com/Lightprotocol/groth16-solana
 - groth16-solana 0.2.0 API (`new`, `verify` vs `verify_unchecked`, `Groth16Verifyingkey`): https://docs.rs/groth16-solana/0.2.0/groth16_solana/groth16/struct.Groth16Verifier.html and https://docs.rs/crate/groth16-solana/0.2.0/source/src/groth16.rs
 - groth16-solana crate versions: https://crates.io/crates/groth16-solana
 - groth16-solana snarkjs VK conversion (G1 x‖y BE, G2 c1‖c0 BE): https://github.com/Lightprotocol/groth16-solana/blob/master/src/vk/circom.rs

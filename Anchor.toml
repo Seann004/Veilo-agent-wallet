@@ -1,5 +1,9 @@
 [toolchain]
 
+# Library crates under programs/ that are not Solana programs.
+[workspace]
+exclude = ["programs/veilo-crypto"]
+
 [features]
 resolution = true
 skip-lint = false

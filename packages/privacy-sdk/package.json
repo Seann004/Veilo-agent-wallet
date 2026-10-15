@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@solana/kit": "5.5.1",
     "@veilo/contracts": "workspace:*",
     "circomlibjs": "0.1.7",
     "snarkjs": "0.7.6"
