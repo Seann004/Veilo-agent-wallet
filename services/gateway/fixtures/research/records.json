@@ -1,0 +1,154 @@
+{
+  "collection": "veilo-demo-community-repair",
+  "label": "demo fixture data",
+  "description": "Synthetic research notes about community repair cafes and tool libraries in the fictional city of Harbourview. Written for the Veilo devnet demo. The places, organizations, figures and quotes are invented and do not describe real-world facts.",
+  "license": "CC0-1.0",
+  "author": "Veilo project contributors",
+  "created": "2026-10-14",
+  "records": [
+    {
+      "id": "hv-001",
+      "tier": "basic",
+      "title": "Harbourview repair cafe attendance log, spring season",
+      "summary": "Volunteer sign-in sheets from twelve Saturday sessions record 418 items brought in for repair. Small electrical appliances were the largest category, followed by clothing and bicycles.",
+      "findings": [
+        "Small appliances made up 37% of items brought in.",
+        "Volunteers marked 61% of items as fully repaired on the day.",
+        "Most items not repaired were waiting on a spare part."
+      ],
+      "published": "2026-04-30"
+    },
+    {
+      "id": "hv-002",
+      "tier": "basic",
+      "title": "Exit survey of repair cafe visitors",
+      "summary": "A short paper survey answered by 156 visitors asked why they came and what would bring them back. Saving money and avoiding waste were the most common reasons.",
+      "findings": [
+        "54% named saving money as their main reason for visiting.",
+        "33% named reducing waste.",
+        "Visitors asked for weekday evening sessions and clearer parts information."
+      ],
+      "published": "2026-05-12"
+    },
+    {
+      "id": "hv-003",
+      "tier": "basic",
+      "title": "Tool library lending records, first year",
+      "summary": "The Eastside tool library lent 1,940 items to 312 members in its first year. Drills, ladders and pressure washers were borrowed most often; specialist tools were borrowed rarely but valued highly by members who used them.",
+      "findings": [
+        "Average member borrowed six items in the year.",
+        "Late returns fell after automated reminder messages started in month five.",
+        "Membership grew mainly through word of mouth."
+      ],
+      "published": "2026-06-03"
+    },
+    {
+      "id": "hv-004",
+      "tier": "basic",
+      "title": "Volunteer interviews on skills and retention",
+      "summary": "Interviews with fourteen volunteer fixers describe what keeps them involved. Teaching visitors to repair their own items was described as more rewarding than repairing items for them.",
+      "findings": [
+        "Volunteers valued pairing with experienced fixers when starting.",
+        "Burnout risk rose when sessions were understaffed.",
+        "Several volunteers wanted short safety refreshers for electrical work."
+      ],
+      "published": "2026-06-20"
+    },
+    {
+      "id": "hv-005",
+      "tier": "basic",
+      "title": "Neighbourhood newsletter coverage summary",
+      "summary": "A review of six months of local newsletter items mentioning repair events. Coverage spiked after a feature about a restored family sewing machine and dropped during the holiday period.",
+      "findings": [
+        "Personal repair stories drew more reader replies than event listings.",
+        "Event listings published less than three days ahead had lower turnout.",
+        "Photos of before-and-after repairs were the most shared content."
+      ],
+      "published": "2026-07-08"
+    },
+    {
+      "id": "hv-006",
+      "tier": "expanded",
+      "title": "Parts sourcing diary from the electrical repair table",
+      "summary": "Fixers kept a diary of spare parts they needed over ten sessions. Fuses, power cords and switches were easiest to source locally; proprietary parts often required waiting several weeks.",
+      "findings": [
+        "Around one in five unfinished repairs needed a proprietary part.",
+        "A shared parts shelf reduced repeat trips for common items.",
+        "Some manufacturers' parts could not be purchased by individuals at all."
+      ],
+      "published": "2026-07-22"
+    },
+    {
+      "id": "hv-007",
+      "tier": "expanded",
+      "title": "Waste diversion estimate method note",
+      "summary": "A method note describing how the volunteer group estimates the weight of items kept out of landfill, using weighed samples by category. The note stresses that the estimate is rough and should be presented as a range.",
+      "findings": [
+        "Estimates use category average weights from a sample of 90 weighed items.",
+        "The group reports diversion as a range, not a single figure.",
+        "Bicycles and furniture dominate weight even though they are a small share of items."
+      ],
+      "published": "2026-08-02"
+    },
+    {
+      "id": "hv-008",
+      "tier": "expanded",
+      "title": "Comparison of weekday evening and Saturday sessions",
+      "summary": "A pilot of four weekday evening sessions attracted fewer visitors than Saturdays but a younger group, many of whom were first-time visitors.",
+      "findings": [
+        "Evening sessions averaged 21 visitors against 35 on Saturdays.",
+        "First-time visitors made up most evening attendance.",
+        "Evening sessions needed fewer volunteers per visitor."
+      ],
+      "published": "2026-08-19"
+    },
+    {
+      "id": "hv-009",
+      "tier": "expanded",
+      "title": "Tool library insurance and safety checklist",
+      "summary": "An internal checklist the tool library uses before lending powered tools: visual inspection, test run, safety leaflet, and a borrower acknowledgement. It records how often tools were withdrawn for maintenance.",
+      "findings": [
+        "Nine powered tools were withdrawn for maintenance during the year.",
+        "Borrowers rarely reported faults unless asked directly on return.",
+        "Safety leaflets were requested in more languages."
+      ],
+      "published": "2026-08-28"
+    },
+    {
+      "id": "hv-010",
+      "tier": "expanded",
+      "title": "School workshop feedback",
+      "summary": "Feedback forms from three school workshops where students repaired toys and small electronics with volunteer supervision. Students reported increased confidence using basic tools.",
+      "findings": [
+        "Most students had never opened an electronic device before.",
+        "Teachers asked for lesson plans they could reuse.",
+        "Short, hands-on tasks held attention better than demonstrations."
+      ],
+      "published": "2026-09-09"
+    },
+    {
+      "id": "hv-011",
+      "tier": "expanded",
+      "title": "Local business partnership notes",
+      "summary": "Meeting notes from conversations with four local shops about donating spare parts and hosting sessions. Two shops agreed to trial a monthly parts donation.",
+      "findings": [
+        "Shops were most willing to donate end-of-line stock.",
+        "Hosting sessions required public liability arrangements.",
+        "Shops valued being mentioned in event promotion."
+      ],
+      "published": "2026-09-23"
+    },
+    {
+      "id": "hv-012",
+      "tier": "expanded",
+      "title": "Open questions and data gaps",
+      "summary": "A list of questions the group could not answer from its own records, including long-term durability of repairs and whether visitors buy fewer new items afterwards.",
+      "findings": [
+        "No follow-up data exists on how long repairs last.",
+        "Purchasing behaviour after a repair has not been measured.",
+        "Survey respondents may over-represent regular visitors."
+      ],
+      "published": "2026-10-01"
+    }
+  ]
+}
