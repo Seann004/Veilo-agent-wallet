@@ -760,9 +760,9 @@ The reference's Cardano validators, byte orders, NFT genesis, BLS artifacts and 
 
 ## 13. Open items (M2 measure or decide before trusted artifacts)
 
-1. Verifier CU is measured (section 9.4: spend 108.4k, insert and exit 97.1k). Still open for T07: full-instruction CU and whether 400k suffices, transaction size with all accounts, and whether an address lookup table is needed.
+1. ~~Full-instruction CU, transaction size, lookup table.~~ Measured in T07: spend_private ≤139,970 CU (400k suffices), largest transaction 1,152 bytes, no lookup table required (see changelog and docs/deployment.md).
 2. ~~Constraint counts, proving time and ptau power; depth 16.~~ Measured in T06 (section 7.4). Native (C++) witness generation was not measured; WASM witness generation takes about 50 ms.
-3. Rent cost of never-closed PDAs (PendingDeposit 234 B, PendingChange 130 B, SpentNullifier 50 B, SeenPrecommitment 49 B) against the sponsor budget. A later closure design would need a protocol revision.
+3. Rent cost of never-closed PDAs (PendingDeposit 234 B, PendingChange 130 B, SpentNullifier 50 B, SeenPrecommitment 49 B), measured in T07: 0.00375 SOL per deposit, 0.00303 SOL per spend, 0.00124 SOL per exit. A later closure design would need a protocol revision.
 4. `QUEUE_MAX_LIVE_DEPOSITS = 64` and `CHANGE_RESERVE = 1024` under concurrency tests.
 5. ~~Confirm circom public-signal order.~~ Done in T06: `circuits/test/artifacts.test.ts` asserts that wires 1..n of each compiled `.sym` are the declared public inputs in order, and every proof test asserts that snarkjs `publicSignals` equal the witness's expected order.
 6. `groth16-solana` 0.2.0 has no audit claim in its README (it is provided "as-is"). light-poseidon reports a Veridise audit. Record this in docs/security.md.
@@ -783,6 +783,11 @@ The reference's Cardano validators, byte orders, NFT genesis, BLS artifacts and 
 | 2026-10-15 (T06) | Section 9.3: verifying keys are generated into the `veilo-crypto` crate (`programs/veilo-crypto/src/vk/`) rather than `programs/privacy-pool/src/vk/`, and the program uses them through that crate | code location only |
 | 2026-10-15 (T06) | Section 9.1: groth16-solana 0.2.0 is MIT-licensed per its crates.io metadata (the draft said Apache-2.0) | fact correction |
 | 2026-10-15 (T06) | Section 9.4: verifier compute units measured in LiteSVM | M2 measurement |
+| 2026-10-15 (T07) | Section 9.4 / 13 item 1 / 13 item 3: full-instruction compute units, transaction sizes, account rent and deployment cost measured in LiteSVM (`artifacts/program/measurements.json`, docs/deployment.md "Program"). spend_private 137,800–139,970 CU, insert_leaf ≈109k, exit_public 121,255, deposit ≤33,086; the recommended client limits hold. Largest transaction 1,152 bytes; an address lookup table is optional, not required | M2 measurement |
+| 2026-10-15 (T07) | Sections 8.4.2, 8.4.3, 8.4.7, 8.4.8: token movements use SPL Token `Transfer`, not `TransferChecked`, because the frozen account lists carry no mint account. Equivalent for the original SPL Token program: the program checks the mint of every source/destination/vault account itself, and deposit still verifies the received amount by reloading the vault | implementation clarification; accounts and encodings unchanged |
+| 2026-10-15 (T07) | Sections 2.2, 8.4.2, 8.4.7, 8.4.8: PendingDeposit, SeenPrecommitment, SpentNullifier and PendingChange are created by the handler after every check (canonical inputs, then proof verification), not by Anchor `init`, so no PDA is derived from a field argument before its canonical check. A replayed nullifier or precommitment fails in the System Program with `AccountAlreadyInUse` (custom error 0), exactly as `init` would | implementation clarification |
+| 2026-10-15 (T07) | Section 5.2 rule 3: when `intent.relayer` is None the `relayer` and `relayer_fee_account` slots are ignored (clients pass the program id for absent optional accounts) | clarification |
+| 2026-10-15 (T07) | Section 8.2 `EXPECTED_GENESIS`: both builds also reject the all-zero genesis hash; the default Cargo feature is `devnet`, and building with both or neither of `devnet`/`localnet` is a compile error | clarification |
 
 ---
 

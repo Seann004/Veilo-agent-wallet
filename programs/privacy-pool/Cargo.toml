@@ -11,7 +11,10 @@ crate-type = ["cdylib", "lib"]
 name = "privacy_pool"
 
 [features]
-default = []
+# Exactly one of `devnet` (deployable; pins the devnet genesis hash) or `localnet` (tests only).
+default = ["devnet"]
+devnet = []
+localnet = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-log-ix-name = []
@@ -22,6 +25,7 @@ custom-panic = []
 
 [dependencies]
 anchor-lang = "=1.2.1"
+veilo-crypto = { path = "../veilo-crypto" }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
