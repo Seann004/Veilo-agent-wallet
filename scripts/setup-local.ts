@@ -10,6 +10,7 @@ import {
   loadDotEnv,
   type VeiloConfig,
 } from "@veilo/contracts";
+import { ensureOwnerServiceSecret } from "../services/wallet/src/secret";
 import { TOOLCHAIN_IMAGE } from "./toolchain-image.mjs";
 
 const REQUIRED_NODE_MAJOR = 22;
@@ -106,6 +107,18 @@ function reportSecretPath(label: string, path: string | undefined) {
   else warn(`${label} configured but no file at ${rel(path)}; setup does not create keys`);
 }
 
+// The wallet-service root secret is the one secret setup creates: 32 random bytes, owner-only
+// permissions, never printed. An existing file is never replaced.
+function ensureOwnerSecret(path: string | undefined) {
+  if (path === undefined) {
+    warn("OWNER_SERVICE_SECRET_PATH not configured; the wallet service API stays disabled");
+    return;
+  }
+  const { created, restricted } = ensureOwnerServiceSecret(path);
+  if (created) ok(`OWNER_SERVICE_SECRET_PATH created at ${rel(path)} (${restricted ? "owner-only" : "permissions not restricted"}; back it up separately)`);
+  else ok(`OWNER_SERVICE_SECRET_PATH file present at ${rel(path)} (contents not read)`);
+}
+
 function main() {
   console.log("Toolchain");
   checkNode();
@@ -135,7 +148,7 @@ function main() {
 
   console.log("Secret files");
   reportSecretPath("SPONSOR_KEY_PATH", config.paths.sponsorKey);
-  reportSecretPath("OWNER_SERVICE_SECRET_PATH", config.paths.ownerServiceSecret);
+  ensureOwnerSecret(config.paths.ownerServiceSecret);
   for (const [service, path] of Object.entries(config.paths.serviceCredentials)) {
     reportSecretPath(`${service} credential`, path);
   }

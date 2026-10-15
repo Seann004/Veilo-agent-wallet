@@ -15,3 +15,7 @@ export * from "./pda";
 export * from "./witness";
 export * from "./proof";
 export * from "./vectors";
+export * from "./anchor";
+export * from "./program";
+export * from "./replay";
+export * from "./manifest";
