@@ -93,6 +93,12 @@ Every process serves `GET /health`.
 |---|---|---|
 | `VEILO_OWNER_PUBKEY` | empty | Owner wallet address. When set, control seeds the workspace once with **draft** default policies (activation is an owner action). Owner login is unavailable until the workspace exists. |
 | `VEILO_DASHBOARD_ORIGIN` | `http://localhost:<DASHBOARD_PORT>` | Exact browser origin. Its host is bound into the sign-in challenge, and mutating owner requests from any other Origin are rejected. An `https:` origin enables the Secure cookie attribute. |
+| `CONTROL_USAGE_PERMIT_KEY_PATH` | `<VEILO_SECRETS_DIR>/control/usage-permit-signing.pem` | Control-only Ed25519 private key that signs usage permits. Created by `pnpm demo:seed`, never printed. Missing: prepaid usage is unavailable. |
+| `CONTROL_GATEWAY_ACCOUNT_TOKEN_PATH` | `<VEILO_SECRETS_DIR>/control/gateway-account.token` | Bearer token of the workspace's single gateway credit account. Agents never receive it. Missing: purchases stay authorization-only (NOT_READY). |
+| `CONTROL_SERVICE_CREDENTIAL_PATH` | empty | Control's bearer credential towards the wallet service funding API. Unset: the funding provider is `unavailable` and returns NOT_READY; it never reports a funded purchase. |
+| `GATEWAY_PLANNING_CREDENTIAL_PATH` | `<VEILO_SECRETS_DIR>/gateway/planning.token` | Read by control to proxy operator-sponsored planning (`POST /worker/planning`); withheld from the runner. |
+
+`pnpm demo:seed` (requires `VEILO_OWNER_PUBKEY`) is idempotent. It seeds the workspace, the three agents with **draft** policies and the fixed catalog. It creates one shared gateway account and the integration secret files above, plus the runner's worker-credential file. If the gateway merchant and fee payer are configured, it binds the unbound services to that recipient. A rerun changes nothing and never issues credits. If the account exists but its token file is lost, it stops instead of creating a second account.
 
 Wallet note secrets and fresh-wallet keys use a separate SQLite file, `<VEILO_SECRETS_DIR>/wallet-secrets.sqlite`, which only the wallet service opens. The control ledger refuses to open it (role check) and refuses to live inside the secrets directory. The runner receives only `toRunnerConfig`: network, control URL, its own worker-credential path and planner model. Every path in `RUNNER_WITHHELD_ENV` is deleted from its environment: provider key, sponsor/funding/owner-secret key paths, other services' credentials, both database paths and the secrets directory.
 
@@ -110,9 +116,34 @@ Wallet note secrets and fresh-wallet keys use a separate SQLite file, `<VEILO_SE
 | `GATEWAY_PRICING_MAX_AGE_SECONDS` | `21600` | Live pricing older than this disables dispatch. |
 | `GATEWAY_SETTLEMENT_WAIT_MS` | `40000` | How long one execute request waits for finality before returning 202. |
 | `USAGE_PERMIT_PUBLIC_KEY_PATH` | empty | PEM Ed25519 public key of the control service's usage-permit signer. Unset: prepaid usage disabled. |
-| `GATEWAY_PLANNING_CREDENTIAL_PATH` | empty | File holding the runner's planning bearer token (only its SHA-256 is kept in memory). |
+| `GATEWAY_PLANNING_CREDENTIAL_PATH` | empty | File holding the sponsored-planning bearer token (only its SHA-256 is kept in memory). Control presents it on behalf of running tasks; the runner never holds it. |
 
 The deployment manifest may carry `{"gateway": {"merchantAddress", "merchantAta", "facilitatorFeePayer"}}`; when the manifest and the environment both set a value they must agree. The gateway keeps its own SQLite ledger at `GATEWAY_DATABASE_PATH`. Accounts are created with `pnpm --filter @veilo/gateway account:create -- --workspace <id> --out <token-file>`; the token is written to a new owner-only file and never printed.
+
+### Runner service
+
+| Variable | Default | Description |
+|---|---|---|
+| `RUNNER_WORKER_CREDENTIAL_PATH` | empty | Per-agent worker tokens. `demo:seed` writes `<VEILO_SECRETS_DIR>/runner/worker-credentials.json` when unset and prints the path to set here. Format (`{"agents":[{"agentId","role","token"}]}`). The runner polls and claims jobs for these agents only. |
+| `RUNNER_APPROVED_FETCH_ORIGINS` | empty | Exact origins agent tools may fetch (owner-suggested sources). Others are listed as "not fetched". |
+| `RUNNER_LOCAL_SERVICE_ORIGINS` | empty | Subset of approved origins that are configured local demo services and may resolve to loopback/private addresses. All other targets must resolve to public addresses; redirects are not followed. |
+
+### Wallet and relayer services
+
+| Variable | Default | Description |
+|---|---|---|
+| `OWNER_SERVICE_SECRET_PATH` | empty | Wallet-service root secret (32 random bytes). `setup:local` creates it once with owner-only permissions and never prints it. Note secrets, one-time keys and backups are encrypted under keys derived from it; keep a separate copy. Unset: the wallet serves only `/health`. |
+| `WALLET_SERVICE_CREDENTIAL_PATH` | empty | Bearer token the wallet presents to control (`/internal/wallet/*`) and the relayer. |
+| `CONTROL_SERVICE_CREDENTIAL_PATH` | empty | Bearer token control presents to the wallet funding API (`/fundings*`). |
+| `OWNER_RECOVERY_ADDRESS` | empty | The only destination owner recovery may pay (its exact-mint ATA must exist). Unset: recovery is unavailable. |
+| `RELAYER_DATABASE_PATH` | `<VEILO_DATA_DIR>/relayer.sqlite` | Relayer withdrawals, attempts, sponsor lamport ledger and indexed transaction cache. |
+| `RELAYER_SPONSOR_LAMPORT_CAP` | `100000000` | Total sponsor exposure (fees spent + outstanding rent) the relayer may incur. |
+| `APPROVED_LABELS_PATH` | `artifacts/deployment/approved-labels.json` | Operator-published ordered approved-label list (written by `pnpm --filter @veilo/relayer approve-root`). |
+| `APPROVED_PARTICIPANTS` | empty | Comma-separated synthetic/test participant addresses whose inserted deposits the prototype rule approves. |
+| `VEILO_CIRCUIT_BUILD_DIR` | `circuits/build` | Proving files (hash-checked against `artifacts/circuits/manifest.json`). |
+| `VEILO_CONTROL_URL`, `VEILO_RELAYER_URL` | loopback + service port | Overrides for the wallet's control and relayer clients. |
+
+`pnpm backup` writes an AES-256-GCM encrypted snapshot (SQLite backup API) of the wallet secrets DB and control ledger to `backups/`. `pnpm restore -- --file <path> [--include-control]` must run with the wallet stopped; it validates every encrypted row, moves the old files aside, advances key counters by 1000 and blocks new proofs and signatures until the wallet's startup reconciliation passes.
 
 ### Diagnostics
 

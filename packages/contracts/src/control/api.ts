@@ -125,6 +125,8 @@ export const purchaseIntentRequestSchema = z
     requestDigest: sha256Hex,
     taskId: uuid.optional(),
     rationale: shortText(1000).optional(),
+    /** Exact SKU input; must hash to requestDigest. Required for the purchase to be executed. */
+    input: z.record(z.string(), z.unknown()).optional(),
     /** Ignored when equal to the credential's agent; any other value is rejected. */
     agentId: uuid.optional(),
   })

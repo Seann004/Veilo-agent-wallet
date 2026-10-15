@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./gateway": "./src/gateway/index.ts"
+    "./gateway": "./src/gateway/index.ts",
+    "./relayer": "./src/relayer/api.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

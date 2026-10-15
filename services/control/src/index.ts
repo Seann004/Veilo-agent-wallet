@@ -13,12 +13,17 @@ import { createApp } from "./app";
 import { ServiceCredentials } from "./auth/credentials";
 import type { SessionSettings } from "./auth/session";
 import { createLedger } from "./context";
+import { createIntegration } from "./integration";
+import { UnavailableFundingProvider, WalletFundingProvider } from "./integration/funding";
+import { GatewayClient } from "./integration/gateway-client";
+import { integrationPaths, readSecret } from "./integration/paths";
+import { PermitSigner } from "./integration/permits";
 import { expireLeases } from "./ledger/jobs";
 import { seedWorkspace } from "./ledger/workspace";
 
 const SERVICE = "control";
 
-function main(): void {
+async function main(): Promise<void> {
   const rootDir = findRepoRoot();
   loadDotEnv({});
   const config = loadConfig(process.env, { rootDir });
@@ -63,19 +68,42 @@ function main(): void {
     (msg) => console.log(`[${SERVICE}] ${msg}`),
   );
 
+  const paths = integrationPaths(config, process.env, rootDir);
+  const accountToken = readSecret(paths.gatewayAccountToken);
+  const gateway = accountToken
+    ? new GatewayClient({
+        baseUrl: `http://${config.bindHost}:${config.ports.gateway}`,
+        accountToken,
+        planningToken: readSecret(paths.planningToken),
+        identity: process.env.GATEWAY_IDENTITY?.trim() || "veilo-gateway-devnet",
+      })
+    : undefined;
+  if (!gateway) console.log(`[${SERVICE}] gateway account token not found; run pnpm demo:seed. Purchases stay authorization-only`);
+  const permits = PermitSigner.fromFile(paths.permitPrivateKey);
+  if (!permits) console.log(`[${SERVICE}] usage permit signing key not found; prepaid usage is unavailable`);
+  const walletToken = readSecret(config.paths.serviceCredentials.control);
+  const funding = walletToken
+    ? new WalletFundingProvider({ baseUrl: `http://${config.bindHost}:${config.ports.wallet}`, serviceToken: walletToken })
+    : new UnavailableFundingProvider("CONTROL_SERVICE_CREDENTIAL_PATH is not configured; private funding is unavailable");
+  console.log(`[${SERVICE}] private funding provider: ${funding.mode}`);
+  const integration = createIntegration(ledger, { gateway, permits, funding, log: (l) => console.log(`[${SERVICE}] ${l}`) });
+  // Startup reconciles existing operations before any new job starts.
+  await integration.scheduler.reconcileExpired();
+  await integration.orchestrator.reconcileAll();
+  integration.scheduler.start();
+
   const port = config.ports.control;
-  createApp(health, { ledger, session, services }).listen(port, config.bindHost, () => {
+  createApp(health, { ledger, session, services, integration }).listen(port, config.bindHost, () => {
     console.log(`[${SERVICE}] listening on http://${config.bindHost}:${port} (${config.network.caip2})`);
   });
   if (process.env.VEILO_LOG_CONFIG === "1") console.log(JSON.stringify(describeConfig(config)));
 }
 
-try {
-  main();
-} catch (error) {
+main().catch((error: unknown) => {
   if (error instanceof VeiloConfigError) {
     console.error(`[${SERVICE}] configuration rejected (${error.code}): ${error.message}`);
     process.exit(1);
   }
-  throw error;
-}
+  console.error(`[${SERVICE}] startup failed: ${(error as Error).name}: ${(error as Error).message}`);
+  process.exit(1);
+});

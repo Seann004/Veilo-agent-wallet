@@ -4,3 +4,5 @@ export * from "./policy";
 export * from "./api";
 export * from "./tools";
 export * from "./runner-config";
+export * from "./agents";
+export * from "./funding";

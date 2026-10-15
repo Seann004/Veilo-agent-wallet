@@ -3,6 +3,9 @@ import type { z } from "zod";
 import {
   activityQuerySchema,
   agentConfigPatchSchema,
+  calendarSchema,
+  campaignBriefSchema,
+  researchTaskInputSchema,
   createAgentRequestSchema,
   purchaseDecisionRequestSchema,
   purchaseIntentRequestSchema,
@@ -31,7 +34,11 @@ import { emergencyStop, pauseAgent, resumeAgent, resumeWorkspace, revokeAgent } 
 import { writeAudit } from "../ledger/events";
 import { enqueueJob, jobView } from "../ledger/jobs";
 import { decidePurchase, getPurchaseRow, purchaseView, type PurchaseRow } from "../ledger/purchases";
-import { activity, agentBudget, balances, createTask, requestHandoff, saveArtifact } from "../ledger/summaries";
+import { activity, agentBudget, createTask, requestHandoff, saveArtifact } from "../ledger/summaries";
+import { chargeToolCall, getTask, validateResearchCitations } from "../agents/work";
+import type { Integration } from "../integration";
+import { fullBalances } from "../integration/balances";
+import { RETRY_MARKER } from "../scheduler/scheduler";
 import {
   activatePolicyVersion,
   activeAgentPolicy,
@@ -81,8 +88,20 @@ function agentView(ledger: Ledger, a: AgentRow): Record<string, unknown> {
   };
 }
 
-export function controlRouter(deps: AuthDeps): Router {
+export const TASK_HEADER = "x-veilo-task-id";
+
+/** Counts a worker tool call against its running task, identified by body or header. */
+function chargeWorkerCall(ledger: Ledger, req: Request, agentId: string, taskId: string | undefined, tool: string): void {
+  const header = req.headers[TASK_HEADER];
+  const id = taskId ?? (typeof header === "string" ? header : undefined);
+  if (id === undefined) return;
+  const task = getTask(ledger, id);
+  if (taskId === undefined || task?.state === "running") chargeToolCall(ledger, agentId, id, tool);
+}
+
+export function controlRouter(deps: AuthDeps & { integration?: Integration | undefined }): Router {
   const { ledger } = deps;
+  const integration = deps.integration;
   const r = Router();
   const owner = requireActor(deps, ["owner"]);
   const worker = requireActor(deps, ["worker"]);
@@ -201,8 +220,8 @@ export function controlRouter(deps: AuthDeps): Router {
     });
   });
 
-  r.get("/balances", owner, (_req, res) => {
-    res.json(balances(ledger, requireWorkspace(ledger, wsId(res))));
+  r.get("/balances", owner, async (_req, res) => {
+    res.json(await fullBalances(ledger, requireWorkspace(ledger, wsId(res)), integration?.gateway));
   });
 
   // Agents
@@ -268,7 +287,7 @@ export function controlRouter(deps: AuthDeps): Router {
     });
   });
 
-  r.post("/agents/:id/run", owner, (req, res) => {
+  r.post("/agents/:id/run", owner, async (req, res) => {
     const body = parse(runAgentRequestSchema, req.body);
     const workspaceId = wsId(res);
     const agent = requireAgent(ledger, workspaceId, param(req, "id"));
@@ -276,27 +295,60 @@ export function controlRouter(deps: AuthDeps): Router {
     if (ws.stopped === 1n) throw new ControlError("ACCOUNT_STOPPED", "workspace emergency stop is active");
     if (agent.status !== "active") throw new ControlError("ACCOUNT_STOPPED", `agent is ${agent.status}`);
     let result: ReturnType<typeof enqueueJob>;
+    let check: unknown;
     if (agent.role === "credit_manager") {
+      const retry = body.input?.retry === true ? RETRY_MARKER : ":";
       result = enqueueJob(ledger, {
         workspaceId,
         agentId: agent.id,
         kind: "credit_check",
-        triggerKey: `manual:${agent.id}:${body.triggerKey ?? ledger.newId()}`,
+        triggerKey: `manual:${agent.id}${retry}${body.triggerKey ?? ledger.newId()}`,
       });
+      if (integration && result.created) {
+        // "Check now" runs the same deterministic check the scheduler runs.
+        const jobId = result.job.id;
+        const ran = (await integration.scheduler.runCreditJobs()).find((x) => x.job.id === jobId);
+        check = ran?.result ?? null;
+        if (ran) result = { job: ran.job, created: true };
+      }
     } else {
-      const objective = body.objective;
-      if (objective === undefined) throw new ControlError("INVALID_REQUEST", "objective: required for research and content runs");
+      let input: Record<string, unknown>;
+      let objective = body.objective;
+      if (agent.role === "research") {
+        const parsed = researchTaskInputSchema.safeParse({ question: objective, ...(body.input ?? {}) });
+        if (!parsed.success) throw new ControlError("INVALID_REQUEST", parsed.error.issues.map((i) => `input.${i.path.join(".")}: ${i.message}`).join("; "));
+        input = parsed.data;
+        objective = objective ?? parsed.data.question;
+      } else {
+        const parsed = campaignBriefSchema.safeParse(body.input ?? {});
+        if (!parsed.success) throw new ControlError("INVALID_REQUEST", parsed.error.issues.map((i) => `input.${i.path.join(".")}: ${i.message}`).join("; "));
+        input = parsed.data;
+        objective = objective ?? `Campaign: ${parsed.data.topic}`;
+      }
       const triggerKey = `task:${agent.id}:${body.triggerKey ?? ledger.newId()}`;
       result = immediate(ledger.db, () => {
         const existing = ledger.db.prepare(`SELECT id FROM job WHERE trigger_key = ?`).pluck().get(triggerKey);
         if (existing !== undefined) {
           return enqueueJob(ledger, { workspaceId, agentId: agent.id, kind: agent.role === "research" ? "research" : "content", triggerKey });
         }
+        const handoffId = typeof input.handoffId === "string" ? input.handoffId : undefined;
+        if (handoffId !== undefined) {
+          // Runs the task reserved by an owner-approved handoff, adding this brief to it.
+          const reserved = ledger.db
+            .prepare(`SELECT t.id, t.input_json FROM handoff_task h JOIN task t ON t.id = h.task_id WHERE h.handoff_id = ? AND t.agent_id = ? AND t.state = 'queued'`)
+            .get(handoffId, agent.id) as { id: string; input_json: string } | undefined;
+          if (!reserved) throw new ControlError("POLICY_DENIED", "no queued task from an approved handoff for this agent");
+          const merged = { ...(JSON.parse(reserved.input_json) as Record<string, unknown>), ...input };
+          ledger.db
+            .prepare(`UPDATE task SET objective = ?, input_json = ?, deadline_at_ms = ?, updated_at_ms = ? WHERE id = ?`)
+            .run(objective, JSON.stringify(merged), body.deadline === undefined ? null : Date.parse(body.deadline), ledger.now(), reserved.id);
+          return enqueueJob(ledger, { workspaceId, agentId: agent.id, taskId: reserved.id, kind: "content", triggerKey });
+        }
         const task = createTask(ledger, {
           workspaceId,
           agent,
-          objective,
-          input: body.input ?? {},
+          objective: objective as string,
+          input,
           limitUsdc: body.taskLimitTestUsdc,
           deadlineMs: body.deadline === undefined ? null : Date.parse(body.deadline),
         });
@@ -313,7 +365,11 @@ export function controlRouter(deps: AuthDeps): Router {
     res.status(result.created ? 202 : 200).json({
       job: jobView(result.job),
       taskId,
-      executor: "queued in the durable scheduler; execution starts when an agent runner claims it",
+      executor:
+        agent.role === "credit_manager" && integration
+          ? "deterministic credit check executed by the control scheduler"
+          : "queued in the durable scheduler; execution starts when an agent runner claims it",
+      ...(check !== undefined ? { check } : {}),
     });
   });
 
@@ -336,7 +392,7 @@ export function controlRouter(deps: AuthDeps): Router {
   });
 
   // Purchases
-  r.post("/purchase-intents", worker, (req, res) => {
+  r.post("/purchase-intents", worker, async (req, res) => {
     const a = actorOf(res);
     if (a.kind !== "worker") throw new ControlError("FORBIDDEN", "worker credential required");
     const body = parse(purchaseIntentRequestSchema, req.body);
@@ -355,6 +411,7 @@ export function controlRouter(deps: AuthDeps): Router {
       );
       throw new ControlError("POLICY_DENIED", "agent scope mismatch: requests act only for the credential's agent");
     }
+    chargeWorkerCall(ledger, req, a.agentId, body.taskId, body.paymentPath === "prepaid_credits" ? "consume_inference_sku" : "request_purchase");
     const result = authorizePurchase(ledger, {
       workspaceId: a.workspaceId,
       agentId: a.agentId,
@@ -366,11 +423,24 @@ export function controlRouter(deps: AuthDeps): Router {
       taskId: body.taskId,
       rationale: body.rationale,
     });
-    const view = purchaseView(ledger, result.purchase);
-    const awaiting = result.purchase.authorization_state === "awaiting_approval";
+    let purchase = result.purchase;
+    let execution: unknown;
+    if (integration && body.input !== undefined) {
+      integration.orchestrator.storeInput(purchase, body.input);
+      if (purchase.authorization_state !== "awaiting_approval") {
+        const driven = await integration.orchestrator.drive(purchase.id);
+        purchase = driven.purchase;
+        execution = driven.execution;
+      } else {
+        execution = integration.orchestrator.view(purchase.id);
+      }
+    }
+    const view = purchaseView(ledger, purchase);
+    const awaiting = purchase.authorization_state === "awaiting_approval";
     res.status(awaiting ? 202 : result.created ? 201 : 200).json({
       purchase: view,
       created: result.created,
+      ...(execution !== undefined ? { execution } : {}),
       ...(awaiting ? { code: "APPROVAL_REQUIRED" } : {}),
     });
   });
@@ -382,7 +452,8 @@ export function controlRouter(deps: AuthDeps): Router {
       throw new ControlError("POLICY_DENIED", "agent scope mismatch");
     }
     if (a.kind === "owner" && p.workspace_id !== a.workspaceId) throw new ControlError("NOT_FOUND", "purchase not found");
-    res.json({ purchase: purchaseView(ledger, p) });
+    if (a.kind === "worker") chargeWorkerCall(ledger, req, a.agentId, undefined, "purchase_status");
+    res.json({ purchase: purchaseView(ledger, p), ...(integration ? { execution: integration.orchestrator.view(p.id) } : {}) });
   });
 
   r.post("/purchases/:id/decision", owner, (req, res) => {
@@ -392,10 +463,18 @@ export function controlRouter(deps: AuthDeps): Router {
     res.json({ purchase: purchaseView(ledger, decidePurchase(ledger, p.id, body.decision, ownerId(res))) });
   });
 
-  r.post("/purchases/:id/reconcile", ownerOrService, (req, res) => {
+  r.post("/purchases/:id/reconcile", ownerOrService, async (req, res) => {
     parse(reconcileRequestSchema, req.body);
     const p = getPurchaseRow(ledger, param(req, "id"));
     if (p.workspace_id !== wsId(res)) throw new ControlError("NOT_FOUND", "purchase not found");
+    if (integration?.orchestrator.configured && integration.orchestrator.input(p.id) !== undefined) {
+      // Reconciliation queries the existing gateway/wallet operation; it never creates a new one.
+      const before = JSON.stringify(purchaseView(ledger, p).states);
+      const driven = await integration.orchestrator.drive(p.id);
+      const view = purchaseView(ledger, driven.purchase);
+      res.json({ purchase: view, execution: driven.execution, reconciled: true, changed: JSON.stringify(view.states) !== before });
+      return;
+    }
     const view = purchaseView(ledger, p);
     const reservation = view.reservation as { status: string };
     const nothingReleased =
@@ -412,9 +491,10 @@ export function controlRouter(deps: AuthDeps): Router {
   });
 
   // Worker tools
-  r.get("/worker/catalog", worker, (_req, res) => {
+  r.get("/worker/catalog", worker, (req, res) => {
     const a = actorOf(res);
     if (a.kind !== "worker") throw new ControlError("FORBIDDEN", "worker credential required");
+    chargeWorkerCall(ledger, req, a.agentId, undefined, "catalog_lookup");
     const policy = activeAgentPolicy(ledger, a.agentId);
     const perms = policy ? agentPermissions(policy) : { allowedSkus: [], allowedPaymentPaths: [] };
     const rows = ledger.db
@@ -440,9 +520,10 @@ export function controlRouter(deps: AuthDeps): Router {
     });
   });
 
-  r.get("/worker/budget", worker, (_req, res) => {
+  r.get("/worker/budget", worker, (req, res) => {
     const a = actorOf(res);
     if (a.kind !== "worker") throw new ControlError("FORBIDDEN", "worker credential required");
+    chargeWorkerCall(ledger, req, a.agentId, undefined, "budget_summary");
     res.json(agentBudget(ledger, requireAgent(ledger, a.workspaceId, a.agentId)));
   });
 
@@ -451,6 +532,18 @@ export function controlRouter(deps: AuthDeps): Router {
     if (a.kind !== "worker") throw new ControlError("FORBIDDEN", "worker credential required");
     const body = parse(saveArtifactRequestSchema, req.body);
     const agent = requireAgent(ledger, a.workspaceId, a.agentId);
+    chargeWorkerCall(ledger, req, a.agentId, body.taskId, "save_artifact");
+    // Evidence exists only through the purchase integration, so that is where citations are checked.
+    if (body.kind === "research_brief" && integration) validateResearchCitations(ledger, agent.id, body);
+    if (body.kind === "content_calendar" && integration) {
+      let entries: unknown;
+      try {
+        entries = JSON.parse(body.content);
+      } catch {
+        entries = undefined;
+      }
+      if (!calendarSchema.safeParse(entries).success) throw new ControlError("INVALID_REQUEST", "calendar content must be seven valid entries");
+    }
     res.status(201).json(saveArtifact(ledger, agent, body));
   });
 
@@ -459,6 +552,7 @@ export function controlRouter(deps: AuthDeps): Router {
     if (a.kind !== "worker") throw new ControlError("FORBIDDEN", "worker credential required");
     const body = parse(handoffRequestSchema, req.body);
     const agent = requireAgent(ledger, a.workspaceId, a.agentId);
+    chargeWorkerCall(ledger, req, a.agentId, undefined, "request_handoff");
     res.status(201).json({ ...requestHandoff(ledger, agent, body), state: "pending_owner" });
   });
 

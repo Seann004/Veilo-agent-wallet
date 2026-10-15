@@ -2,12 +2,17 @@ import express, { type Express, type NextFunction, type Request, type Response }
 import { AmountError, healthReport, type ServiceHealth } from "@veilo/contracts";
 import { ControlError } from "./errors";
 import type { AuthDeps } from "./http/actor";
+import { agentRouter } from "./http/agent-routes";
 import { controlRouter } from "./http/routes";
+import type { Integration } from "./integration";
+import { walletInternalRouter } from "./http/wallet-internal";
 
 export type LogSink = (line: string) => void;
 
 export interface ControlDeps extends AuthDeps {
   log?: LogSink;
+  /** Gateway, funding and scheduler integration; absent until configured. */
+  integration?: Integration | undefined;
 }
 
 /**
@@ -38,7 +43,9 @@ export function createApp(health: ServiceHealth, deps?: ControlDeps): Express {
   const log = deps.log ?? ((line: string) => console.log(line));
   app.use(requestLog(log));
   app.use(express.json({ limit: "256kb", strict: true }));
+  app.use(walletInternalRouter(deps));
   app.use(controlRouter(deps));
+  app.use(agentRouter(deps));
   app.use((_req: Request, res: Response) => {
     res.status(404).json({ error: { code: "NOT_FOUND", message: "no such endpoint" } });
   });
