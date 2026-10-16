@@ -9,11 +9,11 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-privacy_pool = "DDT2U6VGajPjvj62mL4BWyqf5AgoML53NR8souWtfWKs"
+privacy_pool = "3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq"
 
 [provider]
 cluster = "devnet"
-wallet = "/workspace/secrets/deployer-keypair.json"
+wallet = "/workspace/work/keys/devnet/deployer.json"
 
 [scripts]
 test = "cargo test"

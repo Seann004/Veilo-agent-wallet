@@ -36,6 +36,7 @@ Control, wallet, gateway and relayer run the live check; their `/health` is 200 
 | `POOL_PROGRAM_ID` | empty | Deployed pool program address; filled after `pnpm deploy:devnet`. Validated as a base58 address when set. |
 | `POOL_ID` | empty | Logical pool instance id from the deployment manifest. |
 | `DEPLOYMENT_MANIFEST_PATH` | `artifacts/deployment/devnet.json` | Deployment manifest location. |
+| `FUNDING_KEY_PATH` | empty | Funded devnet bootstrap keypair (local file, never printed). `deploy:devnet` uses it (or `--funding <path>`) only to fund roles and test participants. The runner never receives it. |
 
 ### Inference
 
@@ -152,6 +153,7 @@ The deployment manifest may carry `{"gateway": {"merchantAddress", "merchantAta"
 | `VEILO_ENV_FILE` | Alternate env file path. |
 | `VEILO_LOG_CONFIG=1` | Services print a redacted configuration summary at startup (`describeConfig`). |
 | `VEILO_TOOLCHAIN_IMAGE` | Override the toolchain image tag used by `pnpm tc`. |
+| `VEILO_DEPLOY_PROFILE` | `local-rehearsal` points `keys:init`, `deploy:devnet` and `demo:private-smoke` at `work/rehearsal/` and a loopback test validator (non-loopback, devnet and mainnet RPC refused). Unset or anything else: devnet. See docs/deployment.md, "Local rehearsal". |
 
 ## Owner-only permissions
 
