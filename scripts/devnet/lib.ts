@@ -11,7 +11,9 @@ import {
   address,
   appendTransactionMessageInstructions,
   createKeyPairSignerFromBytes,
+  createDefaultRpcTransport,
   createSolanaRpc,
+  createSolanaRpcFromTransport,
   createTransactionMessage,
   devnet,
   getAddressDecoder,
@@ -324,7 +326,23 @@ export function decodeProgramAccount(data: Uint8Array): { programData: string } 
 // RPC and transactions
 
 export type Rpc = ReturnType<typeof createSolanaRpc>;
-export const makeRpc = (url: string): Rpc => createSolanaRpc(devnet(url));
+// A 429 means the request was rejected unprocessed, so resending the same payload
+// (including an already-signed transaction) cannot apply it twice.
+export const makeRpc = (url: string): Rpc => {
+  const base = createDefaultRpcTransport({ url: devnet(url) });
+  const retrying = async <T>(request: Parameters<typeof base>[0]): Promise<T> => {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await base<T>(request);
+      } catch (error) {
+        const rateLimited = /HTTP error \(429\)|Too Many Requests/.test(String((error as Error)?.message ?? error));
+        if (!rateLimited || attempt >= 8) throw error;
+        await new Promise((r) => setTimeout(r, Math.min(30_000, 1_000 * 2 ** attempt)));
+      }
+    }
+  };
+  return createSolanaRpcFromTransport(Object.assign(retrying, { "~cluster": "devnet" as const }) as typeof base) as Rpc;
+};
 
 export interface AccountSnapshot {
   lamports: bigint;
