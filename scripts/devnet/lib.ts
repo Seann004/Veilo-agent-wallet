@@ -4,18 +4,15 @@ import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isMainnetIdentifier, verifyChainIdentity, type VeiloConfig } from "@veilo/contracts";
+import { createDevnetRpc, isMainnetIdentifier, verifyChainIdentity, type VeiloConfig } from "@veilo/contracts";
 import {
   AccountRole,
   addSignersToTransactionMessage,
   address,
   appendTransactionMessageInstructions,
   createKeyPairSignerFromBytes,
-  createDefaultRpcTransport,
   createSolanaRpc,
-  createSolanaRpcFromTransport,
   createTransactionMessage,
-  devnet,
   getAddressDecoder,
   getAddressEncoder,
   getBase64EncodedWireTransaction,
@@ -326,23 +323,7 @@ export function decodeProgramAccount(data: Uint8Array): { programData: string } 
 // RPC and transactions
 
 export type Rpc = ReturnType<typeof createSolanaRpc>;
-// A 429 means the request was rejected unprocessed, so resending the same payload
-// (including an already-signed transaction) cannot apply it twice.
-export const makeRpc = (url: string): Rpc => {
-  const base = createDefaultRpcTransport({ url: devnet(url) });
-  const retrying = async <T>(request: Parameters<typeof base>[0]): Promise<T> => {
-    for (let attempt = 0; ; attempt++) {
-      try {
-        return await base<T>(request);
-      } catch (error) {
-        const rateLimited = /HTTP error \(429\)|Too Many Requests/.test(String((error as Error)?.message ?? error));
-        if (!rateLimited || attempt >= 8) throw error;
-        await new Promise((r) => setTimeout(r, Math.min(30_000, 1_000 * 2 ** attempt)));
-      }
-    }
-  };
-  return createSolanaRpcFromTransport(Object.assign(retrying, { "~cluster": "devnet" as const }) as typeof base) as Rpc;
-};
+export const makeRpc = (url: string): Rpc => createDevnetRpc(url);
 
 export interface AccountSnapshot {
   lamports: bigint;

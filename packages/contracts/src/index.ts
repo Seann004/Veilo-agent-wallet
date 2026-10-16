@@ -5,3 +5,4 @@ export * from "./chain-identity";
 export * from "./env-file";
 export * from "./service-health";
 export * from "./control/index";
+export * from "./rpc";

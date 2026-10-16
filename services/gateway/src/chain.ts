@@ -1,4 +1,5 @@
-import { address, createSolanaRpc, devnet, signature as toSignature } from "@solana/kit";
+import { createDevnetRpc } from "@veilo/contracts";
+import { address, signature as toSignature } from "@solana/kit";
 import { decodeWireTransaction, messageHashOf } from "@veilo/x402-client";
 
 export interface ObservedTransaction {
@@ -20,7 +21,7 @@ export interface GatewayChain {
 }
 
 export function createRpcChain(rpcUrl: string): GatewayChain {
-  const rpc = createSolanaRpc(devnet(rpcUrl));
+  const rpc = createDevnetRpc(rpcUrl);
   return {
     async getLatestBlockhash() {
       const { value } = await rpc.getLatestBlockhash({ commitment: "finalized" }).send();

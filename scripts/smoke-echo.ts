@@ -4,10 +4,11 @@
 //   pnpm tsx scripts/smoke-echo.ts --inspect                      (read-only: challenge + facilitator check)
 //   pnpm tsx scripts/smoke-echo.ts --key <path> --confirm         (one payment, 10,000 base-unit ceiling)
 //   pnpm tsx scripts/smoke-echo.ts --reconcile <evidence.json>    (read-only: find an uncertain attempt on chain)
+import { createDevnetRpc } from "@veilo/contracts";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { address, createKeyPairSignerFromBytes, createSolanaRpc, devnet, signature as toSignature } from "@solana/kit";
+import { address, createKeyPairSignerFromBytes, signature as toSignature } from "@solana/kit";
 import { x402Client, x402HTTPClient } from "@x402/core/client";
 import type { PaymentRequired } from "@x402/core/types";
 import { findRepoRoot, loadConfig, loadDotEnv, redactUrl, verifyChainIdentity } from "@veilo/contracts";
@@ -38,7 +39,7 @@ const rootDir = findRepoRoot();
 loadDotEnv({ rootDir });
 const config = loadConfig(process.env, { rootDir });
 const evidenceDir = join(rootDir, "artifacts", "evidence");
-const rpc = createSolanaRpc(devnet(config.network.rpcUrl));
+const rpc = createDevnetRpc(config.network.rpcUrl);
 const bigintSafe = (_k: string, v: unknown) => (typeof v === "bigint" ? v.toString() : v);
 const log = (o: unknown) => console.log(JSON.stringify(o, bigintSafe, 2));
 

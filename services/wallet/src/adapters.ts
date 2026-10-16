@@ -1,6 +1,7 @@
+import { createDevnetRpc } from "@veilo/contracts";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { address, createSolanaRpc, devnet, signature as toSignature, type Address, type Blockhash } from "@solana/kit";
+import { address, signature as toSignature, type Address, type Blockhash } from "@solana/kit";
 import {
   publicStateWire,
   recoveryViewWire,
@@ -149,7 +150,7 @@ export class HttpRelayerPort implements RelayerPort {
 }
 
 export function createRpcChainPort(rpcUrl: string): ChainPort {
-  const rpc = createSolanaRpc(devnet(rpcUrl));
+  const rpc = createDevnetRpc(rpcUrl);
   return {
     async finalizedSlot() {
       return rpc.getSlot({ commitment: "finalized" }).send();

@@ -1,4 +1,5 @@
-import { createSolanaRpc, devnet, signature as toSignature, type Address, type Base64EncodedWireTransaction, type Signature } from "@solana/kit";
+import { createDevnetRpc } from "@veilo/contracts";
+import { signature as toSignature, type Address, type Base64EncodedWireTransaction, type Signature } from "@solana/kit";
 
 export interface TxRecord {
   signature: string;
@@ -22,7 +23,7 @@ export interface RelayerChain {
 }
 
 export function createRpcRelayerChain(rpcUrl: string): RelayerChain {
-  const rpc = createSolanaRpc(devnet(rpcUrl));
+  const rpc = createDevnetRpc(rpcUrl);
   return {
     finalizedSlot: () => rpc.getSlot({ commitment: "finalized" }).send(),
     finalizedBlockHeight: () => rpc.getBlockHeight({ commitment: "finalized" }).send(),
