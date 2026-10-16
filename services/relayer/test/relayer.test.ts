@@ -37,6 +37,8 @@ import {
   MerkleTree,
   precommitment,
   prove,
+  spentNullifierPda,
+  toBe32,
   spendWitness,
   type DeploymentManifest,
   type PoolEvent,
@@ -128,6 +130,8 @@ interface SpendCase {
   req: WithdrawalRequestWire;
   svc: WithdrawalService;
   destAta: Address;
+  /** A new attempt for the same note: new fresh destination, change secrets and slot bound. */
+  reprove(withdrawalId: string, validUntilSlot: bigint): Promise<WithdrawalRequestWire>;
 }
 
 async function realSpend(): Promise<SpendCase> {
@@ -144,22 +148,25 @@ async function realSpend(): Promise<SpendCase> {
   tree.append(commitment(p, note));
   const approved = buildApprovedTree(p, [label]);
   publishPool(chain, m, { tree, roots: [empty, tree.root], approvedRoot: approved.root, approvedVersion: 1n, head: 2n, tail: 2n, liability: 1_000_001n });
-  const destOwner = randomAddress();
-  const destAta = (await associatedTokenAddress(destOwner, address(m.token.mint))).address;
-  const intent = { destinationTokenAccount: destAta, destinationOwner: destOwner, payoutAmount: "100000", relayerFee: "0", relayer: sponsor.address, relayerFeeTokenAccount: null, validUntilSlot: (chain.slot + 750n).toString() };
-  const ctx = intentContext(
-    { programId: addressBytes(m.program.programId), pool: addressBytes(pool), genesisHash: hexToBytes(GENESIS_HEX), mint: addressBytes(m.token.mint) },
-    { destinationTokenAccount: addressBytes(destAta), destinationOwner: addressBytes(destOwner), payoutAmount: 100_000n, relayerFee: 0n, relayer: addressBytes(sponsor.address), relayerFeeTokenAccount: null, validUntilSlot: chain.slot + 750n },
-  );
-  const w = spendWitness(p, { note, statePath: tree.path(1), approvedPath: approved.path(0), context: ctx.context, withdrawnValue: 100_000n, change: { nullifierSecret: 555n, noteSecret: 666n } });
   const pins = circuitPins();
-  const proved = await prove(w, { wasmPath: join(BUILD, "spend", "spend_js", "spend.wasm"), wasmSha256: pins.spend.wasmSha256, zkeyPath: join(BUILD, "zkey", "spend_final.zkey"), zkeySha256: pins.spend.zkeySha256 });
+  let changeSecret = 555n;
+  const build = async (withdrawalId: string, validUntilSlot: bigint, destOwner: Address): Promise<{ req: WithdrawalRequestWire; destAta: Address }> => {
+    const destAta = (await associatedTokenAddress(destOwner, address(m.token.mint))).address;
+    const intent = { destinationTokenAccount: destAta, destinationOwner: destOwner, payoutAmount: "100000", relayerFee: "0", relayer: sponsor.address, relayerFeeTokenAccount: null, validUntilSlot: validUntilSlot.toString() };
+    const ctx = intentContext(
+      { programId: addressBytes(m.program.programId), pool: addressBytes(pool), genesisHash: hexToBytes(GENESIS_HEX), mint: addressBytes(m.token.mint) },
+      { destinationTokenAccount: addressBytes(destAta), destinationOwner: addressBytes(destOwner), payoutAmount: 100_000n, relayerFee: 0n, relayer: addressBytes(sponsor.address), relayerFeeTokenAccount: null, validUntilSlot },
+    );
+    const w = spendWitness(p, { note, statePath: tree.path(1), approvedPath: approved.path(0), context: ctx.context, withdrawnValue: 100_000n, change: { nullifierSecret: changeSecret++, noteSecret: 666n } });
+    const proved = await prove(w, { wasmPath: join(BUILD, "spend", "spend_js", "spend.wasm"), wasmSha256: pins.spend.wasmSha256, zkeyPath: join(BUILD, "zkey", "spend_final.zkey"), zkeySha256: pins.spend.zkeySha256 });
+    return { req: { withdrawalId, proof: proved.proof as never, publicSignals: proved.publicSignals, intent, sponsorLamportCap: "3000000" }, destAta };
+  };
+  const first = await build("6f1c1b7e-0000-4000-8000-000000000001", chain.slot + 750n, randomAddress());
   const db = openRelayerDb(":memory:");
   chain.db = db;
   const svc = new WithdrawalService({ db, chain, sponsor, manifest: () => m, spendVk: spendVk(), sponsorCapLamports: 100_000_000n });
-  const req: WithdrawalRequestWire = { withdrawalId: "6f1c1b7e-0000-4000-8000-000000000001", proof: proved.proof as never, publicSignals: proved.publicSignals, intent, sponsorLamportCap: "3000000" };
   void precommitment;
-  return { m, chain, sponsor, req, svc, destAta };
+  return { m, chain, sponsor, req: first.req, svc, destAta: first.destAta, reprove: async (id, bound) => (await build(id, bound, randomAddress())).req };
 }
 
 describe.skipIf(!HAVE_CIRCUITS)("POST /withdrawals with a real spend proof (requires circuits/build)", () => {
@@ -217,6 +224,68 @@ describe.skipIf(!HAVE_CIRCUITS)("POST /withdrawals with a real spend proof (requ
     await s.svc.advance(s.req.withdrawalId);
     expect(s.svc.view(s.req.withdrawalId)!.state).toBe("expired");
   }, 30_000);
+
+  it("records the request before any chain read; a failed read leaves it recorded and unchecked, and advance completes it", async () => {
+    const s = await realSpend();
+    const realSlot = s.chain.finalizedSlot.bind(s.chain);
+    let recordedBeforeRead: boolean | null = null;
+    s.chain.finalizedSlot = async () => {
+      recordedBeforeRead = s.svc.view(s.req.withdrawalId) !== null;
+      throw new Error("HTTP 429 Too Many Requests");
+    };
+    const v = await s.svc.submit(s.req);
+    expect(recordedBeforeRead).toBe(true);
+    expect(v.state).toBe("accepted");
+    expect(v.error).toMatch(/chain checks pending/);
+    expect(s.chain.sent).toHaveLength(0);
+    // The identical resend is idempotent; nothing is sent until the chain checks pass.
+    expect((await s.svc.submit(s.req)).state).toBe("accepted");
+    expect(s.chain.sent).toHaveLength(0);
+    s.chain.finalizedSlot = realSlot;
+    expect(s.svc.pendingIds()).toContain(s.req.withdrawalId);
+    await s.svc.advance(s.req.withdrawalId);
+    expect(s.svc.view(s.req.withdrawalId)!.state).toBe("ata_submitted");
+    expect(s.chain.sent).toHaveLength(1);
+  }, 30_000);
+
+  it("an identical request rejected before anything was sent is checked again when resubmitted", async () => {
+    const s = await realSpend();
+    const approval = s.chain.accounts.get(s.m.pool.approvalState)!;
+    const stale = new Uint8Array(approval.data);
+    stale[8 + 64] = stale[8 + 64]! ^ 1;
+    s.chain.accounts.set(s.m.pool.approvalState, { ...approval, data: stale });
+    await expect(s.svc.submit(s.req)).rejects.toMatchObject({ code: "NOTE_PENDING" });
+    expect(s.svc.view(s.req.withdrawalId)!.state).toBe("rejected");
+    expect(s.chain.sent).toHaveLength(0);
+    s.chain.accounts.set(s.m.pool.approvalState, approval);
+    expect((await s.svc.submit(s.req)).state).toBe("ata_submitted");
+  }, 30_000);
+
+  it("accepts a new attempt for a nullifier only after every earlier request for it ended", async () => {
+    const s = await realSpend();
+    s.chain.accounts.set(s.destAta, { data: new Uint8Array(165), lamports: 2_039_280n, owner: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", executable: false });
+    expect((await s.svc.submit(s.req)).state).toBe("submitted");
+    const second = await s.reprove("6f1c1b7e-0000-4000-8000-000000000011", s.chain.slot + 750n);
+    expect(second.publicSignals[3]).toBe(s.req.publicSignals[3]);
+    await expect(s.svc.submit(second)).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+    // The first request's bound passes unsettled; only then may a new attempt be recorded.
+    s.chain.height += 151n;
+    s.chain.slot += 751n;
+    await s.svc.advance(s.req.withdrawalId);
+    expect(s.svc.view(s.req.withdrawalId)!.state).toBe("expired");
+    const third = await s.reprove("6f1c1b7e-0000-4000-8000-000000000012", s.chain.slot + 750n);
+    expect((await s.svc.submit(third)).state).toBe("ata_submitted");
+    expect(s.svc.view(s.req.withdrawalId)!.state).toBe("expired");
+    // The nullifier account still allows one spend: once it exists every later request is rejected.
+    const nf = await spentNullifierPda(address(s.m.program.programId), address(s.m.pool.poolState), toBe32(BigInt(s.req.publicSignals[3]!)));
+    s.chain.accounts.set(nf.address, { data: new Uint8Array(50), lamports: 1n, owner: s.m.program.programId, executable: false });
+    s.chain.height += 151n;
+    s.chain.slot += 751n;
+    await s.svc.advance(third.withdrawalId);
+    const fourth = await s.reprove("6f1c1b7e-0000-4000-8000-000000000013", s.chain.slot + 750n);
+    await expect(s.svc.submit(fourth)).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+    expect(s.chain.sent.length).toBeGreaterThan(0);
+  }, 60_000);
 });
 
 describe("recovery co-signing", () => {

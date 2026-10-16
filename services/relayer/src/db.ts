@@ -9,7 +9,7 @@ export type RelayerDb = Database.Database;
  * last-valid height and signature are written before it is sent. Sponsor lamports are an
  * append-only ledger with fees, outstanding rent and recovered rent kept separate.
  */
-const MIGRATIONS: ReadonlyArray<{ version: number; sql: string }> = [
+const MIGRATIONS: ReadonlyArray<{ version: number; sql: string; rebuild?: true }> = [
   {
     version: 1,
     sql: `
@@ -100,6 +100,48 @@ CREATE TABLE indexed_tx (
 ) STRICT;
 `,
   },
+  {
+    // A withdrawal is recorded before any chain read (checked_at_ms stays NULL until the
+    // chain checks pass), and a nullifier may have a new request once every earlier request
+    // for it ended expired, rejected or failed. The program still allows one spend only.
+    version: 2,
+    rebuild: true,
+    sql: `
+CREATE TABLE withdrawal_new (
+  id TEXT PRIMARY KEY,
+  nullifier_hash TEXT NOT NULL,
+  request_json TEXT NOT NULL CHECK (json_valid(request_json)),
+  destination_owner TEXT NOT NULL,
+  destination_ata TEXT NOT NULL,
+  valid_until_slot INTEGER NOT NULL,
+  sponsor_cap INTEGER NOT NULL CHECK (sponsor_cap >= 0),
+  state TEXT NOT NULL CHECK (state IN ('accepted', 'ata_submitted', 'submitted', 'finalized', 'failed', 'expired', 'rejected')),
+  checked_at_ms INTEGER,
+  ata_signature TEXT UNIQUE,
+  ata_blockhash TEXT,
+  ata_last_valid_block_height INTEGER,
+  signature TEXT UNIQUE,
+  blockhash TEXT,
+  last_valid_block_height INTEGER,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  finalized_slot INTEGER,
+  error TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL
+) STRICT;
+
+INSERT INTO withdrawal_new (id, nullifier_hash, request_json, destination_owner, destination_ata, valid_until_slot, sponsor_cap, state, checked_at_ms,
+  ata_signature, ata_blockhash, ata_last_valid_block_height, signature, blockhash, last_valid_block_height, attempts, finalized_slot, error, created_at_ms, updated_at_ms)
+SELECT id, nullifier_hash, request_json, destination_owner, destination_ata, valid_until_slot, sponsor_cap, state, created_at_ms,
+  ata_signature, ata_blockhash, ata_last_valid_block_height, signature, blockhash, last_valid_block_height, attempts, finalized_slot, error, created_at_ms, updated_at_ms
+FROM withdrawal;
+
+DROP TABLE withdrawal;
+ALTER TABLE withdrawal_new RENAME TO withdrawal;
+
+CREATE UNIQUE INDEX withdrawal_one_live_per_nullifier ON withdrawal (nullifier_hash) WHERE state NOT IN ('expired', 'rejected', 'failed');
+`,
+  },
 ];
 
 export function openRelayerDb(path: string): RelayerDb {
@@ -113,10 +155,18 @@ export function openRelayerDb(path: string): RelayerDb {
   const applied = new Set((db.prepare("SELECT version FROM schema_migrations").all() as Array<{ version: bigint }>).map((r) => Number(r.version)));
   for (const m of MIGRATIONS) {
     if (applied.has(m.version)) continue;
-    db.transaction(() => {
-      db.exec(m.sql);
-      db.prepare("INSERT INTO schema_migrations (version, applied_at_ms) VALUES (?, ?)").run(m.version, Date.now());
-    }).immediate();
+    // Table rebuilds follow SQLite's procedure: foreign keys off outside the transaction and a
+    // full foreign_key_check before commit.
+    if (m.rebuild) db.pragma("foreign_keys = OFF");
+    try {
+      db.transaction(() => {
+        db.exec(m.sql);
+        if (m.rebuild && (db.pragma("foreign_key_check") as unknown[]).length > 0) throw new Error(`relayer migration ${m.version} leaves foreign key violations`);
+        db.prepare("INSERT INTO schema_migrations (version, applied_at_ms) VALUES (?, ?)").run(m.version, Date.now());
+      }).immediate();
+    } finally {
+      if (m.rebuild) db.pragma("foreign_keys = ON");
+    }
   }
   return db;
 }

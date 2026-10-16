@@ -144,6 +144,43 @@ export class FundingService {
     });
   }
 
+  /**
+   * Starts a new funding attempt after a prior attempt for the same note was proven
+   * expired_unsettled: finalized slot past its bound and its nullifier unused, rechecked here
+   * from chain evidence. The new attempt gets its own purchase reference, proof, slot bound,
+   * change secrets and fresh wallet; the prior attempt's row and released proof stay as they
+   * were and are never resent. The program's nullifier account still allows one spend only.
+   */
+  async reattemptAfterExpiry(priorPurchaseId: string, next: FundingInput): Promise<FundingResult> {
+    const { store } = this.d;
+    if (next.purchaseId === priorPurchaseId) return failure("recovery_required", "a new attempt needs its own purchase reference");
+    if (store.funding(next.purchaseId)) return this.prepare(next);
+    let prior = store.funding(priorPurchaseId);
+    if (!prior) return failure("not_ready", "no prior funding attempt exists");
+    if (next.operationId === prior.operation_id) return failure("recovery_required", "a new attempt needs its own operation reference");
+    if (prior.step !== "expired_unsettled") {
+      const r = await this.status(priorPurchaseId);
+      if (r.status !== "expired_unsettled") return failure("not_ready", `prior attempt is ${r.status}; a new attempt waits until it is proven expired and unsettled`);
+      prior = store.funding(priorPurchaseId)!;
+    }
+    const input = store.note(prior.input_note_id)!;
+    if (input.commitment !== next.inputNote.commitment) return failure("recovery_required", "a new attempt must fund from the same input note as the prior attempt");
+    // Slot first, then account: the account read is at least as recent as this slot.
+    const ctx = await this.d.pool();
+    const slot = await this.d.chain.finalizedSlot();
+    const nf = await spentNullifierPda(ctx.programId, ctx.poolState, toBe32(hexToField(prior.nullifier_hash)));
+    if (await this.d.chain.account(nf.address)) return failure("recovery_required", "the input note's nullifier is spent; no new attempt is possible");
+    if (slot <= prior.valid_until_slot) return failure("not_ready", "the prior attempt's slot bound has not passed at finalized commitment");
+    store.event("funding.reattempt", next.purchaseId, {
+      priorPurchaseId,
+      priorOperationId: prior.operation_id,
+      operationId: next.operationId,
+      priorValidUntilSlot: prior.valid_until_slot.toString(),
+      observedFinalizedSlot: slot.toString(),
+    });
+    return this.prepare(next);
+  }
+
   private allocateChangeIndex(parent: NoteRecord): number {
     for (;;) {
       const i = this.d.store.allocate("note");
@@ -322,8 +359,9 @@ export class FundingService {
     }
     if (slot > f.valid_until_slot) return this.markExpired(f, "finalized slot is past the intent bound and the nullifier is unused");
     if (relayerDown) return { status: "uncertain", fundingRef: ref, reason: "relayer unreachable; withdrawal outcome pending" };
-    if (view === null) {
-      // The relayer never recorded the request (reply lost before persistence): resend the same material.
+    if (view === null || (view.state === "rejected" && view.signature === null && view.ataSignature === null)) {
+      // The relayer never recorded the request, or rejected it before sending anything (for
+      // example a root not yet visible): resend the same material while the bound allows it.
       return this.submit(f);
     }
     return { status: "submitted", fundingRef: ref, signature: view.signature };

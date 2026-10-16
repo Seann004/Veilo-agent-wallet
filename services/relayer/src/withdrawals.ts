@@ -76,6 +76,7 @@ interface WithdrawalRow {
   attempts: bigint;
   finalized_slot: bigint | null;
   error: string | null;
+  checked_at_ms: bigint | null;
 }
 
 function toIntent(w: WithdrawalRequestWire["intent"]): WithdrawalIntent {
@@ -143,10 +144,25 @@ export class WithdrawalService {
     };
   }
 
+  /**
+   * Records the request before any chain read: local checks (identity, fees, intent context,
+   * Groth16 proof) run first, then the row is inserted, then chain checks run. A chain read that
+   * fails leaves the row recorded and unchecked; `advance` repeats the checks before sending.
+   * A request rejected before anything was sent is checked again when resubmitted unchanged.
+   */
   async submit(req: WithdrawalRequestWire): Promise<WithdrawalViewWire> {
     const existing = this.row(req.withdrawalId);
     if (existing) {
       if (existing.request_json !== canonicalJson(req)) throw new RelayerError("IDEMPOTENCY_CONFLICT", "withdrawal id was used with different material");
+      if (existing.state === "rejected" && this.attemptCount(existing.id) === 0n) {
+        try {
+          this.set(existing.id, { state: "accepted", checked_at_ms: null, error: null });
+        } catch (error) {
+          if (String((error as Error).message).includes("UNIQUE")) throw new RelayerError("IDEMPOTENCY_CONFLICT", "another live withdrawal exists for this nullifier");
+          throw error;
+        }
+      }
+      if (this.row(existing.id)!.state === "accepted") await this.advanceOrReport(existing.id);
       return this.view(req.withdrawalId)!;
     }
     const { manifest, sponsor } = this.ready();
@@ -154,59 +170,94 @@ export class WithdrawalService {
     const program = address(manifest.program.programId);
     const poolState = address(manifest.pool.poolState);
     const ps = req.publicSignals.map(parseDecimal);
-    const [context, stateRoot, approvedRoot, nullifierHash, withdrawn, newCommitment] = ps as [bigint, bigint, bigint, bigint, bigint, bigint];
+    const [context, , , nullifierHash, withdrawn, newCommitment] = ps as [bigint, bigint, bigint, bigint, bigint, bigint];
     if (req.intent.relayer !== sponsor.address) throw new RelayerError("POLICY_DENIED", "intent must name this relayer");
     if (req.intent.relayerFee !== "0" || req.intent.relayerFeeTokenAccount !== null) throw new RelayerError("POLICY_DENIED", "this relayer charges no token fee");
     const expectedAta = (await associatedTokenAddress(address(req.intent.destinationOwner), mint)).address;
     if (req.intent.destinationTokenAccount !== expectedAta) throw new RelayerError("POLICY_DENIED", "destination must be the destination owner's exact-mint ATA");
-    const intent = toIntent(req.intent);
     const derived = intentContext(
       { programId: addressBytes(program), pool: addressBytes(poolState), genesisHash: hexToBytes(manifest.network.genesisHashHex), mint: addressBytes(mint) },
-      intent,
+      toIntent(req.intent),
     );
     if (derived.context !== context) throw new RelayerError("POLICY_DENIED", "public context does not match the intent");
     if (derived.withdrawnValue !== withdrawn) throw new RelayerError("POLICY_DENIED", "withdrawn value does not match the intent");
     if (newCommitment === 0n) throw new RelayerError("POLICY_DENIED", "new commitment must be nonzero");
-
-    const slot = await this.c.chain.finalizedSlot();
-    const poolAcct = await this.c.chain.account(poolState);
-    const apprAcct = await this.c.chain.account(address(manifest.pool.approvalState));
-    if (!poolAcct || !apprAcct) throw new RelayerError("NOT_READY", "pool accounts not visible");
-    const pool = decodePoolState(poolAcct.data);
-    try {
-      validateIntent(intent, pool.maxRelayerFee, slot);
-    } catch (error) {
-      if (error instanceof IntentError) throw new RelayerError("POLICY_DENIED", `intent rejected: ${error.code}`);
-      throw error;
-    }
-    if (!knownRoots(pool).includes(stateRoot)) throw new RelayerError("NOTE_PENDING", "state root is not in the on-chain root history");
-    if (decodeApprovalState(apprAcct.data).approvedRoot !== approvedRoot) throw new RelayerError("NOTE_PENDING", "approved root is not the current on-chain approved root");
-    const nfPda = await spentNullifierPda(program, poolState, toBe32(nullifierHash));
-    if (await this.c.chain.account(nfPda.address)) throw new RelayerError("IDEMPOTENCY_CONFLICT", "nullifier is already spent");
     if (!(await verifyProof(this.c.spendVk, req.publicSignals, req.proof as Groth16Proof))) throw new RelayerError("POLICY_DENIED", "spend proof does not verify");
-
-    const ataExists = (await this.c.chain.account(expectedAta)) !== null;
-    const rent = ataExists ? 0n : await this.c.chain.rentExemptMinimum(TOKEN_ACCOUNT_SIZE);
-    const estimate = rent + LAMPORTS_PER_SIGNATURE * (ataExists ? 1n : 2n);
-    const cap = BigInt(req.sponsorLamportCap);
-    if (estimate > cap) throw new RelayerError("BUDGET_EXCEEDED", "sponsor cost exceeds this withdrawal's sponsor cap");
-    const totals = sponsorTotals(this.c.db);
-    if (totals.feesSpent + totals.rentOutstanding + estimate > this.c.sponsorCapLamports) throw new RelayerError("BUDGET_EXCEEDED", "sponsor lamport allowance exhausted");
 
     const nfHex = Buffer.from(toBe32(nullifierHash)).toString("hex");
     try {
       this.c.db
         .prepare(
-          `INSERT INTO withdrawal (id, nullifier_hash, request_json, destination_owner, destination_ata, valid_until_slot, sponsor_cap, state, created_at_ms, updated_at_ms)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'accepted', ?, ?)`,
+          `INSERT INTO withdrawal (id, nullifier_hash, request_json, destination_owner, destination_ata, valid_until_slot, sponsor_cap, state, checked_at_ms, created_at_ms, updated_at_ms)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'accepted', NULL, ?, ?)`,
         )
-        .run(req.withdrawalId, nfHex, canonicalJson(req), req.intent.destinationOwner, expectedAta, BigInt(req.intent.validUntilSlot), cap, this.now, this.now);
+        .run(req.withdrawalId, nfHex, canonicalJson(req), req.intent.destinationOwner, expectedAta, BigInt(req.intent.validUntilSlot), BigInt(req.sponsorLamportCap), this.now, this.now);
     } catch (error) {
-      if (String((error as Error).message).includes("UNIQUE")) throw new RelayerError("IDEMPOTENCY_CONFLICT", "a withdrawal for this nullifier already exists");
+      if (String((error as Error).message).includes("UNIQUE")) throw new RelayerError("IDEMPOTENCY_CONFLICT", "a live withdrawal for this nullifier already exists");
       throw error;
     }
-    await this.advance(req.withdrawalId).catch(() => undefined);
+    await this.advanceOrReport(req.withdrawalId);
     return this.view(req.withdrawalId)!;
+  }
+
+  /** Runs a recorded request forward; a chain-check rejection is returned to the caller. */
+  private async advanceOrReport(id: string): Promise<void> {
+    try {
+      await this.advance(id);
+    } catch (error) {
+      if (error instanceof RelayerError) throw error;
+      // A failed chain read leaves the request recorded and unchecked; the loop retries it.
+      this.set(id, { error: `chain checks pending (${(error as Error).name})` });
+    }
+    const r = this.row(id)!;
+    if (r.state === "rejected") {
+      const code = (r.error ?? "").split(":")[0] as ApiErrorCode;
+      throw new RelayerError(code in API_ERROR_STATUS ? code : "POLICY_DENIED", r.error ?? "withdrawal rejected");
+    }
+  }
+
+  private attemptCount(id: string): bigint {
+    return this.c.db.prepare(`SELECT count(*) FROM withdrawal_attempt WHERE withdrawal_id = ?`).pluck().get(id) as bigint;
+  }
+
+  /**
+   * Chain checks for a recorded, not yet checked request: slot bound, known state root,
+   * current approved root, unused nullifier and sponsor caps. A failed check marks the
+   * request rejected (nothing was sent); a failed read throws and leaves it unchecked.
+   */
+  private async chainCheck(r: WithdrawalRow, manifest: DeploymentManifest): Promise<boolean> {
+    const req = JSON.parse(r.request_json) as WithdrawalRequestWire;
+    const ps = req.publicSignals.map(parseDecimal);
+    const [, stateRoot, approvedRoot, nullifierHash] = ps as [bigint, bigint, bigint, bigint];
+    const program = address(manifest.program.programId);
+    const poolState = address(manifest.pool.poolState);
+    const reject = (code: ApiErrorCode, message: string) => {
+      this.set(r.id, { state: "rejected", error: `${code}: ${message}` });
+      return false;
+    };
+    const slot = await this.c.chain.finalizedSlot();
+    const poolAcct = await this.c.chain.account(poolState);
+    const apprAcct = await this.c.chain.account(address(manifest.pool.approvalState));
+    if (!poolAcct || !apprAcct) return reject("NOT_READY", "pool accounts not visible");
+    const pool = decodePoolState(poolAcct.data);
+    try {
+      validateIntent(toIntent(req.intent), pool.maxRelayerFee, slot);
+    } catch (error) {
+      if (error instanceof IntentError) return reject("POLICY_DENIED", `intent rejected: ${error.code}`);
+      throw error;
+    }
+    if (!knownRoots(pool).includes(stateRoot)) return reject("NOTE_PENDING", "state root is not in the on-chain root history");
+    if (decodeApprovalState(apprAcct.data).approvedRoot !== approvedRoot) return reject("NOTE_PENDING", "approved root is not the current on-chain approved root");
+    const nfPda = await spentNullifierPda(program, poolState, toBe32(nullifierHash));
+    if (await this.c.chain.account(nfPda.address)) return reject("IDEMPOTENCY_CONFLICT", "nullifier is already spent");
+    const ataExists = (await this.c.chain.account(address(r.destination_ata))) !== null;
+    const rent = ataExists ? 0n : await this.c.chain.rentExemptMinimum(TOKEN_ACCOUNT_SIZE);
+    const estimate = rent + LAMPORTS_PER_SIGNATURE * (ataExists ? 1n : 2n);
+    if (estimate > r.sponsor_cap) return reject("BUDGET_EXCEEDED", "sponsor cost exceeds this withdrawal's sponsor cap");
+    const totals = sponsorTotals(this.c.db);
+    if (totals.feesSpent + totals.rentOutstanding + estimate > this.c.sponsorCapLamports) return reject("BUDGET_EXCEEDED", "sponsor lamport allowance exhausted");
+    this.set(r.id, { checked_at_ms: BigInt(this.now), error: null });
+    return true;
   }
 
   private set(id: string, fields: Record<string, unknown>): void {
@@ -231,6 +282,8 @@ export class WithdrawalService {
     const req = JSON.parse(r.request_json) as WithdrawalRequestWire;
     const chain = this.c.chain;
 
+    // An unchecked request is checked against the chain before anything is sent.
+    if (r.state === "accepted" && r.checked_at_ms === null && !(await this.chainCheck(r, manifest))) return;
     if (r.state === "accepted" || r.state === "ata_submitted") {
       if (await chain.account(ata)) {
         if (r.ata_signature) {

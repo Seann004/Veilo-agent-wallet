@@ -52,7 +52,7 @@ import { FundingService } from "../../services/wallet/src/funding";
 import { NoteService } from "../../services/wallet/src/notes";
 import { OwnerFlows } from "../../services/wallet/src/owner-flows";
 import { poolContextFrom } from "../../services/wallet/src/pool";
-import type { ControlPort, ControlPurchase, RelayerPort } from "../../services/wallet/src/ports";
+import { PortUnavailableError, type ControlPort, type ControlPurchase, type RelayerPort } from "../../services/wallet/src/ports";
 import { ensureOwnerServiceSecret, WalletKeys } from "../../services/wallet/src/secret";
 import { WalletStore } from "../../services/wallet/src/store";
 import { applyApprovalRule } from "../../services/relayer/src/cli/approve-root";
@@ -101,6 +101,16 @@ const PAYOUT = 10_000n;
 const DEPOSIT_AMOUNT = 200_000n;
 const SPONSOR_CAP_PER_WITHDRAWAL = 3_000_000n;
 const OWNERS = ["testOwnerA", "testOwnerB"] as const;
+const STOP_POINTS = ["deposits", "inserts", "approve-root", "release", "spend", "change-insert", "merchant"] as const;
+type StopPoint = (typeof STOP_POINTS)[number];
+/** --stop-after <step>: end the run after that step (state is kept; a rerun continues). */
+const STOP_AFTER = ((): StopPoint | null => {
+  const i = process.argv.indexOf("--stop-after");
+  if (i < 0) return null;
+  const v = process.argv[i + 1] as StopPoint | undefined;
+  if (!v || !STOP_POINTS.includes(v)) throw new Error(`--stop-after expects one of: ${STOP_POINTS.join(", ")}`);
+  return v;
+})();
 /** Wallet note states at or beyond insertion / approval. */
 const INSERTED = new Set(["indexed", "approved", "spendable", "reserved", "spent", "exit_prepared", "exited"]);
 const APPROVED = new Set(["spendable", "reserved", "spent", "exit_prepared", "exited"]);
@@ -140,6 +150,25 @@ interface SmokeState {
   merchant: { signature: string | null; httpStatus: number | null; messageHash: string | null } | null;
   exits: Partial<Record<"original" | "change", WireTxRecord & { noteId: string; owner: OwnerRole }>>;
   proofTimings: Array<{ circuit: string; ms: number; at: string }>;
+  /** The smoke's logical funding operation; each attempt has its own purchase/operation reference. */
+  logicalOperationId?: string;
+  attempts?: SmokeAttempt[];
+}
+
+interface SmokeAttempt {
+  purchaseId: string;
+  operationId: string;
+  startedAt: string;
+  outcome: "finalized" | "expired_unsettled" | null;
+}
+
+/** Attempt list, created from a single earlier purchase when the state predates attempts. */
+function attemptsOf(s: SmokeState): SmokeAttempt[] {
+  if (!s.attempts) {
+    s.attempts = s.purchaseId ? [{ purchaseId: s.purchaseId, operationId: s.operationId!, startedAt: new Date().toISOString(), outcome: null }] : [];
+    if (s.logicalOperationId === undefined && s.operationId) s.logicalOperationId = s.operationId;
+  }
+  return s.attempts;
 }
 
 const freshState = (pool: string): SmokeState => ({
@@ -178,7 +207,7 @@ class SmokeAuthority implements ControlPort {
     const stage = this.s.stage;
     return {
       id,
-      operationId: this.s.operationId ?? "",
+      operationId: attemptsOf(this.s).find((a) => a.purchaseId === id)?.operationId ?? this.s.operationId ?? "",
       agentId: "m2-smoke",
       paymentPath: "direct_x402",
       price: { amount: PAYOUT.toString() },
@@ -221,7 +250,9 @@ const relayerCall = async <T>(fn: () => Promise<T> | T): Promise<T> => {
     return await fn();
   } catch (error) {
     if (error instanceof RelayerError) throw new ServiceCallError(error.status, error.code, `relayer: ${error.message}`);
-    throw error;
+    // Anything else (for example an RPC 429 inside the relayer) is what an HTTP client sees as an
+    // unreachable relayer: the wallet records the outcome as uncertain and reconciles it.
+    throw new PortUnavailableError(`relayer call failed (${(error as Error).name}: ${(error as Error).message})`);
   }
 };
 
@@ -517,23 +548,41 @@ async function stepSpend(w: World): Promise<void> {
     s.purchaseId = live.purchase_id;
     s.operationId = live.operation_id;
     s.stage = live.step === "prepared" ? "prepare" : "release";
+    if (!attemptsOf(s).some((a) => a.purchaseId === live.purchase_id)) s.attempts!.push({ purchaseId: live.purchase_id, operationId: live.operation_id, startedAt: new Date().toISOString(), outcome: null });
     saveState(s);
   }
   if (!s.purchaseId) {
     s.purchaseId = randomUUID();
     s.operationId = `m2-smoke-${s.purchaseId}`;
+    s.logicalOperationId = s.operationId;
     s.stage = "prepare";
+    s.attempts = [{ purchaseId: s.purchaseId, operationId: s.operationId, startedAt: new Date().toISOString(), outcome: null }];
     saveState(s);
   }
+  attemptsOf(s);
+  let f = w.deps.store.funding(s.purchaseId);
+  if (f?.step === "expired_unsettled") {
+    // The wallet proved this attempt unsettled (bound passed, nullifier unused). Its proof and
+    // fresh wallet are never reused; a new attempt of the same logical operation starts here.
+    const prior = s.attempts!.find((a) => a.purchaseId === s.purchaseId)!;
+    prior.outcome = "expired_unsettled";
+    const n = s.attempts!.length + 1;
+    s.purchaseId = randomUUID();
+    s.operationId = `${s.logicalOperationId}:attempt-${n}`;
+    s.stage = "prepare";
+    s.attempts!.push({ purchaseId: s.purchaseId, operationId: s.operationId, startedAt: new Date().toISOString(), outcome: null });
+    saveState(s);
+    console.log(`  spend: attempt ${n - 1} (${prior.purchaseId}) expired unsettled; starting attempt ${n} with a new proof and fresh payer`);
+    f = undefined;
+  }
   const pid = s.purchaseId;
-  let f = w.deps.store.funding(pid);
   if (!f) {
     const pr = await fetchEchoChallenge();
     const binding = await echoBinding(w.feePayers);
     const verified = await verifyPaymentRequired(pr, { origin: binding.origin, network: binding.network, mint: binding.mint, payTo: binding.payTo, merchantAta: binding.merchantAta, maxAmount: PAYOUT, exactAmount: PAYOUT, allowedFeePayers: binding.allowedFeePayers });
     if (verified.amount !== PAYOUT) stop(`Echo now charges ${verified.amount}, expected ${PAYOUT}`);
-    const input = w.deps.store.note(s.deposits.testOwnerA!.noteId)!;
-    const r = await w.funding.prepare({
+    const input = w.deps.store.note(inputNoteId)!;
+    const req = {
       purchaseId: pid,
       operationId: s.operationId!,
       payoutUsdc: PAYOUT,
@@ -541,25 +590,50 @@ async function stepSpend(w: World): Promise<void> {
       sponsorLamportCap: SPONSOR_CAP_PER_WITHDRAWAL,
       inputNote: { commitment: input.commitment, value: input.value },
       binding,
-    });
-    if (r.status !== "prepared") stop(`funding.prepare: ${r.status} ${"reason" in r ? r.reason : ""}`);
-    console.log(`  spend: proof prepared (fresh payer ${r.payer})`);
+    };
+    const prior = s.attempts!.length > 1 ? s.attempts![s.attempts!.length - 2]! : null;
+    const r = prior ? await w.funding.reattemptAfterExpiry(prior.purchaseId, req) : await w.funding.prepare(req);
+    if (r.status !== "prepared") stop(`funding ${prior ? "re-attempt" : "prepare"}: ${r.status} ${"reason" in r ? r.reason : ""}`);
+    console.log(`  spend: proof prepared (attempt ${s.attempts!.length}, fresh payer ${r.payer})`);
     f = w.deps.store.funding(pid)!;
   }
   if (f.step === "prepared") {
     s.stage = "release";
     saveState(s);
     const r = await w.funding.release(pid, pid);
-    console.log(`  spend: proof released to the relayer (${r.status})`);
+    console.log(`  spend: proof released to the relayer (${r.status}${"reason" in r ? `: ${r.reason}` : ""})`);
+  }
+  if (STOP_AFTER === "release") {
+    console.log("\nstopped after \"release\" as requested (--stop-after); rerun without it to continue");
+    process.exit(0);
   }
   const wid = w.deps.store.funding(pid)!.relayer_withdrawal_id!;
+  let lastReport = 0;
+  const report = (msg: string) => {
+    if (Date.now() - lastReport < 20_000) return;
+    lastReport = Date.now();
+    console.log(`  spend: ${msg}`);
+  };
   await waitFor("withdrawal finalized", async () => {
-    await w.withdrawals.advance(wid).catch((e: Error) => console.log(`  relayer advance: ${e.message}`));
+    const fr = w.deps.store.funding(pid)!;
     const v = w.withdrawals.view(wid);
-    if (v && ["failed", "expired", "rejected"].includes(v.state)) stop(`withdrawal ${v.state}: ${v.error ?? ""}`);
+    if (v === null) {
+      const slot = await rpc.getSlot({ commitment: "finalized" }).send();
+      report(`relayer has no record of withdrawal ${wid} (finalized slot ${slot}, proof bound ${fr.valid_until_slot}); the wallet resends the same proof while the bound allows`);
+    } else {
+      await w.withdrawals.advance(wid).catch((e: Error) => report(`relayer advance: ${e.name}: ${e.message}`));
+      const now = w.withdrawals.view(wid)!;
+      if (now.state !== "finalized") report(`relayer withdrawal ${now.state}${now.error ? ` (${now.error})` : ""}${now.signature ? `, signature ${now.signature}` : ""}`);
+    }
     const st = await w.funding.status(pid);
+    if (st.status === "expired_unsettled") {
+      stop(`attempt ${s.attempts!.length} (${pid}) expired unsettled: ${st.reason}. Nothing settled and the note is unspent; rerun the same command to start a new attempt with a new proof and fresh payer`);
+    }
+    if (st.status === "uncertain" || st.status === "not_ready" || st.status === "recovery_required") report(`wallet funding ${st.status}: ${st.reason}`);
     return st.status === "finalized";
   }, 360_000);
+  s.attempts!.find((a) => a.purchaseId === pid)!.outcome = "finalized";
+  saveState(s);
   const v = w.withdrawals.view(wid)!;
   const fr = w.deps.store.funding(pid)!;
   const spendTx = await txDetails(v.signature!);
@@ -581,6 +655,18 @@ async function stepSpend(w: World): Promise<void> {
   evidence("spend", {
     authority: "smoke authority: operator --execute --confirm stands in for control's prepare/release stages (no control ledger reservation)",
     purchaseId: pid,
+    logicalOperationId: s.logicalOperationId,
+    attempts: s.attempts!.map((at) => {
+      const row = w.deps.store.funding(at.purchaseId);
+      return {
+        ...at,
+        walletStep: row?.step ?? null,
+        freshPayer: row?.fresh_wallet ?? null,
+        validUntilSlot: row?.valid_until_slot.toString() ?? null,
+        relayerWithdrawalId: row?.relayer_withdrawal_id ?? null,
+        relayerRecord: row?.relayer_withdrawal_id ? (w.withdrawals.view(row.relayer_withdrawal_id)?.state ?? "none") : "none",
+      };
+    }),
     freshPayer: fr.fresh_wallet,
     freshPayerExplorer: explorerAddress(fr.fresh_wallet),
     payout: PAYOUT.toString(),
@@ -810,6 +896,8 @@ async function main(): Promise<void> {
     db.close();
     console.log(`public state: consistent ${view.consistent}; leaves ${view.leaves.length}; queue ${view.pool.queueHead}/${view.pool.queueTail}; liability ${view.pool.liability}; approved v${view.approved.version}`);
     for (const o of OWNERS) {
+      // A participant whose deposit is already recorded no longer needs the test USDC.
+      if (st?.deposits[o]) continue;
       const t = await getAccount(rpc, await ata(roles.roles[o].publicKey, mint));
       if (!t || decodeTokenAccount(t.data).amount < DEPOSIT_AMOUNT) console.log(`  WARNING ${o} holds less than ${usdc(DEPOSIT_AMOUNT)}: run pnpm deploy:devnet -- --fund-test-usdc --execute --confirm first`);
     }
@@ -821,20 +909,31 @@ async function main(): Promise<void> {
   acquireRunLock(join(SMOKE_DIR, "run.lock"));
   const w = await buildWorld(roles, manifest, support.feePayers);
   try {
+    const stopAfter = (step: StopPoint): boolean => {
+      if (STOP_AFTER !== step) return false;
+      console.log(`\nstopped after "${step}" as requested (--stop-after); rerun without it to continue`);
+      return true;
+    };
     console.log("\n[1/7] deposits");
     await stepDeposits(w);
+    if (stopAfter("deposits")) return;
     console.log("[2/7] insert deposits");
     if (OWNERS.some((o) => !INSERTED.has(w.deps.store.note(w.state.deposits[o]!.noteId)!.state))) await stepInsertDeposits(w);
+    if (stopAfter("inserts")) return;
     console.log("[3/7] approve root");
     await stepApproveRoot(w);
+    if (stopAfter("approve-root")) return;
     console.log("[4/7] private spend");
     await stepSpend(w);
+    if (stopAfter("spend")) return;
     console.log("[5/7] insert change");
     await stepInsertChange(w);
+    if (stopAfter("change-insert")) return;
     console.log("[6/7] merchant payment");
     // The Echo merchant settles on devnet only; a local rehearsal never contacts it with a payment.
     if (PROFILE === "devnet") await stepMerchant(w);
     else console.log("  skipped in local rehearsal (Echo/PayAI settle on devnet only)");
+    if (stopAfter("merchant")) return;
     console.log("[7/7] public exits");
     await stepExits(w);
     await summary(w);

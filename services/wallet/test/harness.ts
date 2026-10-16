@@ -33,7 +33,7 @@ import { authorizePurchase } from "@veilo/control/src/ledger/authorize";
 import { reservedNoteFor } from "@veilo/control/src/ledger/notes";
 import { getPurchaseRow } from "@veilo/control/src/ledger/purchases";
 import { activateDefaults, addService, createEnv, digest, type TestEnv } from "@veilo/control/test/helpers";
-import { HttpControlPort } from "../src/adapters";
+import { HttpControlPort, ServiceCallError } from "../src/adapters";
 import type { MerchantSigner, WalletDeps } from "../src/deps";
 import { FundingService, type FundingInput } from "../src/funding";
 import { NoteService } from "../src/notes";
@@ -236,7 +236,8 @@ export class FakePool {
   }
 }
 
-export type RelayerMode = "land" | "hold" | "lose_response" | "down";
+/** "error_unrecorded": the relayer fails (HTTP 5xx) before it persists anything. */
+export type RelayerMode = "land" | "hold" | "lose_response" | "down" | "error_unrecorded";
 
 /** Relayer double. Enforces the strict wire schema and keeps every request body for inspection. */
 export class FakeRelayer implements RelayerPort {
@@ -260,6 +261,7 @@ export class FakeRelayer implements RelayerPort {
     if (this.mode === "down") throw new PortUnavailableError("relayer unreachable (test)");
     const parsed = withdrawalRequestWire.parse(JSON.parse(JSON.stringify(req)));
     this.received.push(JSON.stringify(req));
+    if (this.mode === "error_unrecorded") throw new ServiceCallError(503, "INTERNAL_ERROR", "relayer: chain read failed before the request was recorded (test)");
     const existing = this.withdrawals.get(parsed.withdrawalId);
     if (existing) return existing;
     const signature = randomSignature();

@@ -14,6 +14,10 @@ export class MigrationError extends Error {
   }
 }
 
+/** First line marker for migrations that rebuild a table referenced by foreign keys. */
+export const TABLE_REBUILD_MARKER = "-- veilo:table-rebuild";
+export const isTableRebuild = (sql: string): boolean => sql.trimStart().startsWith(TABLE_REBUILD_MARKER);
+
 const checksum = (sql: string) => createHash("sha256").update(sql.replace(/\r\n/g, "\n"), "utf8").digest("hex");
 
 /**
@@ -58,8 +62,16 @@ export function runMigrations(db: Database.Database, migrations: readonly Migrat
   const newlyApplied: number[] = [];
   for (const m of ordered) {
     if (applied.has(m.version)) continue;
+    const rebuild = isTableRebuild(m.sql);
+    // SQLite's table-rebuild procedure: enforcement off outside the transaction, a full
+    // foreign_key_check before commit, enforcement restored afterwards.
+    if (rebuild) db.pragma("foreign_keys = OFF");
     const apply = db.transaction(() => {
       db.exec(m.sql);
+      if (rebuild) {
+        const violations = db.pragma("foreign_key_check") as unknown[];
+        if (violations.length > 0) throw new MigrationError(`migration ${m.version} (${m.name}) leaves ${violations.length} foreign key violation(s)`);
+      }
       db.prepare("INSERT INTO schema_migration (version, name, checksum, applied_at_ms) VALUES (?, ?, ?, ?)").run(
         m.version,
         m.name,
@@ -68,7 +80,11 @@ export function runMigrations(db: Database.Database, migrations: readonly Migrat
       );
       db.prepare("INSERT OR IGNORE INTO veilo_meta (key, value) VALUES ('db_role', ?)").run(role);
     });
-    apply.immediate();
+    try {
+      apply.immediate();
+    } finally {
+      if (rebuild) db.pragma("foreign_keys = ON");
+    }
     newlyApplied.push(m.version);
   }
   return newlyApplied;
