@@ -2,7 +2,7 @@
   "kind": "M2 devnet private smoke: approve-root",
   "profile": "devnet",
   "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
-  "recordedAt": "2026-10-16T00:44:10.109Z",
+  "recordedAt": "2026-10-16T01:27:11.118Z",
   "rule": "labels of finalized, inserted deposits by configured synthetic/test participants (published prototype rule; no screening)",
   "approvedLabels": 2,
   "approvedRoot": "15638458286716113096990222915079628733753777984111514280823310295983832364413",

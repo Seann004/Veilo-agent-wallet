@@ -2,7 +2,7 @@
   "kind": "M2 devnet private smoke: deposits",
   "profile": "devnet",
   "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
-  "recordedAt": "2026-10-16T00:44:08.134Z",
+  "recordedAt": "2026-10-16T01:27:09.137Z",
   "participants": "synthetic/test participants (role-separated keys funded by the operator; not independent users)",
   "amountEach": "200000",
   "deposits": [
