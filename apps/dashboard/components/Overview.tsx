@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { api } from "../lib/api";
-import { credits, usdc } from "../lib/format";
+import { usdc } from "../lib/format";
 import { ROLE_LABEL, agentStateLabel } from "../lib/labels";
 import { summarizeResult } from "../lib/results";
 import type { Activity, Agent, AgentBudget, Balances, Job, Task } from "../lib/types";
@@ -77,7 +77,8 @@ export function Overview() {
   const archived = workspace.agents.filter((a) => a.status === "archived");
   const b = balances.data;
   const wsBudget = b && b.workspace.policyVersion !== null ? b.workspace : null;
-  const gc = b?.gatewayCredits;
+  const ai = useResource(() => api<{ provider: { provider: string; model: string } | null }>("control", "/ai-provider"), "ai-provider");
+  const aiModel = ai.data?.provider ?? null;
 
   return (
     <>
@@ -123,8 +124,18 @@ export function Overview() {
         />
         <Stat label="Left today" value={wsBudget ? usdc(wsBudget.rolling24h.available) : "—"} sub={wsBudget ? `of ${usdc(wsBudget.rolling24h.limit)} per 24 h` : "No active workspace policy"} />
         <Stat label="Cash spent" value={b?.cash ? usdc(b.cash.spent) : "—"} sub={b?.cash ? `${usdc(b.cash.reserved)} reserved` : undefined} />
-        <Stat label="AI credits" value={gc ? (gc.available ? credits(gc.usable) : "Not ready") : "—"} sub="Bought from the pool" />
+        <Stat label="AI model" value={ai.data ? (aiModel ? aiModel.model : "Trial") : "—"} sub={aiModel ? "Your own key" : "Add your key in Settings"} />
       </div>
+      {ai.data && !aiModel && configure.allowed ? (
+        <div className="notice notice-row" role="status">
+          <span>
+            <strong>Bring your own AI key.</strong> Agents think and write with your model provider; USDC is only spent on paid data, tools and swaps.
+          </span>
+          <Link className="btn btn-small btn-primary" href="/settings">
+            Add key
+          </Link>
+        </div>
+      ) : null}
       <ErrorNotice error={balances.error} what="balances" onRetry={balances.reload} />
 
       <Section title="Agents">

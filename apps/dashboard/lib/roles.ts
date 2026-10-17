@@ -1,6 +1,6 @@
 import type { AgentRole } from "./types";
 
-export const ROLE_ORDER: AgentRole[] = ["research", "content", "credit_manager"];
+export const ROLE_ORDER: AgentRole[] = ["research", "content", "custom"];
 
 export const ROLE_TAGLINE: Record<AgentRole, string> = {
   credit_manager: "Keeps inference credits topped up, one pack at a time.",

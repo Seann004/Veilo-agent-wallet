@@ -49,10 +49,10 @@ export const ROLE_TEMPLATES: Record<AgentRole, { name: string; description: stri
       rolling24hTestUsdc: "2000000",
       maxPurchaseTestUsdc: "500000",
       taskLimitTestUsdc: "1000000",
-      usageAllowanceUnits: "2000000",
-      taskCreditUnits: "400000",
-      allowedSkus: ["research-basic", "research-expanded", "summarize", "analyze"],
-      allowedPaymentPaths: ["private_x402", "prepaid_credits"],
+      usageAllowanceUnits: "0",
+      taskCreditUnits: "0",
+      allowedSkus: ["research-basic", "research-expanded"],
+      allowedPaymentPaths: ["private_x402"],
     },
   },
   content: {
@@ -65,27 +65,27 @@ export const ROLE_TEMPLATES: Record<AgentRole, { name: string; description: stri
       rolling24hTestUsdc: "2000000",
       maxPurchaseTestUsdc: "500000",
       taskLimitTestUsdc: "1000000",
-      usageAllowanceUnits: "2000000",
-      taskCreditUnits: "400000",
-      allowedSkus: ["content-package", "summarize", "analyze"],
-      allowedPaymentPaths: ["private_x402", "prepaid_credits"],
+      usageAllowanceUnits: "0",
+      taskCreditUnits: "0",
+      allowedSkus: [],
+      allowedPaymentPaths: ["private_x402"],
     },
   },
   custom: {
     name: "Custom agent",
-    description: "Follows your instructions, using its connectors and AI credits to do the work itself. It may propose a marketplace specialist, but pays nobody without your approval.",
+    description: "Follows your instructions, using its connectors and your AI model to do the work itself. It may propose a marketplace specialist, but pays nobody without your approval.",
     trigger: { type: "owner_task" },
-    // Analysis lets it do the work itself; the specialist SKU is added only when the owner opts in to hiring.
+    // Its own work runs on the owner's model key; the specialist SKU is added only when the owner opts in to hiring.
     policy: {
       tier: "bounded_automatic",
       lifetimeTestUsdc: "2000000",
       rolling24hTestUsdc: "2000000",
       maxPurchaseTestUsdc: "500000",
       taskLimitTestUsdc: "1000000",
-      usageAllowanceUnits: "2000000",
-      taskCreditUnits: "400000",
-      allowedSkus: ["analyze"],
-      allowedPaymentPaths: ["private_x402", "prepaid_credits"],
+      usageAllowanceUnits: "0",
+      taskCreditUnits: "0",
+      allowedSkus: [],
+      allowedPaymentPaths: ["private_x402"],
     },
   },
 };
@@ -136,10 +136,6 @@ const PATH_LABEL: Record<AgentPolicyInput["allowedPaymentPaths"][number], string
   prepaid_credits: "AI credits",
 };
 
-const PATH_HINT: Record<AgentPolicyInput["allowedPaymentPaths"][number], string> = {
-  private_x402: "Each purchase is paid privately from your pool.",
-  prepaid_credits: "Model calls use credits that were bought from the pool, with no payment per call.",
-};
 
 /**
  * Structured policy editor. Amounts are typed in USDC and converted to base units without
@@ -156,7 +152,7 @@ export function PolicyForm({ initial, workspace, onChange }: { initial: AgentPol
   });
   const [tier, setTier] = useState(initial.tier);
   const [skus, setSkus] = useState<string[]>(initial.allowedSkus);
-  const [paths, setPaths] = useState(initial.allowedPaymentPaths);
+  const paths = initial.allowedPaymentPaths;
   const allSkus = [...new Set(workspace.services.flatMap((s) => s.skus.map((k) => k.sku)))].sort();
   const tierId = useId();
 
@@ -183,11 +179,6 @@ export function PolicyForm({ initial, workspace, onChange }: { initial: AgentPol
     const next = skus.includes(sku) ? skus.filter((x) => x !== sku) : [...skus, sku];
     setSkus(next);
     emit({}, tier, next);
-  };
-  const togglePath = (p: AgentPolicyInput["allowedPaymentPaths"][number]) => {
-    const next = paths.includes(p) ? paths.filter((x) => x !== p) : [...paths, p];
-    setPaths(next);
-    emit({}, tier, skus, next);
   };
 
   return (
@@ -219,24 +210,7 @@ export function PolicyForm({ initial, workspace, onChange }: { initial: AgentPol
           ))}
         </div>
       </div>
-      <details className="advanced">
-        <summary>Payment and AI credits</summary>
-        <div className="field">
-          <span className="field-label">Can pay with</span>
-          <div className="chips" role="group" aria-label="Can pay with">
-            {(["private_x402", "prepaid_credits"] as const).map((p) => (
-              <ChipToggle key={p} label={PATH_LABEL[p]} on={paths.includes(p)} onToggle={() => togglePath(p)} />
-            ))}
-          </div>
-          <span className="hint">
-            {PATH_HINT.private_x402} {PATH_HINT.prepaid_credits}
-          </span>
-        </div>
-        <div className="money-grid">
-          <MoneyField label="Credit allowance" hint="Total, in microcredits" unit="µcr" inputMode="numeric" value={text.usage} onChange={(v) => emit({ usage: v })} />
-          <MoneyField label="Credits per task" hint="Per task, in microcredits" unit="µcr" inputMode="numeric" value={text.taskCredits} onChange={(v) => emit({ taskCredits: v })} />
-        </div>
-      </details>
+
     </div>
   );
 }
@@ -265,7 +239,6 @@ export function PolicyReview({ policy, workspacePolicy, title }: { policy: Polic
             ["Total budget", <>{usdc(p.lifetimeTestUsdc)}{ws(workspacePolicy?.lifetimeTestUsdc)}</>],
             ["Can buy", skus.length ? skus.map(skuLabel).join(", ") : "Nothing"],
             ["Pays with", paths.length ? paths.map((x) => PATH_LABEL[x as keyof typeof PATH_LABEL] ?? x).join(", ") : "Nothing"],
-            ["AI credits", `${credits(p.usageAllowanceUnits)} · ${credits(p.taskCreditUnits)} per task`],
             ...(topUp
               ? [["Top-up rule", topUp] as [string, string]]
               : []),

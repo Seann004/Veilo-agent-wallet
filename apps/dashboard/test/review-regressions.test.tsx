@@ -45,18 +45,16 @@ describe("adversarial dashboard regression checks", () => {
     await user.type(screen.getByLabelText("Total budget"), "1.5");
     await user.click(screen.getByRole("button", { name: "How it spends: Automatically, within limits" }));
     await user.keyboard("{ArrowDown}{Enter}");
-    await user.click(screen.getByRole("button", { name: "USDC from the private pool" }));
     await user.click(screen.getByRole("button", { name: "Review" }));
     await user.click(screen.getByRole("button", { name: "Back" }));
     expect((screen.getByLabelText("Total budget") as HTMLInputElement).value).toBe("1.50");
     expect(screen.getByRole("button", { name: "How it spends: Needs approval" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "USDC from the private pool" }).getAttribute("aria-pressed")).toBe("false");
     await user.clear(screen.getByLabelText("Per task"));
     await user.type(screen.getByLabelText("Per task"), "0.3");
     await user.click(screen.getByRole("button", { name: "Review" }));
     await user.click(screen.getByRole("button", { name: "Create agent" }));
     expect(rec.calls).toHaveLength(1);
-    expect(rec.calls[0]!.body).toMatchObject({ policy: { tier: "approval_required", lifetimeTestUsdc: "1500000", taskLimitTestUsdc: "300000", allowedPaymentPaths: ["prepaid_credits"] } });
+    expect(rec.calls[0]!.body).toMatchObject({ policy: { tier: "approval_required", lifetimeTestUsdc: "1500000", taskLimitTestUsdc: "300000", allowedPaymentPaths: ["private_x402"] } });
   });
 
   it("allows only one in-flight action even before React renders busy, and unlocks after failure", async () => {

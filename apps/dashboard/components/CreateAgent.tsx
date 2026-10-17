@@ -192,7 +192,8 @@ function CreateAgentForm() {
         </div>
         <h2 className="section-title">Role</h2>
         <div className="suggestions">
-          {(Object.keys(ROLE_LABEL) as AgentRole[]).map((r) => {
+          {/* Model work runs on the owner's own key, so there is no credit manager to create. */}
+          {(Object.keys(ROLE_LABEL) as AgentRole[]).filter((r) => r !== "credit_manager").map((r) => {
             const a = avatarById(ROLE_AVATAR[r]);
             return (
               <button key={r} type="button" className="suggestion" aria-pressed={role === r} disabled={step === "review"} onClick={() => chooseRole(r)}>

@@ -136,14 +136,14 @@ describe("custom agent roles and maps", () => {
     for (const role of AGENT_ROLES) expect(agentPolicyInputSchema.safeParse(ROLE_TEMPLATES[role].policy).success).toBe(true);
   });
 
-  it("lets the custom template do its own analysis but not hire until hiring is switched on", () => {
+  it("keeps the custom template unable to pay until hiring is switched on; its own work uses the owner's model", () => {
     const base = ROLE_TEMPLATES.custom.policy;
-    expect(base.allowedSkus).toEqual(["analyze"]);
-    expect(base.allowedSkus).not.toContain(SPECIALIST_SKU);
+    expect(base.allowedSkus).toEqual([]);
+    expect(base.allowedPaymentPaths).toEqual(["private_x402"]);
     const on = withHiring(base, true);
-    expect(on.allowedSkus).toEqual(["analyze", SPECIALIST_SKU]);
+    expect(on.allowedSkus).toEqual([SPECIALIST_SKU]);
     expect(on.allowedPaymentPaths).toContain("private_x402");
-    expect(withHiring(on, false).allowedSkus).toEqual(["analyze"]);
+    expect(withHiring(on, false).allowedSkus).toEqual([]);
     expect(withHiring({ ...base, allowedPaymentPaths: [] }, true).allowedPaymentPaths).toEqual(["private_x402"]);
   });
 
@@ -336,7 +336,7 @@ describe("custom agent page", () => {
     const body = calls[0]!.body as { policy: { allowedSkus: string[] } };
     expect(calls[0]!.method).toBe("PATCH");
     expect(Object.keys(body)).toEqual(["policy"]);
-    expect(body.policy.allowedSkus).toEqual(["analyze", SPECIALIST_SKU]);
+    expect(body.policy.allowedSkus).toEqual([SPECIALIST_SKU]);
     expect(screen.getByRole("link", { name: "seller console" }).getAttribute("href")).toBe("/marketplace/seller");
   });
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { credits, lamports, minBase, usdc } from "../lib/format";
-import { LABEL_CREDITS_NO_CHARGE, ROLE_LABEL, SPONSORED_PLANNING_LABEL } from "../lib/labels";
+import { lamports, minBase, usdc } from "../lib/format";
+import { ROLE_LABEL } from "../lib/labels";
 import type { Agent, Balances, LimitUsage } from "../lib/types";
 import { KV, Section } from "./ui";
 
@@ -42,29 +42,21 @@ export function TreasurySummary({ balances, agents }: { balances: Balances; agen
   // Absent in the public view: pool balance movements could be matched to on-chain withdrawals.
   const buckets = balances.tokens.buckets;
   const poolSpendable = buckets?.approved_unreserved ?? "0";
-  const gc = balances.gatewayCredits;
   return (
     <Section title="Shared treasury">
       <p className="small">
-        Three separate meters. They are never added together: cash is devnet USDC, credits are a prepaid balance bought with that cash, and sponsored planning is paid by the operator.
+        Cash is USDC paid privately from your pool. AI runs on your own model key; trial planning calls before you add one are paid by the operator.
       </p>
-      <div className="grid-3 meters">
+      <div className="grid-2 meters">
         <div className="meter">
           <h3>Cash spent (USDC)</h3>
           <p className="meter-value">{balances.cash ? usdc(balances.cash.spent) : "—"}</p>
           <p className="small muted">{balances.cash ? `${usdc(balances.cash.reserved)} reserved by live purchases` : "Cash accounting unavailable."}</p>
         </div>
         <div className="meter">
-          <h3>AI credits</h3>
-          <p className="meter-value">{gc.available ? credits(gc.usable) : "Not ready"}</p>
-          <p className="small muted">
-            {gc.available ? `${credits(gc.consumed)} consumed so far. Using credits is not a second payment.` : "The gateway balance could not be read; no balance is shown."}
-          </p>
-        </div>
-        <div className="meter">
-          <h3>Sponsored planning</h3>
+          <h3>Trial AI calls</h3>
           <p className="meter-value">{balances.sponsoredPlanning ? `${balances.sponsoredPlanning.total} call(s)` : "—"}</p>
-          <p className="small muted">Operator-funded; costs you no cash or credits.</p>
+          <p className="small muted">Operator-funded before you add your own key; costs you no USDC.</p>
         </div>
       </div>
       <div className="grid-2">
@@ -146,45 +138,6 @@ export function TreasurySummary({ balances, agents }: { balances: Balances; agen
       </div>
 
       <div className="grid-2">
-        <div>
-          <h3>AI credits</h3>
-          {gc.available ? (
-            <>
-              <KV
-                rows={[
-                  ["Credits purchased", credits(gc.purchased)],
-                  ["Credits consumed", credits(gc.consumed)],
-                  ["Credits reserved", credits(gc.reserved)],
-                  ["Credits available", <strong key="u">{credits(gc.usable)}</strong>],
-                ]}
-              />
-              {gc.stale ? <p className="notice notice-warn">Balance is stale; Shawn pauses top-up checks until it refreshes.</p> : null}
-              <p className="small">
-                Credit packs are bought with USDC from the private pool and counted once in cash spent. Calls that use credits: “{LABEL_CREDITS_NO_CHARGE}”. Model calls run on the operator’s OpenRouter account.
-              </p>
-            </>
-          ) : (
-            <p className="notice notice-warn" role="status">
-              Not ready: {gc.message} ({gc.code})
-            </p>
-          )}
-          {balances.usageByAgent ? (
-            <ul className="plain small">
-              {balances.usageByAgent.map((u) => (
-                <li key={u.agentId}>
-                  {u.name}: consumed {credits(u.consumedUnits)}, reserved {credits(u.reservedUnits)}
-                  {u.packsPurchased > 0 ? `; bought ${u.packsPurchased} pack(s) = ${credits(u.packUnitsPurchased)} for ${usdc(u.packCashSpent)} (already in cash spent)` : ""}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {balances.sponsoredPlanning ? (
-            <p className="small">
-              <strong>{SPONSORED_PLANNING_LABEL}</strong>: {balances.sponsoredPlanning.total} call(s), operator-funded and separate from cash and
-              credits.
-            </p>
-          ) : null}
-        </div>
         <div>
           <h3>Pool funds and recoverable funds</h3>
           {buckets ? (
