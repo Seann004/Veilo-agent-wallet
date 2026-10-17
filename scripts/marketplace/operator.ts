@@ -54,7 +54,7 @@ const actions: Record<string, () => Promise<unknown>> = {
     const q = (await call("GET", "/operator/workflow-review-queue")) as { connectors: Array<{ id: string; endpoint: string; tools: McpToolPin[] }> };
     const c = q.connectors.find((x) => x.id === a);
     if (!c) throw new Error(`no pending connector ${a}`);
-    const client = new McpClient(c.endpoint);
+    const client = new McpClient(c.endpoint, { publicOnly: true });
     await client.initialize();
     const live = new Map((await client.listTools()).map((t) => [t.name, mcpToolDigest(t)]));
     return { endpoint: c.endpoint, tools: c.tools.map((t) => ({ name: t.name, proposed: mcpToolDigest(t), live: live.get(t.name) ?? null, matches: live.get(t.name) === mcpToolDigest(t) })) };

@@ -347,7 +347,7 @@ async function main(): Promise<void> {
     ];
     for (const c of CONNECTORS) {
       if (done(`connector.${c.id}`)) continue;
-      const client = new McpClient(c.endpoint, { timeoutMs: 20_000, maxBytes: 4_000_000 });
+      const client = new McpClient(c.endpoint, { timeoutMs: 20_000, maxBytes: 4_000_000, publicOnly: true });
       await client.initialize();
       const live = (await client.listTools()).filter((t) => c.tools.includes(t.name));
       if (live.length !== c.tools.length) throw new Error(`${c.id}: expected tools ${c.tools.join(", ")} not all offered`);

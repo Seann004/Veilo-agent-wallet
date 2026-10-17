@@ -1,3 +1,5 @@
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import { mcpToolDigest, mcpToolPinSchema, renderArgs, type McpToolPin } from "@veilo/contracts/marketplace";
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
@@ -33,7 +35,7 @@ export class McpClient {
 
   constructor(
     readonly endpoint: string,
-    private readonly o: { fetch?: FetchLike; bearer?: string | undefined; timeoutMs?: number; maxBytes?: number } = {},
+    private readonly o: { fetch?: FetchLike; bearer?: string | undefined; timeoutMs?: number; maxBytes?: number; publicOnly?: boolean } = {},
   ) {
     this.#fetch = o.fetch ?? ((u, i) => fetch(u, i));
   }
@@ -42,6 +44,7 @@ export class McpClient {
     const headers: Record<string, string> = { "content-type": "application/json", accept: "application/json, text/event-stream", "mcp-protocol-version": PROTOCOL_VERSION };
     if (this.#session) headers["mcp-session-id"] = this.#session;
     if (this.o.bearer) headers.authorization = `Bearer ${this.o.bearer}`;
+    if (this.o.publicOnly) await assertPublicHost(new URL(this.endpoint).hostname);
     let res: Response;
     try {
       res = await this.#fetch(this.endpoint, { method: "POST", headers, body: JSON.stringify(body), redirect: "error", signal: AbortSignal.timeout(this.o.timeoutMs ?? 30_000) });
@@ -51,8 +54,7 @@ export class McpClient {
     const session = res.headers.get("mcp-session-id");
     if (session && /^[\x21-\x7e]{1,256}$/.test(session)) this.#session = session;
     if (!("id" in body)) return undefined;
-    const text = await res.text();
-    if (Buffer.byteLength(text) > (this.o.maxBytes ?? 1_048_576)) throw new McpError("PROVIDER_FAILED", "MCP reply exceeds the size bound");
+    const text = await readBounded(res, this.o.maxBytes ?? 1_048_576);
     if (!res.ok) throw new McpError(res.status >= 500 || res.status === 429 ? "PROVIDER_UNAVAILABLE" : "PROVIDER_FAILED", `MCP server returned HTTP ${res.status}`);
     const type = res.headers.get("content-type") ?? "";
     const messages: unknown[] = [];
@@ -96,6 +98,48 @@ export class McpClient {
   async callTool(name: string, args: Record<string, unknown>): Promise<{ isError: boolean; content: unknown[] }> {
     const r = (await this.#request("tools/call", { name, arguments: args })) as { isError?: unknown; content?: unknown };
     return { isError: r?.isError === true, content: Array.isArray(r?.content) ? r.content : [] };
+  }
+}
+
+/** Reads at most `max` bytes, cancelling the stream as soon as the bound is passed. */
+async function readBounded(res: Response, max: number): Promise<string> {
+  const declared = Number(res.headers.get("content-length") ?? "0");
+  if (declared > max) {
+    await res.body?.cancel().catch(() => undefined);
+    throw new McpError("PROVIDER_FAILED", "MCP reply exceeds the size bound");
+  }
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => undefined);
+      throw new McpError("PROVIDER_FAILED", "MCP reply exceeds the size bound");
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+const PRIVATE_V4 = [/^0\./, /^10\./, /^127\./, /^169\.254\./, /^172\.(1[6-9]|2\d|3[01])\./, /^192\.168\./, /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./, /^(22[4-9]|2[3-5]\d)\./];
+
+/**
+ * Refuses a host that resolves to a loopback, private, link-local, CGNAT or multicast address.
+ * Checked at each request; the connection itself may re-resolve, so this narrows but does not
+ * eliminate DNS rebinding for endpoints that were never reviewed.
+ */
+export async function assertPublicHost(hostname: string): Promise<void> {
+  const host = hostname.replace(/^\[|\]$/g, "");
+  const addrs = isIP(host) ? [{ address: host }] : await lookup(host, { all: true }).catch(() => []);
+  if (addrs.length === 0) throw new McpError("PROVIDER_UNAVAILABLE", "MCP host does not resolve");
+  for (const { address } of addrs) {
+    const a = address.toLowerCase().replace(/^::ffff:/, "");
+    const v6Private = a === "::" || a === "::1" || /^f[cd]/.test(a) || /^fe[89ab]/.test(a) || /^ff/.test(a);
+    if (PRIVATE_V4.some((r) => r.test(a)) || v6Private) throw new McpError("PROVIDER_FAILED", "MCP host resolves to a non-public address");
   }
 }
 

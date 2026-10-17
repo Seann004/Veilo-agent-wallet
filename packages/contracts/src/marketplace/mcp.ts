@@ -33,6 +33,7 @@ export function mcpEndpointProblem(value: string): string | null {
   if (u.protocol !== "https:") return "must use https";
   if (u.username || u.password || u.search || u.hash) return "must not carry credentials, a query or a fragment";
   const host = u.hostname.toLowerCase();
+  if (host.endsWith(".")) return "must not end with a dot";
   if (host === "localhost" || /\.(local|internal|localhost)$/.test(host) || /^[0-9.]+$/.test(host) || host.startsWith("[") || !host.includes(".")) {
     return "must be a public DNS name";
   }

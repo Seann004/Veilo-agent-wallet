@@ -30,3 +30,11 @@ describe("MCP tool pinning", () => {
     expect(renderArgs({ ids: "{{input}}", vs: "usd" }, '"},"x":"y')).toEqual({ ids: '"},"x":"y', vs: "usd" });
   });
 });
+
+describe("mcpEndpointProblem trailing dot", () => {
+  it("refuses a hostname ending in a dot", () => {
+    expect(mcpEndpointProblem("https://localhost./mcp")).not.toBeNull();
+    expect(mcpEndpointProblem("https://mcp.example.com./mcp")).not.toBeNull();
+    expect(mcpEndpointProblem("https://mcp.example.com/mcp")).toBeNull();
+  });
+});

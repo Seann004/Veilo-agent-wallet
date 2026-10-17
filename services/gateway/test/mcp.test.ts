@@ -2,7 +2,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { mcpToolDigest, type McpToolPin } from "@veilo/contracts/marketplace";
-import { McpClient, McpError, liveToolMatches, runMcpTool, type McpJobTool } from "../src/seller-host/mcp";
+import { McpClient, McpError, assertPublicHost, liveToolMatches, runMcpTool, type McpJobTool } from "../src/seller-host/mcp";
 import { buildPaymentHeader, makeHarness, type Harness } from "./harness";
 import { FakeMarketplace } from "./marketplace-fake";
 
@@ -144,5 +144,24 @@ describe("seller-host MCP tools", () => {
     await h!.gateway.recover();
     expect(mcp!.calls).toHaveLength(0);
     expect(mk!.job(job.jobId).fails.at(-1)).toMatchObject({ code: "PROVIDER_UNCERTAIN", uncertain: true });
+  });
+});
+
+describe("MCP reply bounds and hosts", () => {
+  it("stops reading a reply once it passes the size bound", async () => {
+    mcp = await new FakeMcp().start();
+    mcp.tool = { ...PRICE_TOOL, description: "x".repeat(7_000) };
+    const c = new McpClient(mcp.url, { maxBytes: 2_000 });
+    await c.initialize();
+    await expect(c.listTools()).rejects.toThrow("size bound");
+  });
+
+  it("refuses loopback and private hosts when only public hosts are allowed", async () => {
+    mcp = await new FakeMcp().start();
+    await expect(new McpClient(mcp.url, { publicOnly: true }).initialize()).rejects.toThrow("non-public");
+    for (const h of ["10.1.2.3", "169.254.169.254", "192.168.0.1", "[::1]", "[fd00::1]", "100.64.0.1"]) {
+      await expect(assertPublicHost(h)).rejects.toThrow("non-public");
+    }
+    await expect(assertPublicHost("8.8.8.8")).resolves.toBeUndefined();
   });
 });
