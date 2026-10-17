@@ -15,7 +15,7 @@ import { big, iso, num, optIso, type Ledger } from "../context";
 import { ControlError } from "../errors";
 import { appendFinancialEvent, enqueueOutbox, writeAudit } from "./events";
 import { appendTokenEvent, consumeReservedNote, unreserveNote, type WithdrawalOutcome } from "./notes";
-import type { AgentRow, WorkspaceRow } from "./workspace";
+import { activeAgentPolicy, activeWorkspacePolicy, type AgentRow, type PolicyRow, type WorkspaceRow } from "./workspace";
 
 export interface PurchaseRow {
   id: string;
@@ -177,7 +177,7 @@ export function cancelUnreleased(ledger: Ledger, p: PurchaseRow, reason: "reject
 
 /** Owner decision on a purchase awaiting approval. */
 export function decidePurchase(ledger: Ledger, purchaseId: string, decision: "approve" | "reject", ownerId: string): PurchaseRow {
-  return immediate(ledger.db, () => {
+  return cancelOnExpiredPolicy(ledger, purchaseId, () => immediate(ledger.db, () => {
     const p = getPurchaseRow(ledger, purchaseId);
     if (p.authorization_state !== "awaiting_approval") {
       throw new ControlError("IDEMPOTENCY_CONFLICT", `purchase is ${p.authorization_state}, not awaiting approval`);
@@ -197,13 +197,40 @@ export function decidePurchase(ledger: Ledger, purchaseId: string, decision: "ap
       policyResult: decision === "approve" ? "allowed" : "denied",
     });
     return getPurchaseRow(ledger, p.id);
-  });
+  }));
+}
+
+function expiredPolicy(ledger: Ledger, p: PurchaseRow): "workspace" | "agent" | null {
+  const now = ledger.now();
+  const expired = (policy: PolicyRow | undefined) => policy?.expires_at_ms != null && num(policy.expires_at_ms) <= now;
+  if (expired(activeWorkspacePolicy(ledger, p.workspace_id))) return "workspace";
+  if (expired(activeAgentPolicy(ledger, p.agent_id))) return "agent";
+  return null;
+}
+
+/**
+ * A policy that expires while a purchase waits frees its unreleased reservation and note. The
+ * gated step's own transaction has already rolled back, so the cancellation commits separately.
+ */
+function cancelOnExpiredPolicy<T>(ledger: Ledger, purchaseId: string, step: () => T): T {
+  try {
+    return step();
+  } catch (error) {
+    if (error instanceof ControlError && error.code === "POLICY_DENIED") {
+      immediate(ledger.db, () => {
+        const p = getPurchaseRow(ledger, purchaseId);
+        if (expiredPolicy(ledger, p)) cancelUnreleased(ledger, p, "authority_stopped");
+      });
+    }
+    throw error;
+  }
 }
 
 /**
  * Serialized authority boundary: the purchase may proceed only if the workspace is not stopped,
- * the agent is active, and neither the stop epoch nor the agent revocation epoch has moved since
- * authorization. Callers run this in the same transaction as the step it gates.
+ * the agent is active, neither the stop epoch nor the agent revocation epoch has moved since
+ * authorization, and neither active policy has expired. Callers run this in the same transaction
+ * as the step it gates.
  */
 export function assertAuthorityCurrent(ledger: Ledger, p: PurchaseRow): void {
   const ws = ledger.db.prepare(`SELECT * FROM workspace WHERE id = ?`).get(p.workspace_id) as WorkspaceRow;
@@ -214,6 +241,8 @@ export function assertAuthorityCurrent(ledger: Ledger, p: PurchaseRow): void {
   if (agent.status !== "active" || agent.revocation_epoch !== p.agent_epoch) {
     throw new ControlError("ACCOUNT_STOPPED", "agent authority was paused or revoked after authorization");
   }
+  const expired = expiredPolicy(ledger, p);
+  if (expired) throw new ControlError("POLICY_DENIED", `${expired} policy expired after authorization`);
 }
 
 export type AuthorityStage = "prepare_proof" | "release_proof" | "submit_withdrawal" | "sign_merchant" | "issue_usage_permit";
@@ -223,7 +252,7 @@ export type AuthorityStage = "prepare_proof" | "release_proof" | "submit_withdra
  * Material already released before a pause is not recalled; it stays visible as live exposure.
  */
 export function advanceAuthority(ledger: Ledger, purchaseId: string, stage: AuthorityStage): PurchaseRow {
-  return immediate(ledger.db, () => {
+  return cancelOnExpiredPolicy(ledger, purchaseId, () => immediate(ledger.db, () => {
     const p = getPurchaseRow(ledger, purchaseId);
     assertAuthorityCurrent(ledger, p);
     switch (stage) {
@@ -251,7 +280,7 @@ export function advanceAuthority(ledger: Ledger, purchaseId: string, stage: Auth
     }
     enqueueOutbox(ledger, `purchase.${stage}`, p.id, { purchaseId: p.id, operationId: p.operation_id });
     return getPurchaseRow(ledger, p.id);
-  });
+  }));
 }
 
 function requireState(ok: boolean, stage: string): void {
