@@ -10,6 +10,7 @@ import {
 import { existsSync, readFileSync } from "node:fs";
 import { createApp } from "./app";
 import { startWorker, type AgentCredential } from "./worker";
+import { ChromeReader } from "./browser";
 
 const SERVICE = "runner";
 
@@ -38,6 +39,8 @@ function main(): void {
       approvedOrigins: list(process.env.RUNNER_APPROVED_FETCH_ORIGINS),
       localServiceOrigins: list(process.env.RUNNER_LOCAL_SERVICE_ORIGINS),
     },
+    // Uses an installed Chrome; RUNNER_BROWSER=off disables browsing for every agent.
+    ...(process.env.RUNNER_BROWSER === "off" ? {} : { browser: new ChromeReader({ executablePath: process.env.RUNNER_BROWSER_EXECUTABLE?.trim() || undefined }) }),
   });
   console.log(`[${SERVICE}] worker started for ${creds.map((c) => c.role).join(", ")}`);
 }

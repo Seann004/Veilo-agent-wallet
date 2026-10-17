@@ -142,6 +142,21 @@ export class ControlClient {
     return this.request("POST", "/worker/connector-calls", { taskId, connectorId: call.connectorId, tool: call.tool, args: call.args });
   }
 
+  /**
+   * Asks control to authorize one read-only page visit. It is not a model tool, but it counts
+   * against the task's tool-call bound; control checks the agent's browsing permission and caps.
+   */
+  async browsePermit(taskId: string, url: string, ctx: { bounds: RunBounds; now: () => number }): Promise<ControlReply> {
+    const deny = (message: string): never => {
+      this.denied.push({ tool: "browse", code: "BUDGET_EXCEEDED", message });
+      throw new ToolDenied("BUDGET_EXCEEDED", message);
+    };
+    if (ctx.now() > ctx.bounds.deadlineMs) deny("task duration bound reached");
+    if (this.toolCalls >= ctx.bounds.maxToolCalls) deny("task tool-call limit reached");
+    this.toolCalls += 1;
+    return this.request("POST", "/worker/browse-permit", { taskId, url });
+  }
+
   claim(workerId: string, leaseMs: number): Promise<ControlReply> {
     return this.request("POST", "/worker/jobs/claim", { workerId, leaseMs });
   }

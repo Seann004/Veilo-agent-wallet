@@ -19,6 +19,8 @@ export interface AgentPolicyInput {
   allowedSkus: string[];
   allowedPaymentPaths: Array<"private_x402" | "prepaid_credits">;
   roleConfig?: { creditLowWatermark: string; creditPackUnits: string; pollSeconds: number; cooldownSeconds: number };
+  /** Read-only web browsing; off unless the owner turns it on. */
+  allowBrowsing?: boolean;
 }
 
 export const ROLE_TEMPLATES: Record<AgentRole, { name: string; description: string; trigger: Record<string, string | number>; policy: AgentPolicyInput }> = {
@@ -153,10 +155,12 @@ export function PolicyForm({ initial, workspace, onChange }: { initial: AgentPol
   const [tier, setTier] = useState(initial.tier);
   const [skus, setSkus] = useState<string[]>(initial.allowedSkus);
   const paths = initial.allowedPaymentPaths;
+  const [browse, setBrowse] = useState(initial.allowBrowsing === true);
   const allSkus = [...new Set(workspace.services.flatMap((s) => s.skus.map((k) => k.sku)))].sort();
   const tierId = useId();
+  const browseId = useId();
 
-  const emit = (next: Partial<typeof text>, nextTier = tier, nextSkus = skus, nextPaths = paths) => {
+  const emit = (next: Partial<typeof text>, nextTier = tier, nextSkus = skus, nextPaths = paths, nextBrowse = browse) => {
     const t = { ...text, ...next };
     setText(t);
     const vals = [parseUsdcInput(t.lifetime), parseUsdcInput(t.rolling), parseUsdcInput(t.maxPurchase), parseUsdcInput(t.task)];
@@ -173,6 +177,7 @@ export function PolicyForm({ initial, workspace, onChange }: { initial: AgentPol
       taskCreditUnits: t.taskCredits,
       allowedSkus: nextSkus,
       allowedPaymentPaths: nextPaths,
+      allowBrowsing: nextBrowse,
     });
   };
   const toggleSku = (sku: string) => {
@@ -210,7 +215,20 @@ export function PolicyForm({ initial, workspace, onChange }: { initial: AgentPol
           ))}
         </div>
       </div>
-
+      <div className="field inline">
+        <input
+          id={browseId}
+          type="checkbox"
+          checked={browse}
+          onChange={(e) => {
+            setBrowse(e.target.checked);
+            emit({}, tier, skus, paths, e.target.checked);
+          }}
+        />
+        <label htmlFor={browseId}>
+          Can browse the web <span className="muted">(read-only: opens and reads up to 3 public pages per task; no logins, forms or purchases)</span>
+        </label>
+      </div>
     </div>
   );
 }
@@ -238,6 +256,7 @@ export function PolicyReview({ policy, workspacePolicy, title }: { policy: Polic
             ["Per day", <>{usdc(p.rolling24hTestUsdc)}{ws(workspacePolicy?.rolling24hTestUsdc)}</>],
             ["Total budget", <>{usdc(p.lifetimeTestUsdc)}{ws(workspacePolicy?.lifetimeTestUsdc)}</>],
             ["Can buy", skus.length ? skus.map(skuLabel).join(", ") : "Nothing"],
+            ["Web browsing", (p.permissions as { allowBrowsing?: boolean } | undefined)?.allowBrowsing ?? p.allowBrowsing ? "On (read-only)" : "Off"],
             ["Pays with", paths.length ? paths.map((x) => PATH_LABEL[x as keyof typeof PATH_LABEL] ?? x).join(", ") : "Nothing"],
             ...(topUp
               ? [["Top-up rule", topUp] as [string, string]]

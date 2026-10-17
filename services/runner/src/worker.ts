@@ -5,6 +5,7 @@ import { runCustom } from "./roles/custom";
 import { runMira } from "./roles/mira";
 import { runPrince } from "./roles/prince";
 import type { SafeFetchPolicy } from "./safe-fetch";
+import type { PageReader } from "./browser";
 
 export interface AgentCredential {
   agentId: string;
@@ -21,6 +22,8 @@ export interface WorkerOptions {
   now?: () => number;
   /** Waits between purchase status checks (default: real timers). */
   sleep?: (ms: number) => Promise<void>;
+  /** Read-only browser for agents whose policy allows browsing; absent means browsing is unavailable. */
+  browser?: PageReader | undefined;
 }
 
 /**
@@ -64,7 +67,7 @@ export async function runOnce(cred: AgentCredential, o: WorkerOptions): Promise<
   try {
     if (!task) outcome = { taskState: "failed", summary: { error: "job has no task" } };
     else {
-      const ctx = { client, taskId: task.id as string, agentId: cred.agentId, task, bounds, now, notes: [] as string[], ...(o.sleep ? { sleep: o.sleep } : {}) };
+      const ctx = { client, taskId: task.id as string, agentId: cred.agentId, task, bounds, now, notes: [] as string[], ...(o.sleep ? { sleep: o.sleep } : {}), ...(o.browser ? { browser: o.browser } : {}) };
       outcome = cred.role === "research" ? await runPrince(ctx, o.fetchPolicy) : cred.role === "custom" ? await runCustom(ctx) : await runMira(ctx);
     }
   } catch (error) {

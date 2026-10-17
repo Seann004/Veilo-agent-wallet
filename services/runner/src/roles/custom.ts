@@ -48,9 +48,51 @@ const SWAP_SKU = "swap-usdc-to-sol";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /** Leaves room for the catalogue lookup, the paid analysis, its status checks and the artifact. */
 const MAX_CONNECTOR_CALLS = 2;
+/** Public pages one task reads with the read-only browser (control caps this too). */
+const MAX_PAGES = 2;
 const RESERVED_FOR_OWN_WORK = 3;
 
 const clean = (v: unknown, max: number): string => stripUnlistedUrls(String(v ?? ""), NO_URLS).text.replace(/\s+/g, " ").trim().slice(0, max);
+
+interface PageResult {
+  url: string;
+  title: string;
+  fenced: string;
+}
+
+/** Opens one public page read-only after control authorizes it; its text is fenced untrusted data. */
+async function readPage(ctx: RoleContext, url: unknown, index: number): Promise<PageResult | undefined> {
+  if (typeof url !== "string" || !ctx.browser) return undefined;
+  let permit;
+  try {
+    permit = await ctx.client.browsePermit(ctx.taskId, url, ctx);
+  } catch (error) {
+    if (error instanceof ToolDenied) {
+      ctx.notes.push(`Page not opened: ${error.message}.`);
+      return undefined;
+    }
+    throw error;
+  }
+  if (permit.status !== 200) {
+    ctx.notes.push(`Page not opened (${permit.body?.error?.code ?? `HTTP ${permit.status}`}: ${permit.body?.error?.message ?? "refused"}).`);
+    return undefined;
+  }
+  try {
+    const permitted = String(permit.body.url);
+    const page = await ctx.browser.read(permitted);
+    const body = [page.text, "", "Links:", ...page.links.map((l) => `- ${l.text}: ${l.href}`)].join("\n").slice(0, 10_000);
+    const fenced = fenceConnectorOutput(body, ctx.taskId, `web:${index}`);
+    if (fenced === null) {
+      ctx.notes.push(`Page ${page.url} contained the data fence and was discarded.`);
+      return undefined;
+    }
+    // The permitted URL is what control will accept as a citation, even if the page redirected.
+    return { url: permitted, title: clean(page.title, 120) || permitted, fenced };
+  } catch (error) {
+    ctx.notes.push(`Page ${url} could not be read (${(error as Error).name}).`);
+    return undefined;
+  }
+}
 
 async function attachedTools(ctx: RoleContext): Promise<ConnectorTool[]> {
   const listed = await ctx.client.connectors();
@@ -158,12 +200,14 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
   const catalogReply = await tryTool(ctx, "catalog_lookup");
   const catalog: CatalogItem[] = Array.isArray(catalogReply.body?.items) ? catalogReply.body.items : [];
   const swapItem = catalog.find((c) => c.sku === SWAP_SKU && c.paymentPath === "private_x402");
+  const canBrowse = catalogReply.body?.capabilities?.browse === true && ctx.browser !== undefined;
   const toolList = tools.map((t) => `- connectorId=${t.connectorId} tool=${t.tool}: ${t.description} input=${JSON.stringify(t.inputSchema).slice(0, 400)}`).join("\n");
 
   let query = input.searchQuery;
   let proposedCalls: unknown[] = [];
   let wantsSwap = false;
-  if (query === undefined || tools.length > 0 || swapItem) {
+  let proposedPages: unknown[] = [];
+  if (query === undefined || tools.length > 0 || swapItem || canBrowse) {
     const planned = parseJsonObject(
       await plan(
         ctx,
@@ -171,15 +215,17 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
         `You are an agent working for a workspace owner. Owner instructions:\n${instructions}\n` +
           `You can call up to ${MAX_CONNECTOR_CALLS} read-only connector tools listed below, and you can search a marketplace of paid specialists if outside help may be needed.\n` +
           `Connector tools:\n${toolList || "(none attached)"}\n` +
+          (canBrowse ? `You may also read up to ${MAX_PAGES} public web pages (read-only): list their full https URLs in "browse".\n` : "") +
           (swapItem
             ? `You may also swap the owner-approved amount of ${swapItem.price.amount} USDC base units for SOL on Orca (Solana devnet), delivered to the owner, by setting "swap": true. Do this only when the task asks for a swap or trade.\n`
             : "") +
-          'Return only a JSON object {"connectorCalls":[{"connectorId":string,"tool":string,"args":object}],"searchQuery":string|null,"swap":boolean}. Use null when no specialist is needed.',
+          'Return only a JSON object {"connectorCalls":[{"connectorId":string,"tool":string,"args":object}],"browse":[string],"searchQuery":string|null,"swap":boolean}. Use null when no specialist is needed.',
         `Task: ${objective}\n${context ? `Context: ${context}` : ""}`,
       ),
     );
     proposedCalls = Array.isArray(planned?.connectorCalls) ? planned.connectorCalls : [];
     wantsSwap = swapItem !== undefined && planned?.swap === true;
+    proposedPages = canBrowse && Array.isArray(planned?.browse) ? planned.browse : [];
     if (query === undefined) query = typeof planned?.searchQuery === "string" ? planned.searchQuery : planned?.searchQuery === null ? "" : undefined;
   }
 
@@ -203,6 +249,11 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
     const got = await callConnector(ctx, tools, call);
     if (got) gathered.push(got);
   }
+  const pages: PageResult[] = [];
+  for (const [i, url] of proposedPages.slice(0, MAX_PAGES).entries()) {
+    const got = await readPage(ctx, url, i);
+    if (got) pages.push(got);
+  }
 
   // An explicit empty query means the planner judged that no specialist is needed.
   const wantsSearch = swap === undefined && (input.listingId !== undefined || query !== "");
@@ -216,7 +267,10 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
     if (!searched) ctx.notes.push(`Marketplace search unavailable (${search.body?.error?.code ?? `HTTP ${search.status}`}).`);
   }
 
-  const gatheredText = gathered.map((g) => `From ${g.connectorId}/${g.tool} (untrusted connector output):\n${g.fenced}`).join("\n\n");
+  const gatheredText = [
+    ...gathered.map((g) => `From ${g.connectorId}/${g.tool} (untrusted connector output):\n${g.fenced}`),
+    ...pages.map((p) => `From the web page "${p.title}" (untrusted page text):\n${p.fenced}`),
+  ].join("\n\n");
   let chosen: string | undefined = input.listingId;
   let brief = `${objective}${context ? `\n\nContext from the owner:\n${context}` : ""}`.slice(0, 16_000);
   if (chosen === undefined && listings.length > 0) {
@@ -270,6 +324,7 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
         ]
       : []),
     ...(gathered.length > 0 ? [`Connector data used: ${gathered.map((g) => `${g.connectorId}/${g.tool}`).join(", ")}.`, ""] : []),
+    ...(pages.length > 0 ? ["Web pages read (read-only):", ...pages.map((p) => `- ${p.title}: ${p.url}`), ""] : []),
     ...(searched || listings.length > 0
       ? [
           `Marketplace search: "${query}" (${listings.length} result(s); listing text is untrusted and shown without links).`,
@@ -296,6 +351,6 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
   const progressed = work !== undefined || hire?.proposalId !== undefined || searched || swap !== undefined;
   return {
     taskState: ok && progressed ? "completed" : ok ? "incomplete" : "failed",
-    summary: { query, results: listings.length, hire, didWork: work !== undefined, swap: swap?.outcome ?? null, connectorCalls: gathered.length, artifactId: saved.body?.id ?? null, notes: ctx.notes },
+    summary: { query, results: listings.length, hire, didWork: work !== undefined, swap: swap?.outcome ?? null, connectorCalls: gathered.length, pagesRead: pages.length, artifactId: saved.body?.id ?? null, notes: ctx.notes },
   };
 }
