@@ -125,6 +125,70 @@ Wallet note secrets and fresh-wallet keys use a separate SQLite file, `<VEILO_SE
 
 The deployment manifest may carry `{"gateway": {"merchantAddress", "merchantAta", "facilitatorFeePayer"}}`; when the manifest and the environment both set a value they must agree. The gateway keeps its own SQLite ledger at `GATEWAY_DATABASE_PATH`. Accounts are created with `pnpm --filter @veilo/gateway account:create -- --workspace <id> --out <token-file>`; the token is written to a new owner-only file and never printed.
 
+#### Seller-host profile
+
+`GATEWAY_ROLE=seller-host` runs the same gateway code as a second, separate process that sells marketplace specialist jobs. Start it with `pnpm --filter @veilo/gateway start:seller-host`. It uses the operator gateway's seller protocol, so control pays it unchanged: `POST /quotes`, `POST /v1/purchases/:quoteId/execute` (402 with an x402 V2 `exact` `PAYMENT-REQUIRED`, then `PAYMENT-SIGNATURE`) and `GET /v1/purchases/:quoteId/result`.
+
+The two roles stay apart:
+- A seller host quotes only `specialist-job`. It refuses credit packs, datasets, the fixed inference SKUs, prepaid usage (`/credits`, `/usage`) and sponsored planning.
+- The operator gateway refuses `specialist-job`, because that SKU has no fixed price.
+
+The facilitator support check, the fee-payer pin and finality gating are identical in both roles.
+
+| Variable | Default | Description |
+|---|---|---|
+| `GATEWAY_ROLE` | `operator` | `operator` or `seller-host`. Set it per process rather than in a shared `.env`. |
+| `SELLER_HOST_IDENTITY` | `veilo-seller-host-devnet` | Identity named in challenges. It must equal the marketplace quote's `sellerIdentity` and must differ from `GATEWAY_IDENTITY`. |
+| `SELLER_HOST_PUBLIC_ORIGIN` | `http://<bind>:<SELLER_HOST_PORT>` | Origin used in execute and resource URLs. It must equal the quote's `sellerOrigin` and must differ from the operator origin. |
+| `SELLER_HOST_PORT` | `4106` | Listen port. It must differ from `GATEWAY_PORT`. |
+| `SELLER_HOST_DATABASE_PATH` | `data/seller-host.sqlite` | The host's own ledger. It must differ from `GATEWAY_DATABASE_PATH`. |
+| `MARKETPLACE_URL` | required | Marketplace base URL: https, or a loopback URL for local testing. |
+| `MARKETPLACE_SELLER_HOST_TOKEN_PATH` | empty | File holding the seller-host bearer credential (preferred). |
+| `MARKETPLACE_SELLER_HOST_TOKEN` | empty | The same credential as an environment value. If both are set, they must agree. The credential is never printed. |
+| `SELLER_HOST_RECIPIENTS` | empty | Optional comma-separated payout owners. When set, a quote naming any other recipient is refused. A seller running their own host should set it to their payout wallet. |
+| `SELLER_HOST_ACCOUNTS_PER_IP_HOUR` | `5` | Self-service account creations allowed per client address per hour. There is also a global cap of 200 per hour. |
+
+`GATEWAY_FACILITATOR_FEE_PAYER`, `GATEWAY_QUOTE_TTL_SECONDS`, `GATEWAY_SETTLEMENT_WAIT_MS`, `GATEWAY_PROVIDER_TIMEOUT_MS`, `GATEWAY_PRICING_MAX_AGE_SECONDS`, the inference model and `OPERATOR_MAX_REAL_USD_MICRO` apply as in the operator role. `GATEWAY_MERCHANT_ADDRESS`/`_ATA`, the usage-permit key and the planning credential are ignored: a seller host has no fixed merchant.
+
+**Quote.** The `specialist-job` input is `{jobId, listingVersionId, quoteDigest, brief}`. The host fetches `GET {MARKETPLACE_URL}/internal/seller-host/jobs/:jobId` (`sellerHostJobViewSchema`) and quotes only when all of these hold:
+- the job is `awaiting_payment`;
+- `verifyQuote` passes;
+- the digest, job, listing version, runtime version and brief digest match the input;
+- network, genesis hash, mint and decimals match the host's chain configuration;
+- `recipientAta` is the recipient's derived ATA;
+- origin and identity match this host;
+- the quote has not expired;
+- the listing is a Markdown managed template on the pinned model;
+- the amount is nonzero.
+
+The gateway quote takes `amount = totalUnits`, `payTo = recipient` and `merchantAta = recipientAta` from that marketplace quote, and expires no later than it. Payment verification compares against those per-quote values.
+
+Any failed check, or an unreachable marketplace, refuses the quote. The error codes are:
+
+| Code | Cause |
+|---|---|
+| `PRICE_CHANGED` | the digest, IDs or brief differ from the quote |
+| `WRONG_NETWORK` | network or genesis hash mismatch |
+| `WRONG_MINT` | mint or decimals mismatch |
+| `SERVICE_NOT_ALLOWED` | wrong recipient, origin, identity or runtime |
+| `QUOTE_EXPIRED` | the marketplace quote has expired |
+| `NOT_READY` | the job is not awaiting payment, or the marketplace is unreachable |
+
+A job binds to one buyer operation. Before each challenge and each payment, the host re-checks that the job still awaits payment under the same digest.
+
+**Fulfilment** starts only after finalized settlement. Each step is persisted before the next one starts:
+1. `POST …/jobs/:jobId/payment-evidence {operationId, signature}`, so the marketplace verifies the receipt itself. A 409 means already recorded.
+2. `POST …/claim`, retried with backoff while the job is not queued. The returned lease is stored in the host DB.
+3. One bounded provider call for the template, with seller instructions and the brief passed as fenced untrusted data. A heartbeat confirms the lease before dispatch, and another is sent every 15 s while the call runs.
+4. `POST …/complete` with a `veilo.result.v1` envelope and one Markdown artifact (SHA-256 and byte count computed locally).
+5. If the provider call failed, `POST …/fail` instead, with `uncertain` true when the outcome is ambiguous.
+
+The gateway purchase becomes `delivered`, `incomplete` or `paid_no_result` only after the marketplace acknowledges the outcome. Until then, the result shows the payment as paid and pending.
+
+Inference runs at most once per purchase. A crash or a lost lease resumes from the stored step: a new lease reports the stored output, and an interrupted provider call is reported as uncertain, never re-run. The host repeats pending passes every 30 s.
+
+**Buyer accounts.** `POST /v1/accounts` (seller host only, rate-limited per client address) returns `{accountId, token}`. The token is shown once; only its SHA-256 is stored. An account sees only its own quotes and results, and every execution still needs a valid x402 payment. A remote seller can run this profile on their own infrastructure with their own marketplace seller-host credential, origin and `SELLER_HOST_RECIPIENTS`. The marketplace must list exactly that origin and identity in its quotes.
+
 ### Runner service
 
 | Variable | Default | Description |
