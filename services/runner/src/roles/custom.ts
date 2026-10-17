@@ -41,6 +41,8 @@ interface ConnectorResult {
 }
 
 const NO_URLS: ReadonlySet<string> = new Set();
+/** The owner-approved devnet swap; its amount, pool and destination are fixed by the owner. */
+const SWAP_SKU = "swap-usdc-to-sol";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /** Leaves room for the catalogue lookup, the paid analysis, its status checks and the artifact. */
 const MAX_CONNECTOR_CALLS = 2;
@@ -114,9 +116,7 @@ const listingLine = (l: ListingResult, i: number): string =>
     .join(" | ");
 
 /** Completes the task with one paid analysis over the gathered data: prepaid credits first, then per call. */
-async function doTheWork(ctx: RoleContext, objective: string, material: string): Promise<{ text: string; purchase: string } | undefined> {
-  const catalogReply = await tryTool(ctx, "catalog_lookup");
-  const catalog: CatalogItem[] = Array.isArray(catalogReply.body?.items) ? catalogReply.body.items : [];
+async function doTheWork(ctx: RoleContext, catalog: CatalogItem[], objective: string, material: string): Promise<{ text: string; purchase: string } | undefined> {
   const prepaid = catalog.find((c) => c.sku === "analyze" && c.paymentPath === "prepaid_credits");
   const perCall = catalog.find((c) => c.sku === "analyze" && c.paymentPath === "private_x402");
   if (!prepaid && !perCall) {
@@ -151,11 +151,15 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
   const context = String(input.context ?? "").slice(0, 8_000);
 
   const tools = await attachedTools(ctx);
+  const catalogReply = await tryTool(ctx, "catalog_lookup");
+  const catalog: CatalogItem[] = Array.isArray(catalogReply.body?.items) ? catalogReply.body.items : [];
+  const swapItem = catalog.find((c) => c.sku === SWAP_SKU && c.paymentPath === "private_x402");
   const toolList = tools.map((t) => `- connectorId=${t.connectorId} tool=${t.tool}: ${t.description} input=${JSON.stringify(t.inputSchema).slice(0, 400)}`).join("\n");
 
   let query = input.searchQuery;
   let proposedCalls: unknown[] = [];
-  if (query === undefined || tools.length > 0) {
+  let wantsSwap = false;
+  if (query === undefined || tools.length > 0 || swapItem) {
     const planned = parseJsonObject(
       await plan(
         ctx,
@@ -163,12 +167,24 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
         `You are an agent working for a workspace owner. Owner instructions:\n${instructions}\n` +
           `You can call up to ${MAX_CONNECTOR_CALLS} read-only connector tools listed below, and you can search a marketplace of paid specialists if outside help may be needed.\n` +
           `Connector tools:\n${toolList || "(none attached)"}\n` +
-          'Return only a JSON object {"connectorCalls":[{"connectorId":string,"tool":string,"args":object}],"searchQuery":string|null}. Use null when no specialist is needed.',
+          (swapItem
+            ? `You may also swap the owner-approved amount of ${swapItem.price.amount} USDC base units for SOL on Orca (Solana devnet), delivered to the owner, by setting "swap": true. Do this only when the task asks for a swap or trade.\n`
+            : "") +
+          'Return only a JSON object {"connectorCalls":[{"connectorId":string,"tool":string,"args":object}],"searchQuery":string|null,"swap":boolean}. Use null when no specialist is needed.',
         `Task: ${objective}\n${context ? `Context: ${context}` : ""}`,
       ),
     );
     proposedCalls = Array.isArray(planned?.connectorCalls) ? planned.connectorCalls : [];
+    wantsSwap = swapItem !== undefined && planned?.swap === true;
     if (query === undefined) query = typeof planned?.searchQuery === "string" ? planned.searchQuery : planned?.searchQuery === null ? "" : undefined;
+  }
+
+  // The swap's terms are the owner's; the agent only decides whether the task calls for it.
+  let swap: { outcome: string; result: Record<string, unknown> | null } | undefined;
+  if (wantsSwap && swapItem) {
+    const r = await buy(ctx, swapItem, "swap", {}, "The owner's task asked for a USDC to SOL swap");
+    swap = { outcome: outcomeText(r), result: (r.body?.execution?.result as Record<string, unknown> | undefined) ?? null };
+    if (!delivered(r)) ctx.notes.push(`The swap did not complete (${swap.outcome}); control keeps reconciling it.`);
   }
 
   const gathered: ConnectorResult[] = [];
@@ -178,7 +194,7 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
   }
 
   // An explicit empty query means the planner judged that no specialist is needed.
-  const wantsSearch = input.listingId !== undefined || query !== "";
+  const wantsSearch = swap === undefined && (input.listingId !== undefined || query !== "");
   query = clean(query ?? objective, 200) || "specialist";
   let listings: ListingResult[] = [];
   let searched = false;
@@ -221,10 +237,10 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
   }
 
   let work: { text: string; purchase: string } | undefined;
-  if (!hire?.proposalId) {
+  if (!hire?.proposalId && swap === undefined) {
     if (ctx.bounds.maxToolCalls - ctx.client.toolCalls >= RESERVED_FOR_OWN_WORK) {
       const material = [`Owner instructions:\n${instructions}`, context ? `Context from the owner:\n${context}` : "", gatheredText].filter((x) => x !== "").join("\n\n");
-      work = await doTheWork(ctx, objective, material);
+      work = await doTheWork(ctx, catalog, objective, material);
     } else {
       ctx.notes.push("Not enough of this task's tool-call allowance was left to do the work itself.");
     }
@@ -234,6 +250,14 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
     `Objective: ${clean(objective, 500)}`,
     "",
     ...(work ? ["Result:", work.text, "", `Produced by this agent with one paid analysis: ${work.purchase}.`, ""] : []),
+    ...(swap
+      ? [
+          `Swap: ${swap.outcome}.`,
+          ...(swap.result && typeof swap.result.signature === "string" ? [`Swap transaction: ${swap.result.signature} (Solana devnet).`] : []),
+          ...(swap.result && typeof swap.result.minOutLamports === "string" ? [`Guaranteed at least ${swap.result.minOutLamports} lamports of SOL to the owner's address.`] : []),
+          "",
+        ]
+      : []),
     ...(gathered.length > 0 ? [`Connector data used: ${gathered.map((g) => `${g.connectorId}/${g.tool}`).join(", ")}.`, ""] : []),
     ...(searched || listings.length > 0
       ? [
@@ -253,14 +277,14 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
   ];
   const saved = await tryTool(ctx, "save_artifact", {
     kind: "research_brief",
-    title: `${work ? "Result" : "Marketplace scouting"}: ${clean(objective, 150)}`.slice(0, 200),
+    title: `${swap ? "Swap" : work ? "Result" : "Marketplace scouting"}: ${clean(objective, 150)}`.slice(0, 200),
     content: lines.join("\n"),
     ...(gathered.length > 0 ? { citations: gathered.map((g) => ({ url: g.citation, title: `${g.connectorId}/${g.tool} (read-only connector)` })) } : {}),
   });
   const ok = saved.status === 201;
-  const progressed = work !== undefined || hire?.proposalId !== undefined || searched;
+  const progressed = work !== undefined || hire?.proposalId !== undefined || searched || swap !== undefined;
   return {
     taskState: ok && progressed ? "completed" : ok ? "incomplete" : "failed",
-    summary: { query, results: listings.length, hire, didWork: work !== undefined, connectorCalls: gathered.length, artifactId: saved.body?.id ?? null, notes: ctx.notes },
+    summary: { query, results: listings.length, hire, didWork: work !== undefined, swap: swap?.outcome ?? null, connectorCalls: gathered.length, artifactId: saved.body?.id ?? null, notes: ctx.notes },
   };
 }
