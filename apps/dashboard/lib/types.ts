@@ -97,7 +97,8 @@ export type GatewayCredits =
 export interface Balances {
   workspace: WorkspaceBudget;
   agents: AgentBudget[];
-  tokens: { unit: string; mint: string; buckets: Record<string, string> };
+  /** `buckets` is omitted in the public view. */
+  tokens: { unit: string; mint: string; buckets?: Record<string, string> };
   cash?: { spent: string; reserved: string; byAgent: Array<{ agentId: string; name: string; spent: string; reserved: string }>; note: string };
   gatewayCredits: GatewayCredits;
   usageByAgent?: Array<{ agentId: string; name: string; consumedUnits: string; reservedUnits: string; packsPurchased: number; packUnitsPurchased: string; packCashSpent: string }>;

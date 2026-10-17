@@ -43,10 +43,23 @@ export function redactPurchase(view: Json): Json {
   return out;
 }
 
+/**
+ * Private-pool token buckets are withheld: polling them reveals when and by how much the pool
+ * balance moved, which can be matched against on-chain withdrawals.
+ */
 export function redactBalances(balances: Json): Json {
+  const out: Json = { ...balances };
+  const tokens = balances.tokens;
+  if (tokens !== null && typeof tokens === "object") {
+    const rest: Json = { ...(tokens as Json) };
+    delete rest.buckets;
+    out.tokens = rest;
+  }
   const credits = balances.gatewayCredits;
-  if (credits === null || typeof credits !== "object") return balances;
-  const rest: Json = { ...(credits as Json) };
-  delete rest.accountId;
-  return { ...balances, gatewayCredits: rest };
+  if (credits !== null && typeof credits === "object") {
+    const rest: Json = { ...(credits as Json) };
+    delete rest.accountId;
+    out.gatewayCredits = rest;
+  }
+  return out;
 }

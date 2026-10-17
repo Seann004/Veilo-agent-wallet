@@ -357,6 +357,10 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     if (guest) {
       // Task budgets are spending policy, which only the owner sets.
       if (body.taskLimitTestUsdc !== undefined) denyGuestRun(ledger, guest, agent.id, "guests cannot set a task spending limit");
+      // A handoff brief replaces the objective the owner approved, so only the owner may supply one.
+      if (body.input !== undefined && "handoffId" in body.input) {
+        denyGuestRun(ledger, guest, agent.id, "guests cannot run a task reserved by an approved handoff");
+      }
       if (guestRunsInLastHour(ledger, guest) >= guestRunLimit) denyGuestRun(ledger, guest, agent.id, `guest run limit reached (${guestRunLimit} per hour)`);
     }
     /**

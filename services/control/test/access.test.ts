@@ -157,9 +157,11 @@ describe("access configuration", () => {
 
 describe("viewer redaction helpers", () => {
   it("removes the gateway account id and non-allowlisted details", () => {
-    const balances = { tokens: { unit: "x" }, gatewayCredits: { available: true, accountId: "acct_secretish", usable: "5" } };
+    const balances = { tokens: { unit: "x", buckets: { private_spendable: "700" } }, gatewayCredits: { available: true, accountId: "acct_secretish", usable: "5" } };
     const out = redactBalances(balances);
     expect(out.gatewayCredits).toEqual({ available: true, usable: "5" });
+    expect(out.tokens).toEqual({ unit: "x" });
+    expect(balances.tokens.buckets.private_spendable).toBe("700");
     expect(balances.gatewayCredits.accountId).toBe("acct_secretish");
     const events = redactActivityEvents([
       { scope: "session", action: "session.verify", details: { sessionId: "s" } },
@@ -253,6 +255,7 @@ describe("public viewer", () => {
     const balances = await call("/balances");
     expect(balances.status).toBe(200);
     expect(balances.body.gatewayCredits).not.toHaveProperty("accountId");
+    expect(balances.body.tokens).not.toHaveProperty("buckets");
   });
 });
 
@@ -325,6 +328,11 @@ describe("guest sessions", () => {
     expect(limited.body.error.code).toBe("POLICY_DENIED");
     expect(Number(env.db.prepare("SELECT count(*) FROM task").pluck().get())).toBe(0);
 
+    const handoff = await call(`/agents/${prince}/run`, { method: "POST", headers: auth(g), body: { objective: "Rewrite it", input: { handoffId: "h1" } } });
+    expect(handoff.status).toBe(403);
+    expect(handoff.body.error.code).toBe("POLICY_DENIED");
+    expect(Number(env.db.prepare("SELECT count(*) FROM task").pluck().get())).toBe(0);
+
     const ok = await call(`/agents/${prince}/run`, { method: "POST", headers: auth(g), body: { objective: "Compare RPCs" } });
     expect(ok.status).toBe(202);
     expect(ok.body.job.state).toBe("queued");
@@ -336,10 +344,11 @@ describe("guest sessions", () => {
       .all(guest.address) as Array<{ actor_type: string; policy_result: string; details_json: string }>;
     expect(runs.map((r) => [r.actor_type, r.policy_result])).toEqual([
       ["system", "denied"],
+      ["system", "denied"],
       ["system", "allowed"],
       ["system", "allowed"],
     ]);
-    expect(JSON.parse(runs[1]!.details_json)).toMatchObject({ actor: "guest", jobId: ok.body.job.id, role: "research" });
+    expect(JSON.parse(runs[2]!.details_json)).toMatchObject({ actor: "guest", jobId: ok.body.job.id, role: "research" });
   });
 
   it("rate-limits guest runs per wallet per rolling hour", async () => {
