@@ -14,17 +14,20 @@ import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import type { KeyPairSigner } from "@solana/kit";
-import { DEFAULT_AGENTS, DEFAULT_WORKSPACE_POLICY, findRepoRoot, loadConfig, loadDotEnv, redactUrl, verifyChainIdentity, type VeiloConfig } from "@veilo/contracts";
+import { address, signature as toSignature, type KeyPairSigner } from "@solana/kit";
+import { DEFAULT_AGENTS, DEFAULT_WORKSPACE_POLICY, DEMO_TOKEN_MINT, findRepoRoot, loadConfig, loadDotEnv, redactUrl, verifyChainIdentity, type VeiloConfig } from "@veilo/contracts";
 import { GATEWAY_CATALOG, computeRequestDigest } from "@veilo/contracts/gateway";
 import { checkFacilitatorSupport, fetchFacilitatorSupported } from "@veilo/x402-client";
 import { openSqliteReadonly } from "../packages/db/src/index";
-import type { DeploymentManifest } from "../packages/privacy-sdk/src/index";
+import { getPoseidon, type DeploymentManifest } from "../packages/privacy-sdk/src/index";
 import { PLANNING_MAX_INPUT_TOKENS, PLANNING_MAX_OUTPUT_TOKENS } from "../services/gateway/src/planning";
 import { pinnedModel, worstCaseMicroUsd } from "../services/gateway/src/provider/pinned-models";
 import { createRpcRelayerChain } from "../services/relayer/src/chain";
+import { openRelayerDb } from "../services/relayer/src/db";
 import { verifyDeployment } from "../services/relayer/src/deployment";
+import { Indexer } from "../services/relayer/src/indexer";
 import { ensureOwnerServiceSecret } from "../services/wallet/src/secret";
+import { evaluateDemoAcceptance, merchantSignatures, tokenCreditTo, type AcceptanceReceipt, type AcceptanceResult } from "./demo/acceptance";
 import { approveInsertedDeposits } from "./demo/approve";
 import { ata, awaitTx, decodeTokenAccount, explorerAddress, explorerTx, getAccount, hasFlag, lamportsOf, loadSigner, makeRpc, publicKeyOfKeyFile, readJsonOr, repoPath, sendWire, sleep, sol, usdc, writeJson, type Rpc, type SentTx } from "./devnet/lib";
 import { fileSecrets, keypairSecrets, scanDir, type SecretValue } from "./evidence/scan";
@@ -196,6 +199,7 @@ async function devnetReadiness(): Promise<Readiness> {
       if (lam < need) problems.push(`${role} holds ${sol(lam)}, needs ≥ ${sol(need)}`);
     }
   }
+  if (manifest) await describePoolHistory(config.network.rpcUrl, manifest, fundingAddress);
   for (const [name, p] of [["SPONSOR_KEY_PATH", process.env.SPONSOR_KEY_PATH], ["approval authority key", "work/keys/devnet/approval-authority.json"]] as const) {
     if (!p || !existsSync(repoPath(p))) problems.push(`${name} file missing`);
   }
@@ -224,8 +228,35 @@ async function devnetReadiness(): Promise<Readiness> {
   for (const l of worst.lines) log(`  ${l.call.padEnd(62)} ≤ ${l.micro} micro-USD`);
   log(`  worst case total ${worst.total} micro-USD ($${(Number(worst.total) / 1e6).toFixed(6)}); already used by live calls ${prior.micro} micro-USD; ceiling ${ceiling}`);
   for (const s of prior.sources) log(`    ${s}`);
+  if (prior.sources.length === 0) log("    no gateway ledger on this machine; live calls recorded on other machines are not counted, so keep a provider-side spend limit on the key");
   if (worst.total + prior.micro > ceiling) problems.push(`worst-case inference ${worst.total} + prior ${prior.micro} micro-USD exceeds OPERATOR_MAX_REAL_USD_MICRO ${ceiling}`);
   return { ok: problems.length === 0, problems, config, manifest, fundingAddress, budget: { worstCaseMicro: worst.total, priorMicro: prior.micro, ceilingMicro: ceiling } };
+}
+
+/**
+ * Read-only replay of the pool: reports earlier activity by the demo owner and whether the published
+ * approved-label list matches the on-chain approved root. Neither blocks a run: the approval step
+ * republishes the list from chain history, and a new run uses its own notes and databases.
+ */
+async function describePoolHistory(rpcUrl: string, manifest: DeploymentManifest, owner: string | null): Promise<void> {
+  const labelsPath = repoPath(process.env.APPROVED_LABELS_PATH?.trim() || "artifacts/deployment/approved-labels.json");
+  const db = openRelayerDb(":memory:");
+  try {
+    const indexer = new Indexer(db, createRpcRelayerChain(rpcUrl), await getPoseidon(), address(manifest.program.programId), address(manifest.pool.poolState), address(manifest.pool.approvalState), labelsPath);
+    const { view } = await indexer.replay();
+    log(`pool history: ${view.deposits.length} deposits, ${view.spends.length} private spends, ${view.exits.length} public exits; approved root version ${view.approved.version}`);
+    if (!view.approved.consistent) {
+      log(`  note: ${relative(rootDir, labelsPath)} does not match the on-chain approved root (it was last written on another machine). The approval step rebuilds the list from chain history before approving new deposits.`);
+    }
+    const ownerDeposits = owner ? view.deposits.filter((d) => d.refundAuthority === owner).length : 0;
+    if (ownerDeposits > 0 && !existsSync(join(rootDir, "work", "demo", "devnet-state.json"))) {
+      log(`  note: the demo owner already has ${ownerDeposits} deposit(s) in this pool, but no work/demo/devnet-state.json exists here. An earlier run's state and evidence (work/demo/, artifacts/evidence/demo-<runId>/) are on another machine; --execute here starts a NEW run with new deposits and payments.`);
+    }
+  } catch (err) {
+    log(`pool history: replay unavailable (${(err as Error).message})`);
+  } finally {
+    db.close();
+  }
 }
 
 function demoGatewayDbs(): string[] {
@@ -244,7 +275,7 @@ function printPlan(): void {
   log("  f. Mira's allowance is lowered below one package; two concurrent requests are both rejected; Prince is revoked and a new request is refused");
   log("  g. owner public exit of a change note back to the owner wallet, with the privacy warning");
   log(`  test USDC: deposits ${usdc(DEPOSITS.reduce((a, b) => a + b, 0n))}; merchant spend ≤ ${usdc(CREDIT_PACK + RESEARCH + CONTENT)}; the exit returns the largest spendable change note (0.5–0.9 test USDC depending on the research dataset chosen)`);
-  log("  SOL (estimate): owner deposits 3 × ≈0.0038 + exit ≈0.0013; sponsor 3 × (fresh ATA 0.002 + spend rent 0.003 + fees) + inserts ≈ 0.02; approval ≈ 0.00001 → ≈ 0.04 SOL total");
+  log("  SOL (measured on devnet 2026-10-17): owner 3 deposits × 0.00274312 + exit 0.00090924 = 0.0091386; sponsor 3 × (fresh-payer ATA 0.00149344 + spend 0.00221988) + 6 inserts × 0.000005 = 0.0111700; approval authority 2 × 0.000005 → ≈ 0.0203 SOL total");
 }
 
 // ---------------------------------------------------------------------------------------
@@ -496,7 +527,7 @@ function withLinks(e: Env, p: { chainAttempts?: Array<{ signature: string | null
   return (p.chainAttempts ?? []).map((a) => ({ ...a, explorer: a.signature ? e.explorer(a.signature) : null }));
 }
 
-async function run(e: Env, s: RunState): Promise<void> {
+async function run(e: Env, s: RunState): Promise<{ shawn: string; prince: string; mira: string }> {
   await e.client.login(e.owner.address, e.owner.signText);
   const ws = await e.client.workspace();
   const agentId = (n: string) => (ws.agents as Array<{ id: string; name: string }>).find((a) => a.name === n)!.id;
@@ -630,29 +661,46 @@ async function run(e: Env, s: RunState): Promise<void> {
     return { exit: { ...s.exit, explorer: e.explorer(s.exit.signature) } };
   });
   await e.client.control("POST", `/agents/${shawn}/pause`, {});
+  return { shawn, prince, mira };
 }
 
 // ---------------------------------------------------------------------------------------
 // Evidence
 
-function inferenceReceipts(gatewayDb: string): unknown[] {
+function inferenceReceipts(gatewayDb: string): Array<AcceptanceReceipt & Record<string, unknown>> {
   if (!existsSync(gatewayDb)) return [];
   const db = openSqliteReadonly(gatewayDb);
   try {
     return db
       .prepare(
-        `SELECT e.source_kind AS sourceKind, e.model, e.mode, e.reported_model AS reportedModel, e.state, e.prompt_tokens AS promptTokens, e.completion_tokens AS completionTokens,
+        `SELECT e.source_kind AS sourceKind, COALESCE(p.sku, u.sku) AS sku, e.model, e.mode, e.reported_model AS reportedModel, e.state, e.prompt_tokens AS promptTokens, e.completion_tokens AS completionTokens,
                 length(e.output_text) AS outputChars, l.purpose, l.worst_case_micro AS worstCaseMicroUsd, l.actual_micro AS actualMicroUsd, l.actual_source AS costSource, e.started_at AS at
-         FROM provider_executions e LEFT JOIN operator_cost_ledger l ON l.execution_id = e.id ORDER BY e.started_at`,
+         FROM provider_executions e LEFT JOIN operator_cost_ledger l ON l.execution_id = e.id
+         LEFT JOIN purchases p ON e.source_kind = 'purchase' AND p.id = e.source_id
+         LEFT JOIN usage_operations u ON e.source_kind = 'usage' AND u.id = e.source_id
+         ORDER BY e.started_at`,
       )
       .all()
-      .map((r) => JSON.parse(JSON.stringify(r, (_k, v: unknown) => (typeof v === "bigint" ? v.toString() : v))) as unknown);
+      .map((r) => JSON.parse(JSON.stringify(r, (_k, v: unknown) => (typeof v === "bigint" ? v.toString() : v))) as AcceptanceReceipt & Record<string, unknown>);
   } finally {
     db.close();
   }
 }
 
-async function writeEvidence(e: Env, s: RunState): Promise<void> {
+/** Base units each merchant-leg signature credited to the gateway merchant ATA (finalized transactions only). */
+async function merchantCredits(e: Env, purchases: Array<Parameters<typeof merchantSignatures>[0]>): Promise<Record<string, bigint | null>> {
+  const gw = e.manifest.gateway as { merchantAddress?: string } | undefined;
+  if (!gw?.merchantAddress) return {};
+  const merchantAta = await ata(gw.merchantAddress, DEMO_TOKEN_MINT);
+  const out: Record<string, bigint | null> = {};
+  for (const sig of purchases.flatMap(merchantSignatures)) {
+    const tx = await e.rpc.getTransaction(toSignature(sig), { commitment: "finalized", encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }).send();
+    out[sig] = tokenCreditTo(tx as unknown as Parameters<typeof tokenCreditTo>[0], merchantAta);
+  }
+  return out;
+}
+
+async function writeEvidence(e: Env, s: RunState, agents: { shawn: string; prince: string; mira: string }): Promise<AcceptanceResult> {
   const dir = e.evidenceDir;
   mkdirSync(join(dir, "artifacts"), { recursive: true });
   const activity = await e.client.control("GET", "/activity?limit=200");
@@ -677,6 +725,16 @@ async function writeEvidence(e: Env, s: RunState): Promise<void> {
     writeFileSync(join(dir, "artifacts", `${a.kind}-${a.id.slice(0, 8)}.${ext}`), a.kind === "content_calendar" ? `${JSON.stringify(JSON.parse(a.content), null, 2)}\n` : `# ${a.title}\n\n${a.content}\n`);
   }
   const receipts = inferenceReceipts(e.gatewayDb);
+  const taskRows = tasks.body.tasks as Array<{ id: string; state: string }>;
+  const taskOf = (stepName: string) => taskRows.find((t) => t.id === s.steps[stepName]?.data?.taskId);
+  const acceptance = evaluateDemoAcceptance({
+    providerMode: e.providerMode,
+    agents,
+    tasks: { prince: taskOf("c-prince-research"), mira: taskOf("d-handoff-mira") },
+    purchases: activity.body.purchases as Parameters<typeof evaluateDemoAcceptance>[0]["purchases"],
+    receipts,
+    merchantCredits: await merchantCredits(e, activity.body.purchases as Array<Parameters<typeof merchantSignatures>[0]>),
+  });
   writeJson(join(dir, "inference-receipts.json"), {
     provider: e.providerMode === "live" ? "OpenRouter (operator-funded real inference, bounded per pinned tariff)" : "FIXTURE mock provider (local rehearsal; not real inference)",
     note: "Prompts and inputs are not recorded here; outputs are saved as artifacts.",
@@ -705,6 +763,7 @@ async function writeEvidence(e: Env, s: RunState): Promise<void> {
       credits: "Demo inference credits — backed by the operator's OpenRouter account",
       privacy: "Deposits, payouts, amounts, fresh wallets and timing are public; the hidden property is which deposit funded a withdrawal. The demo owner is the only depositor in this run, so its anonymity set is small.",
     },
+    acceptance,
     steps: s.steps,
     deposits: s.deposits.map((d) => ({ ...d, explorer: d.signature ? e.explorer(d.signature) : null })),
     approvals: s.approvals.map((a) => ({ signature: a, explorer: e.explorer(a) })),
@@ -715,6 +774,9 @@ async function writeEvidence(e: Env, s: RunState): Promise<void> {
   const hits = scanDir(dir, e.secrets);
   if (hits.length > 0) throw new Error(`evidence secret scan failed:\n  ${hits.join("\n  ")}`);
   log(`evidence: ${relative(rootDir, dir)} (secret scan clean over ${e.secrets.length} known secret values)`);
+  log("acceptance:");
+  for (const c of acceptance.checks) log(`  ${c.ok ? "ok  " : "FAIL"} ${c.name}: ${c.detail}`);
+  return acceptance;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -728,12 +790,13 @@ async function main(): Promise<void> {
     printPlan();
     log("\nreal-demo gate: BLOCKED in this mode by design (FIXTURE provider; fixture output does not pass real-inference acceptance)");
     const { env } = await localEnv(s);
+    let acceptance: AcceptanceResult;
     try {
-      await run(env, s);
-      await writeEvidence(env, s);
+      acceptance = await writeEvidence(env, s, await run(env, s));
     } finally {
       await env.stop();
     }
+    if (!acceptance.passed) throw new Error(`local rehearsal ${s.runId} finished, but acceptance checks failed (see above and ${relative(rootDir, env.evidenceDir)}/summary.json)`);
     log(`\nLocal rehearsal complete (run ${s.runId}).`);
     return;
   }
@@ -754,12 +817,13 @@ async function main(): Promise<void> {
   saveState(s);
   log(`\nrun ${s.runId} (state ${relative(rootDir, STATE_PATH)})`);
   const env = await devnetEnv(r, s);
+  let acceptance: AcceptanceResult;
   try {
-    await run(env, s);
-    await writeEvidence(env, s);
+    acceptance = await writeEvidence(env, s, await run(env, s));
   } finally {
     await env.stop();
   }
+  if (!acceptance.passed) throw new Error(`demo run ${s.runId} finished, but acceptance checks failed; the evidence in ${relative(rootDir, env.evidenceDir)} records which. Rerunning resumes the same run and only re-checks`);
   log(`\nDemo run ${s.runId} complete. Evidence: ${relative(rootDir, env.evidenceDir)}`);
 }
 
