@@ -10,7 +10,7 @@
 | pnpm | 10.34.6 (`packageManager` field) | Provided by Corepack. |
 | Docker | Docker Desktop / Engine with a Linux daemon | Verified with 28.4.0. Runs every Rust/Solana/Anchor/circom command. |
 
-Rust, the Solana CLI, Anchor and circom are **not** installed on the host. They live only in the pinned toolchain image.
+By default, Rust, the Solana CLI, Anchor and circom are **not** installed on the host. They live only in the pinned toolchain image. The opt-in native mode below runs them on the host at the same pinned versions.
 
 #### Enabling pnpm without admin rights (Windows)
 
@@ -75,6 +75,43 @@ Notes:
 - Build output goes to the gitignored `target/` directory in the repository. Builds over the Windows bind mount are slower than native: the first skeleton build took about 3.5 minutes.
 - `cargo build-sbf` writes a fresh program keypair to `target/deploy/privacy_pool-keypair.json` if none exists. That keypair is an unfunded build by-product, is gitignored, and is not the deployment identity. The deployment identity is the `programId` role created once by `pnpm keys:init` (`work/keys/devnet/program-id.json`, public key `3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq`). `pnpm program:set-id` writes it into `declare_id!`, `Anchor.toml` and the published IDL (`pnpm program:set-id -- --check` verifies all three). Always build with `--ignore-keys` and delete the by-product keypair.
 - The Anchor workspace is at the repository root (`Anchor.toml`, `Cargo.toml`, `rust-toolchain.toml` pinned to 1.97.1, `Cargo.lock`). The program crate lives in `programs/privacy-pool` with `anchor-lang = "=1.2.1"`.
+
+### Native toolchain (`VEILO_TOOLCHAIN=native`)
+
+Docker is the default. With `VEILO_TOOLCHAIN=native`, three commands run on the host instead, in the same working directory: `pnpm tc`, the circuit build (`circuits/scripts/build.ts`) and the `solana program deploy` step of `pnpm deploy:devnet`.
+
+Before each command, `scripts/toolchain-native.mjs` reads the pins from `docker/toolchain.Dockerfile`. It checks `rustc`, `solana`, `anchor` and `circom` on `PATH`, and checks that the pinned platform-tools exist in `~/.cache/solana/<PLATFORM_TOOLS_VERSION>`. A missing tool or another version stops the command before it runs. Any `VEILO_TOOLCHAIN` value other than `docker` or `native` is an error.
+
+The shell scripts read two variables:
+
+- `VEILO_WORKSPACE`: the repository root. It is `/workspace` in Docker and the checkout natively.
+- `VEILO_CACHE_DIR`: the build cache. It is the cargo-registry volume in Docker and `target/native-cache/` natively.
+
+Installing the pins on macOS (arm64), done on 2026-10-17:
+
+```sh
+agave-install init 4.1.2                        # or the release.anza.xyz/v4.1.2 installer
+cargo-build-sbf --install-only --tools-version v1.57
+avm install 1.2.1 && avm use 1.2.1
+cargo install --locked --git https://github.com/iden3/circom --tag v2.2.3 circom
+# rustc 1.97.1 comes from rust-toolchain.toml through rustup.
+```
+
+`agave-install init` switches `~/.local/share/solana/install/active_release`, a symlink that every shell of the user shares. If other work on the machine uses another Solana version, put `~/.local/share/solana/install/releases/4.1.2/solana-release/bin` first on `PATH` instead.
+
+Versions on the Mac that ran the 2026-10-17 redeployment:
+
+```
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+solana-cli 4.1.2 (src:182084b8; feat:c763ae0a, client:Agave)
+cargo-build-sbf 4.1.0 (default platform-tools v1.54; v1.57 installed)
+anchor-cli 1.2.1
+circom compiler 2.2.3 (iden3/circom tag v2.2.3, commit ad44e915)
+snarkjs 0.7.6 (workspace dependency)
+node v22.23.3, pnpm 10.34.6
+```
+
+The host Node is 22.23.3, not the image's 22.22.3. Both satisfy `engines`. `programs/privacy-pool/scripts/build.sh` calls `cargo build-sbf` without `--tools-version`, so it uses the cargo-build-sbf default (v1.54 for 4.1.0) both natively and in the image.
 
 ### Local setup and checks
 
