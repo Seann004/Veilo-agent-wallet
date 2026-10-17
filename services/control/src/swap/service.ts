@@ -97,10 +97,8 @@ export class SwapRunner {
     if (!sign) throw new ControlError("NOT_READY", "the funding provider cannot sign swaps");
     const r = await sign.call(this.funding, p.id, p.id, binding);
     if (r.status === "not_ready") throw new ControlError("NOT_READY", `swap not signed yet: ${r.reason}`);
-    if (r.status === "recovery_required") {
-      markRecoverable(this.ledger, p.id, `swap refused by the wallet: ${r.reason}`);
-      return false;
-    }
+    // The merchant leg stays signed: the wallet's refusal alone does not prove whether a swap signature exists.
+    if (r.status === "recovery_required") throw new ControlError("RECOVERY_REQUIRED", `swap refused by the wallet: ${r.reason}`);
     this.#recordAttempt(p.id, r);
     if (r.status === "submitted") return false;
     if (r.status === "finalized") this.#finish(p, r);

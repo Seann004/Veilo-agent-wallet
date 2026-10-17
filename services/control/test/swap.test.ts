@@ -54,6 +54,7 @@ class SwapTestFunding implements FundingProvider {
     if (this.outcome === "finalized") return { status: "finalized", signature: sig, sponsorLamports: 2_049_280n, ...amounts };
     if (this.outcome === "submitted") return { status: "submitted", signature: sig, ...amounts };
     if (this.outcome === "failed") return { status: "failed", signature: sig, reason: "the swap failed on-chain" };
+    if (this.outcome === "recovery_required") return { status: "recovery_required", reason: "no owner address is configured to receive the swap output" };
     return { status: "not_ready", reason: "relayer unavailable" };
   }
 }
@@ -114,6 +115,14 @@ describe("devnet swap purchase", () => {
     const failed = swapPurchase("swap-3");
     await orchestrator.drive(failed);
     expect(getPurchaseRow(env.ledger, failed)).toMatchObject({ merchant_state: "expired_unsettled", fulfilment_state: "abandoned", recovery_state: "recoverable" });
+  });
+
+  it("blocks a swap the wallet refused as RECOVERY_REQUIRED without forging a settlement state", async () => {
+    funding.outcome = "recovery_required";
+    const id = swapPurchase("swap-5");
+    await orchestrator.drive(id);
+    expect(getPurchaseRow(env.ledger, id)).toMatchObject({ funding_state: "finalized", merchant_state: "signed", recovery_state: "none" });
+    expect(orchestrator.view(id).blocked).toMatchObject({ code: "RECOVERY_REQUIRED" });
   });
 
   it("signs no swap after the agent is paused, and refuses agents without the swap SKU", async () => {
