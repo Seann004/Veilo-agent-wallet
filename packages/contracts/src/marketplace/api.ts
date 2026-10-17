@@ -98,9 +98,18 @@ export const controllerDecisionSchema = z
   .object({ decision: z.enum(["accepted", "rejected"]), code: z.string().max(60).nullable(), controllerRef: z.string().max(128).nullable() })
   .strict();
 
+/**
+ * `payer` is the one-time wallet that signs the merchant transfer. It is reported once, before or
+ * with `paying`, and a receipt only counts when that wallet authorized the transfer.
+ */
 export const controllerStatusSchema = z
-  .object({ status: z.enum(["paying", "uncertain", "failed_unpaid"]), detail: z.string().max(500).nullable() })
-  .strict();
+  .object({
+    status: z.enum(["paying", "uncertain", "failed_unpaid"]),
+    detail: z.string().max(500).nullable(),
+    payer: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).nullable().default(null),
+  })
+  .strict()
+  .refine((s) => s.status !== "paying" || s.payer !== null, "paying status must name the payer");
 
 export const agentHireProposalSchema = z
   .object({

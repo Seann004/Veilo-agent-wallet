@@ -58,6 +58,11 @@ describe("receipt verification", () => {
     expect(checkTransfer(tx({ err: { InstructionError: [0, "Custom"] } }), expected).status).toBe("invalid");
     expect(checkTransfer(tx({ extraTransfer: true }), expected).status).toBe("invalid");
   });
+
+  it("binds the transfer to the operation's payer", () => {
+    expect(checkTransfer(tx(), { ...expected, sourceOwner: PAYER }).status).toBe("verified");
+    expect(checkTransfer(tx(), { ...expected, sourceOwner: SELLER }).status).toBe("invalid");
+  });
 });
 
 describe("wallet identity", () => {

@@ -238,6 +238,10 @@ async function main() {
 
     const accept = await signedCall("POST", `/controller/payment-requests/${hire.body.quote.operationId}/decision`, { decision: "accepted", code: null, controllerRef: "local-1" }, keyId);
     record("controller accepted the payment locally", accept.status === 200);
+    const early = await signedCall("POST", `/controller/payments/${hire.body.quote.operationId}/evidence`, { operationId: hire.body.quote.operationId, signature: FIXTURE_SIG }, keyId);
+    record("evidence before the payer is bound stays pending", early.status === 202);
+    const paying = await signedCall("POST", `/controller/payment-requests/${hire.body.quote.operationId}/status`, { status: "paying", detail: null, payer: buyerA.address }, keyId);
+    record("controller bound the one-time payer to the operation", paying.status === 200);
     const preClaim = await call("POST", `/internal/seller-host/jobs/${jobId}/claim`, { token: managedHostToken });
     record("no execution lease before settlement", preClaim.status === 503);
 
@@ -248,6 +252,8 @@ async function main() {
 
     const hire2 = await call("POST", "/jobs", { token: A.token, body: { listingId: listing.body.listingId, brief: "Second job", idempotencyKey: `idem-${randomUUID()}` } });
     await call("POST", `/jobs/${hire2.body.jobId}/approve`, { token: A.token });
+    await signedCall("POST", `/controller/payment-requests/${hire2.body.quote.operationId}/decision`, { decision: "accepted", code: null, controllerRef: "local-2" }, keyId);
+    await signedCall("POST", `/controller/payment-requests/${hire2.body.quote.operationId}/status`, { status: "paying", detail: null, payer: buyerA.address }, keyId);
     const reuse = await signedCall("POST", `/controller/payments/${hire2.body.quote.operationId}/evidence`, { operationId: hire2.body.quote.operationId, signature: FIXTURE_SIG }, keyId);
     record("one settlement signature cannot fund a second job", reuse.status === 409, `status ${reuse.status}`);
 

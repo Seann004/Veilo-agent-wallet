@@ -8,6 +8,8 @@ export interface ExpectedTransfer {
   recipient: string;
   recipientAta: string;
   amount: bigint;
+  /** When set, the transfer must be authorized by this wallet (the payer bound to the operation). */
+  sourceOwner?: string | undefined;
 }
 
 export interface VerifiedTransfer {
@@ -75,6 +77,9 @@ export function checkTransfer(tx: ParsedTransaction | null, expected: ExpectedTr
   if (typeof rawAmount !== "string" || !/^\d+$/.test(rawAmount)) return { status: "invalid", reason: "transfer amount unreadable" };
   if (BigInt(rawAmount) !== expected.amount) return { status: "invalid", reason: "transfer amount differs from the quoted total" };
   const authority = info.authority ?? info.multisigAuthority;
+  if (expected.sourceOwner !== undefined && authority !== expected.sourceOwner) {
+    return { status: "invalid", reason: "transfer was not authorized by the expected payer" };
+  }
   return {
     status: "verified",
     transfer: {

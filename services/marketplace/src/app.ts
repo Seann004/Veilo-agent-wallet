@@ -331,9 +331,13 @@ export function createApp(deps: Deps): Express {
   app.post(
     "/payments/:operationId/evidence",
     route(async (req, res) => {
-      await user(req, true);
+      const actor = await user(req, true);
       const { signature } = z.object({ signature: signatureB58 }).strict().parse(req.body);
-      const r = await submitEvidence(deps, z.string().max(128).parse(req.params.operationId), signature);
+      const operationId = z.string().max(128).parse(req.params.operationId);
+      const workspaceId = await workspaceOf(actor);
+      const own = await db.admin.from("jobs").select("id").eq("operation_id", operationId).eq("buyer_workspace_id", workspaceId).maybeSingle();
+      if (!own.data) throw new MarketError("NOT_FOUND", "operation not found");
+      const r = await submitEvidence(deps, operationId, signature);
       if (r.status === "pending") res.status(202);
       return r;
     }),
@@ -462,7 +466,10 @@ export function createApp(deps: Deps): Express {
       return_address: string;
       receipt_id: string;
     };
-    const receipt = must(await db.admin.from("chain_receipts").select("mint").eq("id", rr.receipt_id).single()) as { mint: string };
+    const receipt = must(await db.admin.from("chain_receipts").select("mint, job_id").eq("id", rr.receipt_id).single()) as { mint: string; job_id: string };
+    const quote = must(await db.admin.from("quotes").select("recipient").eq("job_id", receipt.job_id).order("created_at", { ascending: false }).limit(1).single()) as {
+      recipient: string;
+    };
     const { checkTransfer, deriveAta } = await import("./chain");
     const ata = await deriveAta(rr.return_address, receipt.mint);
     const outcome = checkTransfer(await deps.chain.finalizedTransaction(signature), {
@@ -471,6 +478,7 @@ export function createApp(deps: Deps): Express {
       recipient: rr.return_address,
       recipientAta: ata,
       amount: BigInt(String(rr.amount)),
+      sourceOwner: quote.recipient,
     });
     if (outcome.status === "pending") return "pending";
     if (outcome.status === "invalid") throw new MarketError("SERVICE_NOT_ALLOWED", `refund evidence rejected: ${outcome.reason}`);
@@ -564,7 +572,13 @@ export function createApp(deps: Deps): Express {
     route(async (req) => {
       const ctl = await controller(req);
       const body = controllerStatusSchema.parse(req.body);
-      await db.rpc("mk_controller_status", { p_workspace: ctl.workspaceId, p_operation: z.string().max(128).parse(req.params.operationId), p_status: body.status, p_detail: body.detail });
+      await db.rpc("mk_controller_status", {
+        p_workspace: ctl.workspaceId,
+        p_operation: z.string().max(128).parse(req.params.operationId),
+        p_status: body.status,
+        p_detail: body.detail,
+        p_payer: body.payer,
+      });
       return { status: body.status };
     }),
   );
