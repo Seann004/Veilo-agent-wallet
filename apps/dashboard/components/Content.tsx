@@ -5,8 +5,9 @@ import { api } from "../lib/api";
 import { REVIEW_LABEL } from "../lib/labels";
 import { when } from "../lib/format";
 import type { CalendarEntry, ContentItem, ReviewState } from "../lib/types";
+import { useCapability } from "./Shell";
 import { useAction } from "./hooks";
-import { ErrorNotice } from "./ui";
+import { DeniedHint, ErrorNotice } from "./ui";
 
 export const NO_CHARGE_NOTE = "Editing is free: it uses no AI, buys nothing and publishes nothing.";
 
@@ -17,6 +18,8 @@ export function ContentEditor({ item, onSaved }: { item: ContentItem; onSaved: (
   const [title, setTitle] = useState(item.title);
   const [content, setContent] = useState(item.content);
   const action = useAction();
+  const reviewCap = useCapability("review");
+  const readOnly = !reviewCap.allowed;
   const titleId = useId();
   const bodyId = useId();
   const dirty = title !== item.title || content !== item.content;
@@ -44,17 +47,17 @@ export function ContentEditor({ item, onSaved }: { item: ContentItem; onSaved: (
       </header>
       <p className="small muted">
         By {item.agent.name} · v{item.revision}
-        {item.lastAuthor === "owner" ? " · edited by you" : ""} · {when(item.updatedAt)}
+        {item.lastAuthor === "owner" ? (readOnly ? " · edited by the owner" : " · edited by you") : ""} · {when(item.updatedAt)}
       </p>
       {item.kind !== "content_calendar" ? (
         <>
           <div className="field">
             <label htmlFor={titleId}>Title</label>
-            <input id={titleId} value={title} disabled={archived} onChange={(e) => setTitle(e.target.value)} />
+            <input id={titleId} value={title} disabled={archived} readOnly={readOnly} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div className="field">
             <label htmlFor={bodyId}>Draft text</label>
-            <textarea id={bodyId} rows={8} value={content} disabled={archived} onChange={(e) => setContent(e.target.value)} />
+            <textarea id={bodyId} rows={8} value={content} disabled={archived} readOnly={readOnly} onChange={(e) => setContent(e.target.value)} />
           </div>
         </>
       ) : null}
@@ -74,17 +77,18 @@ export function ContentEditor({ item, onSaved }: { item: ContentItem; onSaved: (
       ) : null}
       <div className="actions" role="group" aria-label={`Review state for ${item.title}`}>
         {item.kind !== "content_calendar" ? (
-          <button type="button" className="btn btn-small btn-primary" disabled={!dirty || action.busy || archived} onClick={() => void save()}>
+          <button type="button" className="btn btn-small btn-primary" disabled={!dirty || action.busy || archived || readOnly} onClick={() => void save()}>
             Save edit
           </button>
         ) : null}
         <span className="hint actions-note">{NO_CHARGE_NOTE}</span>
         {STATES.filter((s) => s !== item.reviewState && (!archived || s === "draft")).map((s) => (
-          <button key={s} type="button" className="btn btn-small" disabled={action.busy} onClick={() => void review(s)}>
+          <button key={s} type="button" className="btn btn-small" disabled={action.busy || readOnly} onClick={() => void review(s)}>
             {s === "draft" && archived ? "Restore to draft" : `Mark ${REVIEW_LABEL[s]!.toLowerCase()}`}
           </button>
         ))}
       </div>
+      <DeniedHint reason={reviewCap.reason} />
       <ErrorNotice error={action.error} />
     </article>
   );
@@ -94,6 +98,7 @@ export function ContentEditor({ item, onSaved }: { item: ContentItem; onSaved: (
 export function ContentCalendar({ item, drafts, onSaved }: { item: ContentItem; drafts: ContentItem[]; onSaved: (next: ContentItem) => void }) {
   const [entries, setEntries] = useState<CalendarEntry[]>(item.calendar ?? []);
   const action = useAction();
+  const reviewCap = useCapability("review");
   if (!item.calendar) return <p className="notice notice-warn">This calendar&apos;s saved content is not a valid seven-day plan.</p>;
   const dirty = JSON.stringify(entries) !== JSON.stringify(item.calendar);
   const save = () =>
@@ -126,6 +131,7 @@ export function ContentCalendar({ item, drafts, onSaved }: { item: ContentItem; 
                   rows={3}
                   value={e.action}
                   disabled={item.reviewState === "archived"}
+                  readOnly={!reviewCap.allowed}
                   onChange={(ev) => setEntries(entries.map((x) => (x.day === e.day ? { ...x, action: ev.target.value } : x)))}
                 />
                 {draft ? <p className="small muted">Draft: {draft.title} ({REVIEW_LABEL[draft.reviewState]})</p> : null}
@@ -134,7 +140,7 @@ export function ContentCalendar({ item, drafts, onSaved }: { item: ContentItem; 
           })}
       </ol>
       <div className="actions">
-        <button type="button" className="btn btn-primary" disabled={!dirty || action.busy || entries.some((e) => e.action.trim() === "")} onClick={() => void save()}>
+        <button type="button" className="btn btn-primary" disabled={!dirty || action.busy || !reviewCap.allowed || entries.some((e) => e.action.trim() === "")} onClick={() => void save()}>
           Save calendar
         </button>
       </div>

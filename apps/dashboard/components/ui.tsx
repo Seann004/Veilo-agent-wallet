@@ -175,3 +175,8 @@ export function KV({ rows }: { rows: Array<[ReactNode, ReactNode]> }) {
     </dl>
   );
 }
+
+/** Short reason next to a control the current role cannot use. Renders nothing when allowed. */
+export function DeniedHint({ reason }: { reason: string | null }) {
+  return reason ? <p className="hint access-hint">{reason}</p> : null;
+}

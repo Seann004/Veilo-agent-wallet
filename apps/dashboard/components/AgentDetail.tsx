@@ -14,9 +14,9 @@ import { AgentAvatar, AvatarImage, AvatarPicker } from "./Avatar";
 import { Icon } from "./Icon";
 import { Select } from "./Select";
 import { PolicyForm, PolicyReview, type AgentPolicyInput } from "./Policy";
-import { useOwner } from "./Shell";
+import { useCapability, useOwner } from "./Shell";
 import { useAction, useResource } from "./hooks";
-import { ErrorNotice, KV, Loading } from "./ui";
+import { DeniedHint, ErrorNotice, KV, Loading } from "./ui";
 
 function policyInputOf(agent: Agent): AgentPolicyInput | null {
   const p = agent.activePolicy;
@@ -76,7 +76,10 @@ function Queued({ text }: { text: string | null }) {
 }
 
 /** Prince: research question, optional sources and deadline. Queues a task; the runner executes it. */
-export function ResearchForm({ agent, disabled, onQueued }: { agent: Agent; disabled: boolean; onQueued: () => void | Promise<void> }) {
+export function ResearchForm({ agent, disabled: blocked, onQueued }: { agent: Agent; disabled: boolean; onQueued: () => void | Promise<void> }) {
+  const run = useCapability("run");
+  const budgetCap = useCapability("configure");
+  const disabled = blocked || !run.allowed;
   const [question, setQuestion] = useState("");
   const [sources, setSources] = useState("");
   const [deadline, setDeadline] = useState("");
@@ -96,7 +99,7 @@ export function ResearchForm({ agent, disabled, onQueued }: { agent: Agent; disa
             .split(/\s+/)
             .map((s) => s.trim())
             .filter(Boolean);
-          const limit = budget ? parseUsdcInput(budget) : null;
+          const limit = budget && budgetCap.allowed ? parseUsdcInput(budget) : null;
           const r = await api<{ taskId: string; executor: string }>("control", `/agents/${agent.id}/run`, {
             method: "POST",
             body: {
@@ -121,7 +124,7 @@ export function ResearchForm({ agent, disabled, onQueued }: { agent: Agent; disa
           rows={1}
           value={question}
           disabled={disabled || action.busy}
-          placeholder={disabled ? `${agent.name} cannot take tasks right now` : `Ask ${agent.name} a research question`}
+          placeholder={!run.allowed ? (run.reason ?? "") : disabled ? `${agent.name} cannot take tasks right now` : `Ask ${agent.name} a research question`}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={submitOnEnter}
         />
@@ -140,9 +143,14 @@ export function ResearchForm({ agent, disabled, onQueued }: { agent: Agent; disa
         </div>
         <div className="grid-2">
           <TextField label="Deadline" type="datetime-local" value={deadline} onChange={setDeadline} />
-          <TextField label="Task budget (test-USDC, optional)" value={budget} onChange={setBudget} hint="Defaults to the policy's per-task budget." />
+          {budgetCap.allowed ? (
+            <TextField label="Task budget (test-USDC, optional)" value={budget} onChange={setBudget} hint="Defaults to the policy's per-task budget." />
+          ) : (
+            <p className="hint">Runs use the policy&apos;s per-task budget. Only the owner can set a different one.</p>
+          )}
         </div>
       </details>
+      {!run.allowed ? <DeniedHint reason={run.reason} /> : null}
       <Queued text={queued} />
       <ErrorNotice error={action.error} />
     </form>
@@ -150,7 +158,9 @@ export function ResearchForm({ agent, disabled, onQueued }: { agent: Agent; disa
 }
 
 /** Mira: campaign brief, optionally attached to an owner-approved handoff. */
-export function CampaignForm({ agent, disabled, handoffs, onQueued }: { agent: Agent; disabled: boolean; handoffs: Handoff[]; onQueued: () => void | Promise<void> }) {
+export function CampaignForm({ agent, disabled: blocked, handoffs, onQueued }: { agent: Agent; disabled: boolean; handoffs: Handoff[]; onQueued: () => void | Promise<void> }) {
+  const run = useCapability("run");
+  const disabled = blocked || !run.allowed;
   const [f, setF] = useState({ topic: "", audience: "", c1: "", c2: "", c3: "", voice: "", deliverables: "Three channel drafts and a seven-day content calendar", deadline: "", startDate: "", handoffId: "" });
   const set = (k: keyof typeof f) => (v: string) => setF({ ...f, [k]: v });
   const action = useAction();
@@ -214,7 +224,7 @@ export function CampaignForm({ agent, disabled, handoffs, onQueued }: { agent: A
           required
           value={f.topic}
           disabled={disabled || action.busy}
-          placeholder={disabled ? `${agent.name} cannot take tasks right now` : `Brief ${agent.name}: campaign topic`}
+          placeholder={!run.allowed ? (run.reason ?? "") : disabled ? `${agent.name} cannot take tasks right now` : `Brief ${agent.name}: campaign topic`}
           onChange={(e) => set("topic")(e.target.value)}
           onKeyDown={submitOnEnter}
         />
@@ -252,6 +262,7 @@ export function CampaignForm({ agent, disabled, handoffs, onQueued }: { agent: A
           Fill in {missing.join(", ")} before sending.
         </p>
       ) : null}
+      {!run.allowed ? <DeniedHint reason={run.reason} /> : null}
       <Queued text={queued} />
       <ErrorNotice error={action.error} />
     </form>
@@ -261,6 +272,7 @@ export function CampaignForm({ agent, disabled, handoffs, onQueued }: { agent: A
 /** Owner decision on research-to-content handoffs. Approval reserves the receiver's task allowance only. */
 export function HandoffApprovals({ handoffs, agents, onChanged }: { handoffs: Handoff[]; agents: Agent[]; onChanged: () => void | Promise<void> }) {
   const action = useAction();
+  const decideCap = useCapability("decide");
   const pending = handoffs.filter((h) => h.state === "pending_owner");
   const run = (id: string, decision: "approve" | "reject") =>
     void action.run(async () => {
@@ -278,10 +290,10 @@ export function HandoffApprovals({ handoffs, agents, onChanged }: { handoffs: Ha
             {name(h.fromAgentId)} → {name(h.toAgentId)}: {h.note ?? "research brief"} · <strong>{h.state.replace(/_/g, " ")}</strong> · {when(h.createdAt)}
             {h.state === "pending_owner" ? (
               <span className="actions">
-                <button type="button" className="btn btn-primary" disabled={action.busy} onClick={() => run(h.id, "approve")}>
+                <button type="button" className="btn btn-primary" disabled={action.busy || !decideCap.allowed} onClick={() => run(h.id, "approve")}>
                   Approve handoff
                 </button>
-                <button type="button" className="btn" disabled={action.busy} onClick={() => run(h.id, "reject")}>
+                <button type="button" className="btn" disabled={action.busy || !decideCap.allowed} onClick={() => run(h.id, "reject")}>
                   Reject handoff
                 </button>
               </span>
@@ -289,7 +301,7 @@ export function HandoffApprovals({ handoffs, agents, onChanged }: { handoffs: Ha
           </li>
         ))}
       </ul>
-      {pending.length === 0 ? <p className="small muted flush">Nothing waiting for you.</p> : null}
+      {pending.length === 0 ? <p className="small muted flush">Nothing waiting for you.</p> : <DeniedHint reason={decideCap.reason} />}
       <ErrorNotice error={action.error} />
     </>
   );
@@ -487,6 +499,8 @@ export function AgentDetail({ agentId }: { agentId: string }) {
   const [openPurchaseId, setOpenPurchaseId] = useState<string | null>(null);
   const save = useAction();
   const check = useAction();
+  const runCap = useCapability("run");
+  const configure = useCapability("configure");
   const [checkResult, setCheckResult] = useState<string | null>(null);
   const avatar = useAgentAvatar(agentId, agent?.role ?? "research");
 
@@ -547,7 +561,13 @@ export function AgentDetail({ agentId }: { agentId: string }) {
           <div className="notice notice-warn thread-notice" role="status">
             {blocked}
             {agent.status === "draft" && drafts.length > 0 ? (
-              <button type="button" className="btn btn-small btn-primary" disabled={save.busy} onClick={() => activateDraft(drafts.at(-1)!.version)}>
+              <button
+                type="button"
+                className="btn btn-small btn-primary"
+                disabled={save.busy || !configure.allowed}
+                title={configure.reason ?? undefined}
+                onClick={() => activateDraft(drafts.at(-1)!.version)}
+              >
                 Activate policy v{drafts.at(-1)!.version}
               </button>
             ) : null}
@@ -578,7 +598,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={!canRun || check.busy}
+                disabled={!canRun || check.busy || !runCap.allowed}
                 onClick={() =>
                   void check.run(async () => {
                     const r = await api<{ check?: { decision: string; detail: string } | null; executor: string }>("control", `/agents/${agent.id}/run`, { method: "POST", body: {} });
@@ -590,6 +610,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
                 Check now
               </button>
             </div>
+            {!runCap.allowed ? <DeniedHint reason={runCap.reason} /> : null}
             <Queued text={checkResult} />
             <ErrorNotice error={check.error} what="credit check" />
           </div>
@@ -657,14 +678,15 @@ export function AgentDetail({ agentId }: { agentId: string }) {
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={save.busy || terminal}
+                disabled={save.busy || terminal || !configure.allowed}
                 onClick={() => activateDraft(d.version)}
               >
                 Activate policy v{d.version}
               </button>
             </div>
           ))}
-          {!terminal ? (
+          {!terminal && !configure.allowed ? <DeniedHint reason={configure.reason} /> : null}
+          {!terminal && configure.allowed ? (
             <details>
               <summary className="small">Edit settings and policy</summary>
               <form

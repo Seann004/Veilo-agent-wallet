@@ -155,6 +155,39 @@ describe("dashboard proxy", () => {
     expect(await res.json()).not.toHaveProperty("csrfToken");
   });
 
+  it("passes the session role and address through verify", async () => {
+    const u = upstream(() =>
+      Response.json({ role: "guest", address: "GuestAddr", csrfToken: "csrfTokenValue_0123456789", expiresAt: new Date(Date.now() + 3_600_000).toISOString() }),
+    );
+    const res = await proxy(req("control/session/verify", { method: "POST", headers: { origin: ORIGIN }, body: { address: "a", nonce: "n", signature: "s" } }), "control", ["session", "verify"], {
+      config,
+      fetchImpl: u.fetchImpl,
+    });
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ role: "guest", address: "GuestAddr" });
+    expect(body).not.toHaveProperty("csrfToken");
+    expect(body.ownerPubkey).toBeUndefined();
+  });
+
+  it("serves GET /session without CSRF, uncached, with only the documented fields", async () => {
+    const u = upstream(() => Response.json({ role: "owner", address: "OwnerAddr", expiresAt: "2026-10-18T00:00:00.000Z", publicView: false, extra: "x" }));
+    const res = await proxy(req("control/session", { headers: { cookie: "veilo_session=vos_s; veilo_csrf=c; other=secret" } }), "control", ["session"], { config, fetchImpl: u.fetchImpl });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(u.seen[0]!.url).toBe("http://127.0.0.1:4101/session");
+    expect(u.seen[0]!.headers.get("cookie")).toBe("veilo_session=vos_s");
+    expect(await res.json()).toEqual({ role: "owner", address: "OwnerAddr", expiresAt: "2026-10-18T00:00:00.000Z", publicView: false });
+    expect(res.headers.getSetCookie()).toEqual([]);
+
+    const anon = upstream(() => Response.json({ role: "viewer", address: null, expiresAt: null, publicView: true }));
+    const stale = await proxy(req("control/session", { headers: { cookie: "veilo_session=vos_old; veilo_csrf=stale" } }), "control", ["session"], { config, fetchImpl: anon.fetchImpl });
+    expect(await stale.json()).toEqual({ role: "viewer", address: null, expiresAt: null, publicView: true });
+    expect(stale.headers.getSetCookie().some((c) => c.startsWith("veilo_csrf=;") && c.includes("Max-Age=0"))).toBe(true);
+    // Only GET is routed; the session endpoint has no mutating form.
+    const post = await proxy(req("control/session", { method: "POST", headers: { origin: ORIGIN, "x-csrf-token": "t" }, body: {} }), "control", ["session"], { config, fetchImpl: anon.fetchImpl });
+    expect(post.status).toBe(404);
+  });
+
   it("forwards GET query strings and reports an unreachable service as NOT_READY", async () => {
     const u = upstream();
     await proxy(req(`control/tasks?agentId=${AGENT}&limit=5`), "control", ["tasks"], { config, fetchImpl: u.fetchImpl });

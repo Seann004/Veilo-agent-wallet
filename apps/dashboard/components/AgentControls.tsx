@@ -2,8 +2,9 @@
 
 import { api } from "../lib/api";
 import type { Agent } from "../lib/types";
+import { useCapability } from "./Shell";
 import { useAction } from "./hooks";
-import { ConfirmButton, ErrorNotice } from "./ui";
+import { ConfirmButton, DeniedHint, ErrorNotice } from "./ui";
 
 /**
  * Per-agent stop paths. Pause and revoke stop new authority only; already released payments stay
@@ -11,6 +12,8 @@ import { ConfirmButton, ErrorNotice } from "./ui";
  */
 export function AgentControls({ agent, onChanged, compact }: { agent: Agent; onChanged: () => void | Promise<void>; compact?: boolean }) {
   const action = useAction();
+  const stop = useCapability("stop");
+  const archive = useCapability("archive");
   const post = (verb: string) =>
     action.run(async () => {
       await api("control", `/agents/${agent.id}/${verb}`, { method: "POST", body: {} });
@@ -20,11 +23,11 @@ export function AgentControls({ agent, onChanged, compact }: { agent: Agent; onC
   return (
     <div className={compact ? "actions actions-compact" : "actions"} role="group" aria-label={`${agent.name} authority controls`}>
       {agent.status === "paused" ? (
-        <button type="button" className="btn" disabled={action.busy} onClick={() => void post("resume")} aria-label={compact ? `Resume ${agent.name}` : undefined}>
+        <button type="button" className="btn" disabled={action.busy || !stop.allowed} onClick={() => void post("resume")} aria-label={compact ? `Resume ${agent.name}` : undefined}>
           {compact ? "Resume" : `Resume ${agent.name}`}
         </button>
       ) : (
-        <button type="button" className="btn" disabled={action.busy || terminal || agent.status === "draft"} onClick={() => void post("pause")} aria-label={compact ? `Pause ${agent.name}` : undefined}>
+        <button type="button" className="btn" disabled={action.busy || !stop.allowed || terminal || agent.status === "draft"} onClick={() => void post("pause")} aria-label={compact ? `Pause ${agent.name}` : undefined}>
           {compact ? "Pause" : `Pause ${agent.name}`}
         </button>
       )}
@@ -33,7 +36,7 @@ export function AgentControls({ agent, onChanged, compact }: { agent: Agent; onC
         display={compact ? "Revoke" : undefined}
         confirmLabel={`Confirm revoke ${agent.name}`}
         danger
-        disabled={action.busy || terminal}
+        disabled={action.busy || !stop.allowed || terminal}
         warning="Revoke for good? Payments already sent stay visible and recoverable."
         onConfirm={() => void post("revoke")}
       />
@@ -41,10 +44,11 @@ export function AgentControls({ agent, onChanged, compact }: { agent: Agent; onC
         label={`Archive ${agent.name}`}
         display={compact ? "Archive" : undefined}
         confirmLabel={`Confirm archive ${agent.name}`}
-        disabled={action.busy || agent.status === "archived"}
+        disabled={action.busy || !archive.allowed || agent.status === "archived"}
         warning="Archive? It stops for good; its history is kept."
         onConfirm={() => void post("archive")}
       />
+      <DeniedHint reason={stop.reason} />
       <ErrorNotice error={action.error} />
     </div>
   );

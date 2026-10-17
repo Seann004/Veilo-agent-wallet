@@ -91,7 +91,7 @@ export type WorkspaceBudget =
   | { policyVersion: null; stopped: boolean; note: string };
 
 export type GatewayCredits =
-  | { available: true; label: string; purchased: string; consumed: string; reserved: string; usable: string; asOf: string; stale: boolean; note: string }
+  | { available: true; label: string; accountId?: string; purchased: string; consumed: string; reserved: string; usable: string; asOf: string; stale: boolean; note: string }
   | { available: false; code: string; message: string; label?: string };
 
 export interface Balances {
@@ -112,9 +112,10 @@ export interface PaymentStates {
   recovery: string;
 }
 
+/** Fields marked optional are omitted from the anonymous public view. */
 export interface Purchase {
   id: string;
-  operationId: string;
+  operationId?: string;
   agentId: string;
   taskId: string | null;
   serviceId: string;
@@ -126,10 +127,11 @@ export interface Purchase {
   usage: { amount: string };
   states: PaymentStates;
   label: string;
-  stateReason: string | null;
+  stateReason?: string | null;
   reservation: { status: string; closeReason: string | null; usdc: string; lamports: string; usageUnits: string };
   policyVersions: { workspace: number; agent: number };
-  chainAttempts: Array<{ leg: string; attempt: number; signature: string | null; commitment: string }>;
+  chainAttempts?: Array<{ leg: string; attempt: number; signature: string | null; commitment: string }>;
+  requestDigest?: string;
   rationale: string | null;
   settledAt: string | null;
   createdAt: string;

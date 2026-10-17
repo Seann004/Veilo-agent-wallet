@@ -8,11 +8,11 @@ import { summarizeResult } from "../lib/results";
 import type { Activity, Agent, AgentBudget, Balances, Job, Task } from "../lib/types";
 import { ActivityList } from "./Activity";
 import { AgentAvatar } from "./Avatar";
-import { useOwner } from "./Shell";
+import { useCapability, useOwner } from "./Shell";
 import { EmergencyStop } from "./StopControls";
 import { TreasurySummary } from "./TreasurySummary";
 import { useAction, useResource } from "./hooks";
-import { ErrorNotice, Loading, Section } from "./ui";
+import { DeniedHint, ErrorNotice, Loading, Section } from "./ui";
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string | undefined }) {
   return (
@@ -62,6 +62,8 @@ export function Overview() {
   const tasks = useResource(() => api<{ tasks: Task[]; jobs: Job[] }>("control", "/tasks?limit=50"), "tasks");
   const activity = useResource(() => api<Activity>("control", "/activity?limit=50"), "activity");
   const activate = useAction();
+  const configure = useCapability("configure");
+  const create = useCapability("create");
   const reloadAll = async () => {
     await Promise.all([reloadWorkspace(), balances.reload(), tasks.reload(), activity.reload()]);
   };
@@ -78,9 +80,11 @@ export function Overview() {
     <>
       <div className="page-head">
         <h1>Workspace</h1>
-        <Link className="btn btn-primary" href="/agents/new">
-          Create agent
-        </Link>
+        {create.allowed ? (
+          <Link className="btn btn-primary" href="/agents/new">
+            Create agent
+          </Link>
+        ) : null}
       </div>
 
       {draftWs ? (
@@ -91,7 +95,8 @@ export function Overview() {
           <button
             type="button"
             className="btn btn-small btn-primary"
-            disabled={activate.busy}
+            disabled={activate.busy || !configure.allowed}
+            title={configure.reason ?? undefined}
             onClick={() =>
               void activate.run(async () => {
                 await api("control", "/workspace/policy", { method: "POST", body: { activateVersion: draftWs.version } });
@@ -101,6 +106,7 @@ export function Overview() {
           >
             Activate workspace policy v{draftWs.version}
           </button>
+          <DeniedHint reason={configure.reason} />
         </div>
       ) : null}
       <ErrorNotice error={activate.error} />
@@ -117,7 +123,12 @@ export function Overview() {
       <Section title="Agents">
         {visibleAgents.length === 0 ? (
           <p className="muted flush">
-            No agents yet. <Link href="/agents/new">Create one</Link>.
+            No agents yet.{create.allowed ? (
+              <>
+                {" "}
+                <Link href="/agents/new">Create one</Link>.
+              </>
+            ) : null}
           </p>
         ) : (
           <ul className="agent-rows">

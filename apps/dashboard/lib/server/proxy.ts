@@ -17,12 +17,14 @@ const ID = "[0-9a-f-]{36}";
 const r = (method: Method, path: string, extra: Partial<Route> = {}): Route => ({ method, path: new RegExp(`^${path}$`), ...extra });
 
 /**
- * Owner surfaces reachable through the dashboard. Worker, service and internal endpoints (and
+ * Owner, guest and public-view surfaces reachable through the dashboard; the control service
+ * decides which role may use each one. Worker, service and internal endpoints (and
  * worker-credential issuance) are not listed, so the browser cannot reach them through the proxy.
  */
 export const ROUTES: Record<UpstreamService, Route[]> = {
   control: [
     r("GET", "/health", { public: true }),
+    r("GET", "/session", { public: true }),
     r("POST", "/session/challenge", { public: true }),
     r("POST", "/session/verify", { public: true }),
     r("POST", "/session/logout"),
@@ -139,14 +141,27 @@ export async function proxy(req: Request, service: UpstreamService, segments: re
       if (c.startsWith(`${SESSION_COOKIE}=`)) out.append("set-cookie", c);
     }
     if (path === "/session/verify" && upstream.ok) {
-      const parsed = JSON.parse(body) as { csrfToken?: unknown; expiresAt?: unknown; ownerPubkey?: unknown };
+      const parsed = JSON.parse(body) as { csrfToken?: unknown; expiresAt?: unknown; ownerPubkey?: unknown; role?: unknown; address?: unknown };
       if (typeof parsed.csrfToken === "string" && /^[A-Za-z0-9_-]{16,128}$/.test(parsed.csrfToken)) {
         const maxAge = typeof parsed.expiresAt === "string" ? Math.max(0, Math.floor((Date.parse(parsed.expiresAt) - Date.now()) / 1000)) : 0;
         out.append("set-cookie", csrfCookie(parsed.csrfToken, maxAge, config.secureCookies));
       }
-      body = JSON.stringify({ ownerPubkey: parsed.ownerPubkey, expiresAt: parsed.expiresAt });
+      body = JSON.stringify({ role: parsed.role, address: parsed.address, ownerPubkey: parsed.ownerPubkey, expiresAt: parsed.expiresAt });
     }
     if (path === "/session/logout") out.append("set-cookie", csrfCookie("", 0, config.secureCookies));
+  }
+  if (service === "control" && path === "/session" && upstream.ok) {
+    // Only the four documented fields pass; a stale CSRF cookie is cleared once no session remains.
+    let parsed: { role?: unknown; address?: unknown; expiresAt?: unknown; publicView?: unknown };
+    try {
+      parsed = JSON.parse(body) as typeof parsed;
+    } catch {
+      return errorResponse(502, "NOT_READY", "the control service returned an invalid session reply");
+    }
+    body = JSON.stringify({ role: parsed.role, address: parsed.address ?? null, expiresAt: parsed.expiresAt ?? null, publicView: parsed.publicView === true });
+    if (parsed.role !== "owner" && parsed.role !== "guest" && readCookie(req.headers.get("cookie"), CSRF_COOKIE) !== undefined) {
+      out.append("set-cookie", csrfCookie("", 0, config.secureCookies));
+    }
   }
   if (upstream.status === 401) out.append("set-cookie", csrfCookie("", 0, config.secureCookies));
   return new Response(upstream.status === 204 ? null : body, { status: upstream.status, headers: out });

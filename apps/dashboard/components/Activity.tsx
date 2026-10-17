@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../lib/api";
 import { credits, lamports, shortKey, usdc, when } from "../lib/format";
 import { LEG_LABEL, LABEL_CREDITS_NO_CHARGE, legStateLabel, purchaseLabel, reasonGuidance } from "../lib/labels";
 import type { Activity, Agent, AuditEvent, PaymentStates, Purchase, Workspace } from "../lib/types";
+import { useCapability } from "./Shell";
 import { useAction } from "./hooks";
 import { StateStrip } from "./StateStrip";
-import { ErrorNotice, KV, TxLink } from "./ui";
+import { DeniedHint, ErrorNotice, KV, TxLink } from "./ui";
 
 const LEGS: Array<keyof PaymentStates> = ["authorization", "funding", "merchant", "fulfilment", "recovery"];
 
@@ -31,6 +32,7 @@ export function ActivityDrawer({
   const closeRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const action = useAction();
+  const decide = useCapability("decide");
   useEffect(() => {
     closeRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
@@ -58,7 +60,9 @@ export function ActivityDrawer({
   const agent = workspace.agents.find((a) => a.id === purchase.agentId);
   const service = workspace.services.find((s) => s.id === purchase.serviceId);
   const policyEvent = events.find((e) => e.action === "purchase.authorize" && e.details.purchaseId === purchase.id);
-  const sig = (leg: string) => purchase.chainAttempts.filter((a) => a.leg === leg && a.signature).at(-1);
+  // The public view omits chain attempts and operation identifiers.
+  const attempts = purchase.chainAttempts ?? [];
+  const sig = (leg: string) => attempts.filter((a) => a.leg === leg && a.signature).at(-1);
   const funding = sig("funding");
   const merchant = sig("merchant");
   const recovery = sig("recovery");
@@ -112,16 +116,16 @@ export function ActivityDrawer({
             ["Funding signature", prepaid ? "not applicable" : <TxLink key="f" signature={funding?.signature} />],
             ["Settlement signature", prepaid ? "not applicable" : <TxLink key="m" signature={merchant?.signature} />],
             ["Recovery signature", <TxLink key="r" signature={recovery?.signature} />],
-            ["Operation ID", <span key="o" className="mono">{purchase.operationId}</span>],
+            ...(purchase.operationId ? [["Operation ID", <span key="o" className="mono">{purchase.operationId}</span>] as [string, ReactNode]] : []),
             ["Created", when(purchase.createdAt)],
             ["Settled", when(purchase.settledAt)],
           ]}
         />
-        {purchase.chainAttempts.length > 0 ? (
+        {attempts.length > 0 ? (
           <>
             <h3>Chain attempts</h3>
             <ul className="plain small">
-              {purchase.chainAttempts.map((a) => (
+              {attempts.map((a) => (
                 <li key={`${a.leg}-${a.attempt}`}>
                   {a.leg} #{a.attempt}: {a.commitment} — <TxLink signature={a.signature} />
                 </li>
@@ -135,7 +139,7 @@ export function ActivityDrawer({
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={action.busy}
+                disabled={action.busy || !decide.allowed}
                 onClick={() => post("decision", { decision: "approve" })}
               >
                 Approve purchase
@@ -143,7 +147,7 @@ export function ActivityDrawer({
               <button
                 type="button"
                 className="btn"
-                disabled={action.busy}
+                disabled={action.busy || !decide.allowed}
                 onClick={() => post("decision", { decision: "reject" })}
               >
                 Reject purchase
@@ -153,12 +157,13 @@ export function ActivityDrawer({
           <button
             type="button"
             className="btn"
-            disabled={action.busy}
+            disabled={action.busy || !decide.allowed}
             onClick={() => post("reconcile", {})}
           >
             Reconcile with chain and gateway
           </button>
         </div>
+        <DeniedHint reason={decide.reason} />
         <ErrorNotice error={action.error} />
       </aside>
     </div>
@@ -234,7 +239,7 @@ export function EventLog({ events }: { events: AuditEvent[] }) {
                   {reason ? <span className="muted small"> · {reason}</span> : null}
                   {guidance ? <span className="hint block">{guidance}</span> : null}
                 </td>
-                <td className="small">{e.actor.type}</td>
+                <td className="small">{e.details.actor === "guest" ? "guest" : e.actor.type}</td>
                 <td>
                   <span className={`pill pill-${e.policyResult === "allowed" ? "ok" : e.policyResult === "denied" ? "danger" : "muted"}`}>{e.policyResult.replace(/_/g, " ")}</span>
                 </td>

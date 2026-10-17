@@ -3442,3 +3442,18 @@ td,
     align-items: center;
   }
 }
+
+/* ---------- Access (guest and public view) ---------- */
+
+.access-hint {
+  margin: 0.25rem 0 0;
+}
+
+.actions-compact .access-hint,
+.actions-compact .error-notice {
+  grid-column: 1 / -1;
+}
+
+.access-banner {
+  margin: 0 0 1rem;
+}

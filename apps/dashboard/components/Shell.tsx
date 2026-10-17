@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Wallet, WalletAccount } from "@wallet-standard/base";
+import { NO_ACCESS, ROLE_TITLE, can, deniedReason, type Access, type Capability, type SessionInfo } from "../lib/access";
 import { api, health as fetchHealth } from "../lib/api";
 import { shortKey } from "../lib/format";
 import { GATEWAY_CREDIT_LABEL, OPERATOR_INFERENCE_LABEL, ROLE_LABEL, agentStateLabel } from "../lib/labels";
@@ -26,6 +27,8 @@ interface OwnerContextValue {
   reloadWorkspace: () => Promise<void>;
   connected: ConnectedWallet | null;
   setConnected: (c: ConnectedWallet | null) => void;
+  /** Who is looking: the owner, an approved guest or the anonymous public viewer. */
+  access: Access;
 }
 
 const OwnerContext = createContext<OwnerContextValue | null>(null);
@@ -34,6 +37,16 @@ export function useOwner(): OwnerContextValue {
   const v = useContext(OwnerContext);
   if (!v) throw new Error("useOwner must be used inside the owner shell");
   return v;
+}
+
+/** Outside the shell nothing is allowed, so a control rendered without context stays disabled. */
+export function useAccess(): Access {
+  return useContext(OwnerContext)?.access ?? NO_ACCESS;
+}
+
+export function useCapability(capability: Capability): { allowed: boolean; reason: string | null } {
+  const access = useAccess();
+  return { allowed: can(access, capability), reason: deniedReason(access, capability) };
 }
 
 /** Test and storybook helper: provides an owner context without a session round-trip. */
@@ -81,8 +94,10 @@ function AgentList({ agents, stopped, query, pathname }: { agents: Agent[]; stop
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const health = useResource(() => fetchHealth<Health>("control"), "health");
+  const session = useResource(() => api<SessionInfo>("control", "/session"), "session");
   const ws = useResource(() => api<Workspace>("control", "/workspace"), "workspace");
   const [connected, setConnected] = useState<ConnectedWallet | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
   const [query, setQuery] = useState("");
   const [navOpen, setNavOpen] = useState(false);
   const [mobile, setMobile] = useState(false);
@@ -92,7 +107,14 @@ export function Shell({ children }: { children: ReactNode }) {
   const navWasOpen = useRef(false);
   const collapsed = usePref("veilo.sidebar") === "collapsed";
   const [theme, toggleTheme] = useTheme();
-  const signedIn = ws.data !== undefined && ws.error?.status !== 401;
+  const loaded = ws.data !== undefined && ws.error?.status !== 401;
+  const sessionRole = session.data?.role;
+  // Anything short of a confirmed owner or guest session gets the read-only controls.
+  const access: Access = sessionRole === "owner" || sessionRole === "guest" ? { role: sessionRole, address: session.data?.address ?? null } : NO_ACCESS;
+  const signedIn = access.role !== "viewer";
+  const reloadAccess = async () => {
+    await Promise.all([session.reload(), ws.reload()]);
+  };
   useEffect(() => setNavOpen(false), [pathname]);
   useEffect(() => {
     const media = window.matchMedia("(max-width: 900px)");
@@ -122,17 +144,20 @@ export function Shell({ children }: { children: ReactNode }) {
     </span>
   );
 
-  if (!signedIn || !ws.data) {
+  const waiting = (ws.loading && ws.data === undefined) || (session.loading && session.data === undefined);
+  if (signingIn || !loaded || !ws.data || waiting) {
     let body: ReactNode;
-    if (ws.loading && ws.data === undefined) body = <Loading label="workspace" />;
-    else if (ws.error && ws.error.status !== 401) body = <ErrorNotice error={ws.error} what="the control service could not load the workspace" onRetry={ws.reload} />;
+    if (!signingIn && waiting) body = <Loading label="workspace" />;
+    else if (!signingIn && ws.error && ws.error.status !== 401) body = <ErrorNotice error={ws.error} what="the control service could not load the workspace" onRetry={reloadAccess} />;
     else
       body = (
         <ConnectScreen
           onSignedIn={async (c) => {
             setConnected(c);
-            await ws.reload();
+            setSigningIn(false);
+            await reloadAccess();
           }}
+          onCancel={loaded ? () => setSigningIn(false) : undefined}
         />
       );
     return (
@@ -157,7 +182,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const data = ws.data;
   const stopped = data.workspace.stopped;
   return (
-    <OwnerContext.Provider value={{ workspace: data, reloadWorkspace: ws.reload, connected, setConnected }}>
+    <OwnerContext.Provider value={{ workspace: data, reloadWorkspace: ws.reload, connected, setConnected, access }}>
       <a href="#main" className="skip-link">
         Skip to content
       </a>
@@ -189,9 +214,11 @@ export function Shell({ children }: { children: ReactNode }) {
               <button ref={closeButton} type="button" className="icon-btn menu-btn" aria-label="Close navigation" onClick={closeNavigation}>
                 <Icon name="close" />
               </button>
-              <Link href="/agents/new" className="icon-btn" aria-label="Create agent" title="Create agent">
-                <Icon name="plus" />
-              </Link>
+              {can(access, "create") ? (
+                <Link href="/agents/new" className="icon-btn" aria-label="Create agent" title="Create agent">
+                  <Icon name="plus" />
+                </Link>
+              ) : null}
               <button
                 type="button"
                 className="icon-btn collapse-btn"
@@ -224,31 +251,41 @@ export function Shell({ children }: { children: ReactNode }) {
           </nav>
           <div className="sidebar-foot">
             <span className="owner-chip" aria-hidden="true">
-              {data.workspace.ownerPubkey.slice(0, 1)}
+              {(access.address ?? ROLE_TITLE[access.role]).slice(0, 1)}
             </span>
             <span className="owner-text">
-              <span className="owner-name">Owner</span>
-              <span className="mono small" title={data.workspace.ownerPubkey}>
-                {shortKey(data.workspace.ownerPubkey)}
-              </span>
+              <span className="owner-name">{ROLE_TITLE[access.role]}</span>
+              {access.address ? (
+                <span className="mono small" title={access.address}>
+                  {shortKey(access.address)}
+                </span>
+              ) : (
+                <span className="small muted">Read-only</span>
+              )}
             </span>
             <button type="button" className="icon-btn" aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title={theme === "dark" ? "Light mode" : "Dark mode"} onClick={toggleTheme}>
               <Icon name={theme === "dark" ? "sun" : "moon"} />
             </button>
-            <button
-              type="button"
-              className="btn btn-small sign-out"
-              onClick={async () => {
-                try {
-                  await api("control", "/session/logout", { method: "POST" });
-                } finally {
-                  setConnected(null);
-                  await ws.reload();
-                }
-              }}
-            >
-              Sign out
-            </button>
+            {signedIn ? (
+              <button
+                type="button"
+                className="btn btn-small sign-out"
+                onClick={async () => {
+                  try {
+                    await api("control", "/session/logout", { method: "POST" });
+                  } finally {
+                    setConnected(null);
+                    await reloadAccess();
+                  }
+                }}
+              >
+                Sign out
+              </button>
+            ) : (
+              <button type="button" className="btn btn-small sign-out" onClick={() => setSigningIn(true)}>
+                Sign in
+              </button>
+            )}
           </div>
         </aside>
         {navOpen ? <button type="button" className="sidebar-scrim" tabIndex={-1} aria-label="Close navigation" onClick={closeNavigation} /> : null}
@@ -270,6 +307,17 @@ export function Shell({ children }: { children: ReactNode }) {
             ) : null}
           </header>
           <main id="main" tabIndex={-1}>
+            {access.role === "viewer" ? (
+              <div className="notice notice-row access-banner" role="status">
+                <span>
+                  <strong>Read-only public view.</strong> Wallet details and operation identifiers are hidden. Sign in as the owner or an approved guest to do more.
+                </span>
+                <button type="button" className="btn btn-small btn-primary" onClick={() => setSigningIn(true)}>
+                  Sign in
+                </button>
+              </div>
+            ) : null}
+            {session.error ? <ErrorNotice error={session.error} what="your session could not be confirmed; showing read-only controls" onRetry={reloadAccess} /> : null}
             {children}
           </main>
         </div>

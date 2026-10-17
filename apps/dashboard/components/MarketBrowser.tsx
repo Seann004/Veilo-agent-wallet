@@ -9,7 +9,7 @@ import { ROLE_ORDER as ROLES, ROLE_TAGLINE as TAGLINE } from "../lib/roles";
 import type { AgentRole, Workspace } from "../lib/types";
 import { Icon } from "./Icon";
 import { ROLE_TEMPLATES } from "./Policy";
-import { useOwner } from "./Shell";
+import { useCapability, useOwner } from "./Shell";
 
 type Filter = "all" | "agents" | "services";
 type Service = Workspace["services"][number];
@@ -27,8 +27,9 @@ const matches = (q: string, ...fields: string[]) => q === "" || fields.some((f) 
 
 function FeaturedRole({ role }: { role: AgentRole }) {
   const t = ROLE_TEMPLATES[role];
-  return (
-    <Link href={`/agents/new?role=${role}`} className={`featured featured-${role}`} id={role}>
+  const create = useCapability("create");
+  const body = (
+    <>
       <img className="featured-avatar" src={avatarFor(role).src} alt="" width={84} height={84} />
       <span className="featured-text">
         <span className="featured-name">{ROLE_LABEL[role]}</span>
@@ -36,11 +37,24 @@ function FeaturedRole({ role }: { role: AgentRole }) {
           {usdc(t.policy.maxPurchaseTestUsdc)} per purchase · {usdc(t.policy.taskLimitTestUsdc)} per task
         </span>
       </span>
+    </>
+  );
+  if (!create.allowed) {
+    return (
+      <div className={`featured featured-${role}`} id={role} title={create.reason ?? undefined}>
+        {body}
+      </div>
+    );
+  }
+  return (
+    <Link href={`/agents/new?role=${role}`} className={`featured featured-${role}`} id={role}>
+      {body}
     </Link>
   );
 }
 
 function RoleRow({ role }: { role: AgentRole }) {
+  const create = useCapability("create");
   return (
     <li className="market-row">
       <img className="avatar" src={avatarFor(role).src} alt="" width={40} height={40} />
@@ -48,9 +62,15 @@ function RoleRow({ role }: { role: AgentRole }) {
         <strong>{ROLE_LABEL[role]}</strong>
         <span>{TAGLINE[role]}</span>
       </span>
-      <Link href={`/agents/new?role=${role}`} className="btn btn-small btn-pill" aria-label={`Hire ${ROLE_LABEL[role].toLowerCase()}`}>
-        Hire
-      </Link>
+      {create.allowed ? (
+        <Link href={`/agents/new?role=${role}`} className="btn btn-small btn-pill" aria-label={`Hire ${ROLE_LABEL[role].toLowerCase()}`}>
+          Hire
+        </Link>
+      ) : (
+        <button type="button" className="btn btn-small btn-pill" disabled title={create.reason ?? undefined} aria-label={`Hire ${ROLE_LABEL[role].toLowerCase()} (owner only)`}>
+          Hire
+        </button>
+      )}
     </li>
   );
 }

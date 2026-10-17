@@ -11,7 +11,7 @@ import type { Agent, AgentRole } from "../lib/types";
 import { draftPolicyFromText, type PolicyDraftResult } from "../lib/policy-draft";
 import { PolicyForm, PolicyReview, ROLE_TEMPLATES, type AgentPolicyInput } from "./Policy";
 import { AvatarImage, AvatarPicker } from "./Avatar";
-import { useOwner } from "./Shell";
+import { useCapability, useOwner } from "./Shell";
 import { useAction } from "./hooks";
 import { ErrorNotice, Spinner } from "./ui";
 
@@ -20,6 +20,28 @@ import { ErrorNotice, Spinner } from "./ui";
  * The agent is created with a draft policy and cannot spend until the owner activates it.
  */
 export function CreateAgent() {
+  const create = useCapability("create");
+  if (!create.allowed) {
+    return (
+      <>
+        <div className="page-head">
+          <h1>Create agent</h1>
+        </div>
+        <div className="notice" role="status">
+          <p className="flush">
+            <strong>Creating agents is owner-only.</strong> {create.reason}
+          </p>
+          <p className="hint flush">
+            <Link href="/workspace">Back to the workspace</Link>
+          </p>
+        </div>
+      </>
+    );
+  }
+  return <CreateAgentForm />;
+}
+
+function CreateAgentForm() {
   const { workspace, reloadWorkspace } = useOwner();
   const [role, setRole] = useState<AgentRole>("research");
   const [name, setName] = useState("");

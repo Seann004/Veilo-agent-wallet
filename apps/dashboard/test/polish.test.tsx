@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ActivityDrawer, ActivityList } from "../components/Activity";
 import { RecoveryCenter } from "../components/RecoveryCenter";
 import { OwnerProvider } from "../components/Shell";
+import { accessFor, withRole } from "./access-fixtures";
 import { ConfirmButton, ErrorNotice } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { stateSummaries } from "../lib/labels";
@@ -51,7 +52,7 @@ describe("payment, fulfilment and recovery are summarised separately", () => {
 
   it("renders the three states in the list and the drawer", () => {
     const ws = workspace();
-    render(<ActivityList activity={{ events: [], purchases: [purchase({ states: { merchant: "submitted", fulfilment: "not_started" } })] }} workspace={ws} onChanged={vi.fn()} />);
+    render(withRole(<ActivityList activity={{ events: [], purchases: [purchase({ states: { merchant: "submitted", fulfilment: "not_started" } })] }} workspace={ws} onChanged={vi.fn()} />, "owner", ws));
     const strips = screen.getAllByRole("list", { name: "Payment, fulfilment and recovery states" });
     expect(strips).toHaveLength(1);
     expect(within(strips[0]!).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
@@ -76,7 +77,7 @@ describe("keyboard focus", () => {
 
   it("keeps Tab inside the activity drawer", async () => {
     const user = userEvent.setup();
-    render(<ActivityDrawer purchase={purchase()} events={[]} workspace={workspace()} onClose={vi.fn()} onChanged={vi.fn()} />);
+    render(withRole(<ActivityDrawer purchase={purchase()} events={[]} workspace={workspace()} onClose={vi.fn()} onChanged={vi.fn()} />));
     const dialog = screen.getByRole("dialog");
     const focusable = [...dialog.querySelectorAll<HTMLElement>("a[href], button:not([disabled])")];
     focusable.at(-1)!.focus();
@@ -114,7 +115,7 @@ describe("public recovery acknowledgement", () => {
   });
 
   const withOwner = (ws: Workspace, node: ReactNode) => (
-    <OwnerProvider value={{ workspace: ws, reloadWorkspace: async () => undefined, connected: null, setConnected: () => undefined }}>{node}</OwnerProvider>
+    <OwnerProvider value={{ workspace: ws, reloadWorkspace: async () => undefined, connected: null, setConnected: () => undefined, access: accessFor("owner", ws) }}>{node}</OwnerProvider>
   );
 
   it("requires the owner to acknowledge the privacy impact before confirming", async () => {

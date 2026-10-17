@@ -5,7 +5,7 @@ import { ApiError, api } from "../lib/api";
 import { parseUsdcInput, usdc } from "../lib/format";
 import type { NoteStatus, WalletNote } from "../lib/types";
 import { connect, listWallets, onWalletsChanged, signAndSend, type OwnerWallet } from "../lib/wallet";
-import { useOwner, type ConnectedWallet } from "./Shell";
+import { useCapability, useOwner, type ConnectedWallet } from "./Shell";
 import { useAction, useResource } from "./hooks";
 import { ErrorNotice, Loading, Section, Spinner, TxLink } from "./ui";
 
@@ -111,7 +111,25 @@ export function NotesTable({ status }: { status: NoteStatus }) {
   );
 }
 
+/** Note balances, deposits and exits are the owner's private wallet; other roles never request them. */
+export function OwnerOnlyNotice({ what, reason }: { what: string; reason: string | null }) {
+  return (
+    <div className="notice" role="status">
+      <p className="flush">
+        <strong>{what} is owner-only.</strong> {reason}
+      </p>
+      <p className="hint flush">Private pool activity is still visible on the Activity page and in the Privacy tab.</p>
+    </div>
+  );
+}
+
 export function WalletView() {
+  const fund = useCapability("fund");
+  if (!fund.allowed) return <OwnerOnlyNotice what="The private wallet" reason={fund.reason} />;
+  return <OwnerWalletView />;
+}
+
+function OwnerWalletView() {
   const notes = useResource(() => api<NoteStatus>("wallet", "/notes/status"), "notes");
   const { connected } = useOwnerWallet();
   const [amount, setAmount] = useState("");

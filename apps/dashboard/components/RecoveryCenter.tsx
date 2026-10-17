@@ -7,9 +7,9 @@ import { agentStateLabel, hasLiveAuthority } from "../lib/labels";
 import type { Activity, NoteStatus, Purchase } from "../lib/types";
 import { signAndSend } from "../lib/wallet";
 import { AgentControls } from "./AgentControls";
-import { useOwner } from "./Shell";
+import { useCapability, useOwner } from "./Shell";
 import { EmergencyStop } from "./StopControls";
-import { ConnectWalletPrompt, useOwnerWallet } from "./WalletView";
+import { ConnectWalletPrompt, OwnerOnlyNotice, useOwnerWallet } from "./WalletView";
 import { useAction, useResource } from "./hooks";
 import { ErrorNotice, Loading, Section, TxLink } from "./ui";
 
@@ -164,6 +164,12 @@ function PublicExit({ notes, onChanged }: { notes: NoteStatus; onChanged: () => 
 }
 
 export function RecoveryCenter() {
+  const recover = useCapability("recover");
+  if (!recover.allowed) return <OwnerOnlyNotice what="Recovery and withdrawal" reason={recover.reason} />;
+  return <OwnerRecoveryCenter />;
+}
+
+function OwnerRecoveryCenter() {
   const { workspace, reloadWorkspace } = useOwner();
   const activity = useResource(() => api<Activity>("control", "/activity?limit=200"), "activity");
   const notes = useResource(() => api<NoteStatus>("wallet", "/notes/status"), "notes");

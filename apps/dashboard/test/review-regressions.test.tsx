@@ -7,7 +7,7 @@ import { ResearchForm, CampaignForm } from "../components/AgentDetail";
 import { CreateAgent } from "../components/CreateAgent";
 import { Select } from "../components/Select";
 import { PolicyReview, ROLE_TEMPLATES } from "../components/Policy";
-import { OwnerProvider } from "../components/Shell";
+import { withRole } from "./access-fixtures";
 import { useAction } from "../components/hooks";
 import { agent, MIRA, PRINCE, recordingFetch, workspace } from "./fixtures";
 
@@ -37,7 +37,7 @@ describe("adversarial dashboard regression checks", () => {
     const user = userEvent.setup();
     const rec = recordingFetch(() => ({ agent: agent(PRINCE, "Review companion", "research", "draft") }));
     vi.stubGlobal("fetch", rec.impl);
-    render(<OwnerProvider value={{ workspace: workspace(), reloadWorkspace: async () => undefined, connected: null, setConnected: () => undefined }}><CreateAgent /></OwnerProvider>);
+    render(withRole(<CreateAgent />));
     await user.type(screen.getByLabelText("Name"), "Review companion");
     await user.clear(screen.getByLabelText("Total budget"));
     await user.type(screen.getByLabelText("Total budget"), "1.5");
@@ -83,8 +83,8 @@ describe("adversarial dashboard regression checks", () => {
     vi.stubGlobal("fetch", fetcher);
     const user = userEvent.setup();
     const a = agent(role === "research" ? PRINCE : MIRA, "Companion", role === "research" ? "research" : "content");
-    if (role === "research") render(<ResearchForm agent={a} disabled={false} onQueued={() => undefined} />);
-    else render(<CampaignForm agent={a} disabled={false} handoffs={[]} onQueued={() => undefined} />);
+    if (role === "research") render(withRole(<ResearchForm agent={a} disabled={false} onQueued={() => undefined} />));
+    else render(withRole(<CampaignForm agent={a} disabled={false} handoffs={[]} onQueued={() => undefined} />));
     const topic = screen.getByLabelText(role === "research" ? "Research question" : "Campaign topic");
     await user.type(topic, "Review the brief");
     if (role === "campaign") {
