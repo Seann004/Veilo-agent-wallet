@@ -4,6 +4,8 @@
  */
 export const MARKETPLACE_LIMITS = {
   quoteTtlSeconds: 300,
+  /** A buyer controller releases a private proof only while the quote has at least this long left. */
+  minQuoteRemainingSeconds: 120,
   leaseSeconds: 60,
   heartbeatSeconds: 15,
   downloadLinkSeconds: 60,

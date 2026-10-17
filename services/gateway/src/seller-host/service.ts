@@ -269,7 +269,17 @@ export class SellerHostService {
       }
       try {
         if (f.evidence_recorded_at === null) {
-          if (!(await this.recordEvidence(p.id, bound.jobId, bound.quote.operationId, paymentSignature))) return cb.waiting("NOT_READY");
+          const evidence = await this.recordEvidence(p.id, bound.jobId, bound.quote.operationId, paymentSignature);
+          if (evidence === "retry") return cb.waiting("NOT_READY");
+          if (evidence !== "recorded") {
+            // The payment is final on chain but the marketplace will not queue the job for it;
+            // the purchase closes visibly as paid without a result instead of waiting forever.
+            return cb.complete(
+              "paid_no_result",
+              { kind: "specialist_job", jobId: bound.jobId, status: "evidence_refused", code: evidence.code, message: evidence.message },
+              evidence.code,
+            );
+          }
           continue;
         }
         const lease = this.lease(f);
@@ -293,12 +303,27 @@ export class SellerHostService {
     cb.waiting("NOT_READY");
   }
 
-  private async recordEvidence(purchaseId: string, jobId: string, operationId: string, signature: string): Promise<boolean> {
+  /**
+   * 202 (payer not bound yet), 5xx, 401, 408 and 429 are retried; a network error propagates as
+   * MarketplaceUnavailableError and is retried by the caller. Any other refusal is final.
+   */
+  private async recordEvidence(
+    purchaseId: string,
+    jobId: string,
+    operationId: string,
+    signature: string,
+  ): Promise<"recorded" | "retry" | { code: string; message: string }> {
     const res = await this.client.paymentEvidence(jobId, { operationId, signature });
+    if (res.status === 202 || res.status >= 500 || res.status === 401 || res.status === 408 || res.status === 429) return "retry";
     // 409: the marketplace already recorded this receipt for the job.
-    if (!ok(res) && res.status !== 409) return false;
-    this.update(purchaseId, { evidence_recorded_at: this.ctx.now().toISOString() });
-    return true;
+    if (ok(res) || res.status === 409) {
+      this.update(purchaseId, { evidence_recorded_at: this.ctx.now().toISOString() });
+      return "recorded";
+    }
+    const err = (res.body as { error?: { code?: unknown; message?: unknown } } | undefined)?.error;
+    const code = typeof err?.code === "string" && /^[A-Z][A-Z0-9_]{0,59}$/.test(err.code) ? err.code : res.status === 403 ? "SERVICE_NOT_ALLOWED" : `EVIDENCE_REFUSED_${res.status}`;
+    const message = typeof err?.message === "string" ? err.message.slice(0, 300) : `Marketplace refused the payment evidence (HTTP ${res.status})`;
+    return { code, message };
   }
 
   private async claim(purchaseId: string, jobId: string): Promise<"claimed" | "not_queued" | "unavailable"> {

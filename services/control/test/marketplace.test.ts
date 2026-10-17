@@ -440,6 +440,221 @@ describe("durable reporting and unknown outcomes", () => {
   });
 });
 
+describe("refused evidence stays visible and retried", () => {
+  const evidenceRows = (st: MarketStack) => st.count("SELECT count(*) FROM outbox WHERE topic = 'marketplace.evidence' AND published_at_ms IS NULL");
+
+  it.each([
+    [403, "SERVICE_NOT_ALLOWED"],
+    [400, "INVALID_REQUEST"],
+    [404, "NOT_FOUND"],
+  ])("an HTTP %i (%s) evidence refusal never publishes the report and surfaces evidence_rejected to the owner", async (status, code) => {
+    s = await makeMarketStack();
+    s.market.forcedReplies.set("evidence", [
+      { status, body: { error: { code, message: "settlement evidence rejected: test" } } },
+      { status, body: { error: { code, message: "settlement evidence rejected: test" } } },
+    ]);
+    const req = s.request();
+    await bridge(s).receive(req);
+    expect((await approve(s, req.operationId, approvalFor(s, req))).body.hire.state).toBe("paid");
+    await bridge(s).flush();
+    expect(bridge(s).hireView(bridge(s).hire(req.operationId)!)).toMatchObject({ state: "evidence_rejected", recordState: "paid", problem: { code, attempts: 1 } });
+    expect(evidenceRows(s)).toBe(1);
+    expect(s.market.evidence.get(req.operationId)).toBeUndefined();
+    expect(s.count("SELECT count(*) FROM audit_event WHERE action = 'marketplace.evidence.refused' AND reason_code = ?", code)).toBe(1);
+    const owner = await s.login();
+    const listed = await s.call("/marketplace/hires", { headers: { cookie: owner.cookie } });
+    expect(listed.body.items).toEqual([expect.objectContaining({ operationId: req.operationId, state: "evidence_rejected", problem: expect.objectContaining({ code }) })]);
+
+    // Backoff: an immediate pass does not re-send; after the delay it is retried (refused again, then 30 s -> 60 s).
+    await bridge(s).poll();
+    expect(s.count("SELECT count(*) FROM audit_event WHERE action = 'marketplace.evidence.refused'")).toBe(1);
+    s.env.clock.t += 30_000;
+    await bridge(s).poll();
+    expect(bridge(s).outcome(bridge(s).hire(req.operationId)!)).toMatchObject({ state: "evidence_rejected", problem: { attempts: 2 } });
+    s.env.clock.t += 30_000;
+    await bridge(s).poll();
+    expect(evidenceRows(s)).toBe(1);
+    s.env.clock.t += 30_000;
+    await bridge(s).poll();
+    expect(evidenceRows(s)).toBe(0);
+    expect(s.market.evidence.get(req.operationId)).toMatchObject({ deliveries: 1 });
+    expect(bridge(s).hireView(bridge(s).hire(req.operationId)!)).toMatchObject({ state: "paid", problem: null });
+    expect((await s.call("/marketplace/hires", { headers: { cookie: owner.cookie } })).body.items).toEqual([]);
+    expect(s.seller.payments).toBe(1);
+  });
+
+  it("an existing receipt reported with 409 completes the report", async () => {
+    s = await makeMarketStack();
+    s.market.forcedReplies.set("evidence", [{ status: 409, body: { status: "settled", receiptId: "r-1", existing: true } }]);
+    const req = s.request();
+    await bridge(s).receive(req);
+    await approve(s, req.operationId, approvalFor(s, req));
+    await bridge(s).flush();
+    expect(evidenceRows(s)).toBe(0);
+    expect(bridge(s).hireView(bridge(s).hire(req.operationId)!)).toMatchObject({ state: "paid", problem: null });
+  });
+
+  it("a 409 conflict without a receipt is a refusal, not a completed report", async () => {
+    s = await makeMarketStack();
+    s.market.forcedReplies.set("evidence", [{ status: 409, body: { error: { code: "IDEMPOTENCY_CONFLICT", message: "operation already has a different receipt" } } }]);
+    const req = s.request();
+    await bridge(s).receive(req);
+    await approve(s, req.operationId, approvalFor(s, req));
+    await bridge(s).flush();
+    expect(evidenceRows(s)).toBe(1);
+    expect(bridge(s).outcome(bridge(s).hire(req.operationId)!)).toMatchObject({ state: "evidence_rejected", problem: { code: "IDEMPOTENCY_CONFLICT" } });
+  });
+});
+
+describe("payer report retries", () => {
+  it.each([401, 408, 429, 400, 503])("an HTTP %i on the paying report retries with the same payer and releases nothing until a 2xx", async (status) => {
+    s = await makeMarketStack();
+    s.market.forcedReplies.set("status", [{ status, body: { error: { code: "UNAUTHENTICATED", message: "stale request" } } }]);
+    const req = s.request();
+    await bridge(s).receive(req);
+    const r = await approve(s, req.operationId, approvalFor(s, req));
+    expect(r.body.hire.state).toBe("purchasing");
+    expect(s.funding.calls).toMatchObject({ prepare: 1, release: 0, sign: 0 });
+    expect(s.env.db.prepare("SELECT payer_state FROM marketplace_hire").pluck().get()).toBe("none");
+    expect(s.env.db.prepare("SELECT authorization_state, funding_state FROM purchase").get()).toEqual({ authorization_state: "reserved", funding_state: "proof_prepared" });
+    await bridge(s).poll();
+    expect(bridge(s).hire(req.operationId)!.state).toBe("paid");
+    expect(s.funding.calls).toMatchObject({ prepare: 1, release: 1, sign: 1 });
+    expect(s.funding.bindings).toHaveLength(1);
+    // The retry is signed again: every controller request carried a fresh nonce.
+    expect(s.market.replays).toBe(0);
+    const statusCalls = s.market.calls.filter((c) => c.path.endsWith("/status"));
+    expect(statusCalls).toHaveLength(2);
+    expect(statusCalls[0]!.body).toEqual(statusCalls[1]!.body);
+  });
+
+  it("a 403 on the paying report is definite: the unreleased funding is cancelled", async () => {
+    s = await makeMarketStack();
+    s.market.forcedReplies.set("status", [{ status: 403, body: { error: { code: "FORBIDDEN", message: "payer binding proof is invalid" } } }]);
+    const req = s.request();
+    await bridge(s).receive(req);
+    expect((await approve(s, req.operationId, approvalFor(s, req))).body.hire.state).toBe("rejected");
+    expect(s.funding.calls.release).toBe(0);
+    expect(s.env.db.prepare("SELECT authorization_state, funding_state FROM purchase").get()).toEqual({ authorization_state: "rejected", funding_state: "abandoned" });
+  });
+});
+
+describe("quote lifetime on the private path", () => {
+  it("refuses to release the proof with under the minimum quote time left and cancels the unreleased funding", async () => {
+    s = await makeMarketStack();
+    const t = s.env.clock.t;
+    const req = s.request({ edit: (q) => (q.expiresAt = new Date(t + 90_000).toISOString()) });
+    await bridge(s).receive(req);
+    const r = await approve(s, req.operationId, approvalFor(s, req));
+    expect(r.body.hire).toMatchObject({ state: "rejected", rejected: { code: "QUOTE_EXPIRED" } });
+    expect(s.funding.calls).toMatchObject({ prepare: 1, release: 0, sign: 0 });
+    expect(s.market.statuses.get(req.operationId)).toBeUndefined();
+    expect(s.env.db.prepare("SELECT authorization_state, funding_state FROM purchase").get()).toEqual({ authorization_state: "rejected", funding_state: "abandoned" });
+    expect(s.env.db.prepare("SELECT status, close_reason FROM reservation").get()).toEqual({ status: "released", close_reason: "rejected" });
+    expect(s.count("SELECT count(*) FROM note WHERE state = 'reserved'")).toBe(0);
+    await bridge(s).flush();
+    expect(s.market.decisions.get(req.operationId)).toEqual([
+      { decision: "accepted", code: null, controllerRef: expect.any(String) },
+      { decision: "rejected", code: "QUOTE_EXPIRED", controllerRef: null },
+    ]);
+  });
+
+  it("a marketplace quote that expires after funding makes the hire recoverable and pays nothing", async () => {
+    s = await makeMarketStack();
+    const release = s.funding.release.bind(s.funding);
+    s.funding.release = async (purchaseId: string) => {
+      s!.env.clock.t += 301_000;
+      return release(purchaseId);
+    };
+    const req = s.request();
+    await bridge(s).receive(req);
+    const r = await approve(s, req.operationId, approvalFor(s, req));
+    expect(r.body.hire).toMatchObject({ state: "recoverable", recordState: "failed_unpaid", problem: { code: "QUOTE_EXPIRED" } });
+    expect(s.funding.calls).toMatchObject({ prepare: 1, release: 1, sign: 0 });
+    expect(s.seller.payments).toBe(0);
+    expect(s.env.db.prepare("SELECT funding_state, merchant_state, recovery_state FROM purchase").get()).toEqual({ funding_state: "finalized", merchant_state: "abandoned", recovery_state: "recoverable" });
+    await bridge(s).poll();
+    expect(s.funding.calls.sign).toBe(0);
+    expect(s.market.statuses.get(req.operationId)?.at(-1)).toMatchObject({ status: "failed_unpaid" });
+    const owner = await s.login();
+    const listed = await s.call("/marketplace/hires", { headers: { cookie: owner.cookie } });
+    expect(listed.body.items).toEqual([expect.objectContaining({ operationId: req.operationId, state: "recoverable", problem: expect.objectContaining({ code: "QUOTE_EXPIRED", reason: expect.stringMatching(/owner recovery/) }) })]);
+  });
+
+  it("an expired seller-host quote is re-quoted before merchant signing, reusing the funding", async () => {
+    s = await makeMarketStack();
+    const t = s.env.clock.t;
+    const release = s.funding.release.bind(s.funding);
+    s.funding.release = async (purchaseId: string) => {
+      s!.env.clock.t += 400_000;
+      return release(purchaseId);
+    };
+    const req = s.request({ edit: (q) => (q.expiresAt = new Date(t + 900_000).toISOString()) });
+    await bridge(s).receive(req);
+    const r = await approve(s, req.operationId, approvalFor(s, req));
+    expect(r.body.hire.state).toBe("paid");
+    expect(s.seller.quotes.size).toBe(2);
+    expect(s.funding.calls).toMatchObject({ prepare: 1, release: 1, sign: 1 });
+    expect(s.seller.payments).toBe(1);
+    expect(s.count("SELECT count(*) FROM audit_event WHERE action = 'purchase.requote'")).toBe(1);
+  });
+});
+
+describe("granted hires spend from the proposing task", () => {
+  it("records the proposal's task on the purchase, even after that task completed", async () => {
+    s = await makeMarketStack();
+    const listingId = "22222222-2222-4222-8222-222222222222";
+    const brief = "Compare three CRM vendors for a five-person team.";
+    const { taskId } = await proposeAsScout(s, listingId, brief);
+    s.env.db.prepare("UPDATE task SET state = 'completed' WHERE id = ?").run(taskId);
+    await grant(s, listingId);
+    const req = s.request({ brief, listingId, requestedBy: { kind: "agent", agentId: null, localAgentId: s.scout.id } });
+    expect((await bridge(s).receive(req)).state).toBe("paid");
+    expect(s.env.db.prepare("SELECT task_id FROM purchase").pluck().get()).toBe(taskId);
+    expect(s.env.db.prepare("SELECT purchase_count FROM task WHERE id = ?").pluck().get(taskId)).toBe(1n);
+  });
+
+  it("refuses a granted hire beyond the task's USDC limit", async () => {
+    s = await makeMarketStack();
+    const listingId = "22222222-2222-4222-8222-222222222222";
+    const brief = "Compare three CRM vendors for a five-person team.";
+    const { taskId } = await proposeAsScout(s, listingId, brief);
+    s.env.db.prepare("UPDATE task SET limit_usdc = ? WHERE id = ?").run(PRICE - 1n, taskId);
+    await grant(s, listingId);
+    const req = s.request({ brief, listingId, requestedBy: { kind: "agent", agentId: null, localAgentId: s.scout.id } });
+    const h = await bridge(s).receive(req);
+    expect(h).toMatchObject({ state: "rejected", reject_code: "BUDGET_EXCEEDED", basis: "listing_grant" });
+    expect(h.reject_reason).toMatch(/task budget/);
+    expect(purchases(s)).toBe(0);
+    expect(reservations(s)).toBe(0);
+    expect(s.seller.payments).toBe(0);
+  });
+
+  it("refuses a granted hire whose proposing task was cancelled", async () => {
+    s = await makeMarketStack();
+    const listingId = "22222222-2222-4222-8222-222222222222";
+    const brief = "Compare three CRM vendors for a five-person team.";
+    const { taskId } = await proposeAsScout(s, listingId, brief);
+    s.env.db.prepare("UPDATE task SET state = 'cancelled' WHERE id = ?").run(taskId);
+    await grant(s, listingId);
+    const h = await bridge(s).receive(s.request({ brief, listingId, requestedBy: { kind: "agent", agentId: null, localAgentId: s.scout.id } }));
+    expect(h).toMatchObject({ state: "rejected", reject_code: "POLICY_DENIED", reject_reason: "task is cancelled" });
+    expect(purchases(s)).toBe(0);
+  });
+
+  it("refuses a granted hire after the task's deadline", async () => {
+    s = await makeMarketStack();
+    const listingId = "22222222-2222-4222-8222-222222222222";
+    const brief = "Compare three CRM vendors for a five-person team.";
+    const { taskId } = await proposeAsScout(s, listingId, brief);
+    s.env.db.prepare("UPDATE task SET deadline_at_ms = ? WHERE id = ?").run(s.env.clock.t - 1, taskId);
+    await grant(s, listingId);
+    const h = await bridge(s).receive(s.request({ brief, listingId, requestedBy: { kind: "agent", agentId: null, localAgentId: s.scout.id } }));
+    expect(h).toMatchObject({ state: "rejected", reject_code: "POLICY_DENIED" });
+    expect(purchases(s)).toBe(0);
+  });
+});
+
 describe("seller origin policy", () => {
   it("rejects a private-network seller origin unless the operator allowlisted it", async () => {
     s = await makeMarketStack({ allowSellerOrigin: false });

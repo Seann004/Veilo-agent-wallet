@@ -20,6 +20,7 @@ interface QuoteEntry {
   operationId: string;
   requestDigest: string;
   input: unknown;
+  expiresAtMs: number;
   paid: { header: string; signature: string } | null;
 }
 
@@ -34,6 +35,8 @@ export class FakeSellerHost {
   quoteOverride: ((q: Record<string, unknown>) => void) | undefined;
   /** Drop the reply of the next N paid execute calls after the payment is recorded. */
   dropPaidReplies = 0;
+  /** Lifetime of each gateway quote; an unpaid quote past it answers execute with 410. */
+  quoteTtlMs = 300_000;
 
   constructor(readonly cfg: SellerConfig, readonly now: () => number) {}
 
@@ -80,7 +83,7 @@ export class FakeSellerHost {
     if (!auth || ![...this.accounts.values()].includes(auth)) return send(401, { error: { code: "UNAUTHENTICATED", message: "account credential required" } });
     if (req.method === "POST" && path === "/quotes") {
       const quoteId = `q_${randomUUID()}`;
-      const entry: QuoteEntry = { quoteId, operationId: String(body.operationId), requestDigest: String(body.requestDigest), input: body.input, paid: null };
+      const entry: QuoteEntry = { quoteId, operationId: String(body.operationId), requestDigest: String(body.requestDigest), input: body.input, expiresAtMs: this.now() + this.quoteTtlMs, paid: null };
       this.quotes.set(quoteId, entry);
       const view: Record<string, unknown> = {
         quoteId,
@@ -96,7 +99,7 @@ export class FakeSellerHost {
         executeUrl: `${this.origin}/v1/purchases/${quoteId}/execute`,
         delivery: "test",
         createdAt: new Date(this.now()).toISOString(),
-        expiresAt: new Date(this.now() + 300_000).toISOString(),
+        expiresAt: new Date(entry.expiresAtMs).toISOString(),
         purchaseState: null,
       };
       this.quoteOverride?.(view);
@@ -107,6 +110,7 @@ export class FakeSellerHost {
       const q = this.quotes.get(decodeURIComponent(m[1] as string));
       if (!q) return send(404, { error: { code: "NOT_FOUND", message: "quote" } });
       const header = req.headers["payment-signature"];
+      if (!q.paid && this.now() >= q.expiresAtMs) return send(410, { error: { code: "QUOTE_EXPIRED", message: "quote expired" } });
       if (typeof header !== "string") {
         if (q.paid) return send(200, this.#state(q));
         return send(402, {

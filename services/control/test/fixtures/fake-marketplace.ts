@@ -39,6 +39,15 @@ export class FakeMarketplace {
   pendingEvidence = 0;
   /** When false, a reported payer is acknowledged but not bound (evidence then stays pending). */
   applyPayer = true;
+  /** Canned replies served (without recording the call's effect) before the next real ones, per topic fragment. */
+  readonly forcedReplies = new Map<string, Array<{ status: number; body: unknown }>>();
+
+  #forced(fragment: string, send: (status: number, body: unknown) => void): boolean {
+    const next = this.forcedReplies.get(fragment)?.shift();
+    if (!next) return false;
+    send(next.status, next.body);
+    return true;
+  }
 
   async start(): Promise<this> {
     this.server = createServer((req, res) => void this.#handle(req, res));
@@ -133,6 +142,7 @@ export class FakeMarketplace {
       if (!this.#drop("decision", res)) send(200, { ok: true });
     } else if (method === "POST" && (m = /^\/controller\/payment-requests\/([^/]+)\/status$/.exec(path))) {
       const op = decodeURIComponent(m[1] as string);
+      if (this.#forced("status", send)) return;
       const parsed = controllerStatusSchema.safeParse(body);
       if (!parsed.success) return send(400, { error: { code: "INVALID_REQUEST", message: "bad status" } });
       if (parsed.data.payer !== null) {
@@ -142,7 +152,7 @@ export class FakeMarketplace {
         const quoteDigest = this.requests.find((r) => r.operationId === op)?.quote.quoteDigest ?? this.knownDigests.get(op);
         if (!quoteDigest || !this.#verifyBy(parsed.data.payer, payerBindingMessage(op, quoteDigest, parsed.data.payer), parsed.data.payerProof as string)) {
           this.badPayerProofs += 1;
-          return send(401, { error: { code: "UNAUTHENTICATED", message: "payer proof invalid" } });
+          return send(403, { error: { code: "FORBIDDEN", message: "payer binding proof is invalid" } });
         }
         if (prior === undefined && this.accepted.get(op) !== true) return send(409, { error: { code: "INVALID_TRANSITION", message: "a payer can only be bound right after the controller accepts" } });
         if ([...this.payers.entries()].some(([o, p]) => o !== op && p === parsed.data.payer)) return send(409, { error: { code: "IDEMPOTENCY_CONFLICT", message: "payer bound to another operation" } });
@@ -153,6 +163,7 @@ export class FakeMarketplace {
     } else if (method === "POST" && (m = /^\/controller\/payments\/([^/]+)\/evidence$/.exec(path))) {
       const op = decodeURIComponent(m[1] as string);
       const b = body as { operationId: string; signature: string };
+      if (this.#forced("evidence", send)) return;
       if (!this.payers.has(op)) {
         this.pendingEvidence += 1;
         return send(202, { operationId: op, state: "pending_payer" });
