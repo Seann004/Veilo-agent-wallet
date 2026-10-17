@@ -1,0 +1,25 @@
+{
+  "circuits": {
+    "exit": {
+      "instructionDataBytes": 385,
+      "transactionComputeUnits": 97251,
+      "verifierInstructionComputeUnits": 97101
+    },
+    "insert": {
+      "instructionDataBytes": 385,
+      "transactionComputeUnits": 97248,
+      "verifierInstructionComputeUnits": 97098
+    },
+    "spend": {
+      "instructionDataBytes": 449,
+      "transactionComputeUnits": 108549,
+      "verifierInstructionComputeUnits": 108399
+    }
+  },
+  "harness": "LiteSVM 0.17.0 (Agave 4.3 runtime), SBF build with platform-tools v1.57; one verify() per instruction",
+  "zkeySha256": {
+    "exit": "e7057f45eaa9b39964f75b827e94157359e9d9f83c75108c3b7e566e13e05486",
+    "insert": "2f81f9b14a0f398f59853d9ae4c2d537150134db41ffd842d47b654ed8d97e97",
+    "spend": "af6af498c0b022b16911a5611ab0ba225d5f6e87b0639edb519393c5b3de81ef"
+  }
+}

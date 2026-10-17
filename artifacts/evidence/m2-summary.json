@@ -1,0 +1,89 @@
+{
+  "kind": "M2 devnet private smoke: summary",
+  "profile": "devnet",
+  "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+  "recordedAt": "2026-10-16T01:28:10.235Z",
+  "programId": "3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq",
+  "poolState": "65FNWNc1akaXFsPFCoLGMwjnefGbpts3sw4KEVYQ8Tab",
+  "computeUnitsOnDevnet": {
+    "deposit": [
+      "28897",
+      "27397"
+    ],
+    "insert_leaf": [
+      "108611",
+      "108614",
+      "108343"
+    ],
+    "update_approved_root": [
+      "7922"
+    ],
+    "spend_private": [
+      "138103"
+    ],
+    "exit_public (+ idempotent ATA create)": [
+      "121534",
+      "130534"
+    ]
+  },
+  "computeUnitsNote": "computeUnitsConsumed from finalized devnet transactions, including the 150 CU SetComputeUnitLimit instruction",
+  "rentLamportsOnDevnet": {
+    "perDeposit": "2738120",
+    "perSpend": "2214880",
+    "perExit": "904240",
+    "freshPayerAta": "1488440"
+  },
+  "proofTimingsMs": [
+    {
+      "circuit": "insert",
+      "ms": 1438,
+      "at": "2026-10-16T00:32:11.109Z"
+    },
+    {
+      "circuit": "insert",
+      "ms": 641,
+      "at": "2026-10-16T00:32:13.746Z"
+    },
+    {
+      "circuit": "spend",
+      "ms": 899,
+      "at": "2026-10-16T00:32:26.885Z"
+    },
+    {
+      "circuit": "spend",
+      "ms": 1515,
+      "at": "2026-10-16T01:27:14.048Z"
+    },
+    {
+      "circuit": "insert",
+      "ms": 632,
+      "at": "2026-10-16T01:27:29.516Z"
+    },
+    {
+      "circuit": "exit",
+      "ms": 452,
+      "at": "2026-10-16T01:27:41.700Z"
+    },
+    {
+      "circuit": "exit",
+      "ms": 451,
+      "at": "2026-10-16T01:27:47.704Z"
+    }
+  ],
+  "proofTimingNote": "snarkjs fullProve on this host, measured around the wallet/crank prover call",
+  "sponsorTotals": {
+    "feesSpent": "25000",
+    "rentOutstanding": "1488440",
+    "rentRecovered": "0"
+  },
+  "files": [
+    "m2-deploy.json",
+    "m2-deposits.json",
+    "m2-inserts.json",
+    "m2-approve-root.json",
+    "m2-spend.json",
+    "m2-change-insert.json",
+    "m2-merchant.json",
+    "m2-exits.json"
+  ]
+}

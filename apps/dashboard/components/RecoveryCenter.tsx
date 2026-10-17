@@ -1,0 +1,203 @@
+"use client";
+
+import { useState } from "react";
+import { api } from "../lib/api";
+import { usdc, when } from "../lib/format";
+import { hasLiveAuthority, legStateLabel } from "../lib/labels";
+import type { Activity, NoteStatus, Purchase } from "../lib/types";
+import { signAndSend } from "../lib/wallet";
+import { AgentControls } from "./AgentControls";
+import { useOwner } from "./Shell";
+import { EmergencyStop } from "./StopControls";
+import { ConnectWalletPrompt, useOwnerWallet } from "./WalletView";
+import { useAction, useResource } from "./hooks";
+import { ErrorNotice, Loading, Section, TxLink } from "./ui";
+
+export type RecoveryClass = "safe" | "pending" | "in_recovery" | "recovered" | "none";
+
+const MERCHANT_MAY_SETTLE = new Set(["signed", "submitted", "uncertain"]);
+const MERCHANT_CLOSED = new Set(["abandoned", "expired_unsettled"]);
+
+/**
+ * Classifies a purchase for the recovery center. A funded fresh wallet is safe to recover only
+ * once no signed merchant payment can still settle; until then it is pending.
+ */
+export function classifyRecovery(p: Purchase, agentStopped: boolean): RecoveryClass {
+  const s = p.states;
+  if (s.recovery === "recovered") return "recovered";
+  if (s.recovery === "recovery_submitted" || s.recovery === "uncertain") return "in_recovery";
+  if (s.recovery === "recoverable") return "safe";
+  if (s.funding === "finalized" && MERCHANT_CLOSED.has(s.merchant) && s.fulfilment !== "delivered") return "safe";
+  // An unsigned merchant leg is recoverable only once the agent can no longer sign it.
+  if (s.funding === "finalized" && s.merchant === "not_started") return agentStopped ? "safe" : "pending";
+  if (s.funding === "finalized" && MERCHANT_MAY_SETTLE.has(s.merchant)) return "pending";
+  if (["proof_released", "submitted", "uncertain"].includes(s.funding)) return "pending";
+  return "none";
+}
+
+interface RecoveryView {
+  recoveryId: string;
+  purchaseId: string;
+  state: string;
+  amount: { amount: string };
+  destinationOwner: string;
+  signature: string | null;
+  privacyWarning: string;
+}
+
+function RecoveryRow({ p, agentName, agentStopped, onChanged }: { p: Purchase; agentName: string; agentStopped: boolean; onChanged: () => void | Promise<void> }) {
+  const [view, setView] = useState<RecoveryView | null>(null);
+  const action = useAction();
+  const cls = classifyRecovery(p, agentStopped);
+  return (
+    <li className="recovery-row">
+      <p>
+        <strong>{agentName}</strong> · {p.sku} · {usdc(p.price.amount)} · funding {legStateLabel(p.states.funding)}, merchant {legStateLabel(p.states.merchant)} · {when(p.updatedAt)}
+      </p>
+      {cls === "pending" ? <p className="small">Not yet safe: a released withdrawal or signed merchant payment may still settle. Recovery waits for a proven outcome.</p> : null}
+      {cls === "safe" && !view ? (
+        <button type="button" className="btn" disabled={action.busy} onClick={() => void action.run(async () => setView(await api<RecoveryView>("wallet", "/recovery/prepare", { method: "POST", body: { purchaseId: p.id } })))}>
+          Prepare recovery
+        </button>
+      ) : null}
+      {view ? (
+        <div className="notice notice-warn">
+          <p>
+            Recover {usdc(view.amount.amount)} to the configured owner recovery account. <strong>Privacy impact:</strong> {view.privacyWarning}
+          </p>
+          <p className="small">State: {view.state}</p>
+          {view.state === "prepared" ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={action.busy}
+              onClick={() =>
+                void action.run(async () => {
+                  setView(await api<RecoveryView>("wallet", `/recovery/${view.recoveryId}/confirm`, { method: "POST", body: {} }));
+                  await onChanged();
+                })
+              }
+            >
+              Confirm public recovery
+            </button>
+          ) : (
+            <TxLink signature={view.signature} />
+          )}
+        </div>
+      ) : null}
+      <ErrorNotice error={action.error} />
+    </li>
+  );
+}
+
+function PublicExit({ notes, onChanged }: { notes: NoteStatus; onChanged: () => void | Promise<void> }) {
+  const { connected } = useOwnerWallet();
+  const [prepared, setPrepared] = useState<{ exitId: string; transaction: string; value: { amount: string }; privacyWarning: string } | null>(null);
+  const [done, setDone] = useState<{ signature: string; state: string } | null>(null);
+  const action = useAction();
+  const exitable = notes.notes.filter((n) => ["indexed", "approved", "spendable"].includes(n.state) && n.value.amount !== "0");
+  return (
+    <>
+      <p className="notice notice-warn">
+        <strong>Privacy impact:</strong> a public exit is linkable. It reveals the note&apos;s original deposit, its value and your refund address; spending since the deposit can be inferred
+        by subtraction. It needs no operator approval and works during an emergency stop.
+      </p>
+      <ConnectWalletPrompt purpose="sign a public exit as the note's refund authority" />
+      {exitable.length === 0 ? <p className="muted">No exitable notes.</p> : null}
+      <ul className="plain">
+        {exitable.map((n) => (
+          <li key={n.id}>
+            {n.origin} note · {usdc(n.value.amount)} · {n.state}{" "}
+            <button type="button" className="btn" disabled={action.busy} onClick={() => void action.run(async () => setPrepared(await api("wallet", "/exits/prepare", { method: "POST", body: { noteId: n.id } })))}>
+              Prepare public exit
+            </button>
+          </li>
+        ))}
+      </ul>
+      {prepared ? (
+        <div className="notice">
+          <p>
+            Exit of {usdc(prepared.value.amount)} prepared. {prepared.privacyWarning}
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!connected || action.busy || done !== null}
+            onClick={() =>
+              void action.run(async () => {
+                if (!connected) return;
+                const signature = await signAndSend(connected.wallet, connected.account, prepared.transaction);
+                const r = await api<{ state: string }>("wallet", "/exits/register", { method: "POST", body: { exitId: prepared.exitId, signature } });
+                setDone({ signature, state: r.state });
+                await onChanged();
+              })
+            }
+          >
+            Sign exit in wallet
+          </button>
+        </div>
+      ) : null}
+      {done ? (
+        <p role="status">
+          Exit {done.state}: <TxLink signature={done.signature} />
+        </p>
+      ) : null}
+      <ErrorNotice error={action.error} />
+    </>
+  );
+}
+
+export function RecoveryCenter() {
+  const { workspace, reloadWorkspace } = useOwner();
+  const activity = useResource(() => api<Activity>("control", "/activity?limit=200"), "activity");
+  const notes = useResource(() => api<NoteStatus>("wallet", "/notes/status"), "notes");
+  const reloadAll = async () => {
+    await Promise.all([reloadWorkspace(), activity.reload(), notes.reload()]);
+  };
+  const purchases = activity.data?.purchases ?? [];
+  const groups: Record<Exclude<RecoveryClass, "none">, Purchase[]> = { safe: [], pending: [], in_recovery: [], recovered: [] };
+  const stoppedAgent = (id: string) => workspace.workspace.stopped || workspace.agents.find((a) => a.id === id)?.status !== "active";
+  for (const p of purchases) {
+    const c = classifyRecovery(p, stoppedAgent(p.agentId));
+    if (c !== "none") groups[c].push(p);
+  }
+  const live = purchases.filter((p) => hasLiveAuthority(p.states));
+  const name = (id: string) => workspace.agents.find((a) => a.id === id)?.name ?? "agent";
+  const list = (items: Purchase[], empty: string) =>
+    items.length === 0 ? (
+      <p className="muted">{empty}</p>
+    ) : (
+      <ul className="plain">
+        {items.map((p) => (
+          <RecoveryRow key={p.id} p={p} agentName={name(p.agentId)} agentStopped={stoppedAgent(p.agentId)} onChanged={reloadAll} />
+        ))}
+      </ul>
+    );
+
+  return (
+    <>
+      <h1>Recovery center</h1>
+      <p className="small">Recovery and public exit are owner-only and stay available during an emergency stop or after an agent is paused or revoked.</p>
+      <Section title="Stop authority">
+        <EmergencyStop stopped={workspace.workspace.stopped} onChanged={reloadAll} />
+        <h3>Per agent</h3>
+        {workspace.agents.map((a) => (
+          <div key={a.id} className="stop-agent">
+            <strong>{a.name}</strong> ({a.status})
+            <AgentControls agent={a} onChanged={reloadAll} />
+          </div>
+        ))}
+        <p className="small">{live.length} payment(s) currently hold released authority and remain visible until resolved.</p>
+      </Section>
+      {activity.loading && !activity.data ? <Loading label="purchases" /> : null}
+      <ErrorNotice error={activity.error} what="activity" />
+      <Section title="Safe to recover">{list(groups.safe, "No funded fresh wallet is safe to recover.")}</Section>
+      <Section title="Pending — not yet safe to recover">{list(groups.pending, "No payment outcome is pending.")}</Section>
+      <Section title="Recovery in progress / recovered">{list([...groups.in_recovery, ...groups.recovered], "No recoveries yet.")}</Section>
+      <Section title="Owner public exit">
+        {notes.data ? <PublicExit notes={notes.data} onChanged={reloadAll} /> : notes.loading ? <Loading label="notes" /> : null}
+        <ErrorNotice error={notes.error} what="wallet service" />
+      </Section>
+    </>
+  );
+}

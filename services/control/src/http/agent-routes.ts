@@ -1,0 +1,112 @@
+import { Router, type Request, type Response } from "express";
+import type { z } from "zod";
+import {
+  contentPatchSchema,
+  contentQuerySchema,
+  contentReviewSchema,
+  handoffDecisionSchema,
+  jobClaimSchema,
+  jobCompleteSchema,
+  jobHeartbeatSchema,
+  planningProxyRequestSchema,
+} from "@veilo/contracts";
+import { ControlError } from "../errors";
+import { calendarView, decideHandoff, editContent, listContent, listHandoffs, reviewContent } from "../agents/content";
+import { claimWorkerJob, completeWorkerJob, heartbeatWorkerJob, ownTask, sponsoredPlanning, taskView } from "../agents/work";
+import type { Integration } from "../integration";
+import { requireAgent } from "../ledger/workspace";
+import { actorOf, requireActor, type AuthDeps } from "./actor";
+
+function parse<S extends z.ZodType>(schema: S, value: unknown): z.infer<S> {
+  const r = schema.safeParse(value ?? {});
+  if (!r.success) {
+    const details = r.error.issues.map((i) => `${i.path.join(".") || "(body)"}: ${i.message}`).join("; ");
+    throw new ControlError("INVALID_REQUEST", details);
+  }
+  return r.data;
+}
+
+const param = (req: Request, name: string): string => {
+  const v = req.params[name];
+  if (typeof v !== "string" || !/^[0-9a-f-]{36}$/.test(v)) throw new ControlError("NOT_FOUND", "resource not found");
+  return v;
+};
+
+/**
+ * Owner content/handoff endpoints and the runner's job/planning endpoints. None of these
+ * perform inference, purchases or publishing on behalf of an edit or approval.
+ */
+export function agentRouter(deps: AuthDeps & { integration?: Integration | undefined }): Router {
+  const { ledger } = deps;
+  const r = Router();
+  const owner = requireActor(deps, ["owner"]);
+  const worker = requireActor(deps, ["worker"]);
+  const ownerOf = (res: Response) => {
+    const a = actorOf(res);
+    if (a.kind !== "owner") throw new ControlError("FORBIDDEN", "owner session required");
+    return a;
+  };
+  const workerAgent = (res: Response) => {
+    const a = actorOf(res);
+    if (a.kind !== "worker") throw new ControlError("FORBIDDEN", "worker credential required");
+    return requireAgent(ledger, a.workspaceId, a.agentId);
+  };
+
+  r.get("/content", owner, (req, res) => {
+    const o = ownerOf(res);
+    res.json({ items: listContent(ledger, o.workspaceId, parse(contentQuerySchema, req.query)) });
+  });
+
+  r.patch("/content/:id", owner, (req, res) => {
+    const o = ownerOf(res);
+    res.json({ item: editContent(ledger, o.workspaceId, param(req, "id"), parse(contentPatchSchema, req.body), o.ownerPubkey) });
+  });
+
+  r.post("/content/:id/review", owner, (req, res) => {
+    const o = ownerOf(res);
+    res.json({ item: reviewContent(ledger, o.workspaceId, param(req, "id"), parse(contentReviewSchema, req.body).state, o.ownerPubkey) });
+  });
+
+  r.get("/calendar", owner, (_req, res) => {
+    res.json(calendarView(ledger, ownerOf(res).workspaceId));
+  });
+
+  r.get("/handoffs", owner, (_req, res) => {
+    res.json({ items: listHandoffs(ledger, ownerOf(res).workspaceId) });
+  });
+
+  r.post("/handoffs/:id/decision", owner, (req, res) => {
+    const o = ownerOf(res);
+    res.json(decideHandoff(ledger, o.workspaceId, param(req, "id"), parse(handoffDecisionSchema, req.body).decision, o.ownerPubkey));
+  });
+
+  // Runner infrastructure (not model tools): job leases, task reads and sponsored planning.
+  r.post("/worker/jobs/claim", worker, (req, res) => {
+    const agent = workerAgent(res);
+    const body = parse(jobClaimSchema, req.body);
+    const claimed = claimWorkerJob(ledger, agent, body.workerId, body.leaseMs);
+    res.status(claimed ? 200 : 204);
+    if (claimed) res.json(claimed);
+    else res.end();
+  });
+
+  r.post("/worker/jobs/:id/heartbeat", worker, (req, res) => {
+    const body = parse(jobHeartbeatSchema, req.body);
+    res.json(heartbeatWorkerJob(ledger, workerAgent(res), param(req, "id"), body.workerId, body.version, body.leaseMs));
+  });
+
+  r.post("/worker/jobs/:id/complete", worker, (req, res) => {
+    res.json(completeWorkerJob(ledger, workerAgent(res), param(req, "id"), parse(jobCompleteSchema, req.body)));
+  });
+
+  r.get("/worker/tasks/:id", worker, (req, res) => {
+    res.json({ task: taskView(ownTask(ledger, workerAgent(res).id, param(req, "id"))) });
+  });
+
+  r.post("/worker/planning", worker, async (req, res) => {
+    const out = await sponsoredPlanning(ledger, deps.integration?.gateway, workerAgent(res), parse(planningProxyRequestSchema, req.body));
+    res.status(out.status).json(out.body);
+  });
+
+  return r;
+}

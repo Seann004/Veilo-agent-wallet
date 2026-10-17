@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+  - services/*
+  - packages/*
+  - circuits
+
+# Native/install scripts are blocked unless listed here.
+onlyBuiltDependencies:
+  - better-sqlite3
+  - esbuild
+
+# blake-hash falls back to its pure-JS implementation; the native addon is not needed.
+ignoredBuiltDependencies:
+  - blake-hash

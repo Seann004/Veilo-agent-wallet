@@ -1,0 +1,38 @@
+# Compute-unit benchmark for the Groth16 verifiers. A separate workspace so neither Anchor
+# nor the main workspace build it; run via circuits/scripts/measure-cu.sh.
+[package]
+name = "veilo-verify-bench"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+no-entrypoint = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+veilo-crypto = { path = ".." }
+solana-program-entrypoint = "=3.1.1"
+solana-program-error = "3"
+solana-account-info = "3"
+solana-pubkey = "4"
+
+[dev-dependencies]
+litesvm = "=0.17.0"
+solana-keypair = "3.1.2"
+solana-signer = "3.0.1"
+solana-message = "4.2.4"
+solana-transaction = "4.1.5"
+solana-instruction = "3.5"
+solana-address = "2.7"
+solana-compute-budget-interface = "3"
+serde_json = "1"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }

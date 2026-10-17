@@ -1,0 +1,85 @@
+{
+  "kind": "M2 devnet private smoke: deposits",
+  "profile": "devnet",
+  "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+  "recordedAt": "2026-10-16T01:27:09.137Z",
+  "participants": "synthetic/test participants (role-separated keys funded by the operator; not independent users)",
+  "amountEach": "200000",
+  "deposits": [
+    {
+      "role": "testOwnerA",
+      "owner": "53EfGeKqr3VFvhfr3DFVrK3LaK6KUPoPu6TCAr6qARks",
+      "depositId": "e25a493c-7df3-4b64-be50-5a5f7679ce6b",
+      "signature": "4ftZg9utv7EpAnYUpvWdhZ7AgPuE4jP6bUFufguVy9iYycT3R1uHCcQuzbhgmdsP9NLsBhVuZyeBRaUuJJVky3zj",
+      "explorer": "https://explorer.solana.com/tx/4ftZg9utv7EpAnYUpvWdhZ7AgPuE4jP6bUFufguVy9iYycT3R1uHCcQuzbhgmdsP9NLsBhVuZyeBRaUuJJVky3zj?cluster=devnet",
+      "slot": "511530758",
+      "err": null,
+      "feeLamports": "5000",
+      "computeUnitsConsumed": "28897",
+      "lamportChanges": [
+        {
+          "account": "53EfGeKqr3VFvhfr3DFVrK3LaK6KUPoPu6TCAr6qARks",
+          "delta": "-2743120"
+        },
+        {
+          "account": "3n3t5Kca96Hffk4ttYyP2keGonQcpe54LT2eJAXNZPo1",
+          "delta": "1838960"
+        },
+        {
+          "account": "86vpxs8kZpJGT1qrWQSV4uvgmvCEoanToHD3FAFoFXpL",
+          "delta": "899160"
+        }
+      ],
+      "accountKeys": [
+        "53EfGeKqr3VFvhfr3DFVrK3LaK6KUPoPu6TCAr6qARks",
+        "3n3t5Kca96Hffk4ttYyP2keGonQcpe54LT2eJAXNZPo1",
+        "5yjK2K2L45abcZMQvPdmsePSw1eTpsDbYVsZPxgKDQ8c",
+        "65FNWNc1akaXFsPFCoLGMwjnefGbpts3sw4KEVYQ8Tab",
+        "86vpxs8kZpJGT1qrWQSV4uvgmvCEoanToHD3FAFoFXpL",
+        "GQ7u2E8t1mEkUwo4NanbPFy5NhzGJHdhD8FY32ZWorgt",
+        "11111111111111111111111111111111",
+        "3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq",
+        "ComputeBudget111111111111111111111111111111",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+      ]
+    },
+    {
+      "role": "testOwnerB",
+      "owner": "69ardTTzQcZWhTPcHzKodr6TFThxGUehajd2diFthaXv",
+      "depositId": "f1f23b5e-64b1-4198-a668-27d3fa75fb29",
+      "signature": "3nBzcuTTo9cHBFCgEErvE1hGW69NSQWKs72XgEqMW7Ho82WCwUMP1n3ztA29zWuWL55mEuwSwqHxyyAMe6bugT1D",
+      "explorer": "https://explorer.solana.com/tx/3nBzcuTTo9cHBFCgEErvE1hGW69NSQWKs72XgEqMW7Ho82WCwUMP1n3ztA29zWuWL55mEuwSwqHxyyAMe6bugT1D?cluster=devnet",
+      "slot": "511530780",
+      "err": null,
+      "feeLamports": "5000",
+      "computeUnitsConsumed": "27397",
+      "lamportChanges": [
+        {
+          "account": "69ardTTzQcZWhTPcHzKodr6TFThxGUehajd2diFthaXv",
+          "delta": "-2743120"
+        },
+        {
+          "account": "5cdFqq6P771mEYykJkAw7houXJfpWeYjqBcroPHWSbuG",
+          "delta": "899160"
+        },
+        {
+          "account": "ADQ566FTM26boPu7ToJKomfH4zQE2rRGXSbLTSRoMB33",
+          "delta": "1838960"
+        }
+      ],
+      "accountKeys": [
+        "69ardTTzQcZWhTPcHzKodr6TFThxGUehajd2diFthaXv",
+        "5cdFqq6P771mEYykJkAw7houXJfpWeYjqBcroPHWSbuG",
+        "65FNWNc1akaXFsPFCoLGMwjnefGbpts3sw4KEVYQ8Tab",
+        "8RCt7Zzo75vnnUYM1ypWho6d2ZTdCK73rHm6rgViScZe",
+        "ADQ566FTM26boPu7ToJKomfH4zQE2rRGXSbLTSRoMB33",
+        "GQ7u2E8t1mEkUwo4NanbPFy5NhzGJHdhD8FY32ZWorgt",
+        "11111111111111111111111111111111",
+        "3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq",
+        "ComputeBudget111111111111111111111111111111",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+      ]
+    }
+  ],
+  "privacyNote": "Deposit amount, source and timing are public. Two equal-amount deposits from two synthetic participants form a tiny anonymity set."
+}

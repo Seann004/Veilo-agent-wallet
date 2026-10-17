@@ -1,0 +1,143 @@
+{
+  "accounts": {
+    "ApprovalState": {
+      "bytes": 121,
+      "rentExemptLamports": 1733040
+    },
+    "PendingChange": {
+      "bytes": 130,
+      "rentExemptLamports": 1795680
+    },
+    "PendingDeposit": {
+      "bytes": 234,
+      "rentExemptLamports": 2519520
+    },
+    "PoolState": {
+      "bytes": 1407,
+      "rentExemptLamports": 10683600
+    },
+    "SeenPrecommitment": {
+      "bytes": 49,
+      "rentExemptLamports": 1231920
+    },
+    "SpentNullifier": {
+      "bytes": 50,
+      "rentExemptLamports": 1238880
+    },
+    "TokenVault (SPL token account)": {
+      "bytes": 165,
+      "rentExemptLamports": 2039280
+    }
+  },
+  "computeUnitsInclude": "the 150 CU SetComputeUnitLimit instruction",
+  "deployment": {
+    "binary": "devnet feature build (cargo build-sbf --arch v3, platform-tools v1.57)",
+    "binaryBytes": 391456,
+    "bufferRentLamportsRefundedAfterDeploy": 2725682160,
+    "estimatedDeployFeesLamports": 3910000,
+    "estimatedWriteTransactions": 387,
+    "initializePoolRentLamports": 14455920,
+    "lockedAfterDeploySol": 2.7413352,
+    "peakDuringDeploySol": 5.47092736,
+    "programAccountRentLamports": 1141440,
+    "programDataBytes": 391501,
+    "programDataRentLamports": 2725737840
+  },
+  "harness": "LiteSVM 0.17.0 (Agave 4.3 runtime, default feature set), localnet program build",
+  "instructions": {
+    "deposit": {
+      "computeUnitsMax": 30086,
+      "computeUnitsMin": 25586,
+      "legacyTxBytesMax": 618,
+      "legacyTxBytesMin": 618,
+      "recommendedComputeUnitLimit": 100000,
+      "samples": 4
+    },
+    "exit_public": {
+      "computeUnitsMax": 118255,
+      "computeUnitsMin": 118255,
+      "legacyTxBytesMax": 907,
+      "legacyTxBytesMin": 907,
+      "recommendedComputeUnitLimit": 300000,
+      "samples": 1
+    },
+    "initialize_pool": {
+      "computeUnitsMax": 45482,
+      "computeUnitsMin": 45482,
+      "legacyTxBytesMax": 741,
+      "legacyTxBytesMin": 741,
+      "recommendedComputeUnitLimit": 200000,
+      "samples": 1
+    },
+    "insert_leaf": {
+      "computeUnitsMax": 109192,
+      "computeUnitsMin": 108919,
+      "legacyTxBytesMax": 574,
+      "legacyTxBytesMin": 574,
+      "recommendedComputeUnitLimit": 300000,
+      "samples": 5
+    },
+    "refund_pending_deposit": {
+      "computeUnitsMax": 18001,
+      "computeUnitsMin": 18001,
+      "legacyTxBytesMax": 512,
+      "legacyTxBytesMin": 512,
+      "recommendedComputeUnitLimit": 100000,
+      "samples": 1
+    },
+    "skip_refunded_deposit": {
+      "computeUnitsMax": 11327,
+      "computeUnitsMin": 11327,
+      "legacyTxBytesMax": 284,
+      "legacyTxBytesMin": 284,
+      "recommendedComputeUnitLimit": 100000,
+      "samples": 1
+    },
+    "spend_private": {
+      "computeUnitsMax": 142970,
+      "computeUnitsMin": 137800,
+      "legacyTxBytesMax": 1152,
+      "legacyTxBytesMin": 960,
+      "recommendedComputeUnitLimit": 400000,
+      "relayerSignsSeparately_legacyTxBytes": 1152,
+      "relayerSignsSeparately_v0WithLookupTable_txBytes": 1002,
+      "samples": 3
+    },
+    "update_approved_root": {
+      "computeUnitsMax": 8252,
+      "computeUnitsMin": 8252,
+      "legacyTxBytesMax": 412,
+      "legacyTxBytesMin": 412,
+      "recommendedComputeUnitLimit": 100000,
+      "samples": 1
+    },
+    "update_config": {
+      "computeUnitsMax": 8138,
+      "computeUnitsMin": 8138,
+      "legacyTxBytesMax": 360,
+      "legacyTxBytesMin": 360,
+      "recommendedComputeUnitLimit": 100000,
+      "samples": 1
+    }
+  },
+  "lookupTable": {
+    "addresses": [
+      "pool_state",
+      "approval_state",
+      "vault",
+      "vault_authority",
+      "token_program",
+      "system_program"
+    ],
+    "reason": "every measured legacy transaction fits the 1232-byte packet; the table is an optional size reduction for spend_private",
+    "required": false
+  },
+  "packetLimitBytes": 1232,
+  "perOperationRent": {
+    "depositRentLamports": 3751440,
+    "exitRentLamports": 1238880,
+    "note": "No v1 program account is ever closed; rent is paid by the payer/sponsor.",
+    "spendRentLamports": 3034560
+  },
+  "tokenProgramImplementation": "p-token (pinocchio)"
+}

@@ -1,0 +1,10 @@
+{
+  "schema": "veilo-approved-labels-v1",
+  "pool": "65FNWNc1akaXFsPFCoLGMwjnefGbpts3sw4KEVYQ8Tab",
+  "rule": "operator approves labels of finalized, inserted deposits made by the configured synthetic/test participants; no sanctions or compliance screening",
+  "labels": [
+    "330482354770674553879769421484773313157251530314528219002764312632768268037",
+    "432637539670561060093618290679324890852301918759998961752094061879766004153"
+  ],
+  "root": "15638458286716113096990222915079628733753777984111514280823310295983832364413"
+}

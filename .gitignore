@@ -147,3 +147,33 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Veilo secrets and local state
+work/
+keys/
+*.keypair.json
+*-keypair.json
+secrets/
+.env
+.env.*
+!.env.example
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+backups/
+*.veilo-backup
+target/
+.anchor/
+test-ledger/
+circuits/build/
+*.ptau
+*.zkey
+
+# Next.js regenerates this per machine
+next-env.d.ts
+*funding*.json
+
+# Schema-only migrations for the wallet secrets database (no secret values).
+!packages/db/migrations/secrets/

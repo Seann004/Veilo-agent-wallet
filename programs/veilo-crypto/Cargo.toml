@@ -1,0 +1,25 @@
+[package]
+name = "veilo-crypto"
+version = "0.1.0"
+description = "Veilo protocol v1 encodings, label/context hashing and Groth16 verifying keys"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+name = "veilo_crypto"
+crate-type = ["lib"]
+
+[dependencies]
+groth16-solana = "=0.2.0"
+solana-poseidon = "=5.0.1"
+solana-sha256-hasher = { version = "=3.1.0", features = ["sha2"] }
+
+[dev-dependencies]
+light-poseidon = "=0.4.1"
+ark-bn254 = "0.5"
+serde_json = "1"
+solana-pubkey = { version = "4.4.0", features = ["curve25519"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
