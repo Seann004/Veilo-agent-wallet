@@ -6,7 +6,7 @@ import { writeAudit } from "../ledger/events";
 import { activeAgentPolicy, type AgentRow } from "../ledger/workspace";
 import { publicFetch } from "@veilo/mcp-client";
 import { assertTaskLive, ownTask } from "../agents/work";
-import { completeWithProvider, DEFAULT_BASE_URL, ModelCallError, type AiProviderKind, type ModelEndpoint } from "./model-client";
+import { completeWithProvider, DEFAULT_BASE_URL, listProviderModels, ModelCallError, type AiProviderKind, type ModelEndpoint } from "./model-client";
 import type { ProviderKeyVault } from "./vault";
 
 export const BYOK_LABEL = "Your model provider (bring your own key)";
@@ -115,6 +115,30 @@ export class AiService {
       return await completeWithProvider(endpoint, messages, { maxOutputTokens, json, ...(fetchImpl ? { fetch: fetchImpl } : {}) });
     } catch (error) {
       // A rejection (bad key, unknown model, rate limit) is the owner's to fix; anything else may be transient.
+      if (error instanceof ModelCallError) throw new ControlError(error.kind === "rejected" ? "INVALID_REQUEST" : "PROVIDER_UNAVAILABLE", error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * The models a provider offers, for the settings picker. A key typed into the form is used
+   * once and not stored; without one, the saved key is used when the provider and URL match.
+   */
+  async models(workspaceId: string, input: { provider: AiProviderKind; apiKey?: string | undefined; baseUrl?: string | undefined }): Promise<string[]> {
+    const baseUrl = input.provider === "openai_compatible" ? (input.baseUrl ?? "") : DEFAULT_BASE_URL[input.provider];
+    const problem = baseUrlProblem(baseUrl, this.allowLocal);
+    if (problem) throw new ControlError("INVALID_REQUEST", problem);
+    let apiKey = input.apiKey?.trim();
+    if (!apiKey) {
+      const r = this.#row(workspaceId);
+      if (!r || r.provider !== input.provider || r.base_url !== baseUrl.replace(/\/$/, "")) throw new ControlError("INVALID_REQUEST", "enter the API key to load this provider's models");
+      apiKey = this.vault.open(workspaceId, r.key_ciphertext);
+    }
+    const local = isLoopback(new URL(baseUrl));
+    const fetchImpl = this.fetchImpl ?? (local ? undefined : publicFetch);
+    try {
+      return await listProviderModels({ provider: input.provider, baseUrl, apiKey }, fetchImpl ? { fetch: fetchImpl } : {});
+    } catch (error) {
       if (error instanceof ModelCallError) throw new ControlError(error.kind === "rejected" ? "INVALID_REQUEST" : "PROVIDER_UNAVAILABLE", error.message);
       throw error;
     }

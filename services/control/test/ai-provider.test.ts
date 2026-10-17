@@ -114,4 +114,24 @@ describe("bring your own model key", () => {
     live.set(env.ws.id, "owner", { provider: "openai_compatible", apiKey: KEY, model: "m", baseUrl: "https://10.0.0.5/v1" });
     await expect(live.test(env.ws.id)).rejects.toMatchObject({ code: "PROVIDER_UNAVAILABLE" });
   });
+
+  it("lists a provider's models with a typed key or the saved one, never storing the typed key", async () => {
+    env = createEnv();
+    const seen: Array<{ url: string; headers: Record<string, string> }> = [];
+    const fetchImpl = async (url: string, init?: RequestInit) => {
+      seen.push({ url, headers: init?.headers as Record<string, string> });
+      return new Response(JSON.stringify({ data: [{ id: "glm-5.3-flash" }, { id: "glm-5.3" }, { id: "bad id with spaces" }] }), { status: 200 });
+    };
+    const ai = new AiService(env.ledger, ProviderKeyVault.ephemeral(), fetchImpl);
+    const zai = { provider: "openai_compatible" as const, baseUrl: "https://api.z.ai/api/paas/v4" };
+    expect(await ai.models(env.ws.id, { ...zai, apiKey: KEY })).toEqual(["glm-5.3", "glm-5.3-flash"]);
+    expect(seen[0]).toMatchObject({ url: "https://api.z.ai/api/paas/v4/models", headers: { authorization: `Bearer ${KEY}` } });
+    expect(ai.configured(env.ws.id)).toBe(false);
+    await expect(ai.models(env.ws.id, zai)).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+
+    ai.set(env.ws.id, "owner", { ...zai, apiKey: KEY, model: "glm-5.3-flash" });
+    expect(await ai.models(env.ws.id, zai)).toEqual(["glm-5.3", "glm-5.3-flash"]);
+    await ai.models(env.ws.id, { provider: "anthropic", apiKey: "sk-ant-x1234567" });
+    expect(seen.at(-1)).toMatchObject({ url: "https://api.anthropic.com/v1/models", headers: { "x-api-key": "sk-ant-x1234567" } });
+  });
 });

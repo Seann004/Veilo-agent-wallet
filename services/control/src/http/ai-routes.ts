@@ -49,6 +49,13 @@ export function aiRouter(deps: AuthDeps & { ai?: AiService | undefined }): Route
     res.status(204).end();
   });
 
+  r.post("/ai-provider/models", owner, async (req, res) => {
+    const b = providerSchema.pick({ provider: true, baseUrl: true }).extend({ apiKey: z.string().max(400).optional() }).safeParse(req.body ?? {});
+    if (!b.success) throw new ControlError("INVALID_REQUEST", "provider is required");
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ models: await ai().models(ownerOf(res).workspaceId, b.data) });
+  });
+
   r.post("/ai-provider/test", owner, async (_req, res) => {
     res.json(await ai().test(ownerOf(res).workspaceId));
   });

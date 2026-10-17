@@ -8,6 +8,8 @@ import { useCapability } from "./Shell";
 import { DeniedHint, ErrorNotice, Section } from "./ui";
 
 type Provider = "openrouter" | "anthropic" | "openai" | "openai_compatible";
+/** What the owner picks; Z.ai is an OpenAI-compatible provider with known base URLs. */
+type Preset = "openrouter" | "anthropic" | "openai" | "zai" | "custom";
 
 interface ProviderView {
   provider: Provider;
@@ -17,37 +19,64 @@ interface ProviderView {
   updatedAt: string;
 }
 
-const PROVIDERS: Array<SelectOption<Provider>> = [
-  { value: "openrouter", label: "OpenRouter", hint: "One key for many models (DeepSeek, Claude, GPT, Llama…)" },
+const ZAI_GENERAL = "https://api.z.ai/api/paas/v4";
+const ZAI_CODING = "https://api.z.ai/api/coding/paas/v4";
+
+const PRESETS: Array<SelectOption<Preset>> = [
+  { value: "openrouter", label: "OpenRouter", hint: "One key for many models (DeepSeek, GLM, Claude, GPT…)" },
   { value: "anthropic", label: "Anthropic (Claude)", hint: "Your Anthropic API key" },
-  { value: "openai", label: "OpenAI", hint: "Your OpenAI API key" },
-  { value: "openai_compatible", label: "Other (OpenAI-compatible)", hint: "Any provider or local server with a chat completions API" },
+  { value: "openai", label: "OpenAI (GPT, Codex)", hint: "Your OpenAI API key" },
+  { value: "zai", label: "Z.ai (GLM)", hint: "Your Z.ai API key or GLM Coding Plan key" },
+  { value: "custom", label: "Other (OpenAI-compatible)", hint: "Any provider or server with a chat completions API" },
 ];
 
-const MODEL_EXAMPLE: Record<Provider, string> = {
-  openrouter: "deepseek/deepseek-v4-flash",
-  anthropic: "claude-sonnet-5-5",
-  openai: "your OpenAI model id",
-  openai_compatible: "the model id your server expects",
+/** Starting points only; "Load models" asks the provider for its real list. */
+const SUGGESTED: Record<Preset, string[]> = {
+  openrouter: ["deepseek/deepseek-v4-flash", "z-ai/glm-5.3-flash"],
+  anthropic: ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5"],
+  openai: [],
+  zai: ["glm-5.3-flash", "glm-5.3"],
+  custom: [],
 };
 
+function presetOf(v: ProviderView): Preset {
+  if (v.provider !== "openai_compatible") return v.provider;
+  return v.baseUrl === ZAI_GENERAL || v.baseUrl === ZAI_CODING ? "zai" : "custom";
+}
+
 /**
- * The owner's own model provider. The key is sent once and never shown again: the page only
- * ever sees the provider, model and the key's last four characters.
+ * The owner's own model provider. The key is sent to control and never shown again: the page
+ * only ever sees the provider, model and the key's last four characters.
  */
 export function AiProviderSettings() {
   const configure = useCapability("configure");
   const current = useResource(() => api<{ provider: ProviderView | null }>("control", "/ai-provider"), "ai-provider");
-  const [provider, setProvider] = useState<Provider>("openrouter");
+  const [preset, setPreset] = useState<Preset>("openrouter");
+  const [codingPlan, setCodingPlan] = useState(false);
   const [model, setModel] = useState("");
+  const [typing, setTyping] = useState(false);
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [loaded, setLoaded] = useState<string[] | null>(null);
   const [tested, setTested] = useState<string | null>(null);
   const save = useAction();
   const test = useAction();
-  const ids = { provider: useId(), model: useId(), base: useId(), key: useId() };
+  const load = useAction();
+  const ids = { preset: useId(), model: useId(), base: useId(), key: useId(), coding: useId() };
   const view = current.data?.provider ?? null;
-  const label = (p: Provider) => PROVIDERS.find((x) => x.value === p)?.label ?? p;
+
+  const provider: Provider = preset === "zai" || preset === "custom" ? "openai_compatible" : preset;
+  const url = preset === "zai" ? (codingPlan ? ZAI_CODING : ZAI_GENERAL) : preset === "custom" ? baseUrl.trim() : undefined;
+  const choices = [...new Set([...(loaded ?? []), ...SUGGESTED[preset]])];
+  const modelOptions: Array<SelectOption<string>> = [{ value: "", label: "Choose a model" }, ...choices.map((m) => ({ value: m, label: m }))];
+  const label = (v: ProviderView) => PRESETS.find((x) => x.value === presetOf(v))?.label ?? v.provider;
+
+  const pick = (p: Preset) => {
+    setPreset(p);
+    setModel("");
+    setLoaded(null);
+    setTyping(false);
+  };
 
   return (
     <Section title="AI model" id="ai-model">
@@ -58,7 +87,7 @@ export function AiProviderSettings() {
       {view ? (
         <div className="notice notice-row" role="status">
           <span>
-            Using <strong>{label(view.provider)}</strong> · <span className="mono">{view.model}</span> · key <span className="mono">{view.keyHint}</span>
+            Using <strong>{label(view)}</strong> · <span className="mono">{view.model}</span> · key <span className="mono">{view.keyHint}</span>
           </span>
           <span className="actions">
             <button
@@ -104,7 +133,7 @@ export function AiProviderSettings() {
             void save.run(async () => {
               await api("control", "/ai-provider", {
                 method: "PUT",
-                body: { provider, model: model.trim(), apiKey: apiKey.trim(), ...(provider === "openai_compatible" ? { baseUrl: baseUrl.trim() } : {}) },
+                body: { provider, model: model.trim(), apiKey: apiKey.trim(), ...(url !== undefined ? { baseUrl: url } : {}) },
               });
               setApiKey("");
               setTested(null);
@@ -112,17 +141,17 @@ export function AiProviderSettings() {
             });
           }}
         >
-          <div className="grid-2">
-            <div className="field">
-              <label htmlFor={ids.provider}>Provider</label>
-              <Select id={ids.provider} label="Provider" value={provider} options={PROVIDERS} onChange={setProvider} />
-            </div>
-            <div className="field">
-              <label htmlFor={ids.model}>Model</label>
-              <input id={ids.model} required maxLength={200} value={model} placeholder={MODEL_EXAMPLE[provider]} onChange={(e) => setModel(e.target.value)} />
-            </div>
+          <div className="field">
+            <label htmlFor={ids.preset}>Provider</label>
+            <Select id={ids.preset} label="Provider" value={preset} options={PRESETS} onChange={pick} />
           </div>
-          {provider === "openai_compatible" ? (
+          {preset === "zai" ? (
+            <div className="field inline">
+              <input id={ids.coding} type="checkbox" checked={codingPlan} onChange={(e) => setCodingPlan(e.target.checked)} />
+              <label htmlFor={ids.coding}>This is a GLM Coding Plan key</label>
+            </div>
+          ) : null}
+          {preset === "custom" ? (
             <div className="field">
               <label htmlFor={ids.base}>Base URL</label>
               <input id={ids.base} required type="url" maxLength={300} value={baseUrl} placeholder="https://api.example.com/v1" onChange={(e) => setBaseUrl(e.target.value)} />
@@ -134,6 +163,38 @@ export function AiProviderSettings() {
             <input id={ids.key} required type="password" autoComplete="off" maxLength={400} value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
             <span className="hint">Stored encrypted on this machine. It is never shown again.</span>
           </div>
+          <div className="field">
+            <label htmlFor={ids.model}>Model</label>
+            {typing ? (
+              <input id={ids.model} required maxLength={200} value={model} placeholder="Model id, exactly as your provider names it" onChange={(e) => setModel(e.target.value)} />
+            ) : (
+              <Select id={ids.model} label="Model" value={choices.includes(model) ? model : ""} options={modelOptions} onChange={setModel} />
+            )}
+            <span className="actions">
+              <button
+                type="button"
+                className="btn btn-small"
+                disabled={load.busy || (!apiKey.trim() && !view) || (preset === "custom" && !url)}
+                onClick={() =>
+                  void load.run(async () => {
+                    const r = await api<{ models: string[] }>("control", "/ai-provider/models", {
+                      method: "POST",
+                      body: { provider, ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}), ...(url !== undefined ? { baseUrl: url } : {}) },
+                    });
+                    setLoaded(r.models);
+                    setTyping(false);
+                  })
+                }
+              >
+                {load.busy ? "Loading…" : "Load models"}
+              </button>
+              <button type="button" className="btn btn-small" onClick={() => setTyping(!typing)}>
+                {typing ? "Pick from the list" : "Type a model id instead"}
+              </button>
+            </span>
+            {loaded !== null ? <span className="hint">{loaded.length > 0 ? `${loaded.length} models from your provider.` : "Your provider returned no model list; pick a suggestion or type an id."}</span> : null}
+          </div>
+          <ErrorNotice error={load.error} what="loading models (you can still type a model id)" />
           <div className="actions">
             <button type="submit" className="btn btn-primary" disabled={save.busy || !apiKey.trim() || !model.trim()}>
               {view ? "Replace key" : "Save key"}

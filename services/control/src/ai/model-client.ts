@@ -88,3 +88,23 @@ export async function completeWithProvider(
   const usage = parsed.usage as { prompt_tokens?: unknown; completion_tokens?: unknown } | undefined;
   return { text: choice.message.content, model: typeof parsed.model === "string" ? parsed.model : e.model, inputTokens: int(usage?.prompt_tokens), outputTokens: int(usage?.completion_tokens) };
 }
+
+/**
+ * The provider's own model list (no generation, no charge). OpenRouter, OpenAI and compatible
+ * APIs answer GET /models; Anthropic answers GET /v1/models with its own auth header.
+ */
+export async function listProviderModels(e: Omit<ModelEndpoint, "model">, o: { fetch?: FetchLike; timeoutMs?: number } = {}): Promise<string[]> {
+  const fetchImpl = o.fetch ?? ((u, i) => fetch(u, i));
+  const anthropic = e.provider === "anthropic";
+  const headers: Record<string, string> = anthropic ? { "x-api-key": e.apiKey, "anthropic-version": "2023-06-01" } : { authorization: `Bearer ${e.apiKey}` };
+  let res: Response;
+  try {
+    res = await fetchImpl(`${e.baseUrl.replace(/\/$/, "")}/models`, { headers, redirect: "error", signal: AbortSignal.timeout(o.timeoutMs ?? 20_000) });
+  } catch (error) {
+    throw new ModelCallError("unavailable", `model provider unreachable (${(error as Error).name})`);
+  }
+  if (!res.ok) throw new ModelCallError([401, 403].includes(res.status) ? "rejected" : "unavailable", `model list returned HTTP ${res.status}`, res.status);
+  const body = (await res.json().catch(() => null)) as { data?: Array<{ id?: unknown }> } | null;
+  const ids = (body?.data ?? []).map((m) => m.id).filter((id): id is string => typeof id === "string" && /^[A-Za-z0-9._:/@-]{1,200}$/.test(id));
+  return [...new Set(ids)].sort().slice(0, 500);
+}

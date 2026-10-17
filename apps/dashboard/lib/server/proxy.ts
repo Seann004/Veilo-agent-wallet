@@ -72,6 +72,7 @@ export const ROUTES: Record<UpstreamService, Route[]> = {
     r("PUT", "/ai-provider"),
     r("DELETE", "/ai-provider"),
     r("POST", "/ai-provider/test"),
+    r("POST", "/ai-provider/models"),
     r("GET", "/swap-service"),
     r("POST", "/swap-service"),
     r("GET", `/purchases/${ID}/external-calls`),
