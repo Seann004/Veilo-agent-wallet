@@ -5,6 +5,7 @@ import { z } from "zod";
 import { baseUnits, fundingBindingWire, fundingRequestWire, healthReport, payerBindingRequestWire, type ServiceHealth } from "@veilo/contracts";
 import { EncodingError } from "@veilo/privacy-sdk";
 import { ServiceCallError } from "./adapters";
+import { describeError } from "./diagnostics";
 import { WalletError } from "./errors";
 import type { FundingService } from "./funding";
 import type { NoteService } from "./notes";
@@ -174,7 +175,7 @@ export function createApp(health: ServiceHealth, deps?: WalletAppDeps): Express 
     if (e.type === "entity.parse.failed" || e.type === "entity.too.large") {
       return void res.status(400).json({ error: { code: "INVALID_REQUEST", message: "request body is not valid JSON within size limits" } });
     }
-    log(`[wallet] unhandled ${e.name ?? "Error"}`);
+    log(`[wallet] unhandled ${describeError(error)}`);
     res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "internal error" } });
   });
   return app;

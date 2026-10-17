@@ -188,6 +188,51 @@ describe("merchant leg and owner recovery (REC-03)", () => {
     expect((await w.funding.signMerchant(id, { ...body, exactAmountUsdc: 99n })).status).toBe("signed");
   });
 
+  it("T12: an RPC failure before signing is not_ready and logged with its code; the retry signs once", async () => {
+    const lines: string[] = [];
+    w.deps.log = (l) => lines.push(l);
+    const id = await funded("m-rpc");
+    advanceAuthority(ledger(), id, "sign_merchant");
+    const body = { fundingRef: id, paymentRequired: {}, binding: BINDING, exactAmountUsdc: 100_000n };
+    world.merchant.faults = ["rpc_429", "rpc_429"];
+    const first = await w.funding.signMerchant(id, body);
+    expect(first.status).toBe("not_ready");
+    expect((first as { reason: string }).reason).toContain("__code=8100002 statusCode=429");
+    expect((await w.funding.signMerchant(id, body)).status).toBe("not_ready");
+    expect(w.store.merchantPayment(id)).toBeUndefined();
+    const signed = await w.funding.signMerchant(id, body);
+    expect(signed.status).toBe("signed");
+    expect(await w.funding.signMerchant(id, body)).toEqual(signed);
+    expect(world.merchant.signatures).toBe(1);
+    expect(w.store.events(id).filter((e) => e.kind === "merchant.sign_deferred")).toHaveLength(2);
+    expect(lines.some((l) => l.includes(`merchant signing for ${id} failed before signing: SolanaError __code=8100002 statusCode=429 message="Too Many Requests"`))).toBe(true);
+    // Headers (which can carry provider keys) are never part of the diagnostic.
+    expect(lines.join("\n")).not.toContain("secret-header");
+  });
+
+  it("T12: a failure after the fresh wallet signed is recovery_required and never signs again", async () => {
+    const id = await funded("m-after");
+    advanceAuthority(ledger(), id, "sign_merchant");
+    const body = { fundingRef: id, paymentRequired: {}, binding: BINDING, exactAmountUsdc: 100_000n };
+    world.merchant.faults = ["after_sign"];
+    expect((await w.funding.signMerchant(id, body)).status).toBe("recovery_required");
+    expect((await w.funding.signMerchant(id, body)).status).toBe("recovery_required");
+    // A restarted wallet process (fresh in-memory state) also refuses to sign again.
+    const reopened = world.open();
+    expect((await reopened.funding.signMerchant(id, body)).status).toBe("recovery_required");
+    expect(world.merchant.signatures).toBe(1);
+    expect(world.merchant.calls).toBe(1);
+    expect(w.store.merchantPayment(id)).toBeUndefined();
+  });
+
+  it("T12: a non-RPC failure before signing is not reported as retryable", async () => {
+    const id = await funded("m-policy");
+    advanceAuthority(ledger(), id, "sign_merchant");
+    world.merchant.faults = ["policy"];
+    await expect(w.funding.signMerchant(id, { fundingRef: id, paymentRequired: {}, binding: BINDING, exactAmountUsdc: 100_000n })).rejects.toThrow(/approved binding/);
+    expect(world.merchant.signatures).toBe(0);
+  });
+
   it("refuses a changed binding or amount before signing", async () => {
     const id = await funded("m2");
     advanceAuthority(ledger(), id, "sign_merchant");

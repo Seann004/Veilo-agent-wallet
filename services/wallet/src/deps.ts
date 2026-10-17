@@ -35,6 +35,8 @@ export interface WalletDeps {
   /** Slots of margin required before an intent's bound when handing a proof to the relayer. */
   releaseMarginSlots?: bigint;
   now?: () => number;
+  /** Diagnostic lines; never given key material, note secrets or transaction bytes. */
+  log?: (line: string) => void;
 }
 
 export const hex64 = (x: bigint): string => bytesToHex(toBe32(x));

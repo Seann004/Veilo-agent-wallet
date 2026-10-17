@@ -74,6 +74,7 @@ export async function createWalletRuntime(config: VeiloConfig, env: Record<strin
     merchant: x402MerchantSigner(config.network.rpcUrl),
     pool,
     ownerRecoveryAddress: ownerRecoveryAddress(env),
+    log: (line) => console.log(line),
   };
   const funding = new FundingService(deps);
   return {

@@ -4,7 +4,7 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { address, getAddressDecoder, getBase58Decoder, getCompiledTransactionMessageDecoder, type Address } from "@solana/kit";
+import { address, getAddressDecoder, getBase58Decoder, getCompiledTransactionMessageDecoder, SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR, SolanaError, type Address } from "@solana/kit";
 import { createServiceHealth, DEMO_TOKEN_MINT, DEVNET_CAIP2, DEVNET_GENESIS_HASH, loadConfig, type FundingBinding } from "@veilo/contracts";
 import { PROTOTYPE_APPROVAL_RULE, withdrawalRequestWire, type PublicStateWire, type RecoveryRequestWire, type RecoveryViewWire, type WithdrawalRequestWire, type WithdrawalViewWire } from "@veilo/contracts/relayer";
 import { openSecretsDatabase } from "@veilo/db";
@@ -318,13 +318,28 @@ export const placeholderProver: ProverPort & { calls: number } = {
   },
 };
 
-export function fakeMerchant(): MerchantSigner & { calls: number; blockhash: string } {
+/**
+ * Injected failures, one per sign call: "rpc_429" fails like the SDK's mint read before any
+ * signature; "after_sign" fails after the fresh wallet signed; "policy" is a non-RPC refusal.
+ */
+export type MerchantFault = "rpc_429" | "after_sign" | "policy";
+
+export function fakeMerchant(): MerchantSigner & { calls: number; signatures: number; blockhash: string; faults: MerchantFault[] } {
   const m = {
     calls: 0,
+    signatures: 0,
+    faults: [] as MerchantFault[],
     async sign({ wallet, purchaseRef }: Parameters<MerchantSigner["sign"]>[0]) {
       m.calls++;
+      const fault = m.faults.shift();
+      if (fault === "rpc_429") {
+        throw new SolanaError(SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR, { headers: new Headers({ "x-api-key": "secret-header" }), message: "Too Many Requests", statusCode: 429 });
+      }
+      if (fault === "policy") throw new Error("challenge does not match the approved binding");
       const messageBytes = new Uint8Array(randomBytes(96));
       const sig = await wallet.signPaymentMessage({ purchaseRef, messageBytes, validated: {} as never });
+      m.signatures++;
+      if (fault === "after_sign") throw new TypeError("fetch failed");
       return {
         paymentSignatureHeader: Buffer.from(sig).toString("base64"),
         messageHash: createHash("sha256").update(messageBytes).digest("base64"),
