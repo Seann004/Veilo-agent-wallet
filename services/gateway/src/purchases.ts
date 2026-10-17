@@ -18,9 +18,11 @@ import type { AccountRow } from "./auth";
 import type { GatewayContext } from "./context";
 import { immediate } from "./db/database";
 import { GatewayError } from "./errors";
+import { provenanceOf } from "./inference";
 import { appendCreditEvent } from "./ledger/credits";
 import type { KeyedLock } from "./locks";
 import { conservativeInputTokens } from "./provider/token-bound";
+import { SellerHostService, type SpecialistQuoteTerms } from "./seller-host/service";
 import { deliverDataset } from "./skus/datasets";
 import { buildMessages, validateContentPackage } from "./skus/prompts";
 
@@ -98,10 +100,14 @@ export interface HttpResult {
 const PAYER_HISTORY_LIMIT = 25;
 
 export class PurchaseService {
+  readonly sellerHost: SellerHostService | undefined;
+
   constructor(
     private readonly ctx: GatewayContext,
     private readonly lock: KeyedLock,
-  ) {}
+  ) {
+    this.sellerHost = ctx.settings.role === "seller-host" ? new SellerHostService(ctx) : undefined;
+  }
 
   // ---- reads -------------------------------------------------------------------------
 
@@ -153,21 +159,29 @@ export class PurchaseService {
 
   private assertAcceptance(sku: GatewaySku): void {
     const a = this.ctx.acceptance;
-    if (!a.ready || !a.feePayer || !a.merchantAta) {
+    // A seller host has no fixed merchant: each quote carries the listing's verified recipient.
+    if (!a.ready || !a.feePayer || (this.ctx.settings.role === "operator" && !a.merchantAta)) {
       throw new GatewayError(503, "SERVICE_NOT_ALLOWED", `x402 acceptance is disabled: ${a.reason ?? "not verified"}`);
     }
-    if (isInferenceSku(sku)) {
+    if (isInferenceSku(sku) || GATEWAY_CATALOG[sku].kind === "specialist") {
       const r = this.ctx.inference.readiness("inference");
       if (!r.ready) throw new GatewayError(503, r.code, `Inference unavailable: ${r.reason}`);
     }
   }
 
-  createQuote(account: AccountRow, body: unknown): HttpResult {
+  async createQuote(account: AccountRow, body: unknown): Promise<HttpResult> {
     const parsed = quoteRequestSchema.safeParse(body);
     if (!parsed.success) throw new GatewayError(400, "BAD_REQUEST", "Invalid quote request");
     const { operationId, sku, requestDigest } = parsed.data;
     const def = GATEWAY_CATALOG[sku];
-    if (def.x402Amount === null) throw new GatewayError(400, "SERVICE_NOT_ALLOWED", "SKU is not sold through x402");
+    const specialist = def.kind === "specialist";
+    if (this.ctx.settings.role === "seller-host" && !specialist) {
+      throw new GatewayError(400, "SERVICE_NOT_ALLOWED", "This seller host sells only specialist-job");
+    }
+    if (this.ctx.settings.role === "operator" && specialist) {
+      throw new GatewayError(400, "SERVICE_NOT_ALLOWED", "specialist-job has no fixed price and is sold only by a seller host");
+    }
+    if (!specialist && def.x402Amount === null) throw new GatewayError(400, "SERVICE_NOT_ALLOWED", "SKU is not sold through x402");
     const input = skuInputSchemas[sku].safeParse(parsed.data.input);
     if (!input.success) throw new GatewayError(400, "BAD_REQUEST", "Input does not match the SKU input schema");
     if (computeRequestDigest(sku, input.data) !== requestDigest) {
@@ -193,6 +207,8 @@ export class PurchaseService {
         throw new GatewayError(413, "INPUT_TOO_LONG", `Input exceeds the ${def.maxInputTokens} token bound for ${sku}`);
       }
     }
+    let terms: SpecialistQuoteTerms | undefined;
+    if (specialist) terms = await (this.sellerHost as SellerHostService).verifyJob(skuInputSchemas["specialist-job"].parse(input.data));
 
     const now = this.ctx.now();
     const id = `q_${randomUUID()}`;
@@ -221,23 +237,24 @@ export class PurchaseService {
           sku,
           requestDigest,
           JSON.stringify(input.data),
-          def.x402Amount,
+          terms ? terms.amount : def.x402Amount,
           this.ctx.settings.mint,
           this.ctx.settings.network,
-          this.ctx.settings.merchantAddress,
-          a.merchantAta,
+          terms ? terms.payTo : this.ctx.settings.merchantAddress,
+          terms ? terms.merchantAta : a.merchantAta,
           a.feePayer,
           this.ctx.settings.facilitatorUrl,
           this.ctx.settings.maxTimeoutSeconds,
-          def.maxInputTokens,
-          def.maxOutputTokens,
+          terms ? terms.maxInputTokens : def.maxInputTokens,
+          terms ? terms.maxOutputTokens : def.maxOutputTokens,
           def.delivery,
           this.ctx.settings.identity,
           this.ctx.settings.origin,
           now.toISOString(),
-          new Date(now.getTime() + this.ctx.settings.quoteTtlSeconds * 1000).toISOString(),
+          (terms ? terms.expiresAt : new Date(now.getTime() + this.ctx.settings.quoteTtlSeconds * 1000)).toISOString(),
         );
       if (current) this.ctx.db.prepare("UPDATE quotes SET superseded_by = ? WHERE id = ?").run(id, current.id);
+      if (terms) (this.sellerHost as SellerHostService).bindQuote(id, account.id, operationId, terms);
     });
     return { status: 201, body: this.quoteView(this.quote(id) as QuoteRow) };
   }
@@ -351,6 +368,7 @@ export class PurchaseService {
       throw new GatewayError(410, "QUOTE_EXPIRED", "Quote expired; request a new quote for this operation");
     }
     this.assertAcceptance(quote.sku);
+    if (this.sellerHost) await this.sellerHost.assertPayable(quote.id);
     if (paymentHeader === undefined) return this.challenge(quote);
 
     let payload: PaymentPayload;
@@ -651,6 +669,17 @@ export class PurchaseService {
       return;
     }
 
+    if (def.kind === "specialist") {
+      await (this.sellerHost as SellerHostService).fulfil(p, event.tx_signature, {
+        complete: (state, result, errorCode) => this.complete(p.id, state, result, errorCode),
+        waiting: (code) =>
+          this.ctx.db
+            .prepare("UPDATE purchases SET error_code = ?, updated_at = ? WHERE id = ? AND state = 'finalized'")
+            .run(code, this.ctx.now().toISOString(), p.id),
+      });
+      return;
+    }
+
     if (def.kind === "dataset") {
       this.complete(p.id, "delivered", { kind: "dataset", ...deliverDataset(def.dataset as "basic" | "expanded", String(input.query)) }, null);
       return;
@@ -756,18 +785,7 @@ export function inferenceResult(
   input: Record<string, unknown>,
 ): { valid: boolean; result: unknown } {
   if (outcome.status !== "succeeded") return { valid: false, result: null };
-  const provenance = {
-    model: outcome.model,
-    reportedModel: outcome.reportedModel,
-    mode: outcome.mode,
-    label:
-      outcome.mode === "live"
-        ? "Real model output via the operator-funded OpenRouter account"
-        : "FIXTURE: mock provider used by automated tests; not real inference",
-    usage: { promptTokens: outcome.promptTokens, completionTokens: outcome.completionTokens },
-    providerCostMicroUsd: outcome.costMicro,
-    finishReason: outcome.finishReason,
-  };
+  const provenance = provenanceOf(outcome);
   if (sku === "content-package") {
     const v = validateContentPackage(outcome.text, input.channels as string[]);
     return v.valid

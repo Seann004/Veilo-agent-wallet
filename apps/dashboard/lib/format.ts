@@ -12,9 +12,18 @@ export function groupDigits(digits: string): string {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
+/** Drops trailing fractional zeros beyond two places; the value stays exact. */
+export function trimFraction(formatted: string, keep = 2): string {
+  const dot = formatted.indexOf(".");
+  if (dot < 0) return formatted;
+  let end = formatted.length;
+  while (end > dot + 1 + keep && formatted[end - 1] === "0") end--;
+  return formatted.slice(0, end);
+}
+
 export const usdc = (amount: string | null | undefined): string => {
   const f = formatBaseUnits(amount, 6);
-  return f === "—" ? f : `${f} test-USDC`;
+  return f === "—" ? f : `${trimFraction(f)} USDC`;
 };
 
 export const credits = (units: string | null | undefined): string =>
@@ -39,7 +48,7 @@ export function sumBase(...values: Array<string | null | undefined>): string {
   return total.toString();
 }
 
-/** Parses an owner-entered test-USDC amount ("1.5") into base units without floats. */
+/** Parses an owner-entered USDC amount ("1.5") into base units without floats. */
 export function parseUsdcInput(text: string): string | null {
   const m = /^\s*(\d{1,12})(?:\.(\d{1,6}))?\s*$/.exec(text);
   if (!m) return null;

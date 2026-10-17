@@ -9,7 +9,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-privacy_pool = "3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq"
+privacy_pool = "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd"
 
 [provider]
 cluster = "devnet"

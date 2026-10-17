@@ -1,0 +1,51 @@
+[
+  {
+    "day": 1,
+    "date": "2026-10-18",
+    "channel": "Instagram",
+    "draftArtifactId": "fed24fae-9a45-428f-9def-8a7d8e30ddad",
+    "action": "Post with a photo of a repaired toaster and a volunteer smiling"
+  },
+  {
+    "day": 2,
+    "date": "2026-10-19",
+    "channel": "LinkedIn",
+    "draftArtifactId": "0f6ba33d-bfa3-4ae7-9892-30ef3501514e",
+    "action": "Post with a link to a local council success story"
+  },
+  {
+    "day": 3,
+    "date": "2026-10-20",
+    "channel": "Newsletter",
+    "draftArtifactId": "c8f434c4-8226-423b-a4a3-efcdbf19108a",
+    "action": "Send to subscriber list with subject line: Your broken blender? We can fix that."
+  },
+  {
+    "day": 4,
+    "date": "2026-10-21",
+    "channel": "Instagram",
+    "draftArtifactId": null,
+    "action": "Share a volunteer spotlight story with a quote about pairing with experienced fixers"
+  },
+  {
+    "day": 5,
+    "date": "2026-10-22",
+    "channel": "LinkedIn",
+    "draftArtifactId": null,
+    "action": "Post a short video clip from a repair cafe session showing a repair in progress"
+  },
+  {
+    "day": 6,
+    "date": "2026-10-23",
+    "channel": "Instagram",
+    "draftArtifactId": null,
+    "action": "Share a personal repair story from a resident (use quote from research note 5)"
+  },
+  {
+    "day": 7,
+    "date": "2026-10-24",
+    "channel": "Newsletter",
+    "draftArtifactId": null,
+    "action": "Send a reminder about the next repair cafe event with date and location"
+  }
+]

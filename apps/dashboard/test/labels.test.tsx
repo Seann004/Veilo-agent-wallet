@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { GATEWAY_CREDIT_LABEL as CONTRACT_CREDIT_LABEL, SPONSORED_PLANNING_LABEL as CONTRACT_PLANNING_LABEL } from "@veilo/contracts/gateway";
 import { paymentStatusLabel } from "@veilo/contracts";
 import { ActivityDrawer } from "../components/Activity";
+import { withRole } from "./access-fixtures";
 import { DevnetBadge } from "../components/DevnetBadge";
 import {
   GATEWAY_CREDIT_LABEL,
@@ -52,7 +53,7 @@ describe("owner-facing labels", () => {
   it("renders the stopped label in the activity drawer with legs, signatures and devnet explorer links", () => {
     const ws = workspace({ agents: [agent(SHAWN, "Shawn", "credit_manager", "revoked"), agent(PRINCE, "Prince", "research")] });
     const p = withLabel(purchase({ states: { merchant: "submitted", fulfilment: "not_started" } }));
-    render(<ActivityDrawer purchase={p} events={[]} workspace={ws} onClose={vi.fn()} onChanged={vi.fn()} />);
+    render(withRole(<ActivityDrawer purchase={p} events={[]} workspace={ws} onClose={vi.fn()} onChanged={vi.fn()} />, "owner", ws));
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText(LABEL_STOPPED_AUTHORIZED)).toBeTruthy();
     expect(within(dialog).getByText("Funding (pool withdrawal to fresh wallet)")).toBeTruthy();
@@ -67,7 +68,7 @@ describe("owner-facing labels", () => {
 
   it("shows paid-without-result in the drawer", () => {
     const p = withLabel(purchase({ states: { fulfilment: "paid_without_result" } }));
-    render(<ActivityDrawer purchase={p} events={[]} workspace={workspace()} onClose={vi.fn()} onChanged={vi.fn()} />);
+    render(withRole(<ActivityDrawer purchase={p} events={[]} workspace={workspace()} onClose={vi.fn()} onChanged={vi.fn()} />));
     expect(screen.getAllByText(LABEL_PAID_NO_RESULT).length).toBeGreaterThan(0);
   });
 

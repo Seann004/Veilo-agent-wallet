@@ -1,0 +1,28 @@
+{
+  "name": "@veilo/marketplace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Marketplace API: catalogue, hires, job leases, receipts and earnings over Supabase",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@solana-program/token": "0.9.0",
+    "@solana/kit": "5.5.1",
+    "@supabase/supabase-js": "2.117.2",
+    "@veilo/contracts": "workspace:*",
+    "express": "5.3.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "@types/node": "22.20.5",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "5.0.4"
+  }
+}

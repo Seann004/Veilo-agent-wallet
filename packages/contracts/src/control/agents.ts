@@ -21,6 +21,15 @@ export const researchTaskInputSchema = z
     deadline: isoTimestamp.optional(),
     /** Agent that may receive this brief after the owner approves a handoff. */
     handoffToAgentId: uuid.optional(),
+    /** A mint and/or wallet to look up through an owner-approved on-chain data service. */
+    onchain: z
+      .object({
+        mint: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).optional(),
+        wallet: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).optional(),
+      })
+      .strict()
+      .refine((o) => o.mint !== undefined || o.wallet !== undefined, "name a mint or a wallet")
+      .optional(),
   })
   .strict();
 export type ResearchTaskInput = z.infer<typeof researchTaskInputSchema>;
@@ -41,6 +50,24 @@ export const campaignBriefSchema = z
   })
   .strict();
 export type CampaignBrief = z.infer<typeof campaignBriefSchema>;
+
+/**
+ * Task-input key recording how many marketplace hires deep a task is. Owner-started tasks are 0;
+ * a task can propose a hire only below MARKETPLACE_LIMITS.maxDelegationDepth.
+ */
+export const MARKETPLACE_DELEGATION_DEPTH_KEY = "delegationDepth";
+
+/** Owner input for a custom agent task. Instructions come from the agent record, never from here. */
+export const customTaskInputSchema = z
+  .object({
+    context: z.string().trim().max(8_000).optional(),
+    /** Optional owner-suggested marketplace search terms. */
+    searchQuery: text(200).optional(),
+    /** Optional owner-suggested listing; hiring it still needs local authorization. */
+    listingId: uuid.optional(),
+  })
+  .strict();
+export type CustomTaskInput = z.infer<typeof customTaskInputSchema>;
 
 export const REVIEW_STATES = ["draft", "needs_review", "approved_for_export", "archived"] as const;
 export type ReviewState = (typeof REVIEW_STATES)[number];

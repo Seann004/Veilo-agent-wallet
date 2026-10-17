@@ -12,6 +12,11 @@ export interface ApprovedServiceBinding {
   origin: string;
   /** Exact resource URL when known (for example a quote's execute URL). */
   resourceUrl?: string;
+  /**
+   * Approved resource path: an exact path, or a prefix ending in `/*` that matches deeper
+   * segments only. Query strings are ignored; the origin is checked separately.
+   */
+  resourcePath?: string;
   /** Gateway identity that must appear as `resource.serviceName`, when the service declares one. */
   gatewayIdentity?: string;
   /** Approved product SKU; when set, `resource.tags` must contain `veilo-sku:<sku>`. */
@@ -75,6 +80,9 @@ export async function verifyPaymentRequired(
   if (binding.resourceUrl !== undefined && paymentRequired.resource.url !== binding.resourceUrl) {
     throw new X402ClientError("SERVICE_NOT_ALLOWED", "resource_url_mismatch");
   }
+  if (binding.resourcePath !== undefined && !resourcePathMatches(binding.resourcePath, resourceUrl.pathname)) {
+    throw new X402ClientError("SERVICE_NOT_ALLOWED", "resource_path_mismatch");
+  }
   if (binding.gatewayIdentity !== undefined && paymentRequired.resource.serviceName !== binding.gatewayIdentity) {
     throw new X402ClientError("SERVICE_NOT_ALLOWED", "gateway_identity_mismatch");
   }
@@ -82,9 +90,16 @@ export async function verifyPaymentRequired(
     throw new X402ClientError("SERVICE_NOT_ALLOWED", "sku_mismatch");
   }
 
-  const candidates = paymentRequired.accepts.filter(
+  let candidates = paymentRequired.accepts.filter(
     (r) => r.scheme === "exact" && r.network === binding.network && r.asset === binding.mint && r.payTo === binding.payTo,
   );
+  // Some services list several prices for one recipient (for example a per-request charge and a
+  // prepaid top-up). Only a pinned exact amount may choose between them.
+  if (candidates.length > 1 && binding.exactAmount !== undefined) {
+    const exact = binding.exactAmount.toString();
+    candidates = candidates.filter((r) => r.amount === exact);
+    if (candidates.length === 0) throw new X402ClientError("PRICE_CHANGED", "no_requirement_at_approved_price");
+  }
   if (candidates.length === 0) {
     const anyDevnet = paymentRequired.accepts.some((r) => r.network === DEVNET_CAIP2);
     const anyMint = paymentRequired.accepts.some((r) => r.asset === binding.mint);
@@ -118,4 +133,20 @@ export async function verifyPaymentRequired(
   }
   const recentBlockhash = typeof extra.recentBlockhash === "string" ? extra.recentBlockhash : undefined;
   return { requirements, amount, feePayer, recentBlockhash };
+}
+
+const SAFE_PATH = /^\/[A-Za-z0-9._~/-]*$/;
+
+/**
+ * Matches an approved resource path: exact, or a `/*` prefix that requires a deeper segment.
+ * Both sides must use a plain path alphabet with no `.` or `..` segments, so percent-encoding,
+ * backslashes, queries and dot segments cannot make the requested URL differ from the match.
+ */
+export function resourcePathMatches(pattern: string, pathname: string): boolean {
+  const prefix = pattern.endsWith("/*") ? pattern.slice(0, -1) : null;
+  const base = prefix ?? pattern;
+  if (!SAFE_PATH.test(base) || !SAFE_PATH.test(pathname)) return false;
+  if ([base, pathname].some((p) => p.split("/").some((seg) => seg === "." || seg === ".."))) return false;
+  if (prefix === null) return pathname === pattern;
+  return pathname.startsWith(prefix) && pathname.length > prefix.length;
 }

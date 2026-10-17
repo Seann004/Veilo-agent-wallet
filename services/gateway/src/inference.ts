@@ -211,6 +211,7 @@ export class InferenceService {
           maxOutputTokens: request.maxOutputTokens,
           jsonObject: request.jsonObject,
           maxPrice: { prompt: usdPerMillion(model.promptPicoPerToken), completion: usdPerMillion(model.completionPicoPerToken) },
+          ...(model.reasoning === "disabled" ? { disableReasoning: true } : {}),
         },
         AbortSignal.timeout(this.deps.timeoutMs),
       );
@@ -295,4 +296,20 @@ export class InferenceService {
       return rows.length;
     });
   }
+}
+
+/** Provenance attached to every delivered model output; fixture output is labeled as such. */
+export function provenanceOf(outcome: Extract<InferenceOutcome, { status: "succeeded" }>) {
+  return {
+    model: outcome.model,
+    reportedModel: outcome.reportedModel,
+    mode: outcome.mode,
+    label:
+      outcome.mode === "live"
+        ? "Real model output via the operator-funded OpenRouter account"
+        : "FIXTURE: mock provider used by automated tests; not real inference",
+    usage: { promptTokens: outcome.promptTokens, completionTokens: outcome.completionTokens },
+    providerCostMicroUsd: outcome.costMicro,
+    finishReason: outcome.finishReason,
+  };
 }

@@ -39,11 +39,34 @@ function Usage({ u, label }: { u: LimitUsage | undefined; label: string }) {
 export function TreasurySummary({ balances, agents }: { balances: Balances; agents: Agent[] }) {
   const ws = balances.workspace;
   const wsActive = ws.policyVersion !== null ? ws : null;
+  // Absent in the public view: pool balance movements could be matched to on-chain withdrawals.
   const buckets = balances.tokens.buckets;
-  const poolSpendable = buckets.approved_unreserved ?? "0";
+  const poolSpendable = buckets?.approved_unreserved ?? "0";
   const gc = balances.gatewayCredits;
   return (
     <Section title="Shared treasury">
+      <p className="small">
+        Three separate meters. They are never added together: cash is devnet USDC, credits are a prepaid balance bought with that cash, and sponsored planning is paid by the operator.
+      </p>
+      <div className="grid-3 meters">
+        <div className="meter">
+          <h3>Cash spent (USDC)</h3>
+          <p className="meter-value">{balances.cash ? usdc(balances.cash.spent) : "—"}</p>
+          <p className="small muted">{balances.cash ? `${usdc(balances.cash.reserved)} reserved by live purchases` : "Cash accounting unavailable."}</p>
+        </div>
+        <div className="meter">
+          <h3>Prepaid credits</h3>
+          <p className="meter-value">{gc.available ? credits(gc.usable) : "Not ready"}</p>
+          <p className="small muted">
+            {gc.available ? `${credits(gc.consumed)} consumed so far. Using credits is not a second payment.` : "The gateway balance could not be read; no balance is shown."}
+          </p>
+        </div>
+        <div className="meter">
+          <h3>Sponsored planning</h3>
+          <p className="meter-value">{balances.sponsoredPlanning ? `${balances.sponsoredPlanning.total} call(s)` : "—"}</p>
+          <p className="small muted">Operator-funded; costs you no cash or credits.</p>
+        </div>
+      </div>
       <div className="grid-2">
         <div>
           <h3>Global limits (workspace policy)</h3>
@@ -61,7 +84,7 @@ export function TreasurySummary({ balances, agents }: { balances: Balances; agen
           )}
         </div>
         <div>
-          <h3>Cash (test-USDC)</h3>
+          <h3>Cash (USDC)</h3>
           {balances.cash ? (
             <KV
               rows={[
@@ -137,7 +160,7 @@ export function TreasurySummary({ balances, agents }: { balances: Balances; agen
               />
               {gc.stale ? <p className="notice notice-warn">Balance is stale; Shawn pauses top-up checks until it refreshes.</p> : null}
               <p className="small">
-                Credit packs are bought with test-USDC and counted once in cash spent. Calls that use prepaid credits: “{LABEL_CREDITS_NO_CHARGE}”.
+                Credit packs are bought with USDC and counted once in cash spent. Calls that use prepaid credits: “{LABEL_CREDITS_NO_CHARGE}”.
               </p>
             </>
           ) : (
@@ -164,14 +187,18 @@ export function TreasurySummary({ balances, agents }: { balances: Balances; agen
         </div>
         <div>
           <h3>Pool funds and recoverable funds</h3>
-          <KV
-            rows={[
-              ["Spendable pool notes (approved, unreserved)", <strong key="p">{usdc(poolSpendable)}</strong>],
-              ...Object.entries(BUCKET_LABEL)
-                .filter(([k]) => k !== "approved_unreserved")
-                .map(([k, label]) => [label, usdc(buckets[k] ?? "0")] as [string, string]),
-            ]}
-          />
+          {buckets ? (
+            <KV
+              rows={[
+                ["Spendable pool notes (approved, unreserved)", <strong key="p">{usdc(poolSpendable)}</strong>],
+                ...Object.entries(BUCKET_LABEL)
+                  .filter(([k]) => k !== "approved_unreserved")
+                  .map(([k, label]) => [label, usdc(buckets[k] ?? "0")] as [string, string]),
+              ]}
+            />
+          ) : (
+            <p className="small muted">Pool balances are hidden in the public view.</p>
+          )}
           <p className="small muted">
             Funded fresh-wallet balances are recoverable to the owner account once no signed merchant payment can still settle. Recovered funds
             return outside the pool; private spending requires a new deposit.

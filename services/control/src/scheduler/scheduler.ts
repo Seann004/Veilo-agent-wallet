@@ -16,6 +16,11 @@ export interface SchedulerDeps {
   leaseMs?: number;
   /** When set, each tick also reconciles unresolved purchases at most this often (wall clock). */
   purchaseSweepMs?: number;
+  /** Marketplace payment-request polling, run at most every `marketplacePollMs` (wall clock). */
+  marketplace?: { poll(): Promise<unknown> } | undefined;
+  marketplacePollMs?: number;
+  /** Advances approved workflow runs after each marketplace poll. */
+  workflows?: { advanceActive(): Promise<unknown> } | undefined;
   log?: (line: string) => void;
 }
 
@@ -34,6 +39,7 @@ export class Scheduler {
   #timer: NodeJS.Timeout | undefined;
   #running = false;
   #lastSweep = 0;
+  #lastMarketplacePoll = 0;
 
   constructor(readonly deps: SchedulerDeps) {
     this.workerId = deps.workerId ?? "control-scheduler";
@@ -151,6 +157,16 @@ export class Scheduler {
       }
     } catch (error) {
       this.deps.log?.(`[scheduler] tick failed: ${(error as Error).name}: ${(error as Error).message}`);
+    }
+    try {
+      const market = this.deps.marketplace;
+      if (market && Date.now() - this.#lastMarketplacePoll >= (this.deps.marketplacePollMs ?? 10_000)) {
+        this.#lastMarketplacePoll = Date.now();
+        await market.poll();
+      }
+      await this.deps.workflows?.advanceActive();
+    } catch (error) {
+      this.deps.log?.(`[scheduler] marketplace or workflow pass failed: ${(error as Error).name}: ${(error as Error).message}`);
     } finally {
       this.#running = false;
     }

@@ -1,7 +1,16 @@
 import { createPrivateKey, randomUUID, sign } from "node:crypto";
-import { address, type SignatureBytes } from "@solana/kit";
+import { address, getBase58Decoder, type SignatureBytes } from "@solana/kit";
+import { payerBindingMessage } from "@veilo/contracts/marketplace";
 import { isDeepStrictEqual } from "node:util";
-import type { FundingBinding, FundingResult, MerchantSignResult, WithdrawalEvidence } from "@veilo/contracts";
+import type {
+  ExternalCallOutcome,
+  ExternalCallSignRequest,
+  FundingBinding,
+  FundingResult,
+  MerchantSignResult,
+  PayerBindingResult,
+  WithdrawalEvidence,
+} from "@veilo/contracts";
 import type { WithdrawalIntentWire } from "@veilo/contracts/relayer";
 import {
   addressBytes,
@@ -17,11 +26,15 @@ import {
   type WithdrawalIntent,
 } from "@veilo/privacy-sdk";
 import { ServiceCallError } from "./adapters";
-import { hex64, hexToField, KeyedMutex, type WalletDeps } from "./deps";
+import { hex64, hexToField, KeyedMutex, type MerchantSigner, type WalletDeps } from "./deps";
+import { describeError, isTransientRpcError } from "./diagnostics";
 import { WalletError } from "./errors";
 import { verifiedPublicState, type PoolContext, type VerifiedPublicState } from "./pool";
 import { PortUnavailableError } from "./ports";
-import type { FundingRow, NoteRecord } from "./store";
+import type { ExternalCallRow, FundingRow, NoteRecord } from "./store";
+
+/** Wallet event recorded immediately before the fresh wallet signs its one merchant payment. */
+export const MERCHANT_SIGNATURE_PRODUCED = "merchant.signature_produced";
 
 export interface FundingInput {
   purchaseId: string;
@@ -405,11 +418,40 @@ export class FundingService {
    * Signs the purchase's single x402 payment. The signed header is stored before it is
    * returned; a repeated call returns the stored payment and never signs another transfer.
    */
+  /**
+   * Signs payerBindingMessage(operationId, quoteDigest, payer) with the fresh payer key of an
+   * unreleased attempt. The message is rebuilt here from the stored payer; no caller-supplied
+   * bytes are ever signed, and nothing is signed once the attempt's proof has been released.
+   */
+  async signPayerBinding(purchaseId: string, body: { fundingRef: string; operationId: string; quoteDigest: string }): Promise<PayerBindingResult> {
+    return this.mutex.run(purchaseId, async () => {
+      const { store } = this.d;
+      const f = store.funding(purchaseId);
+      if (!f || body.fundingRef !== purchaseId) return { status: "refused", reason: "no funding for this purchase" };
+      if (f.step !== "prepared") return { status: "refused", reason: "the funding proof was already released or discarded" };
+      if (!/^[A-Za-z0-9._:-]{1,128}$/.test(body.operationId) || !/^[0-9a-f]{64}$/.test(body.quoteDigest)) {
+        return { status: "refused", reason: "invalid operation or quote digest" };
+      }
+      const { address: payer, seed } = store.freshWalletSeed(purchaseId);
+      if (payer !== f.fresh_wallet) return { status: "refused", reason: "fresh wallet does not match the funding attempt" };
+      const key = createPrivateKey({ key: Buffer.concat([PKCS8_ED25519_PREFIX, Buffer.from(seed)]), format: "der", type: "pkcs8" });
+      const message = payerBindingMessage(body.operationId, body.quoteDigest, payer);
+      const proof = getBase58Decoder().decode(sign(null, Buffer.from(message, "utf8"), key));
+      store.event("funding.payer_bound", purchaseId, { operationId: body.operationId, quoteDigest: body.quoteDigest });
+      return { status: "signed", payer, proof };
+    });
+  }
+
   async signMerchant(purchaseId: string, body: { fundingRef: string; paymentRequired: unknown; binding: FundingBinding; exactAmountUsdc: bigint }): Promise<MerchantSignResult> {
     return this.mutex.run(`${purchaseId}:merchant`, async () => {
       const { store } = this.d;
       const prior = store.merchantPayment(purchaseId);
       if (prior) return { status: "signed", paymentSignatureHeader: prior.payment_header, payer: prior.fresh_wallet, messageHash: prior.message_hash };
+      // A signature was produced earlier but its payment was never stored: it may exist outside
+      // this process, so the fresh wallet never signs a second transfer.
+      if (store.events(purchaseId).some((e) => e.kind === MERCHANT_SIGNATURE_PRODUCED)) {
+        return { status: "recovery_required", reason: "a merchant signature was produced but its payment was not stored; reconcile before any new signature" };
+      }
       const f = store.funding(purchaseId);
       if (!f || body.fundingRef !== purchaseId) return { status: "recovery_required", reason: "no funding for this purchase" };
       if (f.step !== "finalized") return { status: "not_ready", reason: "funding withdrawal is not finalized" };
@@ -422,6 +464,7 @@ export class FundingService {
       }
       if (body.exactAmountUsdc !== f.payout) return { status: "recovery_required", reason: "merchant amount differs from the funded payout" };
       if (!isDeepStrictEqual(body.binding, JSON.parse(f.binding_json))) return { status: "recovery_required", reason: "service binding changed after funding" };
+      if (body.binding.external !== undefined) return { status: "recovery_required", reason: "an external batch is paid per call, not as one merchant payment" };
 
       const { address: freshAddress, seed } = store.freshWalletSeed(purchaseId);
       const key = createPrivateKey({ key: Buffer.concat([PKCS8_ED25519_PREFIX, Buffer.from(seed)]), format: "der", type: "pkcs8" });
@@ -431,10 +474,27 @@ export class FundingService {
         async signPaymentMessage({ messageBytes }: { messageBytes: Uint8Array }): Promise<SignatureBytes> {
           if (used || store.merchantPayment(purchaseId)) throw new WalletError("POLICY_DENIED", "fresh payment wallet already signed");
           used = true;
+          // Recorded before signing, so a crash or failure after this point never re-signs.
+          store.event(MERCHANT_SIGNATURE_PRODUCED, purchaseId, {});
           return new Uint8Array(sign(null, Buffer.from(messageBytes), key)) as SignatureBytes;
         },
       };
-      const signed = await this.d.merchant.sign({ paymentRequired: body.paymentRequired, binding: body.binding, exactAmount: f.payout, purchaseRef: purchaseId, wallet });
+      let signed: Awaited<ReturnType<MerchantSigner["sign"]>>;
+      try {
+        signed = await this.d.merchant.sign({ paymentRequired: body.paymentRequired, binding: body.binding, exactAmount: f.payout, purchaseRef: purchaseId, wallet });
+      } catch (error) {
+        const detail = describeError(error);
+        this.d.log?.(`[wallet] merchant signing for ${purchaseId} failed ${used ? "after" : "before"} signing: ${detail}`);
+        if (used) {
+          store.event("merchant.sign_failed_after_signature", purchaseId, { error: detail });
+          return { status: "recovery_required", reason: `merchant signing failed after the fresh wallet signed (${detail}); reconcile before any new signature` };
+        }
+        if (isTransientRpcError(error)) {
+          store.event("merchant.sign_deferred", purchaseId, { error: detail });
+          return { status: "not_ready", reason: `merchant payment not signed yet; nothing was signed (${detail})` };
+        }
+        throw error;
+      }
       store.tx(() => {
         store.insertMerchantPayment({
           purchase_id: purchaseId,
@@ -451,10 +511,111 @@ export class FundingService {
   }
 
   /**
+   * Signs one call of an external x402 batch with the batch's funded payer. Calls are signed in
+   * index order, at most `maxCalls` times, each for exactly the approved unit price, and only
+   * after every earlier call has a chain outcome. A repeated index returns the stored payment.
+   */
+  async signExternalCall(req: ExternalCallSignRequest): Promise<MerchantSignResult> {
+    const { purchaseId } = req;
+    return this.mutex.run(`${purchaseId}:merchant`, async () => {
+      const { store } = this.d;
+      const calls = store.externalCalls(purchaseId);
+      const prior = calls.find((c) => Number(c.call_index) === req.callIndex);
+      if (prior) return { status: "signed", paymentSignatureHeader: prior.payment_header, payer: prior.fresh_wallet, messageHash: prior.message_hash };
+      const f = store.funding(purchaseId);
+      if (!f || req.fundingRef !== purchaseId) return { status: "recovery_required", reason: "no funding for this purchase" };
+      if (f.step !== "finalized") return { status: "not_ready", reason: "funding withdrawal is not finalized" };
+      if (!isDeepStrictEqual(req.binding, JSON.parse(f.binding_json))) return { status: "recovery_required", reason: "service binding changed after funding" };
+      const terms = req.binding.external;
+      if (terms === undefined) return { status: "recovery_required", reason: "binding is not an external batch" };
+      if (store.merchantPayment(purchaseId)) return { status: "recovery_required", reason: "this funding already paid a single merchant payment" };
+      const unit = BigInt(terms.unitUsdc);
+      if (unit <= 0n || unit * BigInt(terms.maxCalls) !== f.payout) return { status: "recovery_required", reason: "batch terms do not match the funded payout" };
+      if (req.callIndex >= terms.maxCalls) return { status: "recovery_required", reason: "batch call limit reached" };
+      if (req.callIndex !== calls.length) return { status: "recovery_required", reason: "external calls must be signed in order" };
+      for (const c of calls) {
+        const outcome = await this.#externalOutcome(c);
+        if (outcome.status === "signed") return { status: "not_ready", reason: `call ${c.call_index} may still settle` };
+      }
+      const cp = await this.d.control.purchase(purchaseId);
+      if (cp.states.funding !== "finalized" || cp.states.merchant !== "signed") {
+        return { status: "not_ready", reason: `control has not authorized the batch (merchant ${cp.states.merchant})` };
+      }
+
+      const { address: freshAddress, seed } = store.freshWalletSeed(purchaseId);
+      if (freshAddress !== f.fresh_wallet) return { status: "recovery_required", reason: "fresh wallet does not match the funding attempt" };
+      const key = createPrivateKey({ key: Buffer.concat([PKCS8_ED25519_PREFIX, Buffer.from(seed)]), format: "der", type: "pkcs8" });
+      let used = false;
+      const wallet = {
+        address: freshAddress,
+        async signPaymentMessage({ messageBytes }: { messageBytes: Uint8Array }): Promise<SignatureBytes> {
+          if (used) throw new WalletError("POLICY_DENIED", "external call already signed");
+          used = true;
+          return new Uint8Array(sign(null, Buffer.from(messageBytes), key)) as SignatureBytes;
+        },
+      };
+      const signed = await this.d.merchant.sign({
+        paymentRequired: req.paymentRequired,
+        binding: req.binding,
+        exactAmount: unit,
+        purchaseRef: `${purchaseId}:${req.callIndex}`,
+        wallet,
+      });
+      store.tx(() => {
+        store.insertExternalCall({
+          purchase_id: purchaseId,
+          call_index: BigInt(req.callIndex),
+          fresh_wallet: freshAddress,
+          message_hash: signed.messageHash,
+          payment_header: signed.paymentSignatureHeader,
+          recent_blockhash: signed.recentBlockhash,
+          amount: unit,
+        });
+        store.event("external_call.signed", purchaseId, { callIndex: req.callIndex, messageHash: signed.messageHash });
+      });
+      return { status: "signed", paymentSignatureHeader: signed.paymentSignatureHeader, payer: freshAddress, messageHash: signed.messageHash };
+    });
+  }
+
+  async externalCallOutcome(purchaseId: string, callIndex: number): Promise<ExternalCallOutcome> {
+    const c = this.d.store.externalCalls(purchaseId).find((r) => Number(r.call_index) === callIndex);
+    return c ? this.#externalOutcome(c) : { status: "none" };
+  }
+
+  /** Outcome of a signed external call, found in the payer's history by the signed message. */
+  async #externalOutcome(c: ExternalCallRow): Promise<ExternalCallOutcome> {
+    const idx = Number(c.call_index);
+    if (c.state === "finalized") return { status: "finalized", signature: c.settlement_signature as string };
+    if (c.state === "expired_unsettled") return { status: "expired_unsettled" };
+    if (c.state === "failed") return { status: "failed", signature: c.settlement_signature };
+    const tx = await this.d.chain.findTransaction(address(c.fresh_wallet), c.message_hash);
+    if (tx) {
+      if (!tx.finalized) return { status: "signed" };
+      if (tx.err !== null) {
+        this.d.store.updateExternalCall(c.purchase_id, idx, "failed", tx.signature);
+        return { status: "failed", signature: tx.signature };
+      }
+      this.d.store.updateExternalCall(c.purchase_id, idx, "finalized", tx.signature);
+      return { status: "finalized", signature: tx.signature };
+    }
+    if (c.recent_blockhash === null || (await this.d.chain.isBlockhashValid(c.recent_blockhash))) return { status: "signed" };
+    this.d.store.updateExternalCall(c.purchase_id, idx, "expired_unsettled", null);
+    this.d.store.event("external_call.expired_unsettled", c.purchase_id, { callIndex: idx });
+    return { status: "expired_unsettled" };
+  }
+
+  /**
    * Merchant-leg outcome from chain evidence: finalized when the signed message landed,
    * expired_unsettled only once its blockhash can no longer land and no such transaction exists.
+   * For an external batch it is "signed" while any call may still settle.
    */
   async merchantOutcome(purchaseId: string): Promise<"none" | "signed" | "finalized" | "expired_unsettled" | "failed"> {
+    const calls = this.d.store.externalCalls(purchaseId);
+    if (calls.length > 0) {
+      const outcomes = await Promise.all(calls.map((c) => this.#externalOutcome(c)));
+      if (outcomes.some((o) => o.status === "signed")) return "signed";
+      return outcomes.some((o) => o.status === "finalized") ? "finalized" : "expired_unsettled";
+    }
     const m = this.d.store.merchantPayment(purchaseId);
     if (!m) return "none";
     if (m.state !== "signed") return m.state;

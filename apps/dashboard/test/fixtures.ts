@@ -120,7 +120,7 @@ const usage = (limit: string, settled: string, reserved: string) => {
   return { limit, settled, reserved, available: (used >= l ? 0n : l - used).toString(), overCommitted: (used > l ? used - l : 0n).toString() };
 };
 
-/** Shawn bought one 1.00 test-USDC pack; Prince then consumed 300,000 microcredits of it. */
+/** Shawn bought one 1.00 USDC pack; Prince then consumed 300,000 microcredits of it. */
 export function balancesAfterTopUpAndConsumption(): Balances {
   return {
     workspace: { policyVersion: 1, tier: "bounded_automatic", stopped: false, lifetime: usage("10000000", "1000000", "0"), rolling24h: usage("5000000", "1000000", "0"), sponsor: usage("100000000", "2100000", "0") },

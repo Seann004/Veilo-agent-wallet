@@ -1,3 +1,4 @@
+import { externalBindingForService } from "../external/bindings";
 import { Router, type Request, type Response } from "express";
 import type { z } from "zod";
 import {
@@ -5,6 +6,8 @@ import {
   agentConfigPatchSchema,
   calendarSchema,
   campaignBriefSchema,
+  customTaskInputSchema,
+  MARKETPLACE_DELEGATION_DEPTH_KEY,
   researchTaskInputSchema,
   createAgentRequestSchema,
   purchaseDecisionRequestSchema,
@@ -23,6 +26,9 @@ import { big, iso, num, type Ledger } from "../context";
 import { ControlError } from "../errors";
 import { issueWorkerCredential } from "../auth/credentials";
 import {
+  DEFAULT_GUEST_RUNS_PER_HOUR,
+  SESSION_COOKIE,
+  authenticateSession,
   clearedSessionCookie,
   createChallenge,
   revokeSession,
@@ -39,6 +45,7 @@ import { chargeToolCall, getTask, validateResearchCitations } from "../agents/wo
 import type { Integration } from "../integration";
 import { fullBalances } from "../integration/balances";
 import { RETRY_MARKER } from "../scheduler/scheduler";
+import { LISTING_SERVICE_PREFIX } from "../marketplace/seller-clients";
 import {
   activatePolicyVersion,
   activeAgentPolicy,
@@ -53,7 +60,8 @@ import {
   requireWorkspace,
   type AgentRow,
 } from "../ledger/workspace";
-import { actorOf, assertOrigin, requireActor, type AuthDeps } from "./actor";
+import { READERS, actorOf, assertOrigin, readCookie, requireActor, type Actor, type AuthDeps } from "./actor";
+import { isViewer, redactActivityEvents, redactBalances, redactPurchase } from "./redact";
 
 function parse<S extends z.ZodType>(schema: S, value: unknown): z.infer<S> {
   const r = schema.safeParse(value ?? {});
@@ -81,6 +89,7 @@ function agentView(ledger: Ledger, a: AgentRow): Record<string, unknown> {
     description: a.description,
     trigger: JSON.parse(a.trigger_json) as unknown,
     modelProfile: a.model_profile,
+    ...(a.role === "custom" ? { template: a.template, instructions: a.instructions } : {}),
     policyVersion: num(a.policy_version),
     activePolicy: policy ? policyView(policy) : null,
     revocationEpoch: num(a.revocation_epoch),
@@ -99,6 +108,37 @@ function chargeWorkerCall(ledger: Ledger, req: Request, agentId: string, taskId:
   if (taskId === undefined || task?.state === "running") chargeToolCall(ledger, agentId, id, tool);
 }
 
+const HOUR_MS = 3_600_000;
+
+type GuestActor = Extract<Actor, { kind: "guest" }>;
+
+const guestRunsInLastHour = (ledger: Ledger, guest: GuestActor): number =>
+  num(
+    ledger.db
+      .prepare(
+        `SELECT count(*) FROM audit_event WHERE workspace_id = ? AND actor_type = 'system' AND actor_id = ? AND action = 'agent.run'
+           AND policy_result = 'allowed' AND created_at_ms > ?`,
+      )
+      .pluck()
+      .get(guest.workspaceId, guest.guestPubkey, ledger.now() - HOUR_MS),
+  );
+
+function denyGuestRun(ledger: Ledger, guest: GuestActor, agentId: string, reason: string): never {
+  immediate(ledger.db, () =>
+    writeAudit(ledger, {
+      workspaceId: guest.workspaceId,
+      scope: `agent:${agentId}`,
+      actorType: "system",
+      actorId: guest.guestPubkey,
+      action: "agent.run",
+      policyResult: "denied",
+      reasonCode: "POLICY_DENIED",
+      details: { actor: "guest", reason },
+    }),
+  );
+  throw new ControlError("POLICY_DENIED", reason);
+}
+
 export function controlRouter(deps: AuthDeps & { integration?: Integration | undefined }): Router {
   const { ledger } = deps;
   const integration = deps.integration;
@@ -106,7 +146,11 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
   const owner = requireActor(deps, ["owner"]);
   const worker = requireActor(deps, ["worker"]);
   const ownerOrService = requireActor(deps, ["owner", "service"]);
-  const anyActor = requireActor(deps, ["owner", "worker", "service"]);
+  const reader = requireActor(deps, READERS);
+  const runner = requireActor(deps, ["owner", "guest"]);
+  const signedIn = requireActor(deps, ["owner", "guest"]);
+  const anyActor = requireActor(deps, ["owner", "guest", "viewer", "worker", "service"]);
+  const guestRunLimit = deps.session.guestRunsPerHour ?? DEFAULT_GUEST_RUNS_PER_HOUR;
   const ownerId = (res: Response) => {
     const a = actorOf(res);
     return a.kind === "owner" ? a.ownerPubkey : "";
@@ -116,8 +160,21 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     if (a.kind === "service") return requireWorkspace(ledger).id;
     return a.workspaceId;
   };
+  const viewing = (res: Response) => isViewer(actorOf(res));
 
-  // Owner session
+  // Browser session. Reports who the cookie belongs to without exposing session or CSRF material.
+  r.get("/session", (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const publicView = deps.session.publicView === true;
+    const cookie = readCookie(req, SESSION_COOKIE);
+    const s = cookie ? authenticateSession(ledger, cookie, deps.session.guestPubkeys) : null;
+    if (s) {
+      res.json({ role: s.role, address: s.pubkey, expiresAt: new Date(s.expiresAtMs).toISOString(), publicView });
+      return;
+    }
+    res.json({ role: publicView ? "viewer" : "none", address: null, expiresAt: null, publicView });
+  });
+
   r.post("/session/challenge", (req, res) => {
     assertOrigin(deps, req);
     const body = parse(sessionChallengeRequestSchema, req.body);
@@ -130,18 +187,24 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     const issued = await verifyChallenge(ledger, deps.session, body);
     const secure = deps.session.secureCookies || req.secure;
     res.setHeader("Set-Cookie", sessionCookie(issued.sessionToken, Math.floor(deps.session.sessionTtlMs / 1000), secure));
-    res.status(200).json({ ownerPubkey: issued.ownerPubkey, csrfToken: issued.csrfToken, expiresAt: issued.expiresAt });
+    res.status(200).json({
+      role: issued.role,
+      address: issued.address,
+      ...(issued.role === "owner" ? { ownerPubkey: issued.address } : {}),
+      csrfToken: issued.csrfToken,
+      expiresAt: issued.expiresAt,
+    });
   });
 
-  r.post("/session/logout", owner, (req, res) => {
+  r.post("/session/logout", signedIn, (req, res) => {
     const a = actorOf(res);
-    if (a.kind === "owner") revokeSession(ledger, a.sessionId);
+    if (a.kind === "owner" || a.kind === "guest") revokeSession(ledger, a.sessionId);
     res.setHeader("Set-Cookie", clearedSessionCookie(deps.session.secureCookies || req.secure));
     res.status(204).end();
   });
 
   // Workspace
-  r.get("/workspace", owner, (_req, res) => {
+  r.get("/workspace", reader, (_req, res) => {
     const ws = requireWorkspace(ledger, wsId(res));
     const services = ledger.db
       .prepare(`SELECT id, service_key, origin, gateway_identity, recipient, network, mint, status FROM approved_service WHERE workspace_id = ?`)
@@ -208,20 +271,20 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     res.status(draft ? 201 : 200).json({ draft, activated });
   });
 
-  r.get("/activity", owner, (req, res) => {
+  r.get("/activity", reader, (req, res) => {
     const q = parse(activityQuerySchema, req.query);
     const workspaceId = wsId(res);
     const purchases = ledger.db
       .prepare(`SELECT * FROM purchase WHERE workspace_id = ? ORDER BY created_at_ms DESC LIMIT ?`)
       .all(workspaceId, q.limit) as PurchaseRow[];
-    res.json({
-      events: activity(ledger, workspaceId, q.limit, q.before),
-      purchases: purchases.map((p) => purchaseView(ledger, p)),
-    });
+    const events = activity(ledger, workspaceId, q.limit, q.before);
+    const views = purchases.map((p) => purchaseView(ledger, p));
+    res.json(viewing(res) ? { events: redactActivityEvents(events), purchases: views.map(redactPurchase) } : { events, purchases: views });
   });
 
-  r.get("/balances", owner, async (_req, res) => {
-    res.json(await fullBalances(ledger, requireWorkspace(ledger, wsId(res)), integration?.gateway));
+  r.get("/balances", reader, async (_req, res) => {
+    const balances = await fullBalances(ledger, requireWorkspace(ledger, wsId(res)), integration?.gateway);
+    res.json(viewing(res) ? redactBalances(balances) : balances);
   });
 
   // Agents
@@ -251,16 +314,22 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     const draft = immediate(ledger.db, () => {
       const agent = requireAgent(ledger, workspaceId, agentId);
       if (agent.status === "revoked" || agent.status === "archived") throw new ControlError("ACCOUNT_STOPPED", `agent is ${agent.status}`);
+      if (agent.role !== "custom" && (body.instructions !== undefined || body.template !== undefined)) {
+        throw new ControlError("INVALID_REQUEST", "only custom agents take a template and instructions");
+      }
       ledger.db
         .prepare(
           `UPDATE agent SET name = ifnull(?, name), description = ifnull(?, description), trigger_json = ifnull(?, trigger_json),
-             model_profile = ifnull(?, model_profile), updated_at_ms = ? WHERE id = ?`,
+             model_profile = ifnull(?, model_profile), template = ifnull(?, template), instructions = ifnull(?, instructions),
+             updated_at_ms = ? WHERE id = ?`,
         )
         .run(
           body.name ?? null,
           body.description ?? null,
           body.trigger ? JSON.stringify(body.trigger) : null,
           body.modelProfile ?? null,
+          body.template ?? null,
+          body.instructions ?? null,
           ledger.now(),
           agentId,
         );
@@ -287,23 +356,56 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     });
   });
 
-  r.post("/agents/:id/run", owner, async (req, res) => {
+  r.post("/agents/:id/run", runner, async (req, res) => {
     const body = parse(runAgentRequestSchema, req.body);
     const workspaceId = wsId(res);
     const agent = requireAgent(ledger, workspaceId, param(req, "id"));
     const ws = requireWorkspace(ledger, workspaceId);
     if (ws.stopped === 1n) throw new ControlError("ACCOUNT_STOPPED", "workspace emergency stop is active");
     if (agent.status !== "active") throw new ControlError("ACCOUNT_STOPPED", `agent is ${agent.status}`);
+    const caller = actorOf(res);
+    const guest = caller.kind === "guest" ? caller : null;
+    if (guest) {
+      // Task budgets are spending policy, which only the owner sets.
+      if (body.taskLimitTestUsdc !== undefined) denyGuestRun(ledger, guest, agent.id, "guests cannot set a task spending limit");
+      // A handoff brief replaces the objective the owner approved, so only the owner may supply one.
+      if (body.input !== undefined && "handoffId" in body.input) {
+        denyGuestRun(ledger, guest, agent.id, "guests cannot run a task reserved by an approved handoff");
+      }
+      if (guestRunsInLastHour(ledger, guest) >= guestRunLimit) denyGuestRun(ledger, guest, agent.id, `guest run limit reached (${guestRunLimit} per hour)`);
+    }
+    /**
+     * Runs inside the transaction that creates or finds the job, so concurrent guest requests
+     * cannot exceed the hourly limit and every admitted guest run is audited with its job.
+     */
+    const recordGuestRun = <J extends { job: { id: string }; created: boolean }>(job: J): J => {
+      if (!guest) return job;
+      if (guestRunsInLastHour(ledger, guest) >= guestRunLimit) throw new ControlError("POLICY_DENIED", `guest run limit reached (${guestRunLimit} per hour)`);
+      writeAudit(ledger, {
+        workspaceId,
+        scope: `agent:${agent.id}`,
+        actorType: "system",
+        actorId: guest.guestPubkey,
+        action: "agent.run",
+        policyResult: "allowed",
+        details: { actor: "guest", role: agent.role, jobId: job.job.id, created: job.created },
+      });
+      return job;
+    };
     let result: ReturnType<typeof enqueueJob>;
     let check: unknown;
     if (agent.role === "credit_manager") {
       const retry = body.input?.retry === true ? RETRY_MARKER : ":";
-      result = enqueueJob(ledger, {
-        workspaceId,
-        agentId: agent.id,
-        kind: "credit_check",
-        triggerKey: `manual:${agent.id}${retry}${body.triggerKey ?? ledger.newId()}`,
-      });
+      result = immediate(ledger.db, () =>
+        recordGuestRun(
+          enqueueJob(ledger, {
+            workspaceId,
+            agentId: agent.id,
+            kind: "credit_check",
+            triggerKey: `manual:${agent.id}${retry}${body.triggerKey ?? ledger.newId()}`,
+          }),
+        ),
+      );
       if (integration && result.created) {
         // "Check now" runs the same deterministic check the scheduler runs.
         const jobId = result.job.id;
@@ -314,7 +416,14 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     } else {
       let input: Record<string, unknown>;
       let objective = body.objective;
-      if (agent.role === "research") {
+      const jobKind = agent.role === "research" ? "research" : agent.role === "custom" ? "custom" : "content";
+      if (agent.role === "custom") {
+        const parsed = customTaskInputSchema.safeParse(body.input ?? {});
+        if (!parsed.success) throw new ControlError("INVALID_REQUEST", parsed.error.issues.map((i) => `input.${i.path.join(".")}: ${i.message}`).join("; "));
+        if (objective === undefined) throw new ControlError("INVALID_REQUEST", "objective is required for a custom agent task");
+        // Instructions are snapshotted from the owner's agent record; depth 0 marks an owner-started task.
+        input = { ...parsed.data, instructions: agent.instructions, template: agent.template, [MARKETPLACE_DELEGATION_DEPTH_KEY]: 0 };
+      } else if (agent.role === "research") {
         const parsed = researchTaskInputSchema.safeParse({ question: objective, ...(body.input ?? {}) });
         if (!parsed.success) throw new ControlError("INVALID_REQUEST", parsed.error.issues.map((i) => `input.${i.path.join(".")}: ${i.message}`).join("; "));
         input = parsed.data;
@@ -329,7 +438,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
       result = immediate(ledger.db, () => {
         const existing = ledger.db.prepare(`SELECT id FROM job WHERE trigger_key = ?`).pluck().get(triggerKey);
         if (existing !== undefined) {
-          return enqueueJob(ledger, { workspaceId, agentId: agent.id, kind: agent.role === "research" ? "research" : "content", triggerKey });
+          return recordGuestRun(enqueueJob(ledger, { workspaceId, agentId: agent.id, kind: jobKind, triggerKey }));
         }
         const handoffId = typeof input.handoffId === "string" ? input.handoffId : undefined;
         if (handoffId !== undefined) {
@@ -342,7 +451,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
           ledger.db
             .prepare(`UPDATE task SET objective = ?, input_json = ?, deadline_at_ms = ?, updated_at_ms = ? WHERE id = ?`)
             .run(objective, JSON.stringify(merged), body.deadline === undefined ? null : Date.parse(body.deadline), ledger.now(), reserved.id);
-          return enqueueJob(ledger, { workspaceId, agentId: agent.id, taskId: reserved.id, kind: "content", triggerKey });
+          return recordGuestRun(enqueueJob(ledger, { workspaceId, agentId: agent.id, taskId: reserved.id, kind: "content", triggerKey }));
         }
         const task = createTask(ledger, {
           workspaceId,
@@ -352,13 +461,15 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
           limitUsdc: body.taskLimitTestUsdc,
           deadlineMs: body.deadline === undefined ? null : Date.parse(body.deadline),
         });
-        return enqueueJob(ledger, {
-          workspaceId,
-          agentId: agent.id,
-          taskId: task.id,
-          kind: agent.role === "research" ? "research" : "content",
-          triggerKey,
-        });
+        return recordGuestRun(
+          enqueueJob(ledger, {
+            workspaceId,
+            agentId: agent.id,
+            taskId: task.id,
+            kind: jobKind,
+            triggerKey,
+          }),
+        );
       });
     }
     const taskId = result.job.task_id;
@@ -412,6 +523,15 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
       throw new ControlError("POLICY_DENIED", "agent scope mismatch: requests act only for the credential's agent");
     }
     chargeWorkerCall(ledger, req, a.agentId, body.taskId, body.paymentPath === "prepaid_credits" ? "consume_inference_sku" : "request_purchase");
+    const serviceKey = ledger.db.prepare(`SELECT service_key FROM approved_service WHERE id = ?`).pluck().get(body.serviceId) as string | undefined;
+    if (serviceKey?.startsWith(LISTING_SERVICE_PREFIX)) {
+      // Listing bindings exist only for locally authorized marketplace hires; agents propose hires instead.
+      throw new ControlError("SERVICE_NOT_ALLOWED", "marketplace listings are paid only through an authorized marketplace hire");
+    }
+    if (externalBindingForService(ledger, body.serviceId)?.scope === "workflow") {
+      // Installed for an approved workflow step; agents propose workflow runs instead.
+      throw new ControlError("SERVICE_NOT_ALLOWED", "this external binding is used only by approved workflow runs");
+    }
     const result = authorizePurchase(ledger, {
       workspaceId: a.workspaceId,
       agentId: a.agentId,
@@ -451,8 +571,14 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     if (a.kind === "worker" && p.agent_id !== a.agentId) {
       throw new ControlError("POLICY_DENIED", "agent scope mismatch");
     }
-    if (a.kind === "owner" && p.workspace_id !== a.workspaceId) throw new ControlError("NOT_FOUND", "purchase not found");
+    if ((a.kind === "owner" || a.kind === "guest" || a.kind === "viewer") && p.workspace_id !== a.workspaceId) {
+      throw new ControlError("NOT_FOUND", "purchase not found");
+    }
     if (a.kind === "worker") chargeWorkerCall(ledger, req, a.agentId, undefined, "purchase_status");
+    if (a.kind === "viewer") {
+      res.json({ purchase: redactPurchase(purchaseView(ledger, p)) });
+      return;
+    }
     res.json({ purchase: purchaseView(ledger, p), ...(integration ? { execution: integration.orchestrator.view(p.id) } : {}) });
   });
 
@@ -501,22 +627,42 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
       .prepare(
         `SELECT a.id AS service_id, a.service_key, a.status, s.sku, s.payment_path, s.price_usdc, s.max_fee_usdc, s.usage_units
          FROM service_sku s JOIN approved_service a ON a.id = s.service_id WHERE a.workspace_id = ? AND s.enabled = 1
+           AND substr(a.service_key, 1, ?) <> ?
          ORDER BY a.service_key, s.sku, s.payment_path`,
       )
-      .all(a.workspaceId) as Array<{ service_id: string; service_key: string; status: string; sku: string; payment_path: string; price_usdc: bigint; max_fee_usdc: bigint; usage_units: bigint }>;
+      .all(a.workspaceId, LISTING_SERVICE_PREFIX.length, LISTING_SERVICE_PREFIX) as Array<{ service_id: string; service_key: string; status: string; sku: string; payment_path: string; price_usdc: bigint; max_fee_usdc: bigint; usage_units: bigint }>;
     res.json({
       items: rows
         .filter((s) => perms.allowedSkus.includes(s.sku) && perms.allowedPaymentPaths.includes(s.payment_path))
-        .map((s) => ({
-          serviceId: s.service_id,
-          service: s.service_key,
-          bindingStatus: s.status,
-          sku: s.sku,
-          paymentPath: s.payment_path,
-          price: { amount: big(s.price_usdc).toString(), unit: "usdc_base_units" },
-          maxFee: { amount: big(s.max_fee_usdc).toString(), unit: "usdc_base_units" },
-          usage: { amount: big(s.usage_units).toString(), unit: "gateway_microcredits" },
-        })),
+        .flatMap((s) => {
+          const ext = externalBindingForService(ledger, s.service_id);
+          // Workflow-scoped bindings are bought only by approved workflow runs.
+          if (ext?.scope === "workflow") return [];
+          return [
+            {
+              serviceId: s.service_id,
+              service: s.service_key,
+              bindingStatus: s.status,
+              sku: s.sku,
+              paymentPath: s.payment_path,
+              price: { amount: big(s.price_usdc).toString(), unit: "usdc_base_units" },
+              maxFee: { amount: big(s.max_fee_usdc).toString(), unit: "usdc_base_units" },
+              usage: { amount: big(s.usage_units).toString(), unit: "gateway_microcredits" },
+              ...(ext
+                ? {
+                    external: {
+                      bindingId: ext.id,
+                      label: ext.label,
+                      resourcePath: ext.resource_path,
+                      unitPrice: big(ext.unit_price_usdc).toString(),
+                      maxCalls: Number(ext.max_calls),
+                      rpcMethods: ext.allowed_rpc_methods_json === null ? null : (JSON.parse(ext.allowed_rpc_methods_json) as string[]),
+                    },
+                  }
+                : {}),
+            },
+          ];
+        }),
     });
   });
 

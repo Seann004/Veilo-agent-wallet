@@ -2,9 +2,18 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { address, isAddress } from "@solana/kit";
 import { z } from "zod";
-import { baseUnits, fundingBindingWire, fundingRequestWire, healthReport, type ServiceHealth } from "@veilo/contracts";
+import {
+  baseUnits,
+  externalCallRequestWire,
+  fundingBindingWire,
+  fundingRequestWire,
+  healthReport,
+  payerBindingRequestWire,
+  type ServiceHealth,
+} from "@veilo/contracts";
 import { EncodingError } from "@veilo/privacy-sdk";
 import { ServiceCallError } from "./adapters";
+import { describeError } from "./diagnostics";
 import { WalletError } from "./errors";
 import type { FundingService } from "./funding";
 import type { NoteService } from "./notes";
@@ -114,6 +123,11 @@ export function createApp(health: ServiceHealth, deps?: WalletAppDeps): Express 
   app.get("/fundings/:purchaseId", service, async (req, res) => {
     res.json(wireFunding(await deps.funding.status(uuidParam(req, "purchaseId"))));
   });
+  app.post("/fundings/:purchaseId/payer-binding", service, ready, async (req, res) => {
+    const b = parse(payerBindingRequestWire, req.body);
+    res.setHeader("Cache-Control", "no-store");
+    res.json(await deps.funding.signPayerBinding(uuidParam(req, "purchaseId"), b));
+  });
   app.post("/fundings/:purchaseId/merchant-payment", service, ready, async (req, res) => {
     const b = parse(
       z.object({ fundingRef: z.string().min(1), paymentRequired: z.unknown(), binding: fundingBindingWire, exactAmountUsdc: baseUnits }).strict(),
@@ -121,6 +135,17 @@ export function createApp(health: ServiceHealth, deps?: WalletAppDeps): Express 
     );
     res.setHeader("Cache-Control", "no-store");
     res.json(await deps.funding.signMerchant(uuidParam(req, "purchaseId"), { fundingRef: b.fundingRef, paymentRequired: b.paymentRequired, binding: b.binding, exactAmountUsdc: b.exactAmountUsdc }));
+  });
+
+  app.post("/fundings/:purchaseId/external-calls", service, ready, async (req, res) => {
+    const b = parse(externalCallRequestWire, req.body);
+    res.setHeader("Cache-Control", "no-store");
+    res.json(await deps.funding.signExternalCall({ purchaseId: uuidParam(req, "purchaseId"), ...b }));
+  });
+  app.get("/fundings/:purchaseId/external-calls/:callIndex", service, async (req, res) => {
+    const index = Number(req.params.callIndex);
+    if (!Number.isInteger(index) || index < 0 || index > 99) throw new WalletError("INVALID_REQUEST", "invalid call index");
+    res.json(await deps.funding.externalCallOutcome(uuidParam(req, "purchaseId"), index));
   });
 
   // Owner wallet API.
@@ -169,7 +194,7 @@ export function createApp(health: ServiceHealth, deps?: WalletAppDeps): Express 
     if (e.type === "entity.parse.failed" || e.type === "entity.too.large") {
       return void res.status(400).json({ error: { code: "INVALID_REQUEST", message: "request body is not valid JSON within size limits" } });
     }
-    log(`[wallet] unhandled ${e.name ?? "Error"}`);
+    log(`[wallet] unhandled ${describeError(error)}`);
     res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "internal error" } });
   });
   return app;

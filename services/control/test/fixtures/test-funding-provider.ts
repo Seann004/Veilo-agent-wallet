@@ -21,7 +21,14 @@ interface Entry {
 export class TestFundingProvider implements FundingProvider {
   readonly mode = "test" as const;
   behavior: Mode = "finalize";
-  readonly calls = { prepare: 0, release: 0, status: 0, sign: 0 };
+  /**
+   * Injected signing outcomes, consumed one per signing call: "pre_sign_not_ready" fails before
+   * any signature (like an RPC 429 on the mint read); "post_sign_lost" signs, then loses the reply.
+   */
+  signFaults: Array<"pre_sign_not_ready" | "post_sign_lost"> = [];
+  /** `signAttempts` counts signing calls; `sign` counts signatures actually produced. */
+  readonly calls = { prepare: 0, release: 0, status: 0, sign: 0, signAttempts: 0 };
+  readonly #lostSignatures = new Set<string>();
   readonly #entries = new Map<string, Entry>();
 
   constructor(private readonly now: () => number) {}
@@ -84,8 +91,16 @@ export class TestFundingProvider implements FundingProvider {
     const e = this.#entries.get(req.purchaseId);
     if (!e || e.result.status !== "finalized") return { status: "recovery_required", reason: "funding not finalized" };
     if (e.signed) return e.signed;
+    this.calls.signAttempts += 1;
+    if (this.#lostSignatures.has(req.purchaseId)) return { status: "recovery_required", reason: "a signature was produced but not stored" };
     if (!req.paymentRequired) return { status: "recovery_required", reason: "no challenge" };
+    const fault = this.signFaults.shift();
+    if (fault === "pre_sign_not_ready") return { status: "not_ready", reason: "merchant payment not signed yet; nothing was signed (SolanaError __code=8100002 statusCode=429)" };
     this.calls.sign += 1;
+    if (fault === "post_sign_lost") {
+      this.#lostSignatures.add(req.purchaseId);
+      return { status: "recovery_required", reason: "merchant signing failed after the fresh wallet signed" };
+    }
     const pr = req.paymentRequired as PaymentRequired;
     const accepted = pr.accepts[0];
     if (!accepted || BigInt(accepted.amount) !== req.exactAmountUsdc || accepted.payTo !== req.binding.payTo) {

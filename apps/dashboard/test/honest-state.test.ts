@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { summarizeResult } from "../components/AgentCard";
+import { summarizeResult } from "../lib/results";
 import { ApiError, api } from "../lib/api";
 import type { Job, Task } from "../lib/types";
 

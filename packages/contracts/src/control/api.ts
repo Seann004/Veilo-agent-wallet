@@ -69,6 +69,11 @@ export const sessionVerifyRequestSchema = z
 
 export const agentTriggerSchema = z.record(z.string(), z.union([z.string().max(256), z.number().int(), z.boolean()]));
 
+export const AGENT_TEMPLATES = ["generalist", "researcher", "writer", "analyst"] as const;
+export type AgentTemplate = (typeof AGENT_TEMPLATES)[number];
+
+const agentInstructions = z.string().trim().min(1).max(8_000);
+
 export const createAgentRequestSchema = z
   .object({
     name: shortText(64),
@@ -76,9 +81,18 @@ export const createAgentRequestSchema = z
     description: shortText(500).optional(),
     trigger: agentTriggerSchema.optional(),
     modelProfile: shortText(128).optional(),
+    /** Custom agents only: a starting template and the owner's free-text instructions. */
+    template: z.enum(AGENT_TEMPLATES).optional(),
+    instructions: agentInstructions.optional(),
     policy: agentPolicyInputSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((v, ctx) => {
+    if (v.role === "custom" && v.instructions === undefined) ctx.addIssue({ code: "custom", path: ["instructions"], message: "custom agents need instructions" });
+    if (v.role !== "custom" && (v.instructions !== undefined || v.template !== undefined)) {
+      ctx.addIssue({ code: "custom", path: ["role"], message: "only custom agents take a template and instructions" });
+    }
+  });
 
 export const agentConfigPatchSchema = z
   .object({
@@ -86,6 +100,9 @@ export const agentConfigPatchSchema = z
     description: shortText(500).optional(),
     trigger: agentTriggerSchema.optional(),
     modelProfile: shortText(128).optional(),
+    /** Custom agents only. */
+    template: z.enum(AGENT_TEMPLATES).optional(),
+    instructions: agentInstructions.optional(),
     /** Creates a new draft policy version. */
     policy: agentPolicyInputSchema.optional(),
     /** Activates an existing draft version (owner activation). */

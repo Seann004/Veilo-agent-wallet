@@ -1,13 +1,14 @@
 import { TASK_RUN_BOUNDS } from "@veilo/contracts";
 import { ControlClient, type FetchLike, type RunBounds } from "./control-client";
 import type { RoleOutcome } from "./roles/common";
+import { runCustom } from "./roles/custom";
 import { runMira } from "./roles/mira";
 import { runPrince } from "./roles/prince";
 import type { SafeFetchPolicy } from "./safe-fetch";
 
 export interface AgentCredential {
   agentId: string;
-  role: "research" | "content";
+  role: "research" | "content" | "custom";
   token: string;
 }
 
@@ -18,6 +19,8 @@ export interface WorkerOptions {
   fetchPolicy: SafeFetchPolicy;
   fetch?: FetchLike;
   now?: () => number;
+  /** Waits between purchase status checks (default: real timers). */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -28,7 +31,7 @@ export interface WorkerOptions {
 export async function runOnce(cred: AgentCredential, o: WorkerOptions): Promise<{ jobId: string; outcome: RoleOutcome } | null> {
   const leaseMs = o.leaseMs ?? 60_000;
   const now = o.now ?? Date.now;
-  const client = new ControlClient({ baseUrl: o.controlUrl, token: cred.token, ...(o.fetch ? { fetch: o.fetch } : {}) });
+  const client = new ControlClient({ baseUrl: o.controlUrl, token: cred.token, customTools: cred.role === "custom", ...(o.fetch ? { fetch: o.fetch } : {}) });
   const claimed = await client.claim(o.workerId, leaseMs);
   if (claimed.status !== 200 || !claimed.body?.job) return null;
   const job = claimed.body.job as { id: string; version: string };
@@ -61,8 +64,8 @@ export async function runOnce(cred: AgentCredential, o: WorkerOptions): Promise<
   try {
     if (!task) outcome = { taskState: "failed", summary: { error: "job has no task" } };
     else {
-      const ctx = { client, taskId: task.id as string, agentId: cred.agentId, task, bounds, now, notes: [] as string[] };
-      outcome = cred.role === "research" ? await runPrince(ctx, o.fetchPolicy) : await runMira(ctx);
+      const ctx = { client, taskId: task.id as string, agentId: cred.agentId, task, bounds, now, notes: [] as string[], ...(o.sleep ? { sleep: o.sleep } : {}) };
+      outcome = cred.role === "research" ? await runPrince(ctx, o.fetchPolicy) : cred.role === "custom" ? await runCustom(ctx) : await runMira(ctx);
     }
   } catch (error) {
     outcome = { taskState: "failed", summary: { error: `${(error as Error).name}: ${(error as Error).message}` } };

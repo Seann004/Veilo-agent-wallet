@@ -2,51 +2,51 @@
   "schema": "veilo-devnet-roles-v1",
   "cluster": "devnet",
   "note": "Public keys only. Keypair files live under work/keys/devnet (gitignored, owner-only). Synthetic test participants are labeled as such; role separation is not independent-user anonymity.",
-  "poolId": "c012ae927dfd556e75e9d2f1893a1ffcb1834eee6f1df4f4c5ff7fc3d9b2d589",
-  "createdAt": "2026-10-15T15:23:44.468Z",
+  "poolId": "39cced46df181bdbf4813f07e9ad553c4f7c02a4ab14730cead9ca2b6e100c3e",
+  "createdAt": "2026-10-17T07:21:38.991Z",
   "roles": {
     "deployer": {
-      "publicKey": "38jQg7zthCCZ6thwHDkWfeLHXV8Xg5uwERHP3dhgBTNR",
+      "publicKey": "FcAoTX7M7GnQHgQRVN81bAfd7khph1ZpC8gz37c9AAhy",
       "keyPath": "work/keys/devnet/deployer.json",
       "purpose": "program upgrade authority, deploy fee payer and initialize_pool signer"
     },
     "programId": {
-      "publicKey": "3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq",
+      "publicKey": "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
       "keyPath": "work/keys/devnet/program-id.json",
       "purpose": "privacy-pool program address keypair (signs only the first deploy)"
     },
     "programBuffer": {
-      "publicKey": "7Fy4yfFiBMFFcZqMffStY8Fx9bu3Jq7nshfnAGRrCQqR",
+      "publicKey": "4YW7MrdbT3zgi57pL4oAY8YJYsqjFHpfMDK1PKvsxApu",
       "keyPath": "work/keys/devnet/program-buffer.json",
       "purpose": "deploy buffer keypair, reused so an interrupted deploy resumes"
     },
     "sponsor": {
-      "publicKey": "8djHL1qrsvv6mJJVbfw6i8A1nqeGDw4SQor7YW8tKtcD",
+      "publicKey": "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
       "keyPath": "work/keys/devnet/sponsor-relayer.json",
       "purpose": "relayer and fee/rent sponsor (one key: manifest sponsor == relayer)"
     },
     "merchant": {
-      "publicKey": "49TED53TmAC4EsScoN3zn6iTHZXAcz6J5w9trmnyAVWX",
+      "publicKey": "3hbVsik3DMzaXaCCBrtua2xJt4M152hCsZ17bkLHueFT",
       "keyPath": "work/keys/devnet/merchant.json",
       "purpose": "gateway merchant payTo owner (receives x402 payments to its ATA)"
     },
     "approvalAuthority": {
-      "publicKey": "AiZqKdteFDA3sTiimS9Ga4gGk1BG6R8yWcr646mMgvMd",
+      "publicKey": "7gpa8LcVEm3MLX4JqPtfbv95heRFKpsFCA4R84EhdDRE",
       "keyPath": "work/keys/devnet/approval-authority.json",
       "purpose": "signs update_approved_root only"
     },
     "configAuthority": {
-      "publicKey": "HYFB3197KpG11xoSrdBfBmWwGWMWbdQAVMa8cQxysvea",
+      "publicKey": "5797zmtBdH4rWVAryxjtTreNpiQajkMYX6GqmkTSPmbe",
       "keyPath": "work/keys/devnet/config-authority.json",
       "purpose": "signs update_config only (bounded caps/pause)"
     },
     "testOwnerA": {
-      "publicKey": "53EfGeKqr3VFvhfr3DFVrK3LaK6KUPoPu6TCAr6qARks",
+      "publicKey": "7oTzRWg33mod7KxVUiVWBUyMna6wgrQXUv3dC58ZsabE",
       "keyPath": "work/keys/devnet/test-owner-a.json",
       "purpose": "synthetic test participant A (deposit refund authority)"
     },
     "testOwnerB": {
-      "publicKey": "69ardTTzQcZWhTPcHzKodr6TFThxGUehajd2diFthaXv",
+      "publicKey": "mYG89rxGotGF2VYoT3tffbMbsaKdCaJEoAPbTXzWEZ2",
       "keyPath": "work/keys/devnet/test-owner-b.json",
       "purpose": "synthetic test participant B (deposit refund authority)"
     }

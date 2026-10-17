@@ -16,7 +16,8 @@ export type GatewayErrorCode =
   | "PROVIDER_UNAVAILABLE"
   | "PAID_NO_RESULT"
   | "OPERATOR_BUDGET_EXHAUSTED"
-  | "PLANNING_LIMIT_REACHED";
+  | "PLANNING_LIMIT_REACHED"
+  | "NOT_READY";
 
 /** Errors with safe, agent-readable messages; never carries secrets or note identifiers. */
 export class GatewayError extends Error {

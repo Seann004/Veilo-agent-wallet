@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { usdc } from "../lib/format";
 import type { PublicState } from "../lib/types";
 import { useResource } from "./hooks";
-import { ErrorNotice, KV, Loading, Section } from "./ui";
+import { ErrorNotice, Loading, Section } from "./ui";
 
 /** Below this many distinct approved depositors the pool is flagged as weak. A heuristic, not an anonymity score. */
 export const WEAK_POOL_PARTICIPANTS = 5;
@@ -30,61 +30,75 @@ export function membership(ps: PublicState): Membership {
 export function PrivacyPanel() {
   const ps = useResource(() => api<PublicState>("relayer", "/public-state"), "public-state");
   const m = ps.data ? membership(ps.data) : null;
+  const verified = ps.data ? ps.data.consistent && ps.data.approved.consistent : false;
   return (
     <>
-      <h1>Privacy</h1>
-      <Section title="What is public and what is hidden">
-        <div className="grid-2">
-          <div>
-            <h3>Public on Solana devnet</h3>
-            <ul>
-              <li>Deposits: amount, source account and timing</li>
-              <li>Payouts to fresh payment wallets: amount, mint, fresh wallet and timing</li>
-              <li>Merchant payments: merchant, amount, fees</li>
-              <li>Public exits and recoveries, including your refund or recovery address</li>
-            </ul>
-          </div>
-          <div>
-            <h3>Hidden</h3>
-            <ul>
-              <li>Which deposit note funded a given withdrawal (the explicit note link)</li>
-            </ul>
-            <h3>Visible to service operators</h3>
-            <ul>
-              <li>The gateway sees the credit account, prompts, usage and connection metadata</li>
-              <li>OpenRouter sees the operator account and forwarded prompts; workspace IDs are not forwarded</li>
-              <li>The RPC provider can correlate requests</li>
-            </ul>
-          </div>
-        </div>
-        <p className="small">
-          No anonymity is claimed. Timing, distinctive amounts and small pools can link payments. A public exit may reveal aggregate spending by subtraction. Spending caps are enforced off
-          chain by the owner wallet service.
+      <p className="lede page-lede">Agents pay from a shared private pool. Here&apos;s what that hides, and what it doesn&apos;t.</p>
+      <div className="grid-2 privacy-cards">
+        <section className="panel">
+          <h2 className="panel-title">Hidden</h2>
+          <ul className="check-list">
+            <li>Which of your deposits paid for a purchase</li>
+          </ul>
+        </section>
+        <section className="panel">
+          <h2 className="panel-title">Public on Solana devnet</h2>
+          <ul className="check-list muted-list">
+            <li>Deposit amounts, sender and time</li>
+            <li>Payments: merchant, amount, fees and time</li>
+            <li>Withdrawals and recoveries, including your address</li>
+          </ul>
+        </section>
+      </div>
+      <details className="panel disclosure">
+        <summary>Who else can see what</summary>
+        <ul>
+          <li>The gateway sees the credit account, prompts and usage.</li>
+          <li>OpenRouter sees the operator account and prompts, not your workspace.</li>
+          <li>The RPC provider can link requests together.</li>
+        </ul>
+        <p className="small muted">
+          No anonymity is promised. Timing, unusual amounts and a small pool can link payments to you. A withdrawal can reveal roughly how much you spent. Spending limits are enforced by
+          your wallet service, not on-chain.
         </p>
-      </Section>
-      <Section title="Pool membership">
-        {ps.loading && !ps.data ? <Loading label="public pool state" /> : null}
-        <ErrorNotice error={ps.error} what="public pool state from the relayer" />
+      </details>
+      <Section title="How private is the pool right now?">
+        {ps.loading && !ps.data ? <Loading label="pool size" /> : null}
+        <ErrorNotice error={ps.error} what="public pool state from the relayer" onRetry={ps.reload} />
         {ps.data && m ? (
           <>
-            {m.weak ? (
+            {!verified ? (
               <p className="notice notice-warn" role="alert">
-                Weak pool: only {m.participants} distinct approved depositor(s). Effective privacy is weak; a withdrawal can likely be attributed to you.
+                Can&apos;t verify the pool right now, so these numbers may be incomplete. The operator needs to publish the approved-deposit list (APPROVED_LABELS_PATH).
               </p>
             ) : null}
-            {m.repeatedAmounts === 0 && m.deposits > 0 ? <p className="notice notice-warn">Every deposit amount is distinct, which makes amounts easier to match.</p> : null}
-            <KV
-              rows={[
-                ["Approved labels (approved-set size)", String(m.approvedLabels)],
-                ["Distinct approved depositors", String(m.participants)],
-                ["Deposits observed", String(m.deposits)],
-                ["Withdrawals / exits observed", `${ps.data.spends.length} / ${ps.data.exits.length}`],
-                ["Pool liability", usdc(ps.data.pool.liability)],
-                ["Indexer consistent", ps.data.consistent && ps.data.approved.consistent ? "yes" : "no — public state mismatch"],
-              ]}
-            />
-            <p className="small">Membership size is not a measure of independent active users. Demo participants are synthetic test participants.</p>
-            <p className="small muted">{ps.data.approved.rule}</p>
+            {m.weak && verified ? (
+              <p className="notice notice-warn" role="alert">
+                Weak privacy: only {m.participants} different depositor(s). A purchase can likely be traced back to you.
+              </p>
+            ) : null}
+            {m.repeatedAmounts === 0 && m.deposits > 0 ? <p className="notice notice-warn">Every deposit amount is different, which makes them easier to match.</p> : null}
+            <div className="stats">
+              <div className="stat">
+                <span className="stat-label">Depositors</span>
+                <span className="stat-value">{m.participants}</span>
+              </div>
+              <div className="stat">
+                <span className="stat-label">Deposits</span>
+                <span className="stat-value">{m.deposits}</span>
+              </div>
+              <div className="stat">
+                <span className="stat-label">Payments / withdrawals</span>
+                <span className="stat-value">
+                  {ps.data.spends.length} / {ps.data.exits.length}
+                </span>
+              </div>
+              <div className="stat">
+                <span className="stat-label">In the pool</span>
+                <span className="stat-value">{usdc(ps.data.pool.liability)}</span>
+              </div>
+            </div>
+            <p className="small muted flush">Demo depositors are test accounts, not real people. Approved deposits: {m.approvedLabels}.</p>
           </>
         ) : null}
       </Section>

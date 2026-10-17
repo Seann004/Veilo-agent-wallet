@@ -11,13 +11,14 @@ export const GATEWAY_SKUS = [
   "summarize",
   "analyze",
   "content-package",
+  "specialist-job",
 ] as const;
 export type GatewaySku = (typeof GATEWAY_SKUS)[number];
 
 export const INFERENCE_SKUS = ["summarize", "analyze", "content-package"] as const;
 export type InferenceSku = (typeof INFERENCE_SKUS)[number];
 
-export type SkuKind = "credit_pack" | "dataset" | "inference";
+export type SkuKind = "credit_pack" | "dataset" | "inference" | "specialist";
 
 export interface SkuDefinition {
   sku: GatewaySku;
@@ -110,6 +111,20 @@ export const GATEWAY_CATALOG: Readonly<Record<GatewaySku, SkuDefinition>> = {
     maxOutputTokens: 3_000,
     dataset: null,
     delivery: "Three channel drafts and a seven-day calendar, schema validated",
+  },
+  // Sold only by a seller host: price and recipient come from one published listing version,
+  // so the operator gateway refuses it (no fixed x402 or prepaid price).
+  "specialist-job": {
+    sku: "specialist-job",
+    title: "Marketplace specialist job",
+    kind: "specialist",
+    x402Amount: null,
+    prepaidUnits: null,
+    issuesUnits: null,
+    maxInputTokens: 8_000,
+    maxOutputTokens: 3_000,
+    dataset: null,
+    delivery: "One fixed-scope specialist deliverable for the quoted marketplace job",
   },
 };
 

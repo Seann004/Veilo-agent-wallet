@@ -1,9 +1,10 @@
 // Idempotent demo seed: one workspace with the three role agents and draft demo policies, the
 // fixed SKU catalog, one shared gateway credit account, local integration secrets and runner
-// worker credentials. It never issues credits, moves funds, activates policies or prints secrets.
+// worker credentials (re-runs add credentials only for agents that have none). It never issues
+// credits, moves funds, activates policies or prints secrets.
 import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { isAddress } from "@solana/kit";
 import { VeiloConfigError, findRepoRoot, loadConfig, loadDotEnv } from "@veilo/contracts";
@@ -118,12 +119,28 @@ async function main(): Promise<void> {
   log(`licensed research fixture: ${fixture.records.length} records, ${fixture.license}, labeled "${fixture.label}"`);
 
   console.log("Runner worker credentials");
+  // Agents the runner executes that are still usable; credit checks run in control, not the runner.
+  const runnable = listAgents(ledger, workspace.id).filter((a) => (a.role === "research" || a.role === "content" || a.role === "custom") && a.status !== "revoked" && a.status !== "archived");
+  const issue = (a: (typeof runnable)[number]) => ({ agentId: a.id, name: a.name, role: a.role, token: issueWorkerCredential(ledger, workspace.id, a.id, "demo-seed").token });
   if (!existsSync(paths.runnerCredentials)) {
-    const agents = listAgents(ledger, workspace.id).filter((a) => a.role === "research" || a.role === "content");
-    const entries = agents.map((a) => ({ agentId: a.id, name: a.name, role: a.role, token: issueWorkerCredential(ledger, workspace.id, a.id, "demo-seed").token }));
+    const entries = runnable.map(issue);
     writeSecret(paths.runnerCredentials, `${JSON.stringify({ agents: entries }, null, 2)}\n`);
     log(`issued worker credentials for ${entries.map((e) => e.name).join(", ")} into ${rel(paths.runnerCredentials)}`);
-  } else log("runner credential file present (kept)");
+  } else {
+    const file = JSON.parse(readFileSync(paths.runnerCredentials, "utf8")) as { agents?: Array<{ agentId?: unknown }> };
+    if (!Array.isArray(file.agents)) throw new VeiloConfigError("INVALID_CONFIG", "runner credential file has no agents list; restore it or remove it to reissue");
+    const have = new Set(file.agents.map((e) => e.agentId));
+    const missing = runnable.filter((a) => !have.has(a.id));
+    if (missing.length === 0) log("runner credential file present (kept)");
+    else {
+      // Existing entries are kept byte-for-byte; the file is replaced by rename so a reader never sees a partial write.
+      const added = missing.map(issue);
+      const tmp = `${paths.runnerCredentials}.${process.pid}.tmp`;
+      writeSecret(tmp, `${JSON.stringify({ ...file, agents: [...file.agents, ...added] }, null, 2)}\n`);
+      renameSync(tmp, paths.runnerCredentials);
+      log(`added worker credentials for ${added.map((e) => e.name).join(", ")} to ${rel(paths.runnerCredentials)} (existing entries kept); restart the runner to pick them up`);
+    }
+  }
 
   console.log("Agents (policies are seeded as drafts; the owner reviews and activates them)");
   for (const a of listAgents(ledger, workspace.id)) log(`${a.name} (${a.role}): ${a.status}`);

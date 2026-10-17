@@ -17,8 +17,14 @@ import { ensureKeypairFile, ensureTokenFile } from "./keys";
 import { PROGRAM_SO, startValidator, type LocalValidator } from "./validator";
 import { ata, awaitTx, computeUnitLimitIx, getAccount, loadSigner, programDataAddress, REPO, sha256Hex, signAndSend, writeJson } from "../devnet/lib";
 import { deploymentManifest, GENESIS_HEX } from "../devnet/manifest";
+import { currentProgramIds } from "../devnet/set-program-id";
 
-export const PROGRAM_ID = "3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq";
+/** The id compiled into the program binary; the validator preloads the binary at this address. */
+export const PROGRAM_ID = (() => {
+  const id = currentProgramIds().declareId;
+  if (!id) throw new Error("programs/privacy-pool/src/lib.rs has no declare_id!");
+  return id;
+})();
 export const LOCAL_ROLES = ["deployer", "sponsor", "merchant", "approvalAuthority", "configAuthority", "mintAuthority", "facilitatorFeePayer", "owner", "participantB"] as const;
 export type LocalRole = (typeof LOCAL_ROLES)[number];
 

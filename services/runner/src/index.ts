@@ -57,6 +57,6 @@ function loadCredentials(path: string | undefined): AgentCredential[] {
   if (!path || !existsSync(path)) return [];
   const parsed = JSON.parse(readFileSync(path, "utf8")) as { agents?: Array<Partial<AgentCredential>> };
   return (parsed.agents ?? []).filter(
-    (a): a is AgentCredential => typeof a.agentId === "string" && typeof a.token === "string" && (a.role === "research" || a.role === "content"),
+    (a): a is AgentCredential => typeof a.agentId === "string" && typeof a.token === "string" && (a.role === "research" || a.role === "content" || a.role === "custom"),
   );
 }

@@ -2,44 +2,44 @@
   "kind": "M2 devnet private smoke: inserts",
   "profile": "devnet",
   "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
-  "recordedAt": "2026-10-16T00:32:17.740Z",
+  "recordedAt": "2026-10-17T07:41:46.256Z",
   "leaves": [
     {
       "index": 0,
-      "commitment": "2382162004157086618409316999138945389990001243976083015130495560361359404293",
+      "commitment": "7130452397010727975037381986814543706983976283526147511846681338262834348450",
       "kind": "deposit",
       "queueSeq": "0"
     },
     {
       "index": 1,
-      "commitment": "9658163897856502220925522354693324366442578648217311806045230304857847262094",
+      "commitment": "18301977581706858446213123480797215453644479247583239023438879002277187754533",
       "kind": "deposit",
       "queueSeq": "1"
     }
   ],
-  "currentRoot": "18264306448916342572213723046464191118598653108676958111152814077045200563546",
+  "currentRoot": "7690065099959873493454625954931450316604160469776406452235712988914759527886",
   "crankAttempts": [
     {
       "queueSeq": "0",
       "kind": "insert",
       "state": "finalized",
-      "signature": "3MmZXUj1nHhvHghv8zjUiaQxbWMtTtBXStv5vmsWYGDMuLid58YESqkv7Ws5FDfvCqtrzznpGakYMVDtG1Sd3CDU",
-      "explorer": "https://explorer.solana.com/tx/3MmZXUj1nHhvHghv8zjUiaQxbWMtTtBXStv5vmsWYGDMuLid58YESqkv7Ws5FDfvCqtrzznpGakYMVDtG1Sd3CDU?cluster=devnet",
-      "slot": "511530821",
+      "signature": "2nanatYKRrLezeCYB8MtL3YpyJrgqQBnj6TsWanjYVU1qvkLZtXRXQwGhRgCYfpfCid9mdKWq7jQAuXkDgRvBJJm",
+      "explorer": "https://explorer.solana.com/tx/2nanatYKRrLezeCYB8MtL3YpyJrgqQBnj6TsWanjYVU1qvkLZtXRXQwGhRgCYfpfCid9mdKWq7jQAuXkDgRvBJJm?cluster=devnet",
+      "slot": "512001218",
       "err": null,
       "feeLamports": "5000",
-      "computeUnitsConsumed": "108611",
+      "computeUnitsConsumed": "108601",
       "lamportChanges": [
         {
-          "account": "8djHL1qrsvv6mJJVbfw6i8A1nqeGDw4SQor7YW8tKtcD",
+          "account": "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
           "delta": "-5000"
         }
       ],
       "accountKeys": [
-        "8djHL1qrsvv6mJJVbfw6i8A1nqeGDw4SQor7YW8tKtcD",
-        "3n3t5Kca96Hffk4ttYyP2keGonQcpe54LT2eJAXNZPo1",
-        "65FNWNc1akaXFsPFCoLGMwjnefGbpts3sw4KEVYQ8Tab",
-        "3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq",
+        "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+        "3pFS3aJ8qtVpkFE2L6nT4A9D8vgJnVd51zdaDapHA21j",
+        "5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe",
+        "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
         "ComputeBudget111111111111111111111111111111"
       ]
     },
@@ -47,23 +47,23 @@
       "queueSeq": "1",
       "kind": "insert",
       "state": "finalized",
-      "signature": "2poXrNqR5S5vpBAJWH8KAQ2N8ZdyzKLFpoEYzV98MNwScC985eR9Qk4dU6Pq5SXkZgAzTZbPDuwtAhLkwdxEH3qq",
-      "explorer": "https://explorer.solana.com/tx/2poXrNqR5S5vpBAJWH8KAQ2N8ZdyzKLFpoEYzV98MNwScC985eR9Qk4dU6Pq5SXkZgAzTZbPDuwtAhLkwdxEH3qq?cluster=devnet",
-      "slot": "511530832",
+      "signature": "3fMMtbJVyPsdEvqexitZF4AbK9equtTgp5pVxyEuybqi4fvHa921koFv1sHU7tVCmPp1zzxt2RTjg4xYng3NdpXr",
+      "explorer": "https://explorer.solana.com/tx/3fMMtbJVyPsdEvqexitZF4AbK9equtTgp5pVxyEuybqi4fvHa921koFv1sHU7tVCmPp1zzxt2RTjg4xYng3NdpXr?cluster=devnet",
+      "slot": "512001228",
       "err": null,
       "feeLamports": "5000",
-      "computeUnitsConsumed": "108614",
+      "computeUnitsConsumed": "108604",
       "lamportChanges": [
         {
-          "account": "8djHL1qrsvv6mJJVbfw6i8A1nqeGDw4SQor7YW8tKtcD",
+          "account": "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
           "delta": "-5000"
         }
       ],
       "accountKeys": [
-        "8djHL1qrsvv6mJJVbfw6i8A1nqeGDw4SQor7YW8tKtcD",
-        "65FNWNc1akaXFsPFCoLGMwjnefGbpts3sw4KEVYQ8Tab",
-        "ADQ566FTM26boPu7ToJKomfH4zQE2rRGXSbLTSRoMB33",
-        "3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq",
+        "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+        "5j9cXKhCG6KsXoCBsBiHPocA23S17rSptVnehXbucNsE",
+        "5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe",
+        "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
         "ComputeBudget111111111111111111111111111111"
       ]
     }
@@ -71,13 +71,13 @@
   "proofTimingsMs": [
     {
       "circuit": "insert",
-      "ms": 1438,
-      "at": "2026-10-16T00:32:11.109Z"
+      "ms": 527,
+      "at": "2026-10-17T07:41:39.891Z"
     },
     {
       "circuit": "insert",
-      "ms": 641,
-      "at": "2026-10-16T00:32:13.746Z"
+      "ms": 324,
+      "at": "2026-10-17T07:41:42.305Z"
     }
   ]
 }

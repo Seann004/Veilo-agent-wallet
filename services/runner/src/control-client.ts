@@ -1,4 +1,4 @@
-import { AGENT_TOOLS, isAgentTool, type AgentToolDefinition } from "@veilo/contracts";
+import { AGENT_TOOLS, CUSTOM_AGENT_TOOLS, type AgentToolDefinition } from "@veilo/contracts";
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -39,6 +39,9 @@ const ALLOWED_ARGS: Record<string, readonly string[]> = {
   purchase_status: ["id"],
   save_artifact: ["taskId", "kind", "title", "content", "citations", "sourcePurchaseIds", "artifactId"],
   request_handoff: ["artifactId", "toAgentId", "note"],
+  marketplace_search: ["q"],
+  // No recipient, price, agent or policy field exists here: the quote and local authorization decide those.
+  propose_hire: ["taskId", "listingId", "brief", "idempotencyKey"],
 };
 
 /**
@@ -50,15 +53,17 @@ export class ControlClient {
   readonly #base: string;
   readonly #token: string;
   readonly #fetch: FetchLike;
+  readonly #tools: readonly AgentToolDefinition[];
   toolCalls = 0;
   paidRequests = 0;
   planningCalls = 0;
   readonly denied: Array<{ tool: string; code: string; message: string }> = [];
 
-  constructor(o: { baseUrl: string; token: string; fetch?: FetchLike }) {
+  constructor(o: { baseUrl: string; token: string; fetch?: FetchLike; customTools?: boolean }) {
     this.#base = o.baseUrl.replace(/\/$/, "");
     this.#token = o.token;
     this.#fetch = o.fetch ?? ((i, init) => fetch(i, init));
+    this.#tools = o.customTools ? [...AGENT_TOOLS, ...CUSTOM_AGENT_TOOLS] : AGENT_TOOLS;
   }
 
   async request(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<ControlReply> {
@@ -85,11 +90,12 @@ export class ControlClient {
       this.denied.push({ tool: name, code, message });
       throw new ToolDenied(code, message);
     };
-    if (!isAgentTool(name)) deny("TOOL_UNAVAILABLE", `tool ${name} is not available to agents`);
-    const def = AGENT_TOOLS.find((t) => t.name === name) as AgentToolDefinition;
+    const def = this.#tools.find((t) => t.name === name);
+    if (!def) return deny("TOOL_UNAVAILABLE", `tool ${name} is not available to this agent`);
     if (ctx.now() > ctx.bounds.deadlineMs) deny("BUDGET_EXCEEDED", "task duration bound reached");
     if (this.toolCalls >= ctx.bounds.maxToolCalls) deny("BUDGET_EXCEEDED", "task tool-call limit reached");
-    const paid = name === "request_purchase" || name === "consume_inference_sku";
+    // A hire proposal can lead to a payment, so it counts against the paid-purchase bound too.
+    const paid = name === "request_purchase" || name === "consume_inference_sku" || name === "propose_hire";
     if (paid && this.paidRequests >= ctx.bounds.maxPaidPurchases) deny("BUDGET_EXCEEDED", "task paid-purchase limit reached");
 
     const allowed = ALLOWED_ARGS[name] ?? [];
@@ -107,7 +113,32 @@ export class ControlClient {
     }
     this.toolCalls += 1;
     if (paid) this.paidRequests += 1;
+    if (def.method === "GET" && Object.keys(clean).length > 0) {
+      const qs = new URLSearchParams();
+      for (const [k, v] of Object.entries(clean)) qs.set(k, String(v));
+      path = `${path}?${qs.toString()}`;
+    }
     return this.request(def.method, path, def.method === "GET" ? undefined : clean, { "x-veilo-task-id": ctx.taskId });
+  }
+
+  /** Approved read-only connectors the owner attached to this agent: tool names and input schemas only. */
+  connectors(): Promise<ControlReply> {
+    return this.request("GET", "/worker/connectors");
+  }
+
+  /**
+   * One free read-only connector call. It is not a model tool, but it counts against the task's
+   * tool-call bound like one; control applies its own per-task and per-agent caps on top.
+   */
+  async connectorCall(taskId: string, call: { connectorId: string; tool: string; args: Record<string, unknown> }, ctx: { bounds: RunBounds; now: () => number }): Promise<ControlReply> {
+    const deny = (message: string): never => {
+      this.denied.push({ tool: "connector_call", code: "BUDGET_EXCEEDED", message });
+      throw new ToolDenied("BUDGET_EXCEEDED", message);
+    };
+    if (ctx.now() > ctx.bounds.deadlineMs) deny("task duration bound reached");
+    if (this.toolCalls >= ctx.bounds.maxToolCalls) deny("task tool-call limit reached");
+    this.toolCalls += 1;
+    return this.request("POST", "/worker/connector-calls", { taskId, connectorId: call.connectorId, tool: call.tool, args: call.args });
   }
 
   claim(workerId: string, leaseMs: number): Promise<ControlReply> {

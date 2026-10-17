@@ -8,7 +8,7 @@ import { revokeAgent } from "../ledger/authority";
 import { writeAudit } from "../ledger/events";
 import { jobView, type JobRow } from "../ledger/jobs";
 import { requireAgent } from "../ledger/workspace";
-import { actorOf, requireActor, type AuthDeps } from "./actor";
+import { READERS, actorOf, requireActor, type AuthDeps } from "./actor";
 
 const param = (req: Request, name: string): string => {
   const v = req.params[name];
@@ -38,21 +38,24 @@ function jobsFor(ledger: Ledger, workspaceId: string, agentId: string | undefine
 }
 
 /**
- * Owner read views of tasks and jobs, and agent archiving. Reads only; archiving revokes the
+ * Workspace read views of tasks and jobs, and owner-only agent archiving. Reads only; archiving revokes the
  * agent's authority through the same serialized path as revoke before marking it archived.
  */
 export function ownerRouter(deps: AuthDeps): Router {
   const { ledger } = deps;
   const r = Router();
   const owner = requireActor(deps, ["owner"]);
+  const reader = requireActor(deps, READERS);
   const ownerOf = (res: Response) => {
     const a = actorOf(res);
     if (a.kind !== "owner") throw new ControlError("FORBIDDEN", "owner session required");
     return a;
   };
 
-  r.get("/tasks", owner, (req, res) => {
-    const o = ownerOf(res);
+  r.get("/tasks", reader, (req, res) => {
+    const a = actorOf(res);
+    if (a.kind !== "owner" && a.kind !== "guest" && a.kind !== "viewer") throw new ControlError("FORBIDDEN", "workspace session required");
+    const o = { workspaceId: a.workspaceId };
     const parsed = taskQuerySchema.safeParse(req.query ?? {});
     if (!parsed.success) throw new ControlError("INVALID_REQUEST", parsed.error.issues.map((i) => `${i.path.join(".") || "(query)"}: ${i.message}`).join("; "));
     const q = parsed.data;

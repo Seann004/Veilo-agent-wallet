@@ -2,28 +2,28 @@
   "kind": "M2 devnet private smoke: summary",
   "profile": "devnet",
   "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
-  "recordedAt": "2026-10-16T01:28:10.235Z",
-  "programId": "3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq",
-  "poolState": "65FNWNc1akaXFsPFCoLGMwjnefGbpts3sw4KEVYQ8Tab",
+  "recordedAt": "2026-10-17T07:42:52.797Z",
+  "programId": "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
+  "poolState": "5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe",
   "computeUnitsOnDevnet": {
     "deposit": [
-      "28897",
-      "27397"
+      "33389",
+      "30389"
     ],
     "insert_leaf": [
-      "108611",
-      "108614",
-      "108343"
+      "108601",
+      "108604",
+      "108333"
     ],
     "update_approved_root": [
-      "7922"
+      "7914"
     ],
     "spend_private": [
-      "138103"
+      "144091"
     ],
     "exit_public (+ idempotent ATA create)": [
-      "121534",
-      "130534"
+      "121523",
+      "127523"
     ]
   },
   "computeUnitsNote": "computeUnitsConsumed from finalized devnet transactions, including the 150 CU SetComputeUnitLimit instruction",
@@ -36,38 +36,33 @@
   "proofTimingsMs": [
     {
       "circuit": "insert",
-      "ms": 1438,
-      "at": "2026-10-16T00:32:11.109Z"
+      "ms": 527,
+      "at": "2026-10-17T07:41:39.891Z"
     },
     {
       "circuit": "insert",
-      "ms": 641,
-      "at": "2026-10-16T00:32:13.746Z"
+      "ms": 324,
+      "at": "2026-10-17T07:41:42.305Z"
     },
     {
       "circuit": "spend",
-      "ms": 899,
-      "at": "2026-10-16T00:32:26.885Z"
-    },
-    {
-      "circuit": "spend",
-      "ms": 1515,
-      "at": "2026-10-16T01:27:14.048Z"
+      "ms": 406,
+      "at": "2026-10-17T07:41:55.042Z"
     },
     {
       "circuit": "insert",
-      "ms": 632,
-      "at": "2026-10-16T01:27:29.516Z"
+      "ms": 322,
+      "at": "2026-10-17T07:42:09.597Z"
     },
     {
       "circuit": "exit",
-      "ms": 452,
-      "at": "2026-10-16T01:27:41.700Z"
+      "ms": 255,
+      "at": "2026-10-17T07:42:22.179Z"
     },
     {
       "circuit": "exit",
-      "ms": 451,
-      "at": "2026-10-16T01:27:47.704Z"
+      "ms": 266,
+      "at": "2026-10-17T07:42:28.017Z"
     }
   ],
   "proofTimingNote": "snarkjs fullProve on this host, measured around the wallet/crank prover call",

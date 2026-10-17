@@ -15,6 +15,8 @@ import {
 import { FixtureProvider, makeHarness, VALID_CONTENT, type Harness } from "../../../gateway/test/harness";
 import type { ChatRequest, ChatResult } from "../../../gateway/src/provider/types";
 import { createApp } from "../../src/app";
+import type { AgentConnectors } from "../../src/connectors/agent-connectors";
+import type { Ledger } from "../../src/context";
 import { ServiceCredentials, issueWorkerCredential } from "../../src/auth/credentials";
 import type { SessionSettings } from "../../src/auth/session";
 import { createIntegration, type Integration } from "../../src/integration";
@@ -94,6 +96,10 @@ export interface StackOptions {
   notes?: bigint[];
   leaseMs?: number;
   purchaseSweepMs?: number;
+  settleWaitMs?: number;
+  settlePollMs?: number;
+  /** Agent connectors for the app; absent means the routes answer NOT_READY. */
+  connectors?: (ledger: Ledger) => AgentConnectors;
 }
 
 export async function makeStack(options: StackOptions = {}): Promise<Stack> {
@@ -132,9 +138,9 @@ export async function makeStack(options: StackOptions = {}): Promise<Stack> {
   const permits = PermitSigner.fromPem(gw.permitPem.privateKeyPem);
   const session: SessionSettings = { domain: "localhost:3000", origin: ORIGIN, chainId: DEVNET_CAIP2, challengeTtlMs: 300_000, sessionTtlMs: 3_600_000, secureCookies: false };
 
-  const build = () => createIntegration(env.ledger, { gateway: gatewayClient, permits, funding, ...(options.leaseMs !== undefined ? { leaseMs: options.leaseMs } : {}), ...(options.purchaseSweepMs !== undefined ? { purchaseSweepMs: options.purchaseSweepMs } : {}) });
+  const build = () => createIntegration(env.ledger, { gateway: gatewayClient, permits, funding, ...(options.leaseMs !== undefined ? { leaseMs: options.leaseMs } : {}), ...(options.purchaseSweepMs !== undefined ? { purchaseSweepMs: options.purchaseSweepMs } : {}), ...(options.settleWaitMs !== undefined ? { settleWaitMs: options.settleWaitMs } : {}), ...(options.settlePollMs !== undefined ? { settlePollMs: options.settlePollMs } : {}) });
   const listen = async (integration: Integration) => {
-    const app = createApp(createServiceHealth("control", config, false), { ledger: env.ledger, session, services: new ServiceCredentials([]), log: () => undefined, integration });
+    const app = createApp(createServiceHealth("control", config, false), { ledger: env.ledger, session, services: new ServiceCredentials([]), log: () => undefined, integration, connectors: options.connectors?.(env.ledger) });
     const server = app.listen(0, "127.0.0.1");
     await new Promise<void>((r) => server.once("listening", () => r()));
     return server;

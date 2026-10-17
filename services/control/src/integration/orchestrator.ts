@@ -23,6 +23,16 @@ import {
 import { GatewayUnreachableError, type GatewayClient, type GatewayResponse } from "./gateway-client";
 import { KeyedLock } from "./locks";
 import type { PermitSigner } from "./permits";
+import { LISTING_SERVICE_PREFIX, type SellerClients } from "../marketplace/seller-clients";
+import type { ExternalBatchRunner } from "../external/batch";
+import {
+  EXTERNAL_BATCH_SKU,
+  EXTERNAL_SERVICE_PREFIX,
+  externalBindingForService,
+  externalFundingBinding,
+  externalInputProblem,
+  type ExternalBatchInput,
+} from "../external/bindings";
 
 export interface ExecutionRow {
   purchase_id: string;
@@ -53,6 +63,8 @@ interface QuoteRow {
 
 interface ServiceRow {
   id: string;
+  workspace_id: string;
+  service_key: string;
   origin: string;
   gateway_identity: string | null;
   recipient: string | null;
@@ -76,6 +88,22 @@ export interface OrchestratorDeps {
   gateway: GatewayClient | undefined;
   permits: PermitSigner | undefined;
   funding: FundingProvider;
+  /** Pays approved external x402 resources; absent when external purchases are not configured. */
+  external?: ExternalBatchRunner | undefined;
+  /** Seller-host clients for marketplace listing services; absent when the marketplace is not configured. */
+  sellers?: SellerClients | undefined;
+  /** Called once the one-time payer of a purchase is known, before its merchant leg is signed. */
+  onPayerKnown?: ((purchaseId: string, payer: string) => void) | undefined;
+  /**
+   * Gate checked before a prepared proof is released. "wait" keeps the proof unreleased and
+   * retries later; "refuse" cancels the unreleased operation.
+   */
+  beforeRelease?: ((purchaseId: string) => Promise<{ outcome: "ok" | "wait" | "refuse"; reason?: string }>) | undefined;
+  /**
+   * Gate checked after funding finalized and before any merchant authority or quote. "stop"
+   * means the hook has already made the funded purchase recoverable; nothing is signed.
+   */
+  beforeMerchant?: ((purchaseId: string) => { outcome: "ok" } | { outcome: "stop"; code: string; reason: string }) | undefined;
   /** How long a purchase request keeps reconciling a pending chain outcome before replying. */
   settleWaitMs?: number;
   settlePollMs?: number;
@@ -98,10 +126,14 @@ class Blocked extends Error {
   constructor(
     readonly code: string,
     message: string,
+    /** Nothing was released or signed and the same operation can simply be driven again. */
+    readonly retry = false,
   ) {
     super(message);
   }
 }
+
+const RETRY_MAX_DELAY_MS = 15_000;
 
 /**
  * Drives one authorized purchase across control, the wallet funding leg and the gateway.
@@ -118,7 +150,7 @@ export class PurchaseOrchestrator {
   }
 
   get configured(): boolean {
-    return this.deps.gateway !== undefined;
+    return this.deps.gateway !== undefined || this.deps.sellers !== undefined;
   }
 
   execution(purchaseId: string): ExecutionRow | undefined {
@@ -132,7 +164,14 @@ export class PurchaseOrchestrator {
 
   /** Records the exact SKU input once; it must hash to the purchase's request digest. */
   storeInput(p: PurchaseRow, input: Record<string, unknown>): void {
-    if (!isGatewaySku(p.sku) || computeRequestDigest(p.sku, input) !== p.request_digest) {
+    const external = this.#externalBinding(p);
+    if (external) {
+      const problem = p.sku === EXTERNAL_BATCH_SKU ? externalInputProblem(external, input) : "external services sell only batches";
+      if (problem) throw new ControlError("SERVICE_NOT_ALLOWED", `external purchase input refused: ${problem}`);
+    } else if (!isGatewaySku(p.sku)) {
+      throw new ControlError("IDEMPOTENCY_CONFLICT", "input does not match the purchase request digest");
+    }
+    if (computeRequestDigest(p.sku, input) !== p.request_digest) {
       throw new ControlError("IDEMPOTENCY_CONFLICT", "input does not match the purchase request digest");
     }
     immediate(this.ledger.db, () => {
@@ -165,32 +204,42 @@ export class PurchaseOrchestrator {
   }
 
   /** Advances the purchase as far as current evidence allows; safe to call repeatedly. */
-  async drive(purchaseId: string): Promise<{ purchase: PurchaseRow; execution: ExecutionView }> {
+  async drive(purchaseId: string): Promise<{ purchase: PurchaseRow; execution: ExecutionView; retryable: boolean }> {
     return this.#lock.run(purchaseId, async () => {
+      let retryable = false;
       try {
         await this.#drive(purchaseId);
         this.#setError(purchaseId, null, null);
       } catch (error) {
-        if (error instanceof Blocked) this.#setError(purchaseId, error.code, error.message);
+        if (error instanceof Blocked) {
+          this.#setError(purchaseId, error.code, error.message);
+          retryable = error.retry;
+        }
         else if (error instanceof GatewayUnreachableError) this.#setError(purchaseId, "NOT_READY", error.message);
         else if (error instanceof ControlError) this.#setError(purchaseId, error.code, error.message);
         else throw error;
       }
-      return { purchase: getPurchaseRow(this.ledger, purchaseId), execution: this.view(purchaseId) };
+      return { purchase: getPurchaseRow(this.ledger, purchaseId), execution: this.view(purchaseId), retryable };
     });
   }
 
   /**
-   * Drives a purchase and, while its only blocker is a pending chain outcome, keeps reconciling
-   * the same operation for up to `settleWaitMs` (wall clock). Nothing new is authorized, proved or
-   * signed by waiting; each pass is an ordinary idempotent drive.
+   * Drives a purchase and, while its only blocker is a pending chain outcome or a retryable
+   * pre-sign failure, keeps driving the same operation for up to `settleWaitMs` (wall clock).
+   * Retryable failures back off exponentially. Nothing new is authorized, proved or withdrawn
+   * by waiting; each pass is an ordinary idempotent drive.
    */
-  async driveUntilSettled(purchaseId: string): Promise<{ purchase: PurchaseRow; execution: ExecutionView }> {
+  async driveUntilSettled(purchaseId: string): Promise<{ purchase: PurchaseRow; execution: ExecutionView; retryable: boolean }> {
     const deadline = Date.now() + (this.deps.settleWaitMs ?? 0);
+    const poll = this.deps.settlePollMs ?? 2_000;
+    let backoff = poll;
     for (;;) {
       const r = await this.drive(purchaseId);
-      if (r.execution.blocked?.code !== "SETTLEMENT_UNCERTAIN" || Date.now() >= deadline) return r;
-      await new Promise((resolve) => setTimeout(resolve, this.deps.settlePollMs ?? 2_000));
+      const pending = r.execution.blocked?.code === "SETTLEMENT_UNCERTAIN";
+      if ((!pending && !r.retryable) || Date.now() >= deadline) return r;
+      const delay = r.retryable ? backoff : poll;
+      if (r.retryable) backoff = Math.min(backoff * 2, RETRY_MAX_DELAY_MS);
+      await new Promise((resolve) => setTimeout(resolve, Math.max(0, Math.min(delay, deadline - Date.now()))));
     }
   }
 
@@ -247,12 +296,34 @@ export class PurchaseOrchestrator {
     markOutboxPublished(this.ledger, eventId);
   }
 
+  /**
+   * The client for the purchase's approved service: the operator gateway for its own services,
+   * or the seller host bound by origin and gateway identity for a marketplace listing.
+   */
+  async #clientFor(p: PurchaseRow): Promise<GatewayClient> {
+    const s = this.#service(p);
+    if (s.service_key.startsWith(LISTING_SERVICE_PREFIX)) {
+      if (p.payment_path !== "private_x402") throw new Blocked("SERVICE_NOT_ALLOWED", "marketplace listings are paid only through private x402");
+      if (!this.deps.sellers) throw new Blocked("NOT_READY", "seller-host connections are not configured");
+      return this.deps.sellers.clientFor({ origin: s.origin, gatewayIdentity: s.gateway_identity ?? "", workspaceId: s.workspace_id });
+    }
+    if (!this.deps.gateway) throw new Blocked("NOT_READY", "gateway integration is not configured");
+    return this.deps.gateway;
+  }
+
+  #externalBinding(p: PurchaseRow) {
+    return this.#service(p).service_key.startsWith(EXTERNAL_SERVICE_PREFIX) ? externalBindingForService(this.ledger, p.service_id) : undefined;
+  }
+
   async #drive(purchaseId: string): Promise<void> {
-    const gateway = this.deps.gateway;
     let p = getPurchaseRow(this.ledger, purchaseId);
     if (p.authorization_state === "awaiting_approval") throw new Blocked("APPROVAL_REQUIRED", "waiting for owner approval");
     if (p.authorization_state === "rejected") return;
-    if (!gateway) throw new Blocked("NOT_READY", "gateway integration is not configured");
+    if (this.#service(p).service_key.startsWith(EXTERNAL_SERVICE_PREFIX)) {
+      await this.#driveExternal(purchaseId);
+      return;
+    }
+    const gateway = await this.#clientFor(p);
     const input = this.input(p.id);
     if (!input) throw new Blocked("NOT_READY", "purchase input has not been supplied");
     this.#ensureExecution(p);
@@ -261,6 +332,38 @@ export class PurchaseOrchestrator {
       const progressed =
         p.payment_path === "prepaid_credits" ? await this.#usageStep(p, gateway, input) : await this.#x402Step(p, gateway, input);
       if (!progressed) return;
+    }
+  }
+
+  // ---- external x402 batch (private funding leg, then one payment per call) --------------------
+
+  async #driveExternal(purchaseId: string): Promise<void> {
+    const runner = this.deps.external;
+    if (!runner) throw new Blocked("NOT_READY", "external x402 purchases are not configured");
+    let p = getPurchaseRow(this.ledger, purchaseId);
+    if (p.payment_path !== "private_x402") throw new Blocked("SERVICE_NOT_ALLOWED", "external resources are paid only through private x402");
+    const binding = this.#externalBinding(p);
+    if (!binding) throw new Blocked("RECOVERY_REQUIRED", "external binding missing for this purchase");
+    const input = this.input(p.id) as ExternalBatchInput | undefined;
+    if (!input) throw new Blocked("NOT_READY", "purchase input has not been supplied");
+    this.#ensureExecution(p);
+    for (let step = 0; step < MAX_STEPS + 100; step += 1) {
+      p = getPurchaseRow(this.ledger, purchaseId);
+      if (p.recovery_state !== "none" || TERMINAL_FULFILMENT.has(p.fulfilment_state)) return;
+      if (["expired_unsettled", "abandoned"].includes(p.funding_state)) return;
+      if (p.funding_state !== "finalized") {
+        if (p.funding_state === "not_started" && binding.status !== "approved") {
+          immediate(this.ledger.db, () => {
+            const cur = getPurchaseRow(this.ledger, p.id);
+            if (cur.authorization_state === "reserved") cancelUnreleased(this.ledger, cur, "rejected");
+          });
+          throw new Blocked("SERVICE_NOT_ALLOWED", "external binding was disabled before funding");
+        }
+        const progressed = await this.#fundingStep(p, () => externalFundingBinding(binding, p.sku));
+        if (!progressed) return;
+        continue;
+      }
+      if (!(await runner.step(p, input, binding))) return;
     }
   }
 
@@ -502,6 +605,11 @@ export class PurchaseOrchestrator {
     if (p.merchant_state === "finalized" && TERMINAL_FULFILMENT.has(p.fulfilment_state)) return false;
     if (["expired_unsettled", "abandoned"].includes(p.funding_state)) return false;
 
+    if (p.funding_state === "finalized" && p.merchant_state === "not_started" && this.deps.beforeMerchant) {
+      const gate = this.deps.beforeMerchant(p.id);
+      if (gate.outcome === "stop") throw new Blocked(gate.code, gate.reason);
+    }
+
     const quote = this.#latestQuote(p.id);
     if (!quote) {
       if (p.authorization_state !== "reserved" && p.funding_state !== "finalized") return false;
@@ -509,37 +617,7 @@ export class PurchaseOrchestrator {
       return true;
     }
 
-    switch (p.funding_state) {
-      case "not_started":
-        if (p.authorization_state !== "reserved") return false;
-        // Authority is rechecked and recorded first; the wallet prepares only for this stage.
-        advanceAuthority(this.ledger, p.id, "prepare_proof");
-        return true;
-      case "proof_prepared":
-        return (this.execution(p.id) as ExecutionRow).funding_ref === null ? this.#fundingPrepare(p, quote) : this.#fundingRelease(p);
-      case "proof_released": {
-        const r = await this.deps.funding.status(p.id);
-        if (r.status !== "prepared") return this.#applyFunding(p, r);
-        // Release authority was recorded but the request never reached the wallet (the proof is
-        // still there). The same release is re-sent while authority is still current.
-        try {
-          immediate(this.ledger.db, () => assertAuthorityCurrent(this.ledger, getPurchaseRow(this.ledger, p.id)));
-        } catch (error) {
-          if (error instanceof ControlError) throw new Blocked("RECOVERY_REQUIRED", `release was recorded but never delivered and authority has since stopped: ${error.message}`);
-          throw error;
-        }
-        const ex = this.execution(p.id) as ExecutionRow;
-        this.#intent(p, "wallet.funding.release", { fundingRef: ex.funding_ref, resend: true });
-        return this.#applyFunding(p, await this.deps.funding.release(p.id, ex.funding_ref as string));
-      }
-      case "submitted":
-      case "uncertain":
-        return this.#applyFunding(p, await this.deps.funding.status(p.id));
-      case "finalized":
-        break;
-      default:
-        return false;
-    }
+    if (p.funding_state !== "finalized") return this.#fundingStep(p, () => this.#binding(p, quote));
 
     if (p.merchant_state === "not_started") {
       const ch = await gateway.execute(quote.quote_id, p.operation_id, p.request_digest);
@@ -579,7 +657,40 @@ export class PurchaseOrchestrator {
     return false;
   }
 
-  async #fundingPrepare(p: PurchaseRow, quote: QuoteRow): Promise<boolean> {
+  /** Private funding leg shared by gateway purchases and external batches; never re-withdraws. */
+  async #fundingStep(p: PurchaseRow, binding: () => FundingBinding): Promise<boolean> {
+    switch (p.funding_state) {
+      case "not_started":
+        if (p.authorization_state !== "reserved") return false;
+        // Authority is rechecked and recorded first; the wallet prepares only for this stage.
+        advanceAuthority(this.ledger, p.id, "prepare_proof");
+        return true;
+      case "proof_prepared":
+        return (this.execution(p.id) as ExecutionRow).funding_ref === null ? this.#fundingPrepare(p, binding()) : this.#fundingRelease(p);
+      case "proof_released": {
+        const r = await this.deps.funding.status(p.id);
+        if (r.status !== "prepared") return this.#applyFunding(p, r);
+        // Release authority was recorded but the request never reached the wallet (the proof is
+        // still there). The same release is re-sent while authority is still current.
+        try {
+          immediate(this.ledger.db, () => assertAuthorityCurrent(this.ledger, getPurchaseRow(this.ledger, p.id)));
+        } catch (error) {
+          if (error instanceof ControlError) throw new Blocked("RECOVERY_REQUIRED", `release was recorded but never delivered and authority has since stopped: ${error.message}`);
+          throw error;
+        }
+        const ex = this.execution(p.id) as ExecutionRow;
+        this.#intent(p, "wallet.funding.release", { fundingRef: ex.funding_ref, resend: true });
+        return this.#applyFunding(p, await this.deps.funding.release(p.id, ex.funding_ref as string));
+      }
+      case "submitted":
+      case "uncertain":
+        return this.#applyFunding(p, await this.deps.funding.status(p.id));
+      default:
+        return false;
+    }
+  }
+
+  async #fundingPrepare(p: PurchaseRow, binding: FundingBinding): Promise<boolean> {
     if (p.authorization_state !== "reserved") return false;
     const note = reservedNoteFor(this.ledger, p.id);
     if (!note) throw new Blocked("RECOVERY_REQUIRED", "purchase has no reserved pool note");
@@ -591,17 +702,27 @@ export class PurchaseOrchestrator {
       tokenFeeCapUsdc: big(p.fee_cap_usdc),
       sponsorLamportCap: big(p.sponsor_lamports),
       inputNote: { commitment: note.commitment, value: big(note.value) },
-      binding: this.#binding(p, quote),
+      binding,
     });
     if (r.status !== "prepared") {
       throw new Blocked(r.status === "not_ready" ? "NOT_READY" : "RECOVERY_REQUIRED", `private funding not available: ${"reason" in r ? r.reason : r.status}`);
     }
     this.#ack(ev);
     this.#update(p.id, { funding_ref: r.fundingRef, merchant_payer: r.payer });
+    this.deps.onPayerKnown?.(p.id, r.payer);
     return true;
   }
 
   async #fundingRelease(p: PurchaseRow): Promise<boolean> {
+    const gate = this.deps.beforeRelease ? await this.deps.beforeRelease(p.id) : { outcome: "ok" as const };
+    if (gate.outcome === "wait") throw new Blocked("NOT_READY", gate.reason ?? "waiting before releasing the proof");
+    if (gate.outcome === "refuse") {
+      immediate(this.ledger.db, () => {
+        const cur = getPurchaseRow(this.ledger, p.id);
+        if (cur.authorization_state === "reserved" && cur.funding_state === "proof_prepared") cancelUnreleased(this.ledger, cur, "rejected");
+      });
+      throw new Blocked("POLICY_DENIED", gate.reason ?? "release refused");
+    }
     const ex = this.execution(p.id) as ExecutionRow;
     advanceAuthority(this.ledger, p.id, "release_proof");
     this.#intent(p, "wallet.funding.release", { fundingRef: ex.funding_ref });
@@ -677,9 +798,11 @@ export class PurchaseOrchestrator {
       binding: this.#binding(p, quote),
       exactAmountUsdc: big(p.price_usdc),
     });
-    if (signed.status !== "signed") {
-      throw new Blocked(signed.status === "not_ready" ? "NOT_READY" : "RECOVERY_REQUIRED", `merchant payment not signed: ${signed.reason}`);
+    if (signed.status === "not_ready") {
+      // Nothing was signed: the merchant leg stays authorized on the same funding and is retried.
+      throw new Blocked("NOT_READY", `merchant payment not signed: ${signed.reason}`, true);
     }
+    if (signed.status !== "signed") throw new Blocked("RECOVERY_REQUIRED", `merchant payment not signed: ${signed.reason}`);
     this.#ack(ev);
     immediate(this.ledger.db, () => {
       if (ex.merchant_message_hash === null) this.#update(p.id, { merchant_message_hash: signed.messageHash, merchant_payer: signed.payer });

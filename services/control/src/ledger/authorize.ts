@@ -25,6 +25,12 @@ export interface AuthorizeInput {
   paymentPath: PaymentPath;
   requestDigest: string;
   taskId?: string | undefined;
+  /**
+   * The purchase was proposed by this task while it ran and is authorized later (a granted
+   * marketplace hire), so a task that has since completed still bounds it. A failed, cancelled
+   * or incomplete task does not.
+   */
+  proposedByTask?: boolean | undefined;
   jobId?: string | undefined;
   rationale?: string | undefined;
 }
@@ -139,7 +145,8 @@ function authorizeInTransaction(ledger: Ledger, input: AuthorizeInput): Authoriz
   if (input.taskId !== undefined) {
     task = db.prepare(`SELECT * FROM task WHERE id = ?`).get(input.taskId) as TaskRow | undefined;
     if (!task || task.agent_id !== agent.id) throw new ControlError("POLICY_DENIED", "task scope mismatch");
-    if (task.state !== "queued" && task.state !== "running") throw new ControlError("POLICY_DENIED", `task is ${task.state}`);
+    const open = task.state === "queued" || task.state === "running" || (input.proposedByTask === true && task.state === "completed");
+    if (!open) throw new ControlError("POLICY_DENIED", `task is ${task.state}`);
     if (task.deadline_at_ms !== null && num(task.deadline_at_ms) <= now) {
       throw new ControlError("POLICY_DENIED", "task deadline has passed");
     }

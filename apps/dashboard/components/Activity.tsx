@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../lib/api";
 import { credits, lamports, shortKey, usdc, when } from "../lib/format";
-import { LEG_LABEL, LABEL_CREDITS_NO_CHARGE, legStateLabel, purchaseLabel } from "../lib/labels";
+import { LEG_LABEL, LABEL_CREDITS_NO_CHARGE, legStateLabel, purchaseLabel, reasonGuidance } from "../lib/labels";
 import type { Activity, Agent, AuditEvent, PaymentStates, Purchase, Workspace } from "../lib/types";
+import { useCapability } from "./Shell";
 import { useAction } from "./hooks";
-import { ErrorNotice, KV, TxLink } from "./ui";
+import { StateStrip } from "./StateStrip";
+import { DeniedHint, ErrorNotice, KV, TxLink } from "./ui";
 
 const LEGS: Array<keyof PaymentStates> = ["authorization", "funding", "merchant", "fulfilment", "recovery"];
 
@@ -28,11 +30,29 @@ export function ActivityDrawer({
   onChanged: () => void | Promise<void>;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
   const action = useAction();
+  const decide = useCapability("decide");
   useEffect(() => {
     closeRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab" || !drawerRef.current) return;
+      const items = [...drawerRef.current.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex='-1'])")];
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (!first || !last) return;
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !drawerRef.current.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !drawerRef.current.contains(active))) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -40,7 +60,9 @@ export function ActivityDrawer({
   const agent = workspace.agents.find((a) => a.id === purchase.agentId);
   const service = workspace.services.find((s) => s.id === purchase.serviceId);
   const policyEvent = events.find((e) => e.action === "purchase.authorize" && e.details.purchaseId === purchase.id);
-  const sig = (leg: string) => purchase.chainAttempts.filter((a) => a.leg === leg && a.signature).at(-1);
+  // The public view omits chain attempts and operation identifiers.
+  const attempts = purchase.chainAttempts ?? [];
+  const sig = (leg: string) => attempts.filter((a) => a.leg === leg && a.signature).at(-1);
   const funding = sig("funding");
   const merchant = sig("merchant");
   const recovery = sig("recovery");
@@ -53,7 +75,7 @@ export function ActivityDrawer({
     });
   return (
     <div className="drawer-backdrop" onClick={onClose}>
-      <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>
+      <aside ref={drawerRef} className="drawer" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>
         <div className="panel-head">
           <h2 id={titleId}>
             {purchase.sku} · {agent?.name ?? "unknown agent"}
@@ -65,6 +87,7 @@ export function ActivityDrawer({
         <p className="status-line">
           <strong>{purchaseLabel(purchase, { agentStopped: agentStopped(agent, workspace.workspace.stopped) })}</strong>
         </p>
+        <StateStrip purchase={purchase} />
         <h3>Payment legs</h3>
         <ol className="legs">
           {LEGS.map((leg) => (
@@ -77,7 +100,7 @@ export function ActivityDrawer({
         {purchase.stateReason ? <p className="small">Reason: {purchase.stateReason}</p> : null}
         <KV
           rows={[
-            ["Payment path", prepaid ? `Prepaid gateway credits — ${LABEL_CREDITS_NO_CHARGE}` : "Private pool → fresh wallet → x402 (test-USDC)"],
+            ["Payment path", prepaid ? `Prepaid gateway credits — ${LABEL_CREDITS_NO_CHARGE}` : "Private pool → fresh wallet → x402 (USDC)"],
             ["Rationale", purchase.rationale ?? <span className="muted">none given</span>],
             [
               "Policy result",
@@ -93,16 +116,16 @@ export function ActivityDrawer({
             ["Funding signature", prepaid ? "not applicable" : <TxLink key="f" signature={funding?.signature} />],
             ["Settlement signature", prepaid ? "not applicable" : <TxLink key="m" signature={merchant?.signature} />],
             ["Recovery signature", <TxLink key="r" signature={recovery?.signature} />],
-            ["Operation ID", <span key="o" className="mono">{purchase.operationId}</span>],
+            ...(purchase.operationId ? [["Operation ID", <span key="o" className="mono">{purchase.operationId}</span>] as [string, ReactNode]] : []),
             ["Created", when(purchase.createdAt)],
             ["Settled", when(purchase.settledAt)],
           ]}
         />
-        {purchase.chainAttempts.length > 0 ? (
+        {attempts.length > 0 ? (
           <>
             <h3>Chain attempts</h3>
             <ul className="plain small">
-              {purchase.chainAttempts.map((a) => (
+              {attempts.map((a) => (
                 <li key={`${a.leg}-${a.attempt}`}>
                   {a.leg} #{a.attempt}: {a.commitment} — <TxLink signature={a.signature} />
                 </li>
@@ -116,7 +139,7 @@ export function ActivityDrawer({
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={action.busy}
+                disabled={action.busy || !decide.allowed}
                 onClick={() => post("decision", { decision: "approve" })}
               >
                 Approve purchase
@@ -124,7 +147,7 @@ export function ActivityDrawer({
               <button
                 type="button"
                 className="btn"
-                disabled={action.busy}
+                disabled={action.busy || !decide.allowed}
                 onClick={() => post("decision", { decision: "reject" })}
               >
                 Reject purchase
@@ -134,12 +157,13 @@ export function ActivityDrawer({
           <button
             type="button"
             className="btn"
-            disabled={action.busy}
+            disabled={action.busy || !decide.allowed}
             onClick={() => post("reconcile", {})}
           >
             Reconcile with chain and gateway
           </button>
         </div>
+        <DeniedHint reason={decide.reason} />
         <ErrorNotice error={action.error} />
       </aside>
     </div>
@@ -156,7 +180,7 @@ export function ActivityList({ activity, workspace, onChanged, limit }: { activi
     setOpenId(null);
     if (id) triggers.current.get(id)?.focus();
   };
-  if (purchases.length === 0) return <p className="muted">No purchases recorded yet.</p>;
+  if (purchases.length === 0) return <p className="muted flush">No payments yet. They appear here when an agent buys a service.</p>;
   return (
     <>
       <ul className="activity">
@@ -179,6 +203,7 @@ export function ActivityList({ activity, workspace, onChanged, limit }: { activi
                 <span className="activity-label">{purchaseLabel(p, { agentStopped: agentStopped(agent, workspace.workspace.stopped) })}</span>
                 <span className="muted small">{when(p.createdAt)}</span>
               </button>
+              <StateStrip purchase={p} />
             </li>
           );
         })}
@@ -189,30 +214,38 @@ export function ActivityList({ activity, workspace, onChanged, limit }: { activi
 }
 
 export function EventLog({ events }: { events: AuditEvent[] }) {
-  if (events.length === 0) return <p className="muted">No events yet.</p>;
+  if (events.length === 0) return <p className="muted flush">No audit events yet.</p>;
   return (
     <div className="table-wrap">
       <table>
         <caption className="sr-only">Audit events</caption>
         <thead>
           <tr>
-            <th scope="col">Time</th>
-            <th scope="col">Action</th>
-            <th scope="col">Actor</th>
-            <th scope="col">Policy result</th>
-            <th scope="col">Reason</th>
+            <th scope="col">When</th>
+            <th scope="col">What happened</th>
+            <th scope="col">By</th>
+            <th scope="col">Result</th>
           </tr>
         </thead>
         <tbody>
-          {events.map((e) => (
-            <tr key={e.seq}>
-              <td>{when(e.at)}</td>
-              <td>{e.action}</td>
-              <td>{e.actor.type}</td>
-              <td>{e.policyResult.replace(/_/g, " ")}</td>
-              <td>{e.reasonCode ?? (typeof e.details.reason === "string" ? e.details.reason : "")}</td>
-            </tr>
-          ))}
+          {events.map((e) => {
+            const reason = e.reasonCode ?? (typeof e.details.reason === "string" ? e.details.reason : null);
+            const guidance = reasonGuidance(e.reasonCode);
+            return (
+              <tr key={e.seq}>
+                <td className="nowrap small">{when(e.at)}</td>
+                <td>
+                  {e.action.replace(/[._]/g, " ")}
+                  {reason ? <span className="muted small"> · {reason}</span> : null}
+                  {guidance ? <span className="hint block">{guidance}</span> : null}
+                </td>
+                <td className="small">{e.details.actor === "guest" ? "guest" : e.actor.type}</td>
+                <td>
+                  <span className={`pill pill-${e.policyResult === "allowed" ? "ok" : e.policyResult === "denied" ? "danger" : "muted"}`}>{e.policyResult.replace(/_/g, " ")}</span>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

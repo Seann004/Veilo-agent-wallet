@@ -14,11 +14,14 @@ export function findRepoRoot(start: string = process.cwd()): string {
 }
 
 export const PROVIDER_SECRET_VARS = ["OPENROUTER_API_KEY"] as const;
+/** The Supabase server key reaches only the marketplace process. */
+export const MARKETPLACE_SECRET_VARS = ["SUPABASE_SECRET_KEY"] as const;
 
 export interface LoadDotEnvOptions {
   rootDir?: string;
   /** Only the gateway process may receive the provider API key. */
   allowProviderSecrets?: boolean;
+  allowMarketplaceSecrets?: boolean;
   /** Additional variables this process must not receive. */
   omit?: readonly string[];
 }
@@ -31,6 +34,7 @@ export interface LoadDotEnvOptions {
 export function loadDotEnv(options: LoadDotEnvOptions = {}): boolean {
   const omit = new Set<string>(options.omit ?? []);
   if (!options.allowProviderSecrets) for (const name of PROVIDER_SECRET_VARS) omit.add(name);
+  if (!options.allowMarketplaceSecrets) for (const name of MARKETPLACE_SECRET_VARS) omit.add(name);
   for (const name of omit) delete process.env[name];
 
   const rootDir = options.rootDir ?? findRepoRoot();

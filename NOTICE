@@ -1,0 +1,70 @@
+Veilo — attribution and third-party notices
+
+Veilo's own project license has not been selected by the owner. This NOTICE
+preserves reference attribution; it does not assign the whole project an MIT,
+Apache or GPL license, and is not a complete transitive dependency inventory.
+
+Architectural reference and adaptations
+
+zx402 by Marcus Tan: https://github.com/Marcussy34/zx402
+Inspected snapshot: 9da88d099bb1ad28c0de3e2b0b7e15e2a1fd198d
+Source of the notice below: PRD_latest.md Part VI, SOURCE: LICENSE.
+
+The reference/adaptation areas are pooled notes, approved membership, local
+spend/insert/exit proofs, nullifiers, hidden change, pool-to-fresh-payer-to-x402
+settlement, owner public exit, and the privacy/trust documentation. Veilo
+translates these invariants to Solana accounts, BN254 circuits and its own
+control/wallet/gateway services. The reference map is in PRD section 23.
+This attribution does not assert a line-by-line copying inventory.
+Privacy Pools is the architectural lineage credited by the reference; its
+contracts are not identified as directly vendored in this checkout. Original
+Cardano evidence belongs to zx402 and is not Veilo execution evidence.
+
+Upstream zx402 license (applies to that source and reused/adapted portions)
+
+MIT License
+
+Copyright (c) 2026 Marcus Tan
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+Direct reused libraries and toolchain sources
+
+- iden3 circomlib 2.0.5: GPL-3.0 package declaration; included bitify and
+  comparator circuit headers permit GPL v3 or later, copyright 2018 0KIMS
+  association. Imported into circuits/src. Check the pinned release rather
+  than assuming the current upstream default branch has the same license.
+- iden3 circomlibjs 0.1.7: GPL-3.0 package declaration; Poseidon/hash tooling
+  used by packages/privacy-sdk and proof/vector generation.
+- iden3 snarkjs 0.7.6: GPL-3.0 package declaration and bundled COPYING;
+  proof generation/setup tooling used by circuits and the privacy SDK.
+- iden3 circom 2.2.3: GPL v3 (upstream COPYING); compiler in the Docker image.
+- Lightprotocol groth16-solana 0.2.0: Cargo metadata declares MIT, but the
+  exact published crate's LICENSE is Apache-2.0. This is an unresolved upstream
+  discrepancy, not an assertion of dual licensing. Used by programs/veilo-crypto.
+- x402 Foundation @x402 packages 2.28.0: Apache-2.0 package declaration;
+  protocol/client, gateway and local test facilitator integration.
+- Original synthetic research fixtures: CC0-1.0 dedication in
+  services/gateway/fixtures/research/LICENSE.md. Fictional demo data only.
+
+Keep upstream copyright/license notices with redistributed dependencies and
+adaptations. Owner review of GPL distribution obligations and the verifier
+license discrepancy remains open before choosing Veilo's license or shipping
+a bundle. See docs/references/attribution.md for source links and scope.

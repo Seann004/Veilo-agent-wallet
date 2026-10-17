@@ -46,24 +46,24 @@
   "harness": "LiteSVM 0.17.0 (Agave 4.3 runtime, default feature set), localnet program build",
   "instructions": {
     "deposit": {
-      "computeUnitsMax": 30086,
-      "computeUnitsMin": 25586,
+      "computeUnitsMax": 33086,
+      "computeUnitsMin": 27086,
       "legacyTxBytesMax": 618,
       "legacyTxBytesMin": 618,
       "recommendedComputeUnitLimit": 100000,
       "samples": 4
     },
     "exit_public": {
-      "computeUnitsMax": 118255,
-      "computeUnitsMin": 118255,
+      "computeUnitsMax": 119755,
+      "computeUnitsMin": 119755,
       "legacyTxBytesMax": 907,
       "legacyTxBytesMin": 907,
       "recommendedComputeUnitLimit": 300000,
       "samples": 1
     },
     "initialize_pool": {
-      "computeUnitsMax": 45482,
-      "computeUnitsMin": 45482,
+      "computeUnitsMax": 46982,
+      "computeUnitsMin": 46982,
       "legacyTxBytesMax": 741,
       "legacyTxBytesMin": 741,
       "recommendedComputeUnitLimit": 200000,
@@ -94,8 +94,8 @@
       "samples": 1
     },
     "spend_private": {
-      "computeUnitsMax": 142970,
-      "computeUnitsMin": 137800,
+      "computeUnitsMax": 142300,
+      "computeUnitsMin": 136310,
       "legacyTxBytesMax": 1152,
       "legacyTxBytesMin": 960,
       "recommendedComputeUnitLimit": 400000,
