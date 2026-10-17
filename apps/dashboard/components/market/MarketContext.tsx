@@ -1,5 +1,6 @@
 "use client";
 
+import { clearResourceCache } from "../hooks";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Wallet, WalletAccount } from "@wallet-standard/base";
 import { StandardDisconnect, type StandardDisconnectFeature } from "@wallet-standard/features";
@@ -168,12 +169,19 @@ export function MarketProvider({ children }: { children: ReactNode }) {
     });
   }, [wallet]);
 
+  // Results cached for one marketplace account are never shown to another.
+  const userId = me?.userId ?? null;
+  useEffect(() => {
+    clearResourceCache();
+  }, [userId]);
+
   const signIn = useCallback(
     async (w: OwnerWallet) => {
       const account = await connect(w.wallet).catch(walletError);
       const auth = supabase().auth;
       // A different address never inherits the current session.
       if (meRef.current && meRef.current.address !== account.address) await auth.signOut();
+      clearResourceCache();
       const { error } = await auth.signInWithWeb3({ chain: "solana", statement: SIGN_IN_STATEMENT, wallet: web3SignInAdapter(w.wallet, account) }).catch(walletError);
       if (error) throw new ApiError(error.status ?? 401, "UNAUTHENTICATED", error.message);
       const t = await accessToken();
@@ -188,6 +196,7 @@ export function MarketProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     if (configured) await supabase().auth.signOut();
+    clearResourceCache();
     setMe(null);
     setMeError(undefined);
   }, [configured]);

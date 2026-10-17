@@ -63,7 +63,13 @@ export function useResource<T>(load: () => Promise<T>, key: string): Resource<T>
       if (keyRef.current === k) setData(next);
       setError(undefined);
     } catch (e) {
-      setError(asApiError(e));
+      const err = asApiError(e);
+      // A lost or changed session must not keep showing what the previous one could see.
+      if (err.status === 401 || err.status === 403) {
+        resourceCache.delete(k);
+        if (keyRef.current === k) setData(undefined);
+      }
+      setError(err);
     } finally {
       setLoading(false);
     }
