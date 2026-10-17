@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import type { ChannelService } from "../channels/service";
 import { z } from "zod";
 import {
   contentPatchSchema,
@@ -38,7 +39,7 @@ const param = (req: Request, name: string): string => {
  * Content/handoff reads for every workspace role, owner-only edits and decisions, and the runner's
  * job/planning endpoints. None of these perform inference, purchases or publishing on behalf of an edit or approval.
  */
-export function agentRouter(deps: AuthDeps & { integration?: Integration | undefined; ai?: AiService | undefined }): Router {
+export function agentRouter(deps: AuthDeps & { integration?: Integration | undefined; ai?: AiService | undefined; channels?: ChannelService | undefined }): Router {
   const { ledger } = deps;
   const r = Router();
   const owner = requireActor(deps, ["owner"]);
@@ -103,7 +104,11 @@ export function agentRouter(deps: AuthDeps & { integration?: Integration | undef
   });
 
   r.post("/worker/jobs/:id/complete", worker, (req, res) => {
-    res.json(completeWorkerJob(ledger, workerAgent(res), param(req, "id"), parse(jobCompleteSchema, req.body)));
+    const out = completeWorkerJob(ledger, workerAgent(res), param(req, "id"), parse(jobCompleteSchema, req.body));
+    const taskId = (out.job as { taskId?: string | null }).taskId;
+    // Sent after the reply and outside the transaction; the outcome is recorded on the task.
+    if (taskId && deps.channels) void deps.channels.deliverTask(taskId);
+    res.json(out);
   });
 
   r.get("/worker/tasks/:id", worker, (req, res) => {

@@ -1,5 +1,6 @@
 // TEST ONLY. Boots control (real ledger, routes, orchestrator, scheduler) against the real
 // gateway service code with its test chain/facilitator and FIXTURE provider.
+import type { ChannelService } from "../../src/channels/service";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import {
@@ -103,6 +104,7 @@ export interface StackOptions {
   connectors?: (ledger: Ledger) => AgentConnectors;
   /** The owner's model provider (BYOK); absent means agents fall back to sponsored planning and paid AI. */
   ai?: (ledger: Ledger) => AiService;
+  channels?: (ledger: Ledger) => ChannelService;
 }
 
 export async function makeStack(options: StackOptions = {}): Promise<Stack> {
@@ -143,7 +145,7 @@ export async function makeStack(options: StackOptions = {}): Promise<Stack> {
 
   const build = () => createIntegration(env.ledger, { gateway: gatewayClient, permits, funding, ...(options.leaseMs !== undefined ? { leaseMs: options.leaseMs } : {}), ...(options.purchaseSweepMs !== undefined ? { purchaseSweepMs: options.purchaseSweepMs } : {}), ...(options.settleWaitMs !== undefined ? { settleWaitMs: options.settleWaitMs } : {}), ...(options.settlePollMs !== undefined ? { settlePollMs: options.settlePollMs } : {}) });
   const listen = async (integration: Integration) => {
-    const app = createApp(createServiceHealth("control", config, false), { ledger: env.ledger, session, services: new ServiceCredentials([]), log: () => undefined, integration, connectors: options.connectors?.(env.ledger), ai: options.ai?.(env.ledger) });
+    const app = createApp(createServiceHealth("control", config, false), { ledger: env.ledger, session, services: new ServiceCredentials([]), log: () => undefined, integration, connectors: options.connectors?.(env.ledger), ai: options.ai?.(env.ledger), channels: options.channels?.(env.ledger) });
     const server = app.listen(0, "127.0.0.1");
     await new Promise<void>((r) => server.once("listening", () => r()));
     return server;

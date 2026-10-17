@@ -34,21 +34,22 @@ export class ProviderKeyVault {
     return new ProviderKeyVault(randomBytes(32));
   }
 
-  seal(workspaceId: string, apiKey: string): string {
+  /** `purpose` is bound into the AAD, so a sealed secret only opens for the use it was stored for. */
+  seal(workspaceId: string, apiKey: string, purpose = "ai-provider"): string {
     const nonce = randomBytes(12);
     const cipher = createCipheriv("aes-256-gcm", this.#key, nonce);
-    cipher.setAAD(Buffer.from(`workspace:${workspaceId}:ai-provider`));
+    cipher.setAAD(Buffer.from(`workspace:${workspaceId}:${purpose}`));
     const body = Buffer.concat([cipher.update(apiKey, "utf8"), cipher.final(), cipher.getAuthTag()]);
     return `${nonce.toString("base64")}.${body.toString("base64")}`;
   }
 
-  open(workspaceId: string, sealed: string): string {
+  open(workspaceId: string, sealed: string, purpose = "ai-provider"): string {
     const [n, b] = sealed.split(".");
     if (!n || !b) throw new Error("sealed provider key is malformed");
     const nonce = Buffer.from(n, "base64");
     const body = Buffer.from(b, "base64");
     const decipher = createDecipheriv("aes-256-gcm", this.#key, nonce);
-    decipher.setAAD(Buffer.from(`workspace:${workspaceId}:ai-provider`));
+    decipher.setAAD(Buffer.from(`workspace:${workspaceId}:${purpose}`));
     decipher.setAuthTag(body.subarray(body.length - 16));
     return Buffer.concat([decipher.update(body.subarray(0, body.length - 16)), decipher.final()]).toString("utf8");
   }

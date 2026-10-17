@@ -5,6 +5,8 @@ import type { AuthDeps } from "./http/actor";
 import type { AgentConnectors } from "./connectors/agent-connectors";
 import { agentRouter } from "./http/agent-routes";
 import { aiRouter } from "./http/ai-routes";
+import { channelRouter } from "./http/channel-routes";
+import type { ChannelService } from "./channels/service";
 import type { AiService } from "./ai/service";
 import { connectorRouter } from "./http/connector-routes";
 import { controlRouter } from "./http/routes";
@@ -28,6 +30,7 @@ export interface ControlDeps extends AuthDeps {
   connectors?: AgentConnectors | undefined;
   /** The owner's own model provider (BYOK); planning falls back to the sponsored trial without it. */
   ai?: AiService | undefined;
+  channels?: ChannelService | undefined;
 }
 
 /**
@@ -66,6 +69,7 @@ export function createApp(health: ServiceHealth, deps?: ControlDeps): Express {
   app.use(externalRouter(deps));
   app.use(swapRouter(deps));
   app.use(aiRouter(deps));
+  app.use(channelRouter(deps));
   app.use(workflowRouter(deps));
   app.use(connectorRouter(deps));
   app.use((_req: Request, res: Response) => {

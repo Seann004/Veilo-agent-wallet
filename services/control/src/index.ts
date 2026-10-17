@@ -31,6 +31,7 @@ import { expireLeases } from "./ledger/jobs";
 import { seedWorkspace } from "./ledger/workspace";
 import { AiService } from "./ai/service";
 import { ProviderKeyVault } from "./ai/vault";
+import { ChannelService } from "./channels/service";
 
 const SERVICE = "control";
 
@@ -181,8 +182,10 @@ async function main(): Promise<void> {
   });
 
   const port = config.ports.control;
-  const ai = new AiService(ledger, ProviderKeyVault.fromFile(join(config.paths.secretsDir, "control", "ai-provider.key")), undefined, process.env.AI_ALLOW_LOCAL_PROVIDER === "1");
-  createApp(health, { ledger, session, services, integration, connectors, ai, maxExternalBatchUsdc: BigInt(externalMaxRaw) }).listen(port, config.bindHost, () => {
+  const vault = ProviderKeyVault.fromFile(join(config.paths.secretsDir, "control", "ai-provider.key"));
+  const ai = new AiService(ledger, vault, undefined, process.env.AI_ALLOW_LOCAL_PROVIDER === "1");
+  const channels = new ChannelService(ledger, vault, undefined, process.env.VEILO_DASHBOARD_ORIGIN ?? "");
+  createApp(health, { ledger, session, services, integration, connectors, ai, channels, maxExternalBatchUsdc: BigInt(externalMaxRaw) }).listen(port, config.bindHost, () => {
     console.log(`[${SERVICE}] listening on http://${config.bindHost}:${port} (${config.network.caip2})`);
   });
   if (process.env.VEILO_LOG_CONFIG === "1") console.log(JSON.stringify(describeConfig(config)));
