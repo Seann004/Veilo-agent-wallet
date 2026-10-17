@@ -43,7 +43,7 @@ export const JOB_TRANSITIONS: Readonly<Record<JobState, readonly JobState[]>> = 
   awaiting_payment: ["queued", "cancelled", "expired", "failed"],
   queued: ["running", "cancel_requested", "failed"],
   running: ["succeeded", "input_required", "failed", "delivery_uncertain", "cancel_requested", "queued"],
-  input_required: ["running", "cancel_requested", "expired", "failed"],
+  input_required: ["running", "queued", "cancel_requested", "expired", "failed"],
   cancel_requested: ["cancelled", "succeeded", "failed", "delivery_uncertain"],
   delivery_uncertain: ["succeeded", "failed"],
   succeeded: [],
