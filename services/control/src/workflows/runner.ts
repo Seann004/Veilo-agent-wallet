@@ -794,6 +794,13 @@ export class WorkflowRunner {
     if (!s) return null;
     const run = this.run(s.run_id) as RunRow;
     if (run.status !== "running" || run.cloud_run_id === null) return { outcome: "refuse", reason: `workflow run is ${run.status}` };
+    // Revocation halts the run only on its next advance; a sweep in between must not release funding.
+    try {
+      this.#ownerOf(run);
+    } catch (error) {
+      if (error instanceof ControlError) return { outcome: "refuse", reason: error.message };
+      throw error;
+    }
     const index = num(s.step_index);
     const signed = await this.deps.external.signPayer(purchaseId, workflowStepHireKey(run.cloud_run_id, index), run.approval_digest);
     if (signed === null) return { outcome: "wait", reason: "payer proof not available yet" };

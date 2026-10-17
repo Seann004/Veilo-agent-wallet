@@ -312,6 +312,18 @@ describe("workflow runner (§26.7)", () => {
     expect(await runner.beforeRelease("unrelated-purchase")).toBeNull();
   });
 
+  it("refuses to release an assignment-approved step's funding once the assignment is revoked", async () => {
+    external.payment = "pending";
+    const prince = env.agents.Prince.id;
+    await runner.assign({ agentId: prince, versionId: V1, budgetUsdc: 12_000n, ownerPubkey: OWNER });
+    const run = await runner.propose({ agentId: prince, versionId: V1, runInputs: { mint: "m" } });
+    expect(run.status).toBe("approved");
+    await runner.advance(run.id);
+    env.db.prepare(`UPDATE workflow_assignment SET status = 'revoked' WHERE agent_id = ?`).run(prince);
+    expect(await runner.beforeRelease("ext-purchase-1")).toMatchObject({ outcome: "refuse" });
+    expect(market.payers).toEqual([]);
+  });
+
   it("refuses unknown, missing or oversized run inputs", async () => {
     const base = { versionId: V1, agentId: env.agents.Prince.id, isTest: false, requestedBy: "owner" as const };
     await expect(runner.prepare({ ...base, runInputs: {} })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
