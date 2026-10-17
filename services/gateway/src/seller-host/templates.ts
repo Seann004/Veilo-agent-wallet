@@ -56,11 +56,21 @@ export function buildTemplateMessages(r: TemplateRequest): ChatMessage[] {
 }
 
 /** Sections named by the listing that do not appear as a Markdown heading in the output. */
+/** ATX heading text, parsed without backtracking so model output cannot stall the event loop. */
+function headingText(line: string): string | undefined {
+  const m = /^ {0,3}#{1,6}[ \t]+/.exec(line.slice(0, 400));
+  if (!m) return undefined;
+  let text = line.slice(m[0].length, 400).trimEnd();
+  while (text.endsWith("#")) text = text.slice(0, -1);
+  text = text.trim().toLowerCase();
+  return text === "" ? undefined : text;
+}
+
 export function missingSections(markdown: string, sections: readonly string[]): string[] {
   const headings = new Set(
     markdown
       .split("\n")
-      .map((l) => /^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/.exec(l)?.[1]?.trim().toLowerCase())
+      .map(headingText)
       .filter((h): h is string => h !== undefined),
   );
   return sections.filter((s) => !headings.has(s.trim().toLowerCase()));
