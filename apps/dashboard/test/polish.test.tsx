@@ -128,3 +128,12 @@ describe("public recovery acknowledgement", () => {
     expect(rec.calls.some((c) => c.url.endsWith("/confirm"))).toBe(false);
   });
 });
+
+describe("reason guidance", () => {
+  it("explains known codes and invents nothing for unknown ones", async () => {
+    const { reasonGuidance } = await import("../lib/labels");
+    expect(reasonGuidance("NOTE_PENDING")).toMatch(/Deposit test-USDC/);
+    expect(reasonGuidance("SOMETHING_NEW")).toBeNull();
+    expect(reasonGuidance(null)).toBeNull();
+  });
+});

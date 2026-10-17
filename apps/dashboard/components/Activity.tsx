@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { credits, lamports, shortKey, usdc, when } from "../lib/format";
-import { LEG_LABEL, LABEL_CREDITS_NO_CHARGE, legStateLabel, purchaseLabel } from "../lib/labels";
+import { LEG_LABEL, LABEL_CREDITS_NO_CHARGE, legStateLabel, purchaseLabel, reasonGuidance } from "../lib/labels";
 import type { Activity, Agent, AuditEvent, PaymentStates, Purchase, Workspace } from "../lib/types";
 import { useAction } from "./hooks";
 import { StateStrip } from "./StateStrip";
@@ -221,6 +221,7 @@ export function EventLog({ events }: { events: AuditEvent[] }) {
             <th scope="col">Actor</th>
             <th scope="col">Policy result</th>
             <th scope="col">Reason</th>
+            <th scope="col">What it means</th>
           </tr>
         </thead>
         <tbody>
@@ -231,6 +232,7 @@ export function EventLog({ events }: { events: AuditEvent[] }) {
               <td>{e.actor.type}</td>
               <td>{e.policyResult.replace(/_/g, " ")}</td>
               <td>{e.reasonCode ?? (typeof e.details.reason === "string" ? e.details.reason : "")}</td>
+              <td className="small">{reasonGuidance(e.reasonCode) ?? ""}</td>
             </tr>
           ))}
         </tbody>

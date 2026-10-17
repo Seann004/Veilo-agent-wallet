@@ -3,9 +3,12 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { ApiError } from "../lib/api";
 import { explorerTx, shortKey } from "../lib/format";
+import { reasonGuidance } from "../lib/labels";
 
 /** What the owner can do about a backend error; the backend message is always shown verbatim as well. */
 export function errorGuidance(error: ApiError): string | null {
+  const byCode = reasonGuidance(error.code);
+  if (byCode) return byCode;
   if (error.code === "NOT_READY") {
     return "A service or credential this view needs is not available. This is a missing capability, not a failed payment or a stopped agent. Start or configure the service (docs/configuration.md), then retry.";
   }

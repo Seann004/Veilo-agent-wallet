@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { api } from "../lib/api";
 import { credits, usdc, when } from "../lib/format";
-import { ROLE_LABEL, agentStateLabel } from "../lib/labels";
+import { ROLE_LABEL, agentStateLabel, runBlockedReason } from "../lib/labels";
 import type { Agent, AgentBudget, Balances, Job, Task } from "../lib/types";
 import { AgentControls } from "./AgentControls";
 import { useAction } from "./hooks";
@@ -101,12 +101,17 @@ export function AgentCard({
           >
             Check now
           </button>
-        ) : (
-          <Link className="btn btn-primary" href={`/agents/${agent.id}#run`} aria-disabled={!canRun}>
+        ) : canRun ? (
+          <Link className="btn btn-primary" href={`/agents/${agent.id}#run`}>
             Run {agent.name}
           </Link>
+        ) : (
+          <button type="button" className="btn btn-primary" disabled>
+            Run {agent.name}
+          </button>
         )}
       </div>
+      {runBlockedReason(agent.status, workspaceStopped) ? <p className="small muted">{runBlockedReason(agent.status, workspaceStopped)}</p> : null}
       <ErrorNotice error={run.error} what="run" />
       <AgentControls agent={agent} onChanged={onChanged} />
     </article>
