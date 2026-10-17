@@ -1,5 +1,6 @@
 "use client";
 
+import { brandForConnector, type Brand } from "../lib/brands";
 import { useEffect, useId, useRef, useState } from "react";
 import type { ApiError } from "../lib/api";
 import {
@@ -58,10 +59,21 @@ export function usersOf(connectorId: string, agents: Agent[], map: AttachmentMap
   });
 }
 
-export function ConnectorIcon({ connector, size = 40 }: { connector: Pick<Connector, "title" | "id">; size?: number }) {
+export function ConnectorIcon({ connector, size = 40 }: { connector: Pick<Connector, "title" | "id"> & { endpoint?: string }; size?: number }) {
+  const brand = brandForConnector(connector);
+  if (brand) return <BrandLogo brand={brand} size={size} />;
   return (
     <span className="connector-icon" style={{ width: size, height: size }} aria-hidden="true">
       {monogram(connector.title, connector.id)}
+    </span>
+  );
+}
+
+/** A brand mark on a neutral tile, tinted with the brand colour through a mask. */
+export function BrandLogo({ brand, size = 40 }: { brand: Brand; size?: number }) {
+  return (
+    <span className="brand-tile" style={{ width: size, height: size }} aria-hidden="true">
+      <span className="brand-mark" style={{ backgroundColor: brand.color, maskImage: `url(${brand.logo})`, WebkitMaskImage: `url(${brand.logo})` }} />
     </span>
   );
 }

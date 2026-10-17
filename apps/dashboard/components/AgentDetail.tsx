@@ -11,6 +11,7 @@ import { ActivityDrawer } from "./Activity";
 import { summarizeResult } from "../lib/results";
 import { AgentControls } from "./AgentControls";
 import { AgentConnectors } from "./AgentConnectors";
+import { AgentDelivery } from "./Channels";
 import { CustomAgentPanel } from "./CustomAgentFields";
 import { AgentAvatar, AvatarImage, AvatarPicker } from "./Avatar";
 import { Icon } from "./Icon";
@@ -672,6 +673,13 @@ export function AgentDetail({ agentId }: { agentId: string }) {
         </div>
 
         <AgentConnectors agent={agent} />
+
+        {configure.allowed ? (
+          <div className="panel">
+            <h2 className="section-title">Results</h2>
+            <AgentDelivery agent={agent} canEdit={configure.allowed} />
+          </div>
+        ) : null}
 
         {agent.role === "content" ? (
           <div className="panel">

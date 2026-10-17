@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { KEYED_UNSUPPORTED, hasMarketplaceSignIn, hostOf, isActive, isNotAvailable, matchesQuery, myProposals, reviewChip, summaryOf, type Connector } from "../lib/connectors";
+import { hasMarketplaceSignIn, hostOf, isActive, isNotAvailable, matchesQuery, myProposals, reviewChip, summaryOf, type Connector } from "../lib/connectors";
 import { AddCustomDialog, AttachDialog, ConnectorDrawer, ConnectorIcon, NotAvailableYet, attachable, useApprovedConnectors, useAttachments, usersOf, type AttachmentMap } from "./ConnectorFlows";
+import { ComingSoonApps, SendResultsTo, useChannels, YourChannels } from "./Channels";
 import { Icon } from "./Icon";
 import { useCapability, useOwner } from "./Shell";
 import { useResource } from "./hooks";
@@ -181,6 +182,18 @@ function ConnectorCard({ connector, used, canEdit, onOpen, onAttach }: { connect
 }
 
 function Discover({ connectors, query, map, canEdit, onOpen, onAttach }: { connectors: ReturnType<typeof useApprovedConnectors>; query: string; map: AttachmentMap | undefined; canEdit: boolean; onOpen: (c: Connector) => void; onAttach: (c: Connector) => void }) {
+  return (
+    <section className="connector-section" aria-labelledby="agent-tools">
+      <h2 id="agent-tools" className="section-title">
+        Tools your agents can use
+      </h2>
+      <p className="small muted">Read-only MCP tools reviewed by the operator. They need no key.</p>
+      <ApprovedTools connectors={connectors} query={query} map={map} canEdit={canEdit} onOpen={onOpen} onAttach={onAttach} />
+    </section>
+  );
+}
+
+function ApprovedTools({ connectors, query, map, canEdit, onOpen, onAttach }: { connectors: ReturnType<typeof useApprovedConnectors>; query: string; map: AttachmentMap | undefined; canEdit: boolean; onOpen: (c: Connector) => void; onAttach: (c: Connector) => void }) {
   const { workspace } = useOwner();
   if (connectors.loading && !connectors.data) return <Loading label="connectors" />;
   if (connectors.error && !connectors.data) return <ErrorNotice error={connectors.error} what="connectors could not be loaded" onRetry={connectors.reload} />;
@@ -315,6 +328,7 @@ export function ConnectorsPage() {
   const edit = useCapability("connectors");
   const connectors = useApprovedConnectors();
   const attachments = useAttachments(workspace.agents, edit.allowed);
+  const channels = useChannels(edit.allowed);
   const [tab, setTab] = useState<Tab>("discover");
   const [query, setQuery] = useState("");
   const [detail, setDetail] = useState<Connector | null>(null);
@@ -332,7 +346,7 @@ export function ConnectorsPage() {
         <h1>Connectors</h1>
         <AddMenu disabled={!edit.allowed} reason={edit.reason} onCustom={() => setAdding(true)} />
       </div>
-      <p className="page-lede small muted">Read-only MCP tools your agents can call. Each one is reviewed by the operator and needs no key. {KEYED_UNSUPPORTED}</p>
+      <p className="page-lede small muted">Apps your agents can use, and where their results are sent.</p>
       <DeniedHint reason={edit.reason} />
       <div className="connector-toolbar">
         <Tabs tab={tab} onChange={setTab} ids={ids} />
@@ -343,10 +357,18 @@ export function ConnectorsPage() {
         </label>
       </div>
       <div role="tabpanel" id={ids.discover.panel} aria-labelledby={ids.discover.tab} hidden={tab !== "discover"}>
-        {tab === "discover" ? <Discover connectors={connectors} query={query} map={map} canEdit={edit.allowed} onOpen={setDetail} onAttach={setAttach} /> : null}
+        {tab === "discover" ? (
+          <>
+            <SendResultsTo channels={channels.data?.channels ?? []} canEdit={edit.allowed} onChanged={channels.reload} />
+            <Discover connectors={connectors} query={query} map={map} canEdit={edit.allowed} onOpen={setDetail} onAttach={setAttach} />
+            <ComingSoonApps />
+          </>
+        ) : null}
       </div>
       <div role="tabpanel" id={ids.yours.panel} aria-labelledby={ids.yours.tab} hidden={tab !== "yours"}>
         {tab === "yours" ? (
+          <>
+          <YourChannels channels={channels.data?.channels ?? []} agents={workspace.agents} canEdit={edit.allowed} onChanged={channels.reload} />
           <Yours
             connectors={connectors.data ?? []}
             map={map}
@@ -357,6 +379,7 @@ export function ConnectorsPage() {
             query={query}
             onOpen={setDetail}
           />
+          </>
         ) : null}
       </div>
       {detail && !attach ? (

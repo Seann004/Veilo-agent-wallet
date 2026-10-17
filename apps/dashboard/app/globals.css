@@ -4728,3 +4728,91 @@ ul.cards {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- Connector apps ---------- */
+
+.brand-tile {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: var(--radius);
+  background: var(--surface-2, var(--fill));
+  border: 1px solid var(--line);
+}
+
+.brand-mark {
+  display: block;
+  width: 56%;
+  height: 56%;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  color: var(--ink);
+}
+
+.connector-section + .connector-section {
+  margin-top: 2.5rem;
+}
+
+.connector-section > .small.muted {
+  margin: -0.25rem 0 1rem;
+}
+
+.app-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.app-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 1rem;
+  padding: 1.1rem 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.app-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.app-card-text strong {
+  font-weight: 500;
+}
+
+.app-card-soon .brand-tile {
+  opacity: 0.7;
+}
+
+.app-card-add,
+.app-card-state {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  width: 36px;
+  height: 36px;
+}
+
+.app-card-state {
+  color: var(--ok);
+  background: var(--ok-bg, transparent);
+}
+
+.steps-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}

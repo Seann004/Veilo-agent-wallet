@@ -95,7 +95,7 @@ describe("Discover", () => {
     expect(screen.getByText(/No connectors match/)).toBeTruthy();
   });
 
-  it("says so when nothing is approved, and when the marketplace isn't configured, without placeholder cards", async () => {
+  it("says so when nothing is approved, and when the marketplace isn't configured, and never offers sign-in apps", async () => {
     serve(catalogue([]));
     render(withRole(<ConnectorsPage />));
     expect(await screen.findByText(/No connectors are approved yet/)).toBeTruthy();
@@ -106,7 +106,12 @@ describe("Discover", () => {
     render(withRole(<ConnectorsPage />));
     expect(await screen.findByText(/marketplace is not configured/)).toBeTruthy();
     expect(calls.some((c) => c.url.includes("/marketplace/"))).toBe(false);
-    expect(screen.queryByText(/Gmail|Google Drive|Notion/)).toBeNull();
+    // Sign-in apps are listed only as unavailable: no add button and never among usable connectors.
+    const soon = screen.getByRole("list", { name: "Apps that are not available yet" });
+    for (const name of ["Gmail", "Google Drive", "Notion"]) expect(within(soon).getByText(name)).toBeTruthy();
+    expect(within(soon).queryAllByRole("button")).toHaveLength(0);
+    expect(within(soon).getAllByText("Not available yet").length).toBeGreaterThanOrEqual(3);
+    expect(screen.queryByRole("list", { name: "Approved connectors" })).toBeNull();
   });
 
   it("renders hostile titles, descriptions and endpoints as plain text", async () => {
