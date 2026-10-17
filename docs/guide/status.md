@@ -1,36 +1,62 @@
 # Evidence and current status
 
-Documentation now includes PRD v3.2 §26 and T17–T23. Implementation findings use docs-branch snapshot `8bfe4a2` (application baseline `fe13778`), with separately identified parallel-branch observations checked on 17 October 2026. These are recorded results, not a new execution of product tests or an independent audit. The PRD describes requirements; it is not evidence of completion.
+This page reflects `main` at merge commit `59696dd` (PR #3, integration of the parallel worktrees). It separates what the merged tree was checked against from evidence recorded earlier on the branches that were merged. Recorded results are not an independent audit, and the PRD describes requirements, not completion. All amounts are USDC on **Solana devnet**; they have no monetary value.
+
+## Checks on the merged tree
+
+Measured on the integration branch, whose tree is identical to `main` at `59696dd` (Node 22, pnpm 10.34.6, `.env` loaded):
+
+| Check | Result | Limit |
+|---|---|---|
+| `pnpm install --frozen-lockfile` | pass | — |
+| `pnpm check` (typecheck and lint) | pass | — |
+| `pnpm test` | 643 passed, 8 skipped (74 files passed, 1 skipped) | The 8 skips are the relayer/wallet real-proof tests; they need the gitignored `circuits/build/` |
+| `pnpm test:marketplace-rls` | 84/84 checks passed against the Supabase project | Chain reads in this script use a labeled fixture; it tests identity, RLS, Storage and transitions, not settlement |
+| `next build` (apps/dashboard) | pass | A build is not a funded browser run |
+| Supabase migrations | all 19 in `supabase/migrations/` applied to the project | — |
+
+`pnpm test:integration`, `pnpm test:program`, `pnpm test:circuits` and a devnet demo run were **not rerun** after the merge.
+
+## Recorded evidence (pre-merge)
 
 | Feature / environment | Status | Evidence and limits |
 |---|---|---|
-| M2 pool deposit, authenticated insertion, approved root, Groth16 withdrawal, change insertion and original/change public exits | **verified on devnet** | [M2 summary](https://github.com/Seann004/Veilo-agent-wallet/blob/fe13778/artifacts/evidence/m2-summary.json) and its eight companion files, recorded 16 October. Two synthetic participants; small set, no measured anonymity. |
-| M2 fresh-wallet merchant payment | **verified on devnet** | [Merchant record](https://github.com/Seann004/Veilo-agent-wallet/blob/fe13778/artifacts/evidence/m2-merchant.json): PayAI Echo, 10,000 base units; Echo refunds payments. The operator-confirmed smoke stands in for control authority. This was not the Veilo gateway, credit issuance or an autonomous agent run. |
-| Integrated private payments, credits, idempotency, cap races, revoke, crash recovery and backup/restore | **verified on local test validator** | [Integration report](https://github.com/Seann004/Veilo-agent-wallet/blob/fe13778/artifacts/evidence/integration-2026-10-17T00-36-54-669Z.json): 30 passed, 0 failed, 0 skipped. Separate services, on-chain Groth16 verification, self-hosted x402 facilitator; **fixture / mock provider** for inference. Local signatures are not devnet signatures. |
-| Shawn, Prince and Mira complete workflow rehearsal | **verified on local test validator**; **fixture / mock provider** | `docs/build-status.md` T11–T15 records `pnpm demo:run -- --local-rehearsal`, steps a–g. Rehearsal outputs live under ignored `work/demo-rehearsal/evidence/`; not bundled in this checkout. Research is fictional CC0 demo fixture data in either environment. |
-| Complete Veilo gateway/private agent acceptance: autonomous top-up, research/content and bounded live inference | **not yet run to an accepted result in this checkout** | Parallel deployment branch `96dac1d` records an earlier devnet gateway execution, but its state, gateway ledger, live inference receipts and task artifacts are absent here. Recover and review those files before another paid run; chain settlement alone cannot prove completed jobs. |
-| Dashboard with funded devnet activity and browser-wallet signing | **not yet run** | T14 records local backend-driven UI checks and unfunded screenshots. A real extension sign-in/deposit/exit and funded screenshots remain outstanding. |
-| Policy/session/runner/program negative cases outside the integration report | **fixture / mock provider** where applicable; devnet acceptance **not yet run** | Unit, real-proof and LiteSVM results are recorded in [build status](../build-status.md). These are local checks, not a local test-validator run unless explicitly recorded as such. |
+| M2 pool deposit, authenticated insertion, approved root, Groth16 withdrawal, change insertion and original/change public exits | **verified on devnet** | [M2 summary](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/m2-summary.json) and its eight companion files, recorded 16 October against an earlier pool. Two synthetic participants; small set, no measured anonymity. |
+| M2 fresh-wallet merchant payment | **verified on devnet** | [Merchant record](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/m2-merchant.json): PayAI Echo, 10,000 base units; Echo refunds payments. Not the Veilo gateway or an agent run. |
+| Integrated private payments, credits, idempotency, cap races, revoke, crash recovery and backup/restore | **verified on local test validator** | [Integration report](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/integration-2026-10-17T00-36-54-669Z.json): 30 passed, 0 failed, 0 skipped. On-chain Groth16 verification, self-hosted x402 facilitator, **fixture / mock provider** for inference. Local signatures are not devnet signatures. |
+| Shawn, Prince and Mira eight-step demo with live inference | **verified on devnet** (pre-merge run) | Run `2026-10-17-1eba868c`, program `27Dg…AjFd`: all 11 acceptance checks in [summary.json](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/demo-2026-10-17-1eba868c/summary.json) pass. Three private x402 purchases (credit pack, research dataset, content package) each delivered once to the gateway merchant; live DeepSeek V4 Flash calls via the operator's OpenRouter account per [inference-receipts.json](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/demo-2026-10-17-1eba868c/inference-receipts.json); no fixture provider call. Research sources are still fictional CC0 demo data. Recorded before PR #3 merged; no fresh post-merge run yet. Details: [demo checklist](./demo.md) and [deployment](../deployment.md). |
+| Shawn unattended scheduler top-up | **not yet run** on devnet | The demo invokes Shawn's check explicitly; it does not prove a scheduler-triggered top-up. |
+| Dashboard with funded devnet activity and browser-wallet (Phantom) signing | **not yet run** | Local backend-driven UI checks and unfunded screenshots exist (build status T14). The demo run signed with owner-local key files, not a browser wallet. |
+| Marketplace direct hire, public funding | **verified on devnet** (pre-merge) | [Smoke 05:47](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/marketplace-devnet-smoke-2026-10-17T05-47-34-935Z.json) and [smoke 06:55](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/marketplace-devnet-smoke-2026-10-17T06-55-19-957Z.json): 10,000 base units each to the seller's payout ATA, chain-verified receipt, one job succeeded, earnings with platform fee 0. The payer was funded publicly, **not** from the private pool. |
+| Marketplace hire funded from the private pool through the control bridge | **not yet run** on devnet | Implemented and tested against fakes (build status T20). |
+| Workflow run, QuickNode x402 paid call, MCP tool through a seller host | **not yet run** on devnet | QuickNode returned a live 402 challenge on 17 October; no paid call recorded. One live read-only MCP docs-search call went through control (build status T26); no seller-host MCP run. |
+| Higgsfield, MakeUGC and Zernio | **unverified** | No live provider calls. The demo shows these tools as "Provider not configured" by owner decision; Zernio's drafting connector is not built. |
+| Policy/session/runner/program negative cases outside the integration report | **fixture / mock provider** where applicable | Unit, real-proof and LiteSVM results are recorded in [build status](../build-status.md). |
 
-The M2 artifact set above supports the specific **verified on devnet** label here; later parallel-branch chain observations are not promoted into complete agent or marketplace acceptance. Historical ordinary x402 and standalone provider smoke files are separate baselines; neither proves the integrated agent demo. No page claims audit, mainnet readiness, proof-enforced budgets or metadata anonymity.
+No page claims audit, mainnet readiness, proof-enforced budgets or metadata anonymity.
 
-## Marketplace extension — accepted scope, not yet verified
+## Marketplace — implemented in code, devnet acceptance incomplete
 
-| Requirement group | Status in this checkout | Next gate |
-|---|---|---|
-| Reviewed searchable listings, seller setup and wallet identity | **not yet run**; no implemented marketplace flow | T17 inventory/schema freeze, then T18 Supabase identity/data isolation |
-| Generic templates, private jobs, missing-input requests and deliverables | **not yet run**; existing roles/content artifacts are local foundations | T19 free execution with lease/crash/result checks |
-| Direct seller hiring, zero fee, receipts and earnings history | **not yet run**; managed gateway has one merchant | T20 per-listing recipients and one-receipt/one-job/one-earnings verification |
-| Approved discovery/automation, connectors and remote sellers | **not yet run** | T21–T22 permission/callback/grant tests and genuine devnet seller job |
-| Seller refunds, offline/stale-worker handling and release acceptance | **not yet run** | T23 and all fourteen §26.6 checks |
+The marketplace service, Supabase schema/RLS, seller host, control bridge and dashboard pages are on `main`. The table maps each group to what the RLS end-to-end script (`scripts/marketplace/rls-e2e.ts`) and other recorded runs actually cover.
 
-Supabase and marketplace inclusion are already accepted product scope. Their absence here is an implementation gap, not a reason to drop requirements. The [marketplace guide](./marketplace.md) and [complete triage](./marketplace-triage.md) distinguish reusable code, gaps and exact closure evidence.
+| Group | In code on `main` | Covered by recorded checks | Still needs |
+|---|---|---|---|
+| T17 contracts | Frozen in `packages/contracts/src/marketplace` (quote digest, zero-fee arithmetic, job/financial states) | Contract unit tests | — |
+| T18 identity and protected data | Supabase Web3 sign-in, workspaces, reviewed listings, RLS, private Storage, transition functions | RLS script: anonymous / buyer A / buyer B / seller / controller / seller host isolation through API, PostgREST, RPC and Storage; clients cannot call transition functions; seller cannot approve own listing | — for the isolation gate |
+| T19 generic agents | `custom` role and template, `marketplace_search` / `propose_hire` tools | Unit tests | A free (zero-price) job path; none exists yet |
+| T20 direct paid hiring | Seller-host gateway profile, per-listing payout, controller bridge with local approval, payer binding | RLS script: immutable quote, recipient cannot change, replayed controller request refused, payer bound once, one settlement signature cannot fund a second job, no lease before settlement; devnet smoke with public funding | A private-pool-funded hire on devnet |
+| T21 discovery and approved automation | Custom agents propose hires; listing grants; dashboard Local approval page | Unit tests against fakes | A devnet run |
+| T22 connectors and remote sellers | Public-https remote seller origins, scoped seller-host credentials, read-only MCP connectors with operator review | RLS script: proposed connector private until approved, withdrawn connector removes dependent workflows; one live MCP call through control | A credential broker, an MCP tool run through a seller host on devnet, a genuine remote-seller devnet job |
+| T23 recovery and release | Refund requests/decisions with chain verification, expiry sweep, lease fencing, late-receipt settlement | RLS script: refund capped at settled amount (also cumulatively), return address must be the buyer's verified wallet, stale/wrong lease token refused, hash-mismatched artifact refused | A live refund transfer, offline-controller and stale-worker drills, content retention |
+| T24–T26 tools, workflows, agent connectors | External x402 bindings, workflow runner, MCP connectors, dashboard builder/runs | RLS script workflow and tool checks; seed of demo creators/tools/workflows | A multi-step devnet workflow run and paid tool calls |
+
+The per-check view is in [marketplace triage](./marketplace-triage.md).
 
 ## Sources of truth
 
-- [Build status](../build-status.md) owns task/gate history; stale historical phrases are listed in the [handoff](../handoff.md).
+- [Build status](../build-status.md) owns task/gate history.
 - [Security evidence](../security/evidence.md) maps recorded checks to acceptance cases.
-- [Demo script](./demo.md) lists the eight operator steps and missing evidence.
-- [Deployment](../deployment.md), [configuration](../configuration.md) and [protocol](../protocol.md) describe executable setup and the implemented algorithms.
+- [Demo checklist](./demo.md) lists the eight operator steps, the recorded run and remaining screenshots.
+- [Deployment](../deployment.md), [configuration](../configuration.md) and [protocol](../protocol.md) describe setup and algorithms.
 
 The owner-controlled host remains trusted. Deposits, amounts, fresh payout wallets, merchant transfers, fees and timing are public. Removing an explicit spent-note identifier is narrower than anonymity; see [privacy](./privacy.md).
