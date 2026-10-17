@@ -18,7 +18,7 @@ import { readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { findRepoRoot, loadDotEnv } from "@veilo/contracts";
 import { mcpToolDigest, type McpToolPin } from "@veilo/contracts/marketplace";
-import { McpClient } from "../../services/gateway/src/seller-host/mcp";
+import { McpClient } from "@veilo/mcp-client";
 
 const rootDir = findRepoRoot();
 loadDotEnv({ rootDir });

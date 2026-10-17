@@ -16,7 +16,7 @@ import { PurchaseService } from "./purchases";
 import type { MarketplaceClient } from "./seller-host/marketplace-client";
 import type { ToolProvider } from "@veilo/contracts/marketplace";
 import type { ProviderAdapter } from "./seller-host/providers";
-import { McpClient } from "./seller-host/mcp";
+import { McpClient } from "@veilo/mcp-client";
 import { UsageService } from "./usage";
 
 export interface GatewayOptions {

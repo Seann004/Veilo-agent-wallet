@@ -1,4 +1,4 @@
-import type { McpClient } from "./seller-host/mcp";
+import type { McpClient } from "@veilo/mcp-client";
 import type { ToolProvider } from "@veilo/contracts/marketplace";
 import type { ProviderAdapter } from "./seller-host/providers";
 import type { KeyObject } from "node:crypto";

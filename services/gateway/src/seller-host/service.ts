@@ -1,4 +1,4 @@
-import { liveToolMatches, McpError, runMcpTool, type McpJobTool } from "./mcp";
+import { liveToolMatches, McpError, runMcpTool, type McpJobTool } from "@veilo/mcp-client";
 import { PROVIDER_NOT_CONFIGURED, type ProviderResult } from "./providers";
 import { createHash, randomUUID } from "node:crypto";
 import { GATEWAY_CATALOG } from "@veilo/contracts/gateway";

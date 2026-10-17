@@ -22,7 +22,8 @@ import { OpenRouterProvider } from "./provider/openrouter";
 import { DEFAULT_ACCOUNT_RATE_LIMIT } from "./seller-host/accounts";
 import { CLAIM_RETRY_DELAYS_MS, gatewayRole, HEARTBEAT_MS, loadSellerHostConfig } from "./seller-host/config";
 import { mcpToolDigest } from "@veilo/contracts/marketplace";
-import { McpClient, mcpConfigFromEnv } from "./seller-host/mcp";
+import { McpClient } from "@veilo/mcp-client";
+import { mcpConfigFromEnv } from "./seller-host/mcp";
 import { PROVIDER_NOT_CONFIGURED, providerAdaptersFromEnv, providerStatus } from "./seller-host/providers";
 import { MarketplaceClient } from "./seller-host/marketplace-client";
 

@@ -24,7 +24,7 @@ import { createRpcChain } from "../../services/marketplace/src/chain";
 import type { MarketplaceConfig } from "../../services/marketplace/src/config";
 import { createDb } from "../../services/marketplace/src/db";
 import { payoutProofMessage } from "../../services/marketplace/src/service";
-import { McpClient } from "../../services/gateway/src/seller-host/mcp";
+import { McpClient } from "@veilo/mcp-client";
 import { ata, awaitTx, createAtaIdempotentIx, explorerTx, makeRpc, signAndSend, type SentTx } from "../devnet/lib";
 
 const confirm = process.argv.includes("--confirm");
