@@ -107,7 +107,7 @@ abstract class BaseAdapter implements ProviderAdapter {
 }
 
 const MAX_SLIDES = 4;
-/** Edits per photo; the original photo is the carousel's first slide. */
+/** Edits per photo. */
 const MAX_EDITS = 3;
 
 /** Slide prompts ("Slide 1: …" or "1. …") and an optional "Caption: …" line from a plan. */
@@ -175,13 +175,16 @@ export class HiggsfieldAdapter extends BaseAdapter {
     return { status: "succeeded", artifact: { kind: "json", text: JSON.stringify({ images, caption: plan.caption }), providerJobId: ids.join(",") } };
   }
 
-  /** Before-and-after carousel: the original photo, then one Marketing Studio edit per slide prompt. */
+  /**
+   * One Marketing Studio edit of the buyer's photo per slide prompt. Only the provider-returned
+   * (and provider-moderated) images reach the carousel; the buyer's URL goes to Higgsfield alone.
+   */
   private async editCarousel(slides: string, photo: string, ctx: ProviderRunContext): Promise<ProviderResult> {
     const original = safeMediaUrl(photo.trim());
     if (!original) return { status: "failed", code: "INPUT_REQUIRED", message: "the photo must be an https image URL" };
     const plan = parseCarouselPlan(slides);
-    if (plan.slides.length < 1) return { status: "failed", code: "INPUT_REQUIRED", message: "the plan needs at least one \"Slide N:\" line" };
-    const images: string[] = [original];
+    if (plan.slides.length < 2) return { status: "failed", code: "INPUT_REQUIRED", message: "the plan needs at least two \"Slide N:\" lines" };
+    const images: string[] = [];
     const ids: string[] = [];
     for (const [i, prompt] of plan.slides.slice(0, Math.min(MAX_EDITS, this.maxImages)).entries()) {
       const r = await this.submitAndPoll("/marketing-studio/image", { prompt, image_urls: [original], aspect_ratio: "9:16", resolution: "1k", enhance_prompt: false }, `${ctx.idempotencyKey}:edit:${i}`);

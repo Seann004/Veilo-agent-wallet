@@ -138,7 +138,7 @@ const MANAGED: ManagedTool[] = [
     creator: "studio-north",
     slug: "tiktok-photo-edit-planner",
     title: "TikTok ad edit planner",
-    summary: "Turns a product brief into three photo-edit instructions and a caption for a before-and-after TikTok carousel.",
+    summary: "Turns a product brief into three photo-edit instructions and a caption for a TikTok ad carousel.",
     template: "content-package",
     price: "20000",
     sections: ["Slides", "Caption"],
@@ -182,7 +182,7 @@ const PROVIDERS: ProviderTool[] = [
     creator: "studio-north",
     slug: "higgsfield-photo-edits",
     title: "Higgsfield product photo edits",
-    summary: "Restages one product photo into up to three vertical ad shots with Higgsfield Marketing Studio, keeping the original as the first slide. Workflow step only.",
+    summary: "Restages one product photo into two or three vertical ad shots with Higgsfield Marketing Studio. Workflow step only.",
     provider: "higgsfield",
     toolName: "edit_carousel_images",
     price: "150000",
@@ -489,9 +489,9 @@ async function main(): Promise<void> {
     await workflow("studio-north", "tiktok-ad-from-photo", {
       category: "social",
       title: "TikTok ad from your product photo",
-      summary: "DeepSeek plans three ad scenes, Higgsfield restages your photo into them, Zernio puts a before-and-after carousel draft in your TikTok inbox.",
+      summary: "DeepSeek plans three ad scenes, Higgsfield restages your photo into them, Zernio puts the carousel draft in your TikTok inbox.",
       description:
-        "Step 1 writes three edit instructions and a caption with DeepSeek V4 Flash. Step 2 edits your photo into each scene with Higgsfield Marketing Studio on the seller's key; the original stays as the first slide. Step 3 sends the carousel to the seller's TikTok inbox as a private draft through Zernio; a person publishes it in the TikTok app.",
+        "Step 1 writes three edit instructions and a caption with DeepSeek V4 Flash. Step 2 edits your photo into each scene with Higgsfield Marketing Studio on the seller's key. Step 3 sends the carousel to the seller's TikTok inbox as a private draft through Zernio; a person publishes it in the TikTok app.",
       safetyPromise: "Draft only: the carousel lands in a TikTok inbox as a private draft and is never published by this workflow.",
       runInputs: [
         { name: "brief", label: "Product and campaign", maxChars: 500 },

@@ -25,7 +25,7 @@ export const PROVIDER_MANIFESTS: Readonly<Record<ToolProvider, ToolManifest>> = 
       },
       {
         // Edits one https photo once per "Slide N:" line (2 to 3) with Marketing Studio Image;
-        // outputs {"images": [original, ...edits], "caption"}.
+        // outputs {"images": edits, "caption"}. The buyer's photo URL is never passed on.
         name: "edit_carousel_images",
         effect: "read_only",
         io: {

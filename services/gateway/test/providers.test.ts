@@ -153,7 +153,7 @@ describe("TikTok carousel tools", () => {
     expect(f.calls).toHaveLength(3);
   });
 
-  it("Higgsfield edits the owner's photo once per slide and puts the original first", async () => {
+  it("Higgsfield edits the owner's photo once per slide; only its own images reach the carousel", async () => {
     const photo = "https://images.example/product.jpg";
     const replies: Array<[number, unknown]> = [];
     for (const n of [1, 2, 3]) replies.push([200, { request_id: `e${n}` }], [200, { status: "completed", images: [{ url: `https://cdn.higgsfield.ai/edit${n}.jpg` }] }]);
@@ -161,7 +161,7 @@ describe("TikTok carousel tools", () => {
     const r = await new HiggsfieldAdapter({ id: "k", secret: "s" }, opts(f.fn)).run("edit_carousel_images", { slides: PLAN, photo }, ctx);
     expect(r.status).toBe("succeeded");
     const out = JSON.parse((r as { artifact: { text: string } }).artifact.text) as { images: string[]; caption: string };
-    expect(out.images).toEqual([photo, "https://cdn.higgsfield.ai/edit1.jpg", "https://cdn.higgsfield.ai/edit2.jpg", "https://cdn.higgsfield.ai/edit3.jpg"]);
+    expect(out.images).toEqual(["https://cdn.higgsfield.ai/edit1.jpg", "https://cdn.higgsfield.ai/edit2.jpg", "https://cdn.higgsfield.ai/edit3.jpg"]);
     const posts = f.calls.filter((c) => c.init?.method === "POST");
     expect(posts.map((c) => c.url)).toEqual(Array(3).fill("https://api.higgsfield.ai/marketing-studio/image"));
     expect(JSON.parse(posts[0]!.init!.body as string)).toMatchObject({ image_urls: [photo], aspect_ratio: "9:16", enhance_prompt: false });
