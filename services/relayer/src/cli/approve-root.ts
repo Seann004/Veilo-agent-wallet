@@ -46,7 +46,7 @@ async function main(): Promise<void> {
   const deployment = await verifyDeployment({ manifestPath: config.pool.deploymentManifestPath, repoRoot: rootDir, programId: config.pool.programId, poolId: config.pool.poolId, mint: config.network.mint, chain });
   if (deployment.state !== "verified") throw new VeiloConfigError("INVALID_CONFIG", `deployment not verified: ${deployment.reason}`);
   const m = deployment.manifest;
-  const out = resolve(arg("--out") ?? process.env.APPROVED_LABELS_PATH ?? join(rootDir, "artifacts", "deployment", "approved-labels.json"));
+  const out = arg("--out") !== undefined ? resolve(arg("--out")!) : resolve(rootDir, process.env.APPROVED_LABELS_PATH?.trim() || join("artifacts", "deployment", "approved-labels.json"));
   const p = await getPoseidon();
   const db = openRelayerDb(process.env.RELAYER_DATABASE_PATH?.trim() || join(config.paths.dataDir, "relayer.sqlite"));
   const indexer = new Indexer(db, chain, p, address(m.program.programId), address(m.pool.poolState), address(m.pool.approvalState), out);

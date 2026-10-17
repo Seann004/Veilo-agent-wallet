@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { address } from "@solana/kit";
 import {
   VeiloConfigError,
@@ -55,7 +55,8 @@ async function main(): Promise<void> {
   const spendVk = JSON.parse(vkBytes.toString("utf8")) as VerificationKey;
   const poseidon = await getPoseidon();
   const sponsorCap = BigInt(process.env.RELAYER_SPONSOR_LAMPORT_CAP?.trim() || "100000000");
-  const approvedLabelsPath = process.env.APPROVED_LABELS_PATH?.trim() || join(rootDir, "artifacts", "deployment", "approved-labels.json");
+  // A relative path is from the repository root, not this service's working directory.
+  const approvedLabelsPath = resolve(rootDir, process.env.APPROVED_LABELS_PATH?.trim() || join("artifacts", "deployment", "approved-labels.json"));
 
   let deployment: DeploymentStatus = { state: "missing", reason: "not checked yet" };
   let indexer: Indexer | null = null;
