@@ -25,6 +25,7 @@ import { getPurchaseRow } from "../src/ledger/purchases";
 import { activatePolicyVersion, insertAgentPolicyDraft } from "../src/ledger/workspace";
 import { immediate } from "@veilo/db";
 import { SellerOriginPolicy } from "../src/marketplace/origin-policy";
+import { LocalExternalPort } from "../src/workflows/adapters";
 import { activateDefaults, addNotes, createEnv, intentTask, type TestEnv } from "./helpers";
 
 const UNIT = 1000n;
@@ -347,6 +348,28 @@ describe("external x402 batch through private funding", () => {
     await expect(approveExternalBinding(env.ledger, env.ws.id, "owner", { ...base, payToAta: seller.feePayer }, origins, 100_000n)).rejects.toMatchObject({ code: "SERVICE_NOT_ALLOWED" });
     await expect(approveExternalBinding(env.ledger, env.ws.id, "owner", { ...base, origin: "http://10.0.0.5" }, origins, 100_000n)).rejects.toMatchObject({ code: "SERVICE_NOT_ALLOWED" });
     await expect(approveExternalBinding(env.ledger, env.ws.id, "owner", { ...base, maxCalls: 100, unitPriceUsdc: 10_000n }, origins, 100_000n)).rejects.toMatchObject({ code: "BUDGET_EXCEEDED" });
+  });
+
+  it("a workflow step proposed from a task is bounded by that task's budget", async () => {
+    const port = new LocalExternalPort(env.ledger, orchestrator, runner, 100_000n);
+    const tool = {
+      id: "tool-1",
+      origin: binding.origin,
+      resourcePath: PATH,
+      payTo: binding.pay_to,
+      payToAta: binding.pay_to_ata,
+      unitPriceBaseUnits: UNIT.toString(),
+      callsPerStep: MAX_CALLS,
+      feePayers: JSON.parse(binding.allowed_fee_payers_json) as string[],
+      rpcMethods: ["getSlot", "getTokenSupply"],
+      callTemplate: [],
+    };
+    const taskId = intentTask(env, env.agents.Prince.id, "wf-task");
+    env.db.prepare(`UPDATE task SET limit_usdc = ? WHERE id = ?`).run(UNIT, taskId);
+    const step = { agentId: env.agents.Prince.id, approvedBy: "owner", tool, calls: [rpc("getSlot")] };
+    await expect(port.authorize({ ...step, idempotencyKey: "wf-1", taskId })).rejects.toMatchObject({ code: "BUDGET_EXCEEDED" });
+    const { purchaseId } = await port.authorize({ ...step, idempotencyKey: "wf-2" });
+    expect(row(purchaseId).task_id).toBeNull();
   });
 
   it("batch reservations count against agent caps like any other purchase", async () => {

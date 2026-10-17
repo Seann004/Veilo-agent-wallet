@@ -679,12 +679,15 @@ export class MarketplaceBridge {
     }
     const q = this.quote(h);
     const input: SpecialistJobInput = { jobId: h.job_id, listingVersionId: q.listingVersionId, quoteDigest: h.quote_digest, brief: h.brief };
-    // A granted hire spends from the task that proposed it, so that task's budget, deadline and
-    // purchase count bound it.
+    // A granted hire, or a workflow step an agent proposed from a task, spends from that task, so
+    // its budget, deadline and purchase count bound it.
     const taskId =
-      h.basis === "listing_grant"
-        ? ((this.ledger.db.prepare(`SELECT task_id FROM marketplace_proposal WHERE operation_id = ?`).pluck().get(h.operation_id) as string | null | undefined) ?? undefined)
-        : undefined;
+      ((h.basis === "listing_grant"
+        ? this.ledger.db.prepare(`SELECT task_id FROM marketplace_proposal WHERE operation_id = ?`).pluck().get(h.operation_id)
+        : this.ledger.db
+            .prepare(`SELECT r.task_id FROM workflow_run_step s JOIN workflow_run r ON r.id = s.run_id WHERE s.operation_id = ?`)
+            .pluck()
+            .get(h.operation_id)) as string | null | undefined) ?? undefined;
     let purchase;
     let serviceId: string;
     try {

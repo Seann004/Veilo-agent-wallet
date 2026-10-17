@@ -12,7 +12,7 @@ import {
   type WorkflowMarketPort,
   type WorkflowVersionFacts,
 } from "../src/workflows/runner";
-import { activateDefaults, createEnv, type TestEnv } from "./helpers";
+import { activateDefaults, createEnv, intentTask, type TestEnv } from "./helpers";
 
 const SELLER = "2LWbc9Mi6dRUrdEHBttoNS4udDtH1A4xwBdm1EKqcT57";
 const OTHER = "CPZSjRmyfTS95UjQD8ZdeTEWbQvW9QvEXnn6aGP7yyMN";
@@ -115,8 +115,10 @@ class FakeExternal implements ExternalPort {
   execution: "pending" | "delivered" | "no_result" = "delivered";
   responses: unknown[] = [{ result: { value: { amount: "1000" } } }, { result: 123 }];
   payerReady = true;
-  async authorize(r: { calls: unknown }) {
+  readonly taskIds: Array<string | undefined> = [];
+  async authorize(r: { calls: unknown; taskId?: string | undefined }) {
     this.calls.push(r.calls);
+    this.taskIds.push(r.taskId);
     return { purchaseId: `ext-purchase-${this.calls.length}` };
   }
   async drive() {}
@@ -310,6 +312,17 @@ describe("workflow runner (§26.7)", () => {
     expect(await runner.beforeRelease("ext-purchase-1")).toEqual({ outcome: "ok" });
     expect(market.payers).toEqual([{ index: 0, payer: "FreshPayer" }]);
     expect(await runner.beforeRelease("unrelated-purchase")).toBeNull();
+  });
+
+  it("a run an agent proposed from a task carries that task to its step purchases", async () => {
+    const prince = env.agents.Prince.id;
+    await runner.assign({ agentId: prince, versionId: V1, budgetUsdc: 12_000n, ownerPubkey: OWNER });
+    const taskId = intentTask(env, prince, "wf-run");
+    const run = await runner.propose({ agentId: prince, versionId: V1, runInputs: { mint: "m" }, taskId });
+    expect(run.task_id).toBe(taskId);
+    await runner.advance(run.id);
+    expect(external.taskIds).toEqual([taskId]);
+    expect(() => env.db.prepare(`UPDATE workflow_run SET task_id = NULL WHERE id = ?`).run(run.id)).toThrow(/immutable/);
   });
 
   it("refuses to release an assignment-approved step's funding once the assignment is revoked", async () => {

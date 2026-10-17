@@ -140,7 +140,7 @@ export function workflowRouter(deps: AuthDeps & { integration?: Integration | un
     const task = ownTask(ledger, agent.id, b.taskId);
     assertTaskLive(ledger, task);
     chargeToolCall(ledger, agent.id, task.id, "propose_workflow_run");
-    const run = await runner().propose({ agentId: agent.id, versionId: b.versionId, runInputs: b.runInputs });
+    const run = await runner().propose({ agentId: agent.id, versionId: b.versionId, runInputs: b.runInputs, taskId: task.id });
     res.status(202).json({ runId: run.id, status: run.status });
   });
 

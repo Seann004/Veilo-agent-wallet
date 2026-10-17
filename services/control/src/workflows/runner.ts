@@ -99,7 +99,7 @@ export interface HirePort {
 /** External x402 steps go through an owner-approved binding and the private batch path. */
 export interface ExternalPort {
   /** Reserves the step under the agent's caps; nothing is funded until `drive`. */
-  authorize(r: { agentId: string; approvedBy: string; tool: ExternalToolFacts; calls: Array<{ method: "GET" | "POST"; path: string; body?: unknown }>; idempotencyKey: string }): Promise<{ purchaseId: string }>;
+  authorize(r: { agentId: string; approvedBy: string; tool: ExternalToolFacts; calls: Array<{ method: "GET" | "POST"; path: string; body?: unknown }>; idempotencyKey: string; taskId?: string | undefined }): Promise<{ purchaseId: string }>;
   drive(purchaseId: string): Promise<void>;
   /** Payer proof from the wallet for an unreleased funding; null while the payer is not known yet. */
   signPayer(purchaseId: string, operationId: string, digest: string): Promise<{ payer: string; proof: string } | { refused: string } | null>;
@@ -133,6 +133,7 @@ export interface RunRow {
   is_test: bigint;
   requested_by: "owner" | "agent";
   assignment_id: string | null;
+  task_id: string | null;
   status: RunStatus;
   approved_by: string | null;
   stop_code: string | null;
@@ -242,7 +243,7 @@ export class WorkflowRunner {
   }
 
   /** Builds terms from the server's tool facts and records a run awaiting approval. */
-  async prepare(r: { versionId: string; agentId: string; runInputs: Record<string, string>; isTest: boolean; requestedBy: "owner" | "agent" }): Promise<RunRow> {
+  async prepare(r: { versionId: string; agentId: string; runInputs: Record<string, string>; isTest: boolean; requestedBy: "owner" | "agent"; taskId?: string }): Promise<RunRow> {
     const v = await this.deps.market.version(r.versionId);
     if (!v.live && !r.isTest) throw new ControlError("SERVICE_NOT_ALLOWED", "workflow version is not live");
     const ws = requireWorkspace(this.ledger);
@@ -287,11 +288,11 @@ export class WorkflowRunner {
       this.ledger.db
         .prepare(
           `INSERT INTO workflow_run (id, workspace_id, agent_id, workflow_id, workflow_version_id, terms_json, approval_digest, steps_json, total_max_usdc,
-             run_inputs_json, is_test, requested_by, status, created_at_ms, updated_at_ms)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_approval', ?, ?)`,
+             run_inputs_json, is_test, requested_by, task_id, status, created_at_ms, updated_at_ms)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_approval', ?, ?)`,
         )
         .run(id, ws.id, agent.id, v.workflowId, v.versionId, JSON.stringify(terms), workflowApprovalDigest(terms), JSON.stringify(stored), total,
-          JSON.stringify(r.runInputs), r.isTest ? 1 : 0, r.requestedBy, now, now);
+          JSON.stringify(r.runInputs), r.isTest ? 1 : 0, r.requestedBy, r.taskId ?? null, now, now);
       terms.steps.forEach((s, i) => {
         this.ledger.db
           .prepare(`INSERT INTO workflow_run_step (run_id, step_index, tool_kind, tool_id, recipient, max_usdc, state, updated_at_ms) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`)
@@ -365,7 +366,7 @@ export class WorkflowRunner {
    * An agent's proposal. It is approved without the owner only when an active assignment covers
    * these exact terms and the run fits the assignment's remaining budget; otherwise it waits.
    */
-  async propose(r: { agentId: string; versionId: string; runInputs: Record<string, string> }): Promise<RunRow> {
+  async propose(r: { agentId: string; versionId: string; runInputs: Record<string, string>; taskId?: string }): Promise<RunRow> {
     const run = await this.prepare({ ...r, isTest: false, requestedBy: "agent" });
     const auto = immediate(this.ledger.db, () => {
       const a = this.ledger.db
@@ -692,7 +693,7 @@ export class WorkflowRunner {
         return false;
       }
       const calls = renderCalls(tool.callTemplate, inputs);
-      const bought = await this.deps.external.authorize({ agentId: run.agent_id, approvedBy: this.#ownerOf(run), tool, calls, idempotencyKey: workflowStepHireKey(run.cloud_run_id as string, index) });
+      const bought = await this.deps.external.authorize({ agentId: run.agent_id, approvedBy: this.#ownerOf(run), tool, calls, idempotencyKey: workflowStepHireKey(run.cloud_run_id as string, index), taskId: run.task_id ?? undefined });
       this.#setStep(run.id, index, { state: "paying", purchase_id: bought.purchaseId });
       return true;
     }

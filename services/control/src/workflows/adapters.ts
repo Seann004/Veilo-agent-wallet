@@ -223,6 +223,8 @@ export class LocalExternalPort implements ExternalPort {
       sku: EXTERNAL_BATCH_SKU,
       paymentPath: "private_x402",
       requestDigest: computeRequestDigest(EXTERNAL_BATCH_SKU, input),
+      taskId: r.taskId,
+      proposedByTask: r.taskId !== undefined,
       rationale: "workflow step",
     });
     this.orchestrator.storeInput(purchase, input);
