@@ -50,10 +50,12 @@ export function walletInternalRouter(deps: AuthDeps): Router {
 
   r.post("/internal/wallet/owner-session", (req, res) => {
     const body = parse(z.object({ sessionToken: z.string().min(1).max(256), csrfToken: z.string().max(256).optional() }).strict(), req.body);
-    const s = authenticateSession(ledger, body.sessionToken);
+    const s = authenticateSession(ledger, body.sessionToken, deps.session.guestPubkeys);
     if (!s) throw new ControlError("UNAUTHENTICATED", "owner session is not valid");
+    // Deposits, exits, recovery and note status stay with the owner; guest sessions never reach them.
+    if (s.role !== "owner") throw new ControlError("FORBIDDEN", "owner session required");
     const csrfValid = body.csrfToken !== undefined && safeEqualHex(sha256Hex(body.csrfToken), s.csrfHash);
-    res.json({ workspaceId: s.workspaceId, ownerPubkey: s.ownerPubkey, csrfValid });
+    res.json({ workspaceId: s.workspaceId, ownerPubkey: s.pubkey, csrfValid });
   });
 
   r.get("/internal/wallet/notes", (_req, res) => {

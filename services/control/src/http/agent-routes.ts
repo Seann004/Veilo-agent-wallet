@@ -15,7 +15,7 @@ import { calendarView, decideHandoff, editContent, listContent, listHandoffs, re
 import { claimWorkerJob, completeWorkerJob, heartbeatWorkerJob, ownTask, sponsoredPlanning, taskView } from "../agents/work";
 import type { Integration } from "../integration";
 import { requireAgent } from "../ledger/workspace";
-import { actorOf, requireActor, type AuthDeps } from "./actor";
+import { READERS, actorOf, requireActor, type AuthDeps } from "./actor";
 
 function parse<S extends z.ZodType>(schema: S, value: unknown): z.infer<S> {
   const r = schema.safeParse(value ?? {});
@@ -33,14 +33,20 @@ const param = (req: Request, name: string): string => {
 };
 
 /**
- * Owner content/handoff endpoints and the runner's job/planning endpoints. None of these
- * perform inference, purchases or publishing on behalf of an edit or approval.
+ * Content/handoff reads for every workspace role, owner-only edits and decisions, and the runner's
+ * job/planning endpoints. None of these perform inference, purchases or publishing on behalf of an edit or approval.
  */
 export function agentRouter(deps: AuthDeps & { integration?: Integration | undefined }): Router {
   const { ledger } = deps;
   const r = Router();
   const owner = requireActor(deps, ["owner"]);
   const worker = requireActor(deps, ["worker"]);
+  const reader = requireActor(deps, READERS);
+  const readerWorkspace = (res: Response): string => {
+    const a = actorOf(res);
+    if (a.kind !== "owner" && a.kind !== "guest" && a.kind !== "viewer") throw new ControlError("FORBIDDEN", "workspace session required");
+    return a.workspaceId;
+  };
   const ownerOf = (res: Response) => {
     const a = actorOf(res);
     if (a.kind !== "owner") throw new ControlError("FORBIDDEN", "owner session required");
@@ -52,9 +58,8 @@ export function agentRouter(deps: AuthDeps & { integration?: Integration | undef
     return requireAgent(ledger, a.workspaceId, a.agentId);
   };
 
-  r.get("/content", owner, (req, res) => {
-    const o = ownerOf(res);
-    res.json({ items: listContent(ledger, o.workspaceId, parse(contentQuerySchema, req.query)) });
+  r.get("/content", reader, (req, res) => {
+    res.json({ items: listContent(ledger, readerWorkspace(res), parse(contentQuerySchema, req.query)) });
   });
 
   r.patch("/content/:id", owner, (req, res) => {
@@ -67,12 +72,12 @@ export function agentRouter(deps: AuthDeps & { integration?: Integration | undef
     res.json({ item: reviewContent(ledger, o.workspaceId, param(req, "id"), parse(contentReviewSchema, req.body).state, o.ownerPubkey) });
   });
 
-  r.get("/calendar", owner, (_req, res) => {
-    res.json(calendarView(ledger, ownerOf(res).workspaceId));
+  r.get("/calendar", reader, (_req, res) => {
+    res.json(calendarView(ledger, readerWorkspace(res)));
   });
 
-  r.get("/handoffs", owner, (_req, res) => {
-    res.json({ items: listHandoffs(ledger, ownerOf(res).workspaceId) });
+  r.get("/handoffs", reader, (_req, res) => {
+    res.json({ items: listHandoffs(ledger, readerWorkspace(res)) });
   });
 
   r.post("/handoffs/:id/decision", owner, (req, res) => {

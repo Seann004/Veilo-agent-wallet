@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import type { Ledger } from "../context";
 import { ControlError } from "../errors";
+import { getWorkspace } from "../ledger/workspace";
 import { authenticateWorker, type ServiceCredentials, type ServicePrincipal } from "../auth/credentials";
 import {
   CSRF_HEADER,
@@ -13,6 +14,9 @@ import {
 
 export type Actor =
   | { kind: "owner"; workspaceId: string; ownerPubkey: string; sessionId: string; csrfHash: string }
+  | { kind: "guest"; workspaceId: string; guestPubkey: string; sessionId: string; csrfHash: string }
+  /** Anonymous read-only caller; exists only when public view is enabled. */
+  | { kind: "viewer"; workspaceId: string }
   | { kind: "worker"; workspaceId: string; agentId: string; credentialId: string }
   | { kind: "service"; service: ServicePrincipal };
 
@@ -24,7 +28,7 @@ export interface AuthDeps {
   services: ServiceCredentials;
 }
 
-function readCookie(req: Request, name: string): string | undefined {
+export function readCookie(req: Request, name: string): string | undefined {
   const header = req.headers.cookie;
   if (!header) return undefined;
   for (const part of header.split(";")) {
@@ -35,9 +39,14 @@ function readCookie(req: Request, name: string): string | undefined {
   return undefined;
 }
 
+/** Readers of workspace state: every browser role. */
+export const READERS: readonly ActorKind[] = ["owner", "guest", "viewer"];
+
 /**
  * Resolves the caller from exactly one credential: a bearer token (worker or service) or the
- * owner session cookie. Request bodies never contribute to identity.
+ * session cookie (owner or guest). Without either, and only with public view enabled, the caller
+ * is an anonymous viewer. An invalid bearer token is never downgraded to a viewer. Request bodies
+ * never contribute to identity.
  */
 export function resolveActor(deps: AuthDeps, req: Request): Actor | null {
   const auth = req.headers.authorization;
@@ -53,8 +62,13 @@ export function resolveActor(deps: AuthDeps, req: Request): Actor | null {
   }
   const cookie = readCookie(req, SESSION_COOKIE);
   if (cookie) {
-    const s = authenticateSession(deps.ledger, cookie);
-    if (s) return { kind: "owner", workspaceId: s.workspaceId, ownerPubkey: s.ownerPubkey, sessionId: s.id, csrfHash: s.csrfHash };
+    const s = authenticateSession(deps.ledger, cookie, deps.session.guestPubkeys);
+    if (s?.role === "owner") return { kind: "owner", workspaceId: s.workspaceId, ownerPubkey: s.pubkey, sessionId: s.id, csrfHash: s.csrfHash };
+    if (s?.role === "guest") return { kind: "guest", workspaceId: s.workspaceId, guestPubkey: s.pubkey, sessionId: s.id, csrfHash: s.csrfHash };
+  }
+  if (deps.session.publicView === true) {
+    const ws = getWorkspace(deps.ledger);
+    if (ws) return { kind: "viewer", workspaceId: ws.id };
   }
   return null;
 }
@@ -73,8 +87,12 @@ export function requireActor(deps: AuthDeps, allowed: readonly ActorKind[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const actor = resolveActor(deps, req);
     if (!actor) throw new ControlError("UNAUTHENTICATED", "valid credentials are required");
+    // A viewer holds no credential, so anything beyond a permitted read asks for sign-in.
+    if (actor.kind === "viewer" && (!allowed.includes("viewer") || req.method !== "GET")) {
+      throw new ControlError("UNAUTHENTICATED", "sign in is required for this action");
+    }
     if (!allowed.includes(actor.kind)) throw new ControlError("FORBIDDEN", `this endpoint is not available to ${actor.kind} credentials`);
-    if (actor.kind === "owner" && MUTATING.has(req.method)) {
+    if ((actor.kind === "owner" || actor.kind === "guest") && MUTATING.has(req.method)) {
       assertOrigin(deps, req);
       const header = req.headers[CSRF_HEADER];
       if (typeof header !== "string" || !safeEqualHex(sha256Hex(header), actor.csrfHash)) {

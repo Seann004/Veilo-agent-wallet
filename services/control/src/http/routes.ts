@@ -23,6 +23,9 @@ import { big, iso, num, type Ledger } from "../context";
 import { ControlError } from "../errors";
 import { issueWorkerCredential } from "../auth/credentials";
 import {
+  DEFAULT_GUEST_RUNS_PER_HOUR,
+  SESSION_COOKIE,
+  authenticateSession,
   clearedSessionCookie,
   createChallenge,
   revokeSession,
@@ -53,7 +56,8 @@ import {
   requireWorkspace,
   type AgentRow,
 } from "../ledger/workspace";
-import { actorOf, assertOrigin, requireActor, type AuthDeps } from "./actor";
+import { READERS, actorOf, assertOrigin, readCookie, requireActor, type Actor, type AuthDeps } from "./actor";
+import { isViewer, redactActivityEvents, redactBalances, redactPurchase } from "./redact";
 
 function parse<S extends z.ZodType>(schema: S, value: unknown): z.infer<S> {
   const r = schema.safeParse(value ?? {});
@@ -99,6 +103,37 @@ function chargeWorkerCall(ledger: Ledger, req: Request, agentId: string, taskId:
   if (taskId === undefined || task?.state === "running") chargeToolCall(ledger, agentId, id, tool);
 }
 
+const HOUR_MS = 3_600_000;
+
+type GuestActor = Extract<Actor, { kind: "guest" }>;
+
+const guestRunsInLastHour = (ledger: Ledger, guest: GuestActor): number =>
+  num(
+    ledger.db
+      .prepare(
+        `SELECT count(*) FROM audit_event WHERE workspace_id = ? AND actor_type = 'system' AND actor_id = ? AND action = 'agent.run'
+           AND policy_result = 'allowed' AND created_at_ms > ?`,
+      )
+      .pluck()
+      .get(guest.workspaceId, guest.guestPubkey, ledger.now() - HOUR_MS),
+  );
+
+function denyGuestRun(ledger: Ledger, guest: GuestActor, agentId: string, reason: string): never {
+  immediate(ledger.db, () =>
+    writeAudit(ledger, {
+      workspaceId: guest.workspaceId,
+      scope: `agent:${agentId}`,
+      actorType: "system",
+      actorId: guest.guestPubkey,
+      action: "agent.run",
+      policyResult: "denied",
+      reasonCode: "POLICY_DENIED",
+      details: { actor: "guest", reason },
+    }),
+  );
+  throw new ControlError("POLICY_DENIED", reason);
+}
+
 export function controlRouter(deps: AuthDeps & { integration?: Integration | undefined }): Router {
   const { ledger } = deps;
   const integration = deps.integration;
@@ -106,7 +141,11 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
   const owner = requireActor(deps, ["owner"]);
   const worker = requireActor(deps, ["worker"]);
   const ownerOrService = requireActor(deps, ["owner", "service"]);
-  const anyActor = requireActor(deps, ["owner", "worker", "service"]);
+  const reader = requireActor(deps, READERS);
+  const runner = requireActor(deps, ["owner", "guest"]);
+  const signedIn = requireActor(deps, ["owner", "guest"]);
+  const anyActor = requireActor(deps, ["owner", "guest", "viewer", "worker", "service"]);
+  const guestRunLimit = deps.session.guestRunsPerHour ?? DEFAULT_GUEST_RUNS_PER_HOUR;
   const ownerId = (res: Response) => {
     const a = actorOf(res);
     return a.kind === "owner" ? a.ownerPubkey : "";
@@ -116,8 +155,21 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     if (a.kind === "service") return requireWorkspace(ledger).id;
     return a.workspaceId;
   };
+  const viewing = (res: Response) => isViewer(actorOf(res));
 
-  // Owner session
+  // Browser session. Reports who the cookie belongs to without exposing session or CSRF material.
+  r.get("/session", (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const publicView = deps.session.publicView === true;
+    const cookie = readCookie(req, SESSION_COOKIE);
+    const s = cookie ? authenticateSession(ledger, cookie, deps.session.guestPubkeys) : null;
+    if (s) {
+      res.json({ role: s.role, address: s.pubkey, expiresAt: new Date(s.expiresAtMs).toISOString(), publicView });
+      return;
+    }
+    res.json({ role: publicView ? "viewer" : "none", address: null, expiresAt: null, publicView });
+  });
+
   r.post("/session/challenge", (req, res) => {
     assertOrigin(deps, req);
     const body = parse(sessionChallengeRequestSchema, req.body);
@@ -130,18 +182,24 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     const issued = await verifyChallenge(ledger, deps.session, body);
     const secure = deps.session.secureCookies || req.secure;
     res.setHeader("Set-Cookie", sessionCookie(issued.sessionToken, Math.floor(deps.session.sessionTtlMs / 1000), secure));
-    res.status(200).json({ ownerPubkey: issued.ownerPubkey, csrfToken: issued.csrfToken, expiresAt: issued.expiresAt });
+    res.status(200).json({
+      role: issued.role,
+      address: issued.address,
+      ...(issued.role === "owner" ? { ownerPubkey: issued.address } : {}),
+      csrfToken: issued.csrfToken,
+      expiresAt: issued.expiresAt,
+    });
   });
 
-  r.post("/session/logout", owner, (req, res) => {
+  r.post("/session/logout", signedIn, (req, res) => {
     const a = actorOf(res);
-    if (a.kind === "owner") revokeSession(ledger, a.sessionId);
+    if (a.kind === "owner" || a.kind === "guest") revokeSession(ledger, a.sessionId);
     res.setHeader("Set-Cookie", clearedSessionCookie(deps.session.secureCookies || req.secure));
     res.status(204).end();
   });
 
   // Workspace
-  r.get("/workspace", owner, (_req, res) => {
+  r.get("/workspace", reader, (_req, res) => {
     const ws = requireWorkspace(ledger, wsId(res));
     const services = ledger.db
       .prepare(`SELECT id, service_key, origin, gateway_identity, recipient, network, mint, status FROM approved_service WHERE workspace_id = ?`)
@@ -208,20 +266,20 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     res.status(draft ? 201 : 200).json({ draft, activated });
   });
 
-  r.get("/activity", owner, (req, res) => {
+  r.get("/activity", reader, (req, res) => {
     const q = parse(activityQuerySchema, req.query);
     const workspaceId = wsId(res);
     const purchases = ledger.db
       .prepare(`SELECT * FROM purchase WHERE workspace_id = ? ORDER BY created_at_ms DESC LIMIT ?`)
       .all(workspaceId, q.limit) as PurchaseRow[];
-    res.json({
-      events: activity(ledger, workspaceId, q.limit, q.before),
-      purchases: purchases.map((p) => purchaseView(ledger, p)),
-    });
+    const events = activity(ledger, workspaceId, q.limit, q.before);
+    const views = purchases.map((p) => purchaseView(ledger, p));
+    res.json(viewing(res) ? { events: redactActivityEvents(events), purchases: views.map(redactPurchase) } : { events, purchases: views });
   });
 
-  r.get("/balances", owner, async (_req, res) => {
-    res.json(await fullBalances(ledger, requireWorkspace(ledger, wsId(res)), integration?.gateway));
+  r.get("/balances", reader, async (_req, res) => {
+    const balances = await fullBalances(ledger, requireWorkspace(ledger, wsId(res)), integration?.gateway);
+    res.json(viewing(res) ? redactBalances(balances) : balances);
   });
 
   // Agents
@@ -287,23 +345,52 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     });
   });
 
-  r.post("/agents/:id/run", owner, async (req, res) => {
+  r.post("/agents/:id/run", runner, async (req, res) => {
     const body = parse(runAgentRequestSchema, req.body);
     const workspaceId = wsId(res);
     const agent = requireAgent(ledger, workspaceId, param(req, "id"));
     const ws = requireWorkspace(ledger, workspaceId);
     if (ws.stopped === 1n) throw new ControlError("ACCOUNT_STOPPED", "workspace emergency stop is active");
     if (agent.status !== "active") throw new ControlError("ACCOUNT_STOPPED", `agent is ${agent.status}`);
+    const caller = actorOf(res);
+    const guest = caller.kind === "guest" ? caller : null;
+    if (guest) {
+      // Task budgets are spending policy, which only the owner sets.
+      if (body.taskLimitTestUsdc !== undefined) denyGuestRun(ledger, guest, agent.id, "guests cannot set a task spending limit");
+      if (guestRunsInLastHour(ledger, guest) >= guestRunLimit) denyGuestRun(ledger, guest, agent.id, `guest run limit reached (${guestRunLimit} per hour)`);
+    }
+    /**
+     * Runs inside the transaction that creates or finds the job, so concurrent guest requests
+     * cannot exceed the hourly limit and every admitted guest run is audited with its job.
+     */
+    const recordGuestRun = <J extends { job: { id: string }; created: boolean }>(job: J): J => {
+      if (!guest) return job;
+      if (guestRunsInLastHour(ledger, guest) >= guestRunLimit) throw new ControlError("POLICY_DENIED", `guest run limit reached (${guestRunLimit} per hour)`);
+      writeAudit(ledger, {
+        workspaceId,
+        scope: `agent:${agent.id}`,
+        actorType: "system",
+        actorId: guest.guestPubkey,
+        action: "agent.run",
+        policyResult: "allowed",
+        details: { actor: "guest", role: agent.role, jobId: job.job.id, created: job.created },
+      });
+      return job;
+    };
     let result: ReturnType<typeof enqueueJob>;
     let check: unknown;
     if (agent.role === "credit_manager") {
       const retry = body.input?.retry === true ? RETRY_MARKER : ":";
-      result = enqueueJob(ledger, {
-        workspaceId,
-        agentId: agent.id,
-        kind: "credit_check",
-        triggerKey: `manual:${agent.id}${retry}${body.triggerKey ?? ledger.newId()}`,
-      });
+      result = immediate(ledger.db, () =>
+        recordGuestRun(
+          enqueueJob(ledger, {
+            workspaceId,
+            agentId: agent.id,
+            kind: "credit_check",
+            triggerKey: `manual:${agent.id}${retry}${body.triggerKey ?? ledger.newId()}`,
+          }),
+        ),
+      );
       if (integration && result.created) {
         // "Check now" runs the same deterministic check the scheduler runs.
         const jobId = result.job.id;
@@ -329,7 +416,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
       result = immediate(ledger.db, () => {
         const existing = ledger.db.prepare(`SELECT id FROM job WHERE trigger_key = ?`).pluck().get(triggerKey);
         if (existing !== undefined) {
-          return enqueueJob(ledger, { workspaceId, agentId: agent.id, kind: agent.role === "research" ? "research" : "content", triggerKey });
+          return recordGuestRun(enqueueJob(ledger, { workspaceId, agentId: agent.id, kind: agent.role === "research" ? "research" : "content", triggerKey }));
         }
         const handoffId = typeof input.handoffId === "string" ? input.handoffId : undefined;
         if (handoffId !== undefined) {
@@ -342,7 +429,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
           ledger.db
             .prepare(`UPDATE task SET objective = ?, input_json = ?, deadline_at_ms = ?, updated_at_ms = ? WHERE id = ?`)
             .run(objective, JSON.stringify(merged), body.deadline === undefined ? null : Date.parse(body.deadline), ledger.now(), reserved.id);
-          return enqueueJob(ledger, { workspaceId, agentId: agent.id, taskId: reserved.id, kind: "content", triggerKey });
+          return recordGuestRun(enqueueJob(ledger, { workspaceId, agentId: agent.id, taskId: reserved.id, kind: "content", triggerKey }));
         }
         const task = createTask(ledger, {
           workspaceId,
@@ -352,13 +439,15 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
           limitUsdc: body.taskLimitTestUsdc,
           deadlineMs: body.deadline === undefined ? null : Date.parse(body.deadline),
         });
-        return enqueueJob(ledger, {
-          workspaceId,
-          agentId: agent.id,
-          taskId: task.id,
-          kind: agent.role === "research" ? "research" : "content",
-          triggerKey,
-        });
+        return recordGuestRun(
+          enqueueJob(ledger, {
+            workspaceId,
+            agentId: agent.id,
+            taskId: task.id,
+            kind: agent.role === "research" ? "research" : "content",
+            triggerKey,
+          }),
+        );
       });
     }
     const taskId = result.job.task_id;
@@ -451,8 +540,14 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     if (a.kind === "worker" && p.agent_id !== a.agentId) {
       throw new ControlError("POLICY_DENIED", "agent scope mismatch");
     }
-    if (a.kind === "owner" && p.workspace_id !== a.workspaceId) throw new ControlError("NOT_FOUND", "purchase not found");
+    if ((a.kind === "owner" || a.kind === "guest" || a.kind === "viewer") && p.workspace_id !== a.workspaceId) {
+      throw new ControlError("NOT_FOUND", "purchase not found");
+    }
     if (a.kind === "worker") chargeWorkerCall(ledger, req, a.agentId, undefined, "purchase_status");
+    if (a.kind === "viewer") {
+      res.json({ purchase: redactPurchase(purchaseView(ledger, p)) });
+      return;
+    }
     res.json({ purchase: purchaseView(ledger, p), ...(integration ? { execution: integration.orchestrator.view(p.id) } : {}) });
   });
 
