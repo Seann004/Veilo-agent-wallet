@@ -36,6 +36,9 @@ import { PortUnavailableError } from "./ports";
 import type { ExternalCallRow, FundingRow, NoteRecord, SwapRow } from "./store";
 import { buildSwapTransaction } from "./swap";
 
+/** Relayer error codes that refuse a swap before co-signing it. */
+const TERMINAL_SWAP_REFUSALS = new Set(["POLICY_DENIED", "INVALID_REQUEST", "BUDGET_EXCEEDED"]);
+
 /** Wallet event recorded immediately before the fresh wallet signs its one swap. */
 export const SWAP_SIGNATURE_PRODUCED = "swap.signature_produced";
 
@@ -695,13 +698,22 @@ export class FundingService {
     const { store, relayer } = this.d;
     const amounts = { minOutLamports: s.min_out, estOutLamports: s.est_out, destination: s.destination };
     if (s.state === "finalized") return { status: "finalized", signature: s.signature!, sponsorLamports: s.sponsor_lamports, ...amounts };
-    if (s.state === "failed" || s.state === "expired") return { status: "failed", signature: s.signature, reason: s.state === "failed" ? "the swap failed on-chain" : "the swap expired before landing" };
+    if (s.state === "failed" || s.state === "expired") {
+      const reason = s.state === "expired" ? "the swap expired before landing" : s.signature === null ? "the relayer refused the swap; nothing was broadcast" : "the swap failed on-chain";
+      return { status: "failed", signature: s.signature, reason };
+    }
     let view;
     try {
       view = s.state === "signed"
         ? await relayer.submitSwap({ swapId: s.swap_id, transaction: s.transaction_b64, lastValidBlockHeight: s.last_valid_block_height.toString(), freshWallet: address(s.fresh_wallet), destination: address(s.destination) })
         : await relayer.swap(s.swap_id);
     } catch (error) {
+      // The relayer refuses before co-signing, and only it can pay the fee, so these bytes can never land.
+      if (s.state === "signed" && error instanceof ServiceCallError && TERMINAL_SWAP_REFUSALS.has(error.code)) {
+        store.updateSwap(s.purchase_id, { state: "failed" });
+        store.event("swap.refused", s.purchase_id, { code: error.code, message: error.message });
+        return { status: "failed", signature: null, reason: `the relayer refused the swap (${error.code}: ${error.message}); nothing was broadcast` };
+      }
       return { status: "not_ready", reason: `relayer unavailable (${describeError(error)}); the signed swap is kept and resubmitted unchanged` };
     }
     if (!view) return { status: "not_ready", reason: "the relayer has no record of this swap yet" };

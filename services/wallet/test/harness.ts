@@ -237,7 +237,7 @@ export class FakePool {
 }
 
 /** "error_unrecorded": the relayer fails (HTTP 5xx) before it persists anything. */
-export type RelayerMode = "land" | "hold" | "lose_response" | "down" | "error_unrecorded";
+export type RelayerMode = "land" | "hold" | "lose_response" | "down" | "error_unrecorded" | "refuse_swap";
 
 /** Relayer double. Enforces the strict wire schema and keeps every request body for inspection. */
 export class FakeRelayer implements RelayerPort {
@@ -304,6 +304,7 @@ export class FakeRelayer implements RelayerPort {
     if (this.mode === "down") throw new PortUnavailableError("relayer unreachable (test)");
     const parsed = swapRequestWire.parse(JSON.parse(JSON.stringify(req)));
     this.received.push(JSON.stringify(req));
+    if (this.mode === "refuse_swap") throw new ServiceCallError(403, "BUDGET_EXCEEDED", "relayer: sponsor lamport allowance exhausted (test)");
     const existing = this.swaps.get(parsed.swapId);
     if (existing) return existing.view;
     const view: SwapViewWire = {

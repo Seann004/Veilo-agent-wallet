@@ -115,4 +115,20 @@ describe("devnet swap signing", () => {
     expect([...world.relayer.swaps.values()][0]!.req.transaction).toBe(stored.transaction_b64);
     expect(quotes).toBe(1);
   });
+
+  it("marks a swap the relayer refused as failed instead of retrying it forever", async () => {
+    const binding = SWAP();
+    const id = await funded("s6", binding);
+    advanceAuthority(ledger(), id, "sign_merchant");
+    world.relayer.mode = "refuse_swap";
+    const r = await w.funding.signSwap(id, id, binding);
+    expect(r).toMatchObject({ status: "failed", signature: null });
+    expect(w.store.swap(id)!.state).toBe("failed");
+    world.relayer.mode = "land";
+    expect(await w.funding.signSwap(id, id, binding)).toMatchObject({ status: "failed", signature: null });
+    expect(await w.funding.merchantOutcome(id)).toBe("failed");
+    expect(world.relayer.received.filter((b) => b.includes(w.store.swap(id)!.swap_id))).toHaveLength(1);
+    expect(world.relayer.swaps.size).toBe(0);
+    expect(quotes).toBe(1);
+  });
 });
