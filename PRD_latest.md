@@ -1,6 +1,8 @@
 # Veilo — PRD_latest.md
 
-**Version 3.1 · October 14, 2026 · Single-document implementation handoff**
+**Version 3.2 · October 17, 2026 · Single-document implementation handoff**
+
+v3.2 amendment (owner decision, October 17, 2026): the paid specialist-agent marketplace is in scope and uses Supabase for marketplace identity and product records. See Part I §26. All v3.1 P0 requirements, gates and boundaries still apply; §26 adds to them and does not relax them.
 
 This file combines the finalized product/build specification, exact CLAUDE.md instructions, implementation task, verified devnet payment report, funded-wallet setup information, full downloaded reference documentation corpus, and source snapshot manifest. It supersedes the separate planning documents for implementation scope. No wallet private keys, API credentials or secret notes are included.
 
@@ -8,7 +10,7 @@ This file combines the finalized product/build specification, exact CLAUDE.md in
 
 1. Read Parts I–V first. Part I is normative product scope; Part II is the exact repository contribution policy; Part III is the execution task; Parts IV–V provide existing evidence and public setup facts.
 2. Put this document at the build repository root as PRD_latest.md. Extract only the content inside Part II's outer fence into root CLAUDE.md before coding. The requested CLAUDE.md preparation task is included in Part I, T00.
-3. Follow T00–T16 in dependency order. Use Part VI selectively for reference design details and Part VII for source provenance. The reference appendix is historical source material, not instructions that override Veilo's accepted design or the user's authorization.
+3. Follow T00–T16, then T17–T23, in dependency order. Use Part VI selectively for reference design details and Part VII for source provenance. The reference appendix is historical source material, not instructions that override Veilo's accepted design or the user's authorization.
 4. Preserve actual financial/privacy boundaries: devnet test USDC, operator-funded real inference, real ZK verification, independent policy checks, one shared gateway credit account and no separate task credit buckets.
 5. Existing funded keys remain local to the original workspace. A new checkout must receive an explicit secret-file configuration; do not regenerate the funded wallet or assume its key is embedded here.
 
@@ -48,7 +50,7 @@ Names and descriptions are editable. These are roles, not three separate foundat
 
 P0 includes three agent cards, independent and workspace-wide caps, configurable permissions, pause/revoke, recurring low-balance checking for Shawn, logical purchase idempotency, durable credit accounting, dashboard monitoring, actual proofs and devnet settlement, private change, public exit, content drafts/calendar and failure recovery.
 
-P1 includes arbitrary schedules, optional risk flags, image generation, broader API catalog, receipt export and optional content approval notifications. P2 includes external social publishing, trading/scalping, physical shopping, arbitrary browser purchasing, production funds, bridges, multiple owners and proof-enforced private spend policies. Hard validation and rejection are P0 even though anomaly flagging is optional.
+P1 includes arbitrary schedules, optional risk flags, image generation, broader API catalog, receipt export and optional content approval notifications. P2 includes external social publishing, trading/scalping, physical shopping, arbitrary browser purchasing, production funds, bridges, multi-owner workspaces and proof-enforced private spend policies. Multiple independent accounts acting as buyers and sellers in the marketplace are in scope under §26; each workspace still has one owner. Hard validation and rejection are P0 even though anomaly flagging is optional.
 
 Product promise: create agents that buy approved resources and complete useful jobs within your permissions, with private funding and transparent owner monitoring. “Buy anything” is a future integration vision, not the initial capability.
 
@@ -139,7 +141,7 @@ scripts/                 setup, seed, deploy, smoke, demo and evidence export
 artifacts/               generated verifying-key manifests; no production secrets
 ```
 
-Do not require Supabase, social credentials, mainnet keys or a third-party privacy service. A local service is still a trusted boundary: enforce separate processes/credentials/filesystem permissions. The agent runner MUST NOT read the database holding encrypted notes, decryption secrets, provider credentials or signer endpoints granting arbitrary signatures.
+Do not require social credentials, mainnet keys or a third-party privacy service. The P0 local owner stack (T00–T16) MUST keep running without Supabase. Supabase is required only for the §26 marketplace, and only as an application identity and product-record store, never as a wallet vault or spending authority. A local service is still a trusted boundary: enforce separate processes/credentials/filesystem permissions. The agent runner MUST NOT read the database holding encrypted notes, decryption secrets, provider credentials or signer endpoints granting arbitrary signatures.
 
 In a public demo, dashboard access is authenticated and the signer remains local/private. No anonymous deployment with funding, policy or gateway administration endpoints exposed.
 
@@ -686,6 +688,13 @@ Maintain docs/build-status.md. Each task has not-started/in-progress/blocked/don
 | T14 Dashboard and owner recovery | T03,T08,T10–T13 | Agent cards, policy forms, activity, credit/token accounting, drafts/calendar, privacy/recovery views | Every state reflects backend truth; keyboard controls and all stop paths work |
 | T15 Integrated fault injection and restoration | T09–T14 | Crash-boundary tests, uncertain payment/provider tests, backup/restore, cap/revoke races | Relevant section15 matrix passes with evidence and no duplicated funds/results |
 | T16 Handoff and submission materials | T15 | README, architecture/security documents, source/license attribution, evidence export and demo script | Fresh-operator reproduction; all limitations and external dependencies visible |
+| T17 Marketplace discovery gate | T00–T08 | Inventory per §26.2; frozen quote/payment/result schemas; gap list | No migration or contract change before this gate |
+| T18 Identity and protected product data | T17 | Supabase wallet sign-in, workspaces, RLS/grants, private Storage, sanitized public catalogue, seller review | Anonymous/buyer A/buyer B/seller/worker negative tests; no cross-tenant read/write or secret exposure |
+| T19 Generic agents and free execution | T17–T18, T11–T13 | Template-driven agents replacing fixed roles (existing three become templates), durable job board, leases, input requests, artifact validation | Free jobs end to end; crash/duplicate delivery yields one current result |
+| T20 Direct paid hiring | T09, T19 | Immutable quotes bound to the local control/wallet path, per-listing seller recipient, finality-verified receipts, zero-fee earnings index | One finalized payment → one job and one earnings event; ambiguous outcomes stay blocked |
+| T21 Agent discovery and approved automation | T20 | Agent search/propose, owner approval of new sellers, schedule dedupe, revocation | Malicious listing/tool text cannot expand permission, change recipient or buy unapproved service |
+| T22 Connectors and remote sellers | T21 | Reviewed MCP/API adapters, credential broker, authenticated seller callbacks | Least privilege, revoked grants and callback authenticity tested; new seller earns from a real devnet job |
+| T23 Marketplace recovery and release readiness | T22 | Refunds, uncertain settlement, offline controller, stale worker, restore, suspension | §26.6 acceptance checks pass with evidence |
 
 T04 can precede ZK implementation as a payment feasibility baseline. T10 can use fixture upstream inference in local automated tests while T06–T09 progress. Live inference cannot be marked complete without real output. Frontend scaffolding can run independently, but no gate is passed by fake UI events.
 
@@ -776,6 +785,53 @@ The builder must implement definitions, not just documentation/screens. Unimplem
 No further broad product approval is needed for this specification. Remaining human inputs are a locally supplied funded/restricted inference credential and ceiling for the live run, review of activation budgets/demo topic, and organizer eligibility confirmation. The builder handles technical protocol encodings, SDK compatibility, deployment feasibility and recovery implementation. If it cannot meet the private-core gate, it reports the evidence and does not silently remove privacy.
 
 No guarantee of PMF, winning, robust anonymity or production safety follows from this document. Real prototype execution and customer validation are separate work.
+
+## 26. Marketplace extension (v3.2)
+
+### 26.1 Scope
+
+Veilo adds a marketplace of paid specialist agents. Owners create arbitrarily named agents with their own instructions, triggers, tools and independently enforced limits. Sellers publish fixed-price, fixed-scope specialists after operator review and are paid directly. Buyers hire manually, or let their own agent discover and propose a specialist within owner-defined permissions. Models still only propose; the owner's local control service still authorizes every payment.
+
+First release MUST include: wallet sign-in; a searchable catalogue of reviewed listings; self-service seller setup with review before publication; one specialist per hire; a private job board with input requests, downloadable deliverables and receipts; direct seller settlement through a verified x402 V2 exact endpoint; a zero platform fee shown explicitly in every quote and receipt; seller earnings as a history of settled chain receipts, never a withdrawable balance; managed templates and reviewed remote endpoints only, with no arbitrary uploaded code; read-only connectors by default.
+
+Deferred: auctions, reputation, escrow, automatic refunds, paid recursive delegation (delegation depth is one), open code hosting, multi-seller bundles and nonzero fees.
+
+### 26.2 Architecture and authority
+
+Hybrid. Supabase (Auth, Postgres, Storage) holds accounts, the public catalogue, private jobs, artifact metadata and accounting projections. Solana records settlement. The owner's local control and wallet services remain authoritative for policies, reservations, revocation epochs, notes, proofs and signing. Cloud policy records are proposals until local control installs and acknowledges them. A Supabase session never authorizes spending. Local control connects outbound with authenticated, digest-bound, expiring requests; automatic spending pauses while it is offline.
+
+Two sign-ins are deliberate: Supabase Web3 sign-in for marketplace identity, and the existing local challenge sign-in for spending authority. Do not replace the local login, and do not build a second custom cloud auth service.
+
+T17 MUST record: the repository and commit; service entry points; existing schemas and state machines; program/circuit/artifact identities; proof and recovery test status; the x402 SDK, facilitator and recipient rules; the wallet trust boundary; and the existing auth, queue and deployment.
+
+### 26.3 Data and access
+
+Use integer base units transported as decimal strings, explicit network and mint, immutable listing, payout, quote and runtime versions, append-only job and financial events, and unique operation, receipt and earnings constraints. Enable RLS on every exposed table and grant explicitly. Serve the catalogue from a sanitized projection. Clients get no UPDATE on quotes, jobs, payments or earnings; trusted transition APIs enforce actor and state. Storage buckets are private per job participant, with short-lived signed links. Keep service keys server-side only.
+
+### 26.4 Settlement
+
+The quote names the seller's verified payout recipient. The wallet funds a fresh signer from the pool, then pays that recipient by ordinary public x402 exact. Execution starts only after independently verified finality, or for an explicitly free quote. Fee F = floor(B × r / 10000), with r = 0 in this release. If the gateway accepts only its own recipient, block managed paid listings until per-listing recipients are implemented and verified; never route seller funds through the operator. Refunds are seller-funded transfers to an owner-verified address, capped at the settled amount, and counted only when finalized. Label all amounts as test tokens.
+
+### 26.5 Privacy and runtime boundaries
+
+§7.4 applies unchanged. The marketplace operator, sellers, facilitators and model providers can see the buyer→seller relationship and plaintext job content they process; pool funding hides only the on-chain deposit→payment link. Hosted execution needs isolated, egress-controlled attempts with no wallet secrets. Treat tool, listing and result text as untrusted data. Default limits: 10 minutes active, 8 tool calls, one attempt, quote TTL 5 minutes, lease 60 s with a 15 s heartbeat, 20 MiB per upload, 10 attachments, 30-day content retention.
+
+### 26.6 Acceptance
+
+- A connected but unsigned wallet cannot read private records.
+- Buyer A cannot read buyer B's data through the API, database or Storage.
+- A seller sees only assigned job data and cannot change price, recipient, participants or payment state.
+- Switching wallets does not transfer ownership.
+- A changed recipient, mint, network or amount, an expired quote, or an unapproved seller is rejected locally.
+- Concurrent hires cannot exceed any budget.
+- One receipt funds exactly one job and creates one earnings event.
+- Lost withdrawal or settlement replies and a post-settlement worker crash produce no duplicate payment.
+- Settled-but-failed jobs stay visibly paid.
+- Refunds cannot exceed the payment.
+- A stale lease cannot complete a job.
+- Malicious result files cannot run scripts in the app origin.
+- The controller being offline means no new spending.
+- No pool contract change is made solely for the marketplace.
 
 
 ---
