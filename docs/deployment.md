@@ -73,7 +73,17 @@ Cargo registry and git caches persist in the named Docker volumes `veilo-cargo-r
 Notes:
 
 - Build output goes to the gitignored `target/` directory in the repository. Builds over the Windows bind mount are slower than native: the first skeleton build took about 3.5 minutes.
-- `cargo build-sbf` writes a fresh program keypair to `target/deploy/privacy_pool-keypair.json` if none exists. That keypair is an unfunded build by-product, is gitignored, and is not the deployment identity. The deployment identity is the `programId` role created once by `pnpm keys:init` (`work/keys/devnet/program-id.json`, public key `3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq`). `pnpm program:set-id` writes it into `declare_id!`, `Anchor.toml` and the published IDL (`pnpm program:set-id -- --check` verifies all three). Always build with `--ignore-keys` and delete the by-product keypair.
+- `cargo build-sbf` writes a fresh program keypair to `target/deploy/privacy_pool-keypair.json` if none exists. That keypair is an unfunded build by-product, is gitignored, and is not the deployment identity. The deployment identity is the `programId` role created once by `pnpm keys:init` (`work/keys/devnet/program-id.json`, public key `27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd`). `pnpm program:set-id` writes it into `declare_id!`, `Anchor.toml` and the published IDL: the address and the `initialize_pool` ProgramData PDA seed, which is the program id's bytes. `pnpm program:set-id -- --check` verifies all four.
+- Anchor 1.2.1 `anchor build` syncs program ids before it builds, even with `--ignore-keys`. It reads `target/deploy/privacy_pool-keypair.json`, generates that file if it is missing, and rewrites `declare_id!` and `Anchor.toml` to match it. A build without the right keypair in place therefore embeds a throwaway id. This was observed on 2026-10-17. Build like this instead, then delete the copy:
+
+  ```sh
+  install -m 600 work/keys/devnet/program-id.json target/deploy/privacy_pool-keypair.json
+  pnpm tc -- anchor build --ignore-keys
+  rm target/deploy/privacy_pool-keypair.json
+  pnpm program:set-id -- --check   # must print "ok": true
+  ```
+
+  `pnpm deploy:devnet` also refuses a binary that does not embed the role program id.
 - The Anchor workspace is at the repository root (`Anchor.toml`, `Cargo.toml`, `rust-toolchain.toml` pinned to 1.97.1, `Cargo.lock`). The program crate lives in `programs/privacy-pool` with `anchor-lang = "=1.2.1"`.
 
 ### Native toolchain (`VEILO_TOOLCHAIN=native`)
@@ -144,18 +154,18 @@ The tests load the program (SBPF v3, as `anchor build` produces with platform-to
 
 ### Measurements (`artifacts/program/measurements.json`)
 
-Compute units include the 150 CU `SetComputeUnitLimit` instruction. Values were regenerated after the program id change (T09): PDA bump searches differ per program id, roughly 1.5k CU per extra iteration. Transaction sizes are full signed legacy transactions with every account (packet limit 1,232 bytes).
+Compute units include the 150 CU `SetComputeUnitLimit` instruction. Values were regenerated after each program id change (T09; last for 27Dg…AjFd on 2026-10-17): PDA bump searches differ per program id, roughly 1.5k CU per extra iteration. Transaction sizes are full signed legacy transactions with every account (packet limit 1,232 bytes).
 
 | Instruction | CU measured | Client CU limit | Tx bytes |
 |---|---|---|---|
-| initialize_pool | 45,482 | 200,000 | 741 |
-| deposit | 25,586–30,086 | 100,000 | 618 |
+| initialize_pool | 46,982 | 200,000 | 741 |
+| deposit | 27,086–33,086 | 100,000 | 618 |
 | refund_pending_deposit | 18,001 | 100,000 | 512 |
 | insert_leaf | 108,919–109,192 | 300,000 | 574 |
 | skip_refunded_deposit | 11,327 | 100,000 | 284 |
 | update_approved_root | 8,252 | 100,000 | 412 |
-| spend_private | 137,800–142,970 | 400,000 | 960 (no relayer) to 1,152 (relayer signing besides the sponsor, fee account) |
-| exit_public | 118,255 | 300,000 | 907 |
+| spend_private | 136,310–142,300 | 400,000 | 960 (no relayer) to 1,152 (relayer signing besides the sponsor, fee account) |
+| exit_public | 119,755 | 300,000 | 907 |
 | update_config | 8,138 | 100,000 | 360 |
 
 Address lookup table: **not required**. The largest transaction (spend with a separate relayer signer and a fee account) is 1,152 bytes, 80 bytes under the limit. A v0 transaction with a table holding `pool_state, approval_state, vault, vault_authority, token_program, system_program` brings it to 1,002 bytes and is tested; use it if a client adds instructions (for example a priority-fee instruction plus an ATA creation) to the spend transaction. The program id cannot go in the table because it is invoked.
@@ -194,41 +204,43 @@ That leaves about 4.5 SOL after deployment for sponsored deposits, spends, exits
 
 Every signing step is run by the operator. The scripts are dry runs by default: they make read-only RPC calls and print the plan. They sign only with both `--execute` and `--confirm`. Each transaction signature is persisted before the transaction is sent. A rerun reconciles from finalized chain state instead of signing again. A mismatch stops the run, and no key, pool or manifest is ever replaced. A run lock refuses a second concurrent run.
 
-### Roles (`pnpm keys:init`, already run)
+### Roles (`pnpm keys:init`, run 2026-10-17 on macOS)
 
-Keypairs live in `work/keys/devnet/` (gitignored, owner-only ACL). `artifacts/deployment/roles.devnet.json` records only public keys and the pool id. A rerun keeps existing files and stops if a recorded role file is missing or holds a different key.
+Keypairs live in `work/keys/devnet/` (gitignored, owner-only ACL) on the Mac that deployed the pool, and nowhere else. Back them up before relying on this deployment; the previous deployment was retired because its keys stayed on another machine (`artifacts/deployment/prior-3B6D/README.md`). `artifacts/deployment/roles.devnet.json` records only public keys and the pool id. A rerun keeps existing files and stops if a recorded role file is missing or holds a different key.
 
 | Role | Public key | Purpose |
 |---|---|---|
-| deployer | `38jQg7zthCCZ6thwHDkWfeLHXV8Xg5uwERHP3dhgBTNR` | Upgrade authority, deploy fee payer, `initialize_pool` signer |
-| programId | `3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq` | Program address (in `declare_id!`, `Anchor.toml` and the IDL) |
-| programBuffer | `7Fy4yfFiBMFFcZqMffStY8Fx9bu3Jq7nshfnAGRrCQqR` | Deploy buffer, reused so an interrupted deploy resumes |
-| sponsor | `8djHL1qrsvv6mJJVbfw6i8A1nqeGDw4SQor7YW8tKtcD` | Relayer and fee/rent sponsor (manifest sponsor = relayer) |
-| merchant | `49TED53TmAC4EsScoN3zn6iTHZXAcz6J5w9trmnyAVWX` | Gateway `payTo` owner; merchant ATA `9YVRYnbzEojUGCNVuW1eGjjzPywAYYWRV92omacRjMuC` |
-| approvalAuthority | `AiZqKdteFDA3sTiimS9Ga4gGk1BG6R8yWcr646mMgvMd` | `update_approved_root` only |
-| configAuthority | `HYFB3197KpG11xoSrdBfBmWwGWMWbdQAVMa8cQxysvea` | `update_config` only; not funded (no transaction planned) |
-| testOwnerA | `53EfGeKqr3VFvhfr3DFVrK3LaK6KUPoPu6TCAr6qARks` | Synthetic test participant A |
-| testOwnerB | `69ardTTzQcZWhTPcHzKodr6TFThxGUehajd2diFthaXv` | Synthetic test participant B |
+| deployer | `FcAoTX7M7GnQHgQRVN81bAfd7khph1ZpC8gz37c9AAhy` | Upgrade authority, deploy fee payer, `initialize_pool` signer |
+| programId | `27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd` | Program address (in `declare_id!`, `Anchor.toml` and the IDL) |
+| programBuffer | `4YW7MrdbT3zgi57pL4oAY8YJYsqjFHpfMDK1PKvsxApu` | Deploy buffer, reused so an interrupted deploy resumes |
+| sponsor | `D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd` | Relayer and fee/rent sponsor (manifest sponsor = relayer) |
+| merchant | `3hbVsik3DMzaXaCCBrtua2xJt4M152hCsZ17bkLHueFT` | Gateway `payTo` owner; merchant ATA `45oAG4yFR88nFQQVN6iGKtfKPD55vaNtXoxzGhrwaatz` |
+| approvalAuthority | `7gpa8LcVEm3MLX4JqPtfbv95heRFKpsFCA4R84EhdDRE` | `update_approved_root` only |
+| configAuthority | `5797zmtBdH4rWVAryxjtTreNpiQajkMYX6GqmkTSPmbe` | `update_config` only; not funded (no transaction planned) |
+| testOwnerA | `7oTzRWg33mod7KxVUiVWBUyMna6wgrQXUv3dC58ZsabE` | Synthetic test participant A |
+| testOwnerB | `mYG89rxGotGF2VYoT3tffbMbsaKdCaJEoAPbTXzWEZ2` | Synthetic test participant B |
 
-Pool id `c012ae927dfd556e75e9d2f1893a1ffcb1834eee6f1df4f4c5ff7fc3d9b2d589`. Derived addresses: PoolState `65FNWNc1akaXFsPFCoLGMwjnefGbpts3sw4KEVYQ8Tab`, VaultAuthority `J2CxmbQrLhhWhLKFUZMpgXpSGfDBsbpTamYjC7yry1jG`, vault `GQ7u2E8t1mEkUwo4NanbPFy5NhzGJHdhD8FY32ZWorgt`, ApprovalState `9im1P2PRuozYWQpFF6FBViqyDLFSdUBjJ7kr4e7tKTUF`, ProgramData `DWeeQQKCKewGPi4hUyfQ5tdz3aFb3Hp1rrWasYWFQkN9`.
+Pool id `39cced46df181bdbf4813f07e9ad553c4f7c02a4ab14730cead9ca2b6e100c3e`. Derived addresses: PoolState `5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe`, VaultAuthority `AwEDp4gTWkXZzGhefaQ3rZhYuTAaSrEKBzci4RqZN33y`, vault `5MwxHt19yYSqcACa3UpABdQNsQhBN3v6jHLNSeKjBrGu`, ApprovalState `93626hbqJEjEY376ZH2goAgP8pWifvDECxSrhF5BqTkw`, ProgramData `ErofgrMt7PU56rkkk4kiazRvSnw2VjR1g1wecYgFNcr4`.
 
-Binary: `target/deploy/privacy_pool.so` from `pnpm tc -- anchor build --ignore-keys` (SBPF v3, devnet feature). It is 378,808 bytes, sha256 `01449e43d097ea1a09049f0397d62aad8d4777250ceef780eb62a70c8044e278`. The deploy script refuses a binary that does not embed the role program id. Deploy with `--max-len` equal to the binary size.
+Binary: `target/deploy/privacy_pool.so` from `pnpm tc -- anchor build --ignore-keys` with `VEILO_TOOLCHAIN=native` on macOS arm64 (SBPF v3, devnet feature, platform-tools v1.57). It is 378,080 bytes, sha256 `864410cdc896bf5387b595450ce45d9568d3b2978be9729fc5630fcd92b862f9`. The deploy script refuses a binary that does not embed the role program id. Deploy with `--max-len` equal to the binary size.
 
-### Budget (devnet rent read live on 2026-10-15, dry run)
+### Budget (devnet rent read live on 2026-10-17, dry run)
 
 | Item | SOL |
 |---|---|
-| ProgramData rent (45 + 378,808 B), locked | 1.925223 |
+| ProgramData rent (45 + 378,080 B), locked | 1.921525 |
 | Program account rent, locked | 0.000833 |
-| Deploy buffer rent (returned to the deployer when the deploy completes) | 1.925183 (temporary) |
+| Deploy buffer rent (returned to the deployer when the deploy completes) | 1.921485 (temporary) |
 | Deploy fees (~379 write transactions, ×2 retry margin) | 0.003850 |
 | `initialize_pool` rent (PoolState + ApprovalState + vault) | 0.010551 |
 | Merchant ATA rent | 0.001488 |
-| Peak held by the deployer during deploy | 3.855089 |
-| Locked after deployment | 1.938096 |
-| Transfers from the funding wallet: deployer 3.887149 (peak + init + ATA + 0.02 margin), sponsor 0.30, approval authority 0.01, testOwnerA 0.03, testOwnerB 0.03 | **4.257159** |
-| Funding wallet after the transfers (from 10.0) | ≈ 5.74 |
+| Peak held by the deployer during deploy | 3.847693 |
+| Locked after deployment | 1.934398 |
+| Transfers from the funding wallet: deployer 3.879753 (peak + init + ATA + 0.02 margin), sponsor 0.30, approval authority 0.01, testOwnerA 0.03, testOwnerB 0.03 | **4.249753** |
+| Funding wallet after the transfers (from 5.726240) | 1.476478 |
 | Test-USDC step: 0.2 test USDC per participant (0.4 total) plus two ATA creations | 0.002987 SOL |
+
+The previous deployment's figures (2026-10-15, 378,808-byte binary, 4.257159 SOL transferred) are in `artifacts/deployment/prior-3B6D/`.
 
 Spending during the M2 smoke:
 
@@ -239,7 +251,7 @@ The figures are recomputed on every dry run, and a shortfall stops the run.
 
 ### Operator commands, in order
 
-Run each command from the repository root (in a Claude Code session: `! <command>`). Docker must be running. `.env` already holds `FUNDING_KEY_PATH=work/keys/veilo-devnet-funding.json`.
+Run each command from the repository root (in a Claude Code session: `! <command>`). Docker must be running, unless you set `VEILO_TOOLCHAIN=native`. `.env` already holds `FUNDING_KEY_PATH=work/keys/veilo-devnet-funding.json`.
 
 1. Plan (read-only):
    `pnpm deploy:devnet`
@@ -285,7 +297,7 @@ The control service is not part of this gate. The operator's `--execute --confir
 ### If something stops
 
 - **Any stop:** fix the cause and rerun the **same** command. Sent transactions are reconciled by signature, and a transaction whose blockhash expired unseen is rebuilt. Nothing is signed twice for one step. If the smoke's state file and the wallet database disagree about the in-flight purchase, the wallet's funding is adopted, never re-proved.
-- **`solana program deploy` fails mid-way** (devnet RPC drops writes): rerun step 2. The CLI resumes from buffer `7Fy4yf…CQqR`. To abandon instead and reclaim the buffer rent: `pnpm tc -- solana program close 7Fy4yfFiBMFFcZqMffStY8Fx9bu3Jq7nshfnAGRrCQqR --url https://api.devnet.solana.com --keypair work/keys/devnet/deployer.json`.
+- **`solana program deploy` fails mid-way** (devnet RPC drops writes): rerun step 2. The CLI resumes from buffer `4YW7Mr…xApu`. To abandon instead and reclaim the buffer rent: `pnpm tc -- solana program close 4YW7MrdbT3zgi57pL4oAY8YJYsqjFHpfMDK1PKvsxApu --url https://api.devnet.solana.com --keypair work/keys/devnet/deployer.json`.
 - **`... not finalized yet; rerun later`:** devnet is slow; wait a minute and rerun.
 - **Mismatch stops:** this covers a deployed binary that differs, PoolState fields that differ, a manifest that differs, or `approved-labels.json` belonging to another pool. Nothing is overwritten. Investigate before continuing; upgrades are deliberately not automated.
 - **Facilitator or Echo unavailable:** the merchant step stops before signing, because the challenge is fetched and verified first. A rerun continues at that step.
@@ -395,16 +407,16 @@ Totals:
   - The facilitator pays the merchant-leg fees, so the merchant and the fresh payers need no SOL.
 - **Worst case test USDC:** if prepaid `analyze` is refused, the per-call fallback adds 0.2, for a merchant spend of 1.7. The three 1.0 notes cover that.
 
-**OpenRouter budget guard.** The worst case is maximum input plus maximum output tokens per call, at the pinned `mistralai/mistral-nemo` tariff:
+**OpenRouter budget guard.** The worst case is maximum input plus maximum output tokens per call, at the pinned `deepseek/deepseek-v4-flash` tariff (dry run, 2026-10-17):
 
 | Call | Worst case (micro-USD) |
 |---|---|
-| Prince planning | 2 × 140 |
-| analyze | 292 |
-| per-call analyze fallback (runs only if prepaid is refused) | 292 |
-| Mira planning | 2 × 140 |
-| content-package | 322 |
-| **Total** | **≤ 1,466 (≈ $0.0015)** |
+| Prince planning (sponsored, ≤ 2) | ≤ 1,020 |
+| analyze (prepaid credits) | ≤ 1,092 |
+| per-call analyze fallback (runs only if prepaid is refused) | ≤ 1,092 |
+| Mira planning (sponsored, ≤ 2) | ≤ 1,020 |
+| content-package (direct x402) | ≤ 1,274 |
+| **Total** | **≤ 5,498 (≈ $0.0055)** |
 
 Before executing, `demo:run` adds the exposure already recorded by live calls in the known gateway ledgers. It refuses if the total exceeds `OPERATOR_MAX_REAL_USD_MICRO`, and sets the demo gateway's own ceiling to the remainder. If real inference is disabled, the run reports `BLOCKED real-demo gate` and stops before signing.
 
@@ -414,8 +426,8 @@ Before executing, `demo:run` adds the exposure already recorded by live calls in
    `pnpm demo:run`
    Expected lines:
    - `chain: devnet genesis EtWT…ZBG`
-   - `pool: verified — program 3B6D…rUrq, PoolState 65FN…8Tab`
-   - `gateway merchant 49TE…AVWX: ATA 9YVR…MuC exists`
+   - `pool: verified — program 27Dg…AjFd, PoolState 5u3N…suhe`
+   - `gateway merchant 3hbV…HueFT: ATA 45oA…aatz exists`
    - `facilitator https://facilitator.payai.network: exact/devnet supported, fee payer 2wKu…DBg4`
    - balances for the demo owner, the sponsor and the approval authority
    - the allowance checks, the OpenRouter budget table and the plan
@@ -457,42 +469,34 @@ The evidence directory, `artifacts/evidence/demo-<runId>/`, contains:
 
 The directory is scanned for every known secret value: the provider key, every role and funding keypair, and the run's credentials. It is also scanned for secret-shaped patterns. Any hit fails the run.
 
-### Earlier devnet execution (2026-10-17)
+### Devnet runs on the retired 3B6D pool
 
-Public devnet history shows one full demo:run-shaped execution on 2026-10-17 between 01:15:41 and 01:18:07 UTC, signed from the Windows machine:
+On 2026-10-17 between 01:15:41 and 01:18:07 UTC, a full demo:run-shaped execution was signed from the Windows machine against program `3B6D…rUrq`. Its state file, evidence and note stores stayed on that machine. That pool is retired; see `artifacts/deployment/prior-3B6D/README.md`.
 
-- three deposits by the funding wallet
-- two approvals
-- three private withdrawals
-- three x402 payments to the gateway merchant ATA, of 1,000,000, 200,000 and 300,000
-- an 800,000 exit
+### Run on 27Dg…AjFd from macOS (2026-10-17, run `2026-10-17-e60755f3`): stopped at step d
 
-Its state file, evidence directory and gateway ledger are not in the repository. Before running again, copy `work/demo/` and `artifacts/evidence/demo-*/` from that machine. If the copied run passes `pnpm demo:run -- --execute --confirm`, which only re-checks a finished run, a second run is not needed. The dry run reports such earlier owner deposits when no state file is present.
+`pnpm demo:run` reported `readiness: all checks passed`. `--execute --confirm` then finalized these steps on devnet:
+
+- **a-deposits:** three 1.0 test-USDC deposits by the funding wallet (`3eoEDQb2…kUHm`, `5pYgMF9y…zU73N`, `3BRRHBKr…3MRPr`) and `update_approved_root` `37DWQqSK…sebK`. The first two attempts stopped before signing with relayer `NOT_READY` (a timeout, then an indexer root mismatch while the crank inserted). Each rerun resumed.
+- **b-shawn-topup:** pool withdrawal `upe58KYT…YM3` and x402 payment to the gateway merchant `gjE8z7yh…Rv9i`. The 1,000,000-credit pack was delivered.
+- **c-prince-research:** Prince bought `research-expanded`: withdrawal `5S2tz7rk…zkhg`, x402 `5ipsYM7J…kA1i`. Both legs finalized and the dataset was delivered. The task still ended `incomplete`, without `analyze` and without a handoff request.
+
+Cause: in each of the three purchases, the wallet's first `POST /fundings/:id/merchant-payment` failed with `unhandled SolanaError` (HTTP 500). The failure is inside the x402 client's `createPaymentPayload`, which reads only the mint and the latest blockhash from `DEVNET_RPC_URL`. The wallet logs only the error class, so the exact RPC error code was not recorded. Control parses the 500 body as `recovery_required` ("wallet service returned an unrecognized signing state"). Shawn's scheduler retried and succeeded. Prince's runner reported the purchase as `RECOVERY_REQUIRED` and stopped using it, although control's reconciliation later found both legs finalized.
+
+Because step c is recorded as done, a rerun waits at step d for a handoff that never comes. Fixing this needs a change to how the wallet and control classify a failed merchant-signing call; nothing is signed when it fails. Until then, the run cannot finish. Its notes (an untouched 1.0 note and a 0.8 change note) stay in the pool and can be exited by the owner from this Mac, under `work/demo/devnet/2026-10-17-e60755f3/`. Operator-funded inference was one planning call, 88 micro-USD (provider-reported).
 
 ### Running on macOS (operator checklist)
 
 Prerequisites on the Mac:
 
 1. Node 22: `export PATH=/opt/homebrew/opt/node@22/bin:$PATH`. The default Node 25 is outside `engines`.
-2. From the Windows checkout, copy these files to the same relative paths. Do not create new keys for these roles.
-   - `work/keys/veilo-devnet-funding.json`: the demo owner 3FCio7smQJX7fm5x4Rz2UPPesfHA46FkexC3S3SqkMFd
-   - `work/keys/devnet/sponsor-relayer.json`: 8djH…tcD
-   - `work/keys/devnet/approval-authority.json`: AiZq…Mgvd
-   - optional, so the evidence scan covers every role key: the rest of `work/keys/devnet/`
-   - `circuits/build/`: proving files, hash-checked against `artifacts/circuits/manifest.json`
-   - optional: `work/demo/` and `artifacts/evidence/demo-*/` from the earlier run, and `artifacts/deployment/approved-labels.json` (the committed copy predates that run; the approval step rebuilds it from chain history if it is stale)
-
-   Then restrict the files: `chmod 700 work work/keys work/keys/devnet && chmod 600 work/keys/*.json work/keys/devnet/*.json`.
-3. In `.env`, set:
-   - `POOL_PROGRAM_ID=3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq`
-   - `POOL_ID=c012ae927dfd556e75e9d2f1893a1ffcb1834eee6f1df4f4c5ff7fc3d9b2d589`
-   - `SPONSOR_KEY_PATH=work/keys/devnet/sponsor-relayer.json`
+2. The role keys of `27Dg…AjFd` exist only on the Mac that deployed it, under `work/keys/devnet/`. On another machine, copy that directory and `work/keys/veilo-devnet-funding.json` to the same relative paths. Do not create new keys for these roles. Then restrict the files: `chmod 700 work work/keys work/keys/devnet && chmod 600 work/keys/*.json work/keys/devnet/*.json`.
+3. `circuits/build/` can be rebuilt with `pnpm test:circuits`. The setup is deterministic, and the build fails if any hash differs from `artifacts/circuits/manifest.json`.
+4. `pnpm deploy:devnet` fills `.env` (`POOL_PROGRAM_ID`, `POOL_ID`, `SPONSOR_KEY_PATH`, `APPROVED_PARTICIPANTS`, `GATEWAY_MERCHANT_ADDRESS`, `GATEWAY_MERCHANT_ATA`). It never overwrites a different existing value, so clear the old values before deploying a new pool. Also set:
    - `FUNDING_KEY_PATH=work/keys/veilo-devnet-funding.json`
-   - `GATEWAY_MERCHANT_ADDRESS=49TED53TmAC4EsScoN3zn6iTHZXAcz6J5w9trmnyAVWX`
-   - `GATEWAY_MERCHANT_ATA=9YVRYnbzEojUGCNVuW1eGjjzPywAYYWRV92omacRjMuC`
    - `OPENROUTER_API_KEY`: a key with its own provider-side spend limit
-   - `OPERATOR_MAX_REAL_USD_MICRO`: at least 1466, for example `5000`. The budget guard counts only gateway ledgers on this machine.
-4. Ports 4700–4705 must be free during the run.
+   - `OPERATOR_MAX_REAL_USD_MICRO`: at least 5,498, for example `50000`. The budget guard counts only gateway ledgers on this machine.
+5. Ports 4700–4705 must be free during the run.
 
 Commands, in order:
 
@@ -506,15 +510,15 @@ pnpm evidence:export
 
 If `--execute` stops, rerun the same command. Then commit `artifacts/evidence/demo-<runId>/` and the export, after checking that both secret scans were clean.
 
-Funding is sufficient for another run as of 2026-10-17:
+Balances after the stopped run (finalized, 2026-10-17):
 
-| Account | Has | Needs per run | Missing |
-|---|---|---|---|
-| funding/demo owner 3FCi…kMFd | 5.73 SOL, 17.4 test USDC | readiness: 0.05 SOL and 3.0 test USDC; spends 0.0091 SOL and 3.0 test USDC (0.8 returns by exit) | none |
-| sponsor 8djH…tcD | 0.2851 SOL | readiness: 0.03 SOL; spends 0.0112 SOL | none |
-| approval authority AiZq…Mgvd | 0.009985 SOL | readiness: 0.0001 SOL; spends 0.000005–0.000015 SOL | none |
-| merchant 49TE…AVWX | 0 SOL, ATA exists | 0 (the facilitator pays fees) | none |
-| deployer, config authority, testOwnerA/B | n/a | not used by demo:run | none |
+| Account | Has | Needs per run |
+|---|---|---|
+| funding/demo owner 3FCi…kMFd | 1.4653 SOL, 13.98 test USDC | readiness: 0.05 SOL and 3.0 test USDC; spends ≈ 0.0091 SOL |
+| sponsor D7iW…uamd | 0.2888 SOL | readiness: 0.03 SOL; spends ≈ 0.0112 SOL |
+| approval authority 7gpa…hdDRE | 0.00999 SOL | readiness: 0.0001 SOL; spends 0.000005–0.000015 SOL |
+| merchant 3hbV…HueFT | 0 SOL; ATA holds the 1.2 test USDC paid by this run | 0 (the facilitator pays fees) |
+| deployer FcAo…AAhy | 1.9435 SOL (deploy buffer refund) | not used by demo:run |
 
 ### Local rehearsal
 
