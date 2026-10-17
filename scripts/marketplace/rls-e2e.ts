@@ -302,6 +302,8 @@ async function main() {
     const aStorage = await A.client.storage.from("job-files").download(`jobs/${jobId}/${claim.body.attemptId}/${artifactId}`);
     record("even the buyer reads private files only through the signed-link API", aStorage.error !== null);
 
+    const sPayer = await S.client.from("payment_operations").select("expected_payer").eq("job_id", jobId);
+    record("the seller cannot read the buyer's one-time payer", sPayer.error !== null);
     const sJob = await call("GET", `/jobs/${jobId}`, { token: S.token });
     record("the assigned seller sees the job", sJob.status === 200);
     const dash = await call("GET", "/seller/dashboard", { token: S.token });
@@ -320,6 +322,11 @@ async function main() {
     record("two refunds cannot together exceed the settled payment", approveOne.status === 200 && approveTwo.status === 400, `statuses ${approveOne.status}/${approveTwo.status}`);
     const bDecide = await call("POST", `/refunds/${refundTwo.body?.refundId}/decision`, { token: B.token, body: { approve: true } });
     record("only the assigned seller can decide a refund", bDecide.status === 404);
+    const decline = await call("POST", `/refunds/${refundTwo.body?.refundId}/decision`, { token: S.token, body: { approve: false } });
+    const afterDecline = await call("GET", `/jobs/${jobId}`, { token: A.token });
+    record("declining one refund keeps the claim open while another approved refund is pending", decline.status === 200 && afterDecline.body?.job?.financial_state === "refund_requested", `financial ${afterDecline.body?.job?.financial_state}`);
+    const earlyRefund = await call("POST", `/jobs/${hire2.body.jobId}/refund-requests`, { token: A.token, body: { amount: "1", returnAddress: buyerA.address, reason: "early" } });
+    record("a refund cannot be requested while a job can still run", earlyRefund.status === 409 || earlyRefund.status === 503, `status ${earlyRefund.status}`);
 
     await call("POST", `/operator/listings/${listing.body.listingId}/status`, { token: operatorToken, body: { status: "archived" } });
   } finally {
