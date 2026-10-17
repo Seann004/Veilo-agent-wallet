@@ -88,6 +88,19 @@ export interface MerchantPaymentRow {
   signed_at_ms: bigint;
 }
 
+export interface ExternalCallRow {
+  purchase_id: string;
+  call_index: bigint;
+  fresh_wallet: string;
+  message_hash: string;
+  payment_header: string;
+  recent_blockhash: string | null;
+  amount: bigint;
+  state: "signed" | "finalized" | "expired_unsettled" | "failed";
+  settlement_signature: string | null;
+  signed_at_ms: bigint;
+}
+
 export interface DepositRow {
   id: string;
   note_id: string;
@@ -476,6 +489,29 @@ export class WalletStore {
     this.db
       .prepare(`UPDATE merchant_payment SET state = ?, settlement_signature = ifnull(?, settlement_signature), updated_at_ms = ? WHERE purchase_id = ?`)
       .run(state, settlementSignature, this.now(), purchaseId);
+  }
+
+  externalCalls(purchaseId: string): ExternalCallRow[] {
+    return this.db.prepare(`SELECT * FROM external_call WHERE purchase_id = ? ORDER BY call_index`).all(purchaseId) as ExternalCallRow[];
+  }
+
+  insertExternalCall(c: Omit<ExternalCallRow, "state" | "settlement_signature" | "signed_at_ms">): void {
+    const now = this.now();
+    this.db
+      .prepare(
+        `INSERT INTO external_call (purchase_id, call_index, fresh_wallet, message_hash, payment_header, recent_blockhash, amount, state, signed_at_ms, updated_at_ms)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'signed', ?, ?)`,
+      )
+      .run(c.purchase_id, c.call_index, c.fresh_wallet, c.message_hash, c.payment_header, c.recent_blockhash, c.amount, now, now);
+  }
+
+  updateExternalCall(purchaseId: string, callIndex: number, state: ExternalCallRow["state"], settlementSignature: string | null): void {
+    this.db
+      .prepare(
+        `UPDATE external_call SET state = ?, settlement_signature = ifnull(?, settlement_signature), updated_at_ms = ?
+         WHERE purchase_id = ? AND call_index = ? AND state = 'signed'`,
+      )
+      .run(state, settlementSignature, this.now(), purchaseId, callIndex);
   }
 
   // Deposits, exits, recoveries -----------------------------------------------------------

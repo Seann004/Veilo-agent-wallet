@@ -60,7 +60,7 @@ describe("secrets migration 0003: funding attempts", () => {
     note(db, "c3", hex("5"), 5, "n2");
     expect(() => funding(db!, "p3", "n2", "c3", "fresh3", hex("b"))).toThrow(/UNIQUE/);
 
-    expect(runMigrations(db, all, SECRETS_DB_ROLE)).toEqual([3]);
+    expect(runMigrations(db, all.filter((m) => m.version <= 3), SECRETS_DB_ROLE)).toEqual([3]);
     expect(db.pragma("foreign_keys", { simple: true })).toBe(1n);
     expect(db.pragma("foreign_key_check")).toEqual([]);
     expect(db.prepare(`SELECT purchase_id, step FROM funding ORDER BY purchase_id`).all()).toEqual([

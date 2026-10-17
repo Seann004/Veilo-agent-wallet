@@ -2,7 +2,15 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { address, isAddress } from "@solana/kit";
 import { z } from "zod";
-import { baseUnits, fundingBindingWire, fundingRequestWire, healthReport, payerBindingRequestWire, type ServiceHealth } from "@veilo/contracts";
+import {
+  baseUnits,
+  externalCallRequestWire,
+  fundingBindingWire,
+  fundingRequestWire,
+  healthReport,
+  payerBindingRequestWire,
+  type ServiceHealth,
+} from "@veilo/contracts";
 import { EncodingError } from "@veilo/privacy-sdk";
 import { ServiceCallError } from "./adapters";
 import { WalletError } from "./errors";
@@ -126,6 +134,17 @@ export function createApp(health: ServiceHealth, deps?: WalletAppDeps): Express 
     );
     res.setHeader("Cache-Control", "no-store");
     res.json(await deps.funding.signMerchant(uuidParam(req, "purchaseId"), { fundingRef: b.fundingRef, paymentRequired: b.paymentRequired, binding: b.binding, exactAmountUsdc: b.exactAmountUsdc }));
+  });
+
+  app.post("/fundings/:purchaseId/external-calls", service, ready, async (req, res) => {
+    const b = parse(externalCallRequestWire, req.body);
+    res.setHeader("Cache-Control", "no-store");
+    res.json(await deps.funding.signExternalCall({ purchaseId: uuidParam(req, "purchaseId"), ...b }));
+  });
+  app.get("/fundings/:purchaseId/external-calls/:callIndex", service, async (req, res) => {
+    const index = Number(req.params.callIndex);
+    if (!Number.isInteger(index) || index < 0 || index > 99) throw new WalletError("INVALID_REQUEST", "invalid call index");
+    res.json(await deps.funding.externalCallOutcome(uuidParam(req, "purchaseId"), index));
   });
 
   // Owner wallet API.

@@ -22,6 +22,18 @@ import { baseUnitString } from "./amounts";
  * `recovery_required` (owner attention). It never returns a success-shaped state it did not
  * observe on chain.
  */
+/**
+ * Terms of an owner-approved external x402 resource paid as a bounded batch: one funded payer
+ * makes at most `maxCalls` payments of exactly `unitUsdc` each to the binding's recipient.
+ * Those payments share one payer, so they are linkable to each other on chain.
+ */
+export interface ExternalBatchTerms {
+  /** Exact path, or a `/*` prefix (see @veilo/x402-client resourcePathMatches). */
+  resourcePath: string;
+  unitUsdc: string;
+  maxCalls: number;
+}
+
 export interface FundingBinding {
   origin: string;
   gatewayIdentity: string;
@@ -31,6 +43,8 @@ export interface FundingBinding {
   payTo: string;
   merchantAta: string;
   allowedFeePayers: string[];
+  /** Present only for an external x402 batch; Veilo services never set it. */
+  external?: ExternalBatchTerms | undefined;
 }
 
 export interface FundingRequest {
@@ -76,6 +90,24 @@ export interface MerchantSignRequest {
   exactAmountUsdc: bigint;
 }
 
+/** One payment of an external batch, signed by the batch's funded payer. */
+export interface ExternalCallSignRequest {
+  purchaseId: string;
+  fundingRef: string;
+  /** Zero-based and contiguous; each earlier call must have a resolved chain outcome. */
+  callIndex: number;
+  paymentRequired: unknown;
+  binding: FundingBinding;
+}
+
+/** Chain outcome of one signed external call, by the payer's history and the signed message. */
+export type ExternalCallOutcome =
+  | { status: "none" }
+  | { status: "signed" }
+  | { status: "finalized"; signature: string }
+  | { status: "expired_unsettled" }
+  | { status: "failed"; signature: string | null };
+
 export type MerchantSignResult =
   | { status: "not_ready"; reason: string }
   | { status: "recovery_required"; reason: string }
@@ -106,6 +138,9 @@ export interface FundingProvider {
   release(purchaseId: string, fundingRef: string): Promise<FundingResult>;
   status(purchaseId: string): Promise<FundingResult>;
   signMerchantPayment(request: MerchantSignRequest): Promise<MerchantSignResult>;
+  /** Present only where the provider supports external x402 batches. */
+  signExternalCall?(request: ExternalCallSignRequest): Promise<MerchantSignResult>;
+  externalCallOutcome?(purchaseId: string, callIndex: number): Promise<ExternalCallOutcome>;
   /** Present only where the provider can prove payer-key possession (marketplace hires). */
   signPayerBinding?(request: PayerBindingRequest): Promise<PayerBindingResult>;
 }
@@ -121,8 +156,33 @@ export const fundingBindingWire = z
     payTo: z.string(),
     merchantAta: z.string(),
     allowedFeePayers: z.array(z.string()),
+    external: z
+      .object({
+        resourcePath: z.string().regex(/^\/[A-Za-z0-9._~/-]{0,200}(\/\*)?$/),
+        unitUsdc: baseUnitString,
+        maxCalls: z.number().int().min(1).max(100),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
+
+export const externalCallRequestWire = z
+  .object({
+    fundingRef: z.string().min(1),
+    callIndex: z.number().int().min(0).max(99),
+    paymentRequired: z.unknown(),
+    binding: fundingBindingWire,
+  })
+  .strict();
+
+export const externalCallOutcomeWire = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("none") }),
+  z.object({ status: z.literal("signed") }),
+  z.object({ status: z.literal("finalized"), signature: z.string().min(32) }),
+  z.object({ status: z.literal("expired_unsettled") }),
+  z.object({ status: z.literal("failed"), signature: z.string().min(32).nullable() }),
+]);
 
 export const fundingRequestWire = z
   .object({
@@ -192,4 +252,6 @@ export const WALLET_FUNDING_ROUTES = {
   status: "GET /fundings/:purchaseId",
   signMerchantPayment: "POST /fundings/:purchaseId/merchant-payment",
   signPayerBinding: "POST /fundings/:purchaseId/payer-binding",
+  signExternalCall: "POST /fundings/:purchaseId/external-calls",
+  externalCallOutcome: "GET /fundings/:purchaseId/external-calls/:callIndex",
 } as const;

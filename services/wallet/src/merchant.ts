@@ -11,10 +11,12 @@ import { WalletError } from "./errors";
 export function x402MerchantSigner(rpcUrl: string): MerchantSigner {
   return {
     async sign({ paymentRequired, binding, exactAmount, purchaseRef, wallet }) {
+      // An external resource declares no Veilo gateway identity or SKU tag; its path is pinned instead.
       const approved: ApprovedServiceBinding = {
         origin: binding.origin,
-        gatewayIdentity: binding.gatewayIdentity,
-        sku: binding.sku,
+        ...(binding.external
+          ? { resourcePath: binding.external.resourcePath }
+          : { gatewayIdentity: binding.gatewayIdentity, sku: binding.sku }),
         network: binding.network,
         mint: binding.mint,
         payTo: binding.payTo,
