@@ -238,14 +238,14 @@ Binary: `target/deploy/privacy_pool.so` from `pnpm tc -- anchor build --ignore-k
 | Locked after deployment | 1.934398 |
 | Transfers from the funding wallet: deployer 3.879753 (peak + init + ATA + 0.02 margin), sponsor 0.30, approval authority 0.01, testOwnerA 0.03, testOwnerB 0.03 | **4.249753** |
 | Funding wallet after the transfers (from 5.726240) | 1.476478 |
-| Test-USDC step: 0.2 test USDC per participant (0.4 total) plus two ATA creations | 0.002987 SOL |
+| USDC funding step: 0.2 USDC per participant (0.4 total) plus two ATA creations | 0.002987 SOL |
 
 The previous deployment's figures (2026-10-15, 378,808-byte binary, 4.257159 SOL transferred) are in `artifacts/deployment/prior-3B6D/`.
 
 Spending during the M2 smoke:
 
 - About 0.02 SOL in total. The participants pay deposit and exit rent and fees. The sponsor pays the fresh-payer ATA, spend rent, and the insert and spend fees.
-- 10,000 test-USDC base units go to the Echo merchant (Echo refunds them to the fresh payer).
+- 10,000 USDC base units go to the Echo merchant (Echo refunds them to the fresh payer).
 
 The figures are recomputed on every dry run, and a shortfall stops the run.
 
@@ -271,7 +271,7 @@ Run each command from the repository root (in a Claude Code session: `! <command
    - `manifest: wrote artifacts/deployment/devnet.json (relayer verifyDeployment: verified)`
    - `.env: set POOL_PROGRAM_ID, POOL_ID, SPONSOR_KEY_PATH, APPROVED_PARTICIPANTS, GATEWAY_MERCHANT_ADDRESS, GATEWAY_MERCHANT_ATA`
    - `Deployment complete`
-3. Fund the two synthetic participants with test USDC (signs one transaction):
+3. Fund the two synthetic participants with USDC (signs one transaction):
    `pnpm deploy:devnet -- --fund-test-usdc --funding work/keys/veilo-devnet-funding.json --execute --confirm`
    Expected: `fund-test-usdc: finalized`.
 4. Smoke plan (read-only):
@@ -285,7 +285,7 @@ When step 5 has finished, reply "done". The scripts have already written the dep
 
 ### What the smoke does
 
-- **Steps 1–3:** two 0.2 test-USDC deposits, one each from testOwnerA and testOwnerB. The sponsor's insert crank inserts both, with real insert proofs. The approval authority then publishes the approved labels under the prototype rule.
+- **Steps 1–3:** two 0.2 USDC deposits, one each from testOwnerA and testOwnerB. The sponsor's insert crank inserts both, with real insert proofs. The approval authority then publishes the approved labels under the prototype rule.
 - **Step 4:** the wallet's `FundingService` builds a real spend proof from A's note. The payout is 10,000 to a fresh payer. The in-process relayer (`WithdrawalService`) checks the proof off-chain, creates the fresh payer's ATA and submits `spend_private`.
 - **PRIV-07 check:** the spend transaction must not contain any deposit's owner, owner ATA, PendingDeposit/SeenPrecommitment PDA, commitment, label, precommitment or salt.
 - **Step 5:** inserts the change note.
@@ -325,7 +325,7 @@ The container needs three settings:
 On 2026-10-15/16 the rehearsal ran the whole flow end to end with the real SPL Token program:
 
 - deploy, plus an idempotent rerun
-- test-USDC funding
+- USDC funding
 - two deposits and three inserts
 - approve-root
 - a real-proof spend through the relayer, with PRIV-07 passing
@@ -387,9 +387,9 @@ Extra arguments go to vitest, for example `--bail=1`.
 
 Amounts follow the seeded SKU catalog. Each private purchase spends one note.
 
-| Step | What happens | Test USDC | Notes |
+| Step | What happens | USDC | Notes |
 |---|---|---|---|
-| a | 3 owner deposits of 1.0 test USDC; relayer insert crank; approval authority approves the owner's labels (prototype rule) | 3.0 into the pool | owner pays deposit rent ≈ 0.0038 SOL each |
+| a | 3 owner deposits of 1.0 USDC; relayer insert crank; approval authority approves the owner's labels (prototype rule) | 3.0 into the pool | owner pays deposit rent ≈ 0.0038 SOL each |
 | b | Shawn: gateway credits start at 0 (< 200,000). "Check now" runs the scheduled check: private pool → fresh wallet → x402 to the Veilo gateway (merchant `GATEWAY_MERCHANT_ADDRESS`, PayAI devnet facilitator) → one 1,000,000-credit issuance | 1.0 | |
 | c | Prince research task (runner): compares research-basic and research-expanded, buys one via private x402, consumes `analyze` with prepaid credits (real bounded OpenRouter inference), saves a cited brief (demo fixture data), requests a handoff | 0.2 (or 0.1) | ≤ 2 sponsored planning calls |
 | d | Owner approves the handoff; Mira buys `content-package` directly via private x402 with real inference → three drafts and a seven-day calendar | 0.3 | ≤ 2 sponsored planning calls |
@@ -399,13 +399,13 @@ Amounts follow the seeded SKU catalog. Each private purchase spends one note.
 
 Totals:
 
-- **Test USDC:** merchant spend at most 1.5. Of the 3.0 deposited, the exit returns 0.5–0.9 (the largest change note); the rest stays in the pool as notes.
+- **USDC:** merchant spend at most 1.5. Of the 3.0 deposited, the exit returns 0.5–0.9 (the largest change note); the rest stays in the pool as notes.
 - **SOL, measured on devnet (2026-10-17 run):** about 0.0203 in total.
   - The owner pays 0.0091386: three deposits at 0.00274312 each and the exit at 0.00090924.
   - The sponsor pays 0.0111700: three fresh-payer ATAs at 0.00149344, three spends at 0.00221988 and six inserts at 0.000005.
   - The approval authority pays 0.000005 per `update_approved_root` (two in that run).
   - The facilitator pays the merchant-leg fees, so the merchant and the fresh payers need no SOL.
-- **Worst case test USDC:** if prepaid `analyze` is refused, the per-call fallback adds 0.2, for a merchant spend of 1.7. The three 1.0 notes cover that.
+- **Worst case USDC:** if prepaid `analyze` is refused, the per-call fallback adds 0.2, for a merchant spend of 1.7. The three 1.0 notes cover that.
 
 **OpenRouter budget guard.** The worst case is maximum input plus maximum output tokens per call, at the pinned `deepseek/deepseek-v4-flash` tariff (dry run, 2026-10-17):
 
@@ -510,13 +510,13 @@ The pinned model now declares `reasoning: "disabled"`, so the request carries `r
 - d: content-package withdrawal `oefXfDPG…Sj4E`, x402 `pg6uMdTg…ALQH`. Mira's task completed with three drafts and a seven-day calendar.
 - e: duplicate checks created no new purchase.
 - f: both concurrent over-budget requests were refused with `BUDGET_EXCEEDED`. After Prince was revoked, his tool call got HTTP 401.
-- g: the owner exited 0.5 test USDC (`2JSGW9Xg…T7Y`).
+- g: the owner exited 0.5 USDC (`2JSGW9Xg…T7Y`).
 
 Every merchant signing call in runs `96c82bb7` and `1eba868c` succeeded on the first attempt (five of five). Evidence: `artifacts/evidence/demo-2026-10-17-1eba868c/` (its secret scan was clean over 39 known secret values) and `artifacts/evidence-export/2026-10-17T08-28-08-894Z/`.
 
 Operator-funded inference, provider-reported: 88 micro-USD (run e607), 73 micro-USD (run 96c8) and 205 micro-USD (run 1eba). Two diagnostic replays cost about 430 more.
 
-The stopped runs' notes stay in the pool: 1.8 test USDC each for `e60755f3` and `96c82bb7`. Their state files are `work/demo/devnet-state.2026-10-17-<runId>.json`, and their note stores are under `work/demo/devnet/<runId>/`. The owner can exit them from this Mac.
+The stopped runs' notes stay in the pool: 1.8 USDC each for `e60755f3` and `96c82bb7`. Their state files are `work/demo/devnet-state.2026-10-17-<runId>.json`, and their note stores are under `work/demo/devnet/<runId>/`. The owner can exit them from this Mac.
 
 ### Running on macOS (operator checklist)
 
@@ -547,11 +547,11 @@ Balances after run `1eba868c` (finalized, 2026-10-17):
 
 | Account | Has | Needs per run |
 |---|---|---|
-| funding/demo owner 3FCi…kMFd | 1.4479 SOL, 8.48 test USDC | readiness: 0.05 SOL and 3.0 test USDC; spends ≈ 0.0091 SOL |
+| funding/demo owner 3FCi…kMFd | 1.4479 SOL, 8.48 USDC | readiness: 0.05 SOL and 3.0 USDC; spends ≈ 0.0091 SOL |
 | sponsor D7iW…uamd | 0.2702 SOL | readiness: 0.03 SOL; spends ≈ 0.0112 SOL (measured ≈ 0.0062–0.0124 per run) |
 | approval authority 7gpa…hdDRE | 0.009975 SOL | readiness: 0.0001 SOL; spends 0.000005–0.000015 SOL |
-| merchant 3hbV…HueFT | 0 SOL; ATA holds 3.9 test USDC paid by the three runs | 0 (the facilitator pays fees) |
-| pool vault 5Mwx…BrGu | 4.6 test USDC, all owner notes from the three runs | — |
+| merchant 3hbV…HueFT | 0 SOL; ATA holds 3.9 USDC paid by the three runs | 0 (the facilitator pays fees) |
+| pool vault 5Mwx…BrGu | 4.6 USDC, all owner notes from the three runs | — |
 | deployer FcAo…AAhy | 1.9435 SOL (deploy buffer refund) | not used by demo:run |
 
 ### Local rehearsal

@@ -4,11 +4,11 @@ An owner-controlled workspace for AI agents that buy approved resources within d
 
 ## Current verification status
 
-The recorded M2 pool/Echo smoke is **verified on devnet**. Integrated payments/recovery are **verified on local test validator**; Shawn, Prince and Mira use a **fixture / mock provider** in local rehearsal. A parallel branch reports a later devnet gateway execution, but complete task/live-inference acceptance evidence is missing here. Marketplace acceptance is **not yet run** in this checkout. See [current status](./guide/status.md), [running Veilo](./guide/running.md), the [demo checklist](./guide/demo.md) and [handoff gaps](./handoff.md). The setup is deterministic and for development test funds only; this is not an audited or mainnet-ready system.
+The recorded M2 pool/Echo smoke and one complete Shawn/Prince/Mira run with live inference (`2026-10-17-1eba868c`, before PR #3 merged) are **verified on devnet**. Integrated payments/recovery are **verified on local test validator** with a **fixture / mock provider**. The marketplace is implemented on `main` and passes its live RLS e2e checks; a private-pool-funded hire, a fresh post-merge run and browser-wallet signing are **not yet run**. See [current status](./guide/status.md), [running Veilo](./guide/running.md), the [demo checklist](./guide/demo.md) and [handoff gaps](./handoff.md). The setup is deterministic and for development test funds only; this is not an audited or mainnet-ready system.
 
 ## Marketplace scope in v3.2
 
-Buyers will discover reviewed specialist agents, hire one at a fixed price and receive deliverables through a private job board. Sellers will complete operator-reviewed setup and receive payment directly through x402, with an explicit zero platform fee and earnings shown as finalized receipt history. Supabase holds marketplace identity and product data; local control and wallet services retain spending authority. These marketplace features are accepted requirements, not implemented capabilities in this checkout.
+Buyers discover reviewed specialist agents and published workflows, hire at a fixed price and receive deliverables through a private job board. Sellers complete operator-reviewed setup and receive payment directly through x402, with an explicit zero platform fee and earnings shown as finalized receipt history. Supabase holds marketplace identity and product data; local control and wallet services retain spending authority. This is implemented in code; its devnet acceptance is incomplete (see [triage](./guide/marketplace-triage.md)).
 
 See [Marketplace](./guide/marketplace.md) for buyer/seller flows, two sign-ins, direct settlement and limits, and [implementation triage](./guide/marketplace-triage.md) for every T17–T23 gate and §26.6 acceptance check. The existing local workspace continues to run without Supabase.
 
@@ -18,7 +18,7 @@ Create agents that can buy approved digital resources and complete jobs within y
 
 ### User flow
 
-1. Connect your owner wallet and deposit test funds into the shared pool.
+1. Connect your owner wallet and deposit devnet USDC into the shared pool.
 2. Create an agent and configure its job, allowed services, budget and approval mode.
 3. Start a task or enable its trigger. The agent proposes the resources it needs.
 4. The control and wallet services check policy, reserve funds and authorize a permitted purchase.
@@ -49,7 +49,7 @@ The merchant payment wallet and transfer are public. The intended privacy proper
 
 ## Create your own agents
 
-The existing workspace lets owners create and configure named agents using credit-manager, research and content role templates. Shawn, Prince and Mira are seeded examples. PRD v3.2 requires generic agents and specialists with owner-defined instructions/tools; that execution model is pending T19. All agents remain subject to workspace-wide limits.
+The workspace lets owners create and configure named agents using credit-manager, research, content and custom role templates. Shawn, Prince and Mira are seeded examples. Custom agents can search the marketplace and propose hires that the owner approves locally. All agents remain subject to workspace-wide limits.
 
 ### Demo examples
 
@@ -63,8 +63,8 @@ The model proposes work. An independent wallet/control service authorizes money.
 
 ## Network and service boundaries
 
-- Settlement uses test assets on Solana devnet. SOL pays chain costs separately.
-- Real inference is paid for by the gateway operator's OpenRouter account. Test USDC does not replenish commercial provider funds.
+- Settlement uses USDC on Solana devnet, which has no monetary value. SOL pays chain costs separately.
+- Real inference is paid for by the gateway operator's OpenRouter account. Devnet USDC does not replenish commercial provider funds.
 - Gateway credits are application service entitlements, not OpenRouter account credits or redeemable money.
 - Research fixtures must be labeled demo data; fixture output does not prove live search.
 - Content scheduling means planning dates and local editable posts. External social publishing is outside the current scope.

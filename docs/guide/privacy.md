@@ -1,6 +1,6 @@
 # Privacy and trust
 
-**Verification scope:** see [current status](./status.md). The recorded M2 proof run is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. Full devnet agent acceptance lacks complete evidence here. Marketplace acceptance is **not yet run** in this checkout.
+**Verification scope:** see [current status](./status.md). The recorded M2 proof run is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The Shawn/Prince/Mira demo has one recorded pre-merge **verified on devnet** run with live inference. Marketplace code is on `main`; a private-pool-funded hire is **not yet run** on devnet.
 
 ## Intended protection
 
@@ -38,7 +38,7 @@ Persistent gateway accounts deliberately link service usage off chain. The proto
 
 Marketplace identity and job records create additional off-chain linkage. The marketplace operator, sellers, facilitators and model providers can see the buyer–seller relationship and plaintext job content they process. Supabase Web3 identity does not hide a buyer from the cloud operator. Private Storage and RLS restrict application access; they do not establish transaction or metadata anonymity.
 
-Hosted seller execution must receive only permitted job data and no wallet secrets. The required retention default is 30 days, with private participant files and short-lived signed download links; these controls are not implemented or verified here. See [marketplace](./marketplace.md) and [acceptance gaps](./marketplace-triage.md).
+Hosted seller execution must receive only permitted job data and no wallet secrets. Participant files are private and downloaded through short-lived signed links (checked in the live RLS e2e script). The required 30-day retention cleanup is not implemented. See [marketplace](./marketplace.md) and [acceptance gaps](./marketplace-triage.md).
 
 ## Correlation and anonymity limits
 

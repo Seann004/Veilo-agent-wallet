@@ -1,6 +1,6 @@
 # Payment lifecycle
 
-**Verification scope:** see [current status](./status.md). The recorded M2 proof run is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. Full devnet agent acceptance lacks complete evidence here. Marketplace acceptance is **not yet run** in this checkout.
+**Verification scope:** see [current status](./status.md). The recorded M2 proof run is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The Shawn/Prince/Mira demo has one recorded pre-merge **verified on devnet** run with live inference. Marketplace code is on `main`; a private-pool-funded hire is **not yet run** on devnet.
 
 The private withdrawal and x402 merchant payment are separate transactions. A fresh payment wallet uses ordinary x402; x402 alone does not hide the source of funds.
 
@@ -33,17 +33,17 @@ The gateway validates the immutable quote/account/request binding and atomically
 
 | Payment option | Financial effect |
 |---|---|
-| Direct per-call x402 | One test-USDC payment; no prepaid debit |
-| Credit-pack purchase | One test-USDC payment attributed to Shawn; one gateway issuance |
+| Direct per-call x402 | One USDC payment; no prepaid debit |
+| Credit-pack purchase | One USDC payment attributed to Shawn; one gateway issuance |
 | Prepaid inference | Consume shared gateway credits and requesting agent usage allowance; no second USDC charge |
 
-Mira's scripted demo uses a **direct private x402 content-package purchase**; its local-validator rehearsal uses a **fixture / mock provider**. A later devnet gateway run is reported on the deployment branch, but Mira's complete live result/receipt evidence is missing here. Shawn demonstrates shared-credit replenishment; Prince may use the prepaid path.
+Mira's scripted demo uses a **direct private x402 content-package purchase**; its local-validator rehearsal uses a **fixture / mock provider**. Devnet run `2026-10-17-1eba868c` (before PR #3 merged) recorded the content-package withdrawal, a 300,000-base-unit merchant leg to the Veilo gateway and a live inference receipt; see the [demo checklist](./demo.md). Shawn demonstrates shared-credit replenishment; Prince may use the prepaid path.
 
-## Marketplace settlement — required, not implemented here
+## Marketplace settlement
 
 A marketplace quote must bind the reviewed listing, runtime and payout versions, exact seller recipient, scope, network, mint, amount and expiry. The fresh signer pays that seller directly through x402 V2 exact. Execution waits for independently verified finality unless the quote is explicitly free. Quotes/receipts show a zero platform fee; seller earnings are finalized receipt history, not a platform balance. Gateway credits do not replace direct seller settlement.
 
-The current gateway has one configured merchant. Managed paid listings stay blocked until per-listing recipients and receipt-to-job uniqueness are implemented and verified; do not route seller funds through the operator. One finalized receipt may fund one job and one earnings event. Refunds are separate seller-funded, finalized transfers to an owner-verified destination, cumulatively capped at the settled amount; failed delivery must remain visibly paid. These are [v3.2 requirements](./marketplace.md), not evidence that marketplace settlement/refunds work.
+Managed listings settle on the seller-host gateway profile to the listing's verified payout address, never through the operator's gateway merchant. Receipt-to-job uniqueness is enforced in the database (checked in the live RLS e2e script). Two devnet smokes settled directly to a seller's payout ATA with a publicly funded payer; a private-pool-funded hire is not yet run on devnet. One finalized receipt may fund one job and one earnings event. Refunds are separate seller-funded, finalized transfers to an owner-verified destination, cumulatively capped at the settled amount; failed delivery must remain visibly paid. Refund rules pass the live RLS e2e script; no live refund transfer is recorded. See the [marketplace guide](./marketplace.md).
 
 ## Recovery and failure handling
 

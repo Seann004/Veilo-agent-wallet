@@ -1,12 +1,17 @@
 # Running Veilo
 
-**Verification scope:** M2 is **verified on devnet**. Integrated payments/recovery are **verified on local test validator**, agent inference uses a **fixture / mock provider**, and complete devnet agent acceptance evidence is missing here. Marketplace acceptance is **not yet run** in this checkout. See [current status](./status.md).
+**Verification scope:** M2 and the pre-merge Shawn/Prince/Mira demo run `2026-10-17-1eba868c` are **verified on devnet**. Integrated payments/recovery are **verified on local test validator** with a **fixture / mock provider**. A fresh post-merge devnet run, browser-wallet signing and a private-pool-funded marketplace hire are **not yet run**. See [current status](./status.md).
 
-## Marketplace setup is a separate, pending track
+## Marketplace setup (optional)
 
-The commands below start the existing local wallet workspace, not the v3.2 marketplace. T18 will add Supabase Auth/Postgres/private Storage; T19–T23 add generic jobs, direct hiring, discovery, connectors and release checks. Supabase is required for that extension but remains unnecessary for the local T00–T16 stack.
+The local T00–T16 workspace runs without Supabase. To enable the marketplace, set the Supabase and marketplace variables from `.env.example` (see [configuration](../configuration.md#marketplace-service-and-dashboard)), apply `supabase/migrations/` to the project, enable the Supabase Web3 (Solana) sign-in provider, and run `pnpm setup:local` to create the seller-host and operator token files. `pnpm dev` then also starts the marketplace service and the seller host. A cloud session never authorizes a wallet spend.
 
-No marketplace migration, environment-variable contract, setup script, cloud connection or deployed project is supplied here. Do not invent Supabase key names or use a cloud session as wallet authorization. Follow [marketplace triage](./marketplace-triage.md) and complete the T17 discovery/schema gate before making those changes.
+```sh
+pnpm test:marketplace-rls   # live identity/RLS/Storage checks; chain reads use a labeled fixture
+pnpm marketplace:seed       # read-only plan; add --confirm to create the demo catalogue
+```
+
+The service key stays in the marketplace process only.
 
 ## Application quickstart
 
@@ -24,7 +29,7 @@ pnpm check:devnet
 
 `setup:local` creates `.env` from `.env.example` if missing and local directories. It creates the wallet encryption root only when `OWNER_SERVICE_SECRET_PATH` is configured; it reports service credential paths but does not generate those credentials. Existing secrets are never replaced. Back up the encryption root separately; never commit it.
 
-Edit `.env` locally using [configuration](../configuration.md): set `VEILO_OWNER_PUBKEY`, deployment manifest/program/pool values and role credential/key **paths**. Configure gateway merchant/ATA and facilitator fee payer consistently with the manifest. Missing bindings remain unbound/NOT_READY. For live inference only, the gateway needs an operator-funded OpenRouter key, allowlisted models and a nonzero bounded `OPERATOR_MAX_REAL_USD_MICRO`; test USDC cannot buy provider dollars.
+Edit `.env` locally using [configuration](../configuration.md): set `VEILO_OWNER_PUBKEY`, deployment manifest/program/pool values and role credential/key **paths**. Configure gateway merchant/ATA and facilitator fee payer consistently with the manifest. Missing bindings remain unbound/NOT_READY. For live inference only, the gateway needs an operator-funded OpenRouter key, allowlisted models and a nonzero bounded `OPERATOR_MAX_REAL_USD_MICRO`; devnet USDC cannot buy provider dollars.
 
 For a new manual local stack, set `OWNER_SERVICE_SECRET_PATH=secrets/owner-service.secret`, `CONTROL_SERVICE_CREDENTIAL_PATH=secrets/control-service.credential`, `WALLET_SERVICE_CREDENTIAL_PATH=secrets/wallet-service.credential` and `RELAYER_SERVICE_CREDENTIAL_PATH=secrets/relayer-service.credential` in `.env`. Generate those three independent credentials without printing them (the directories already exist after setup):
 
@@ -42,7 +47,20 @@ pnpm test
 pnpm dev
 ```
 
-Seed policies start as drafts and seeding never issues credits. Open the dashboard at `http://127.0.0.1:3000`, connect the configured devnet owner wallet and review/activate workspace and agent policies. Control/runner/wallet/gateway/relayer use ports 4101–4105. Run [deployment instructions](../deployment.md) to provision/fund roles and deploy a pool before attempting private purchases. A clean clone has no funded keys, proving keys, databases or provider credentials.
+Seed policies start as drafts and seeding never issues credits. Open the dashboard at `http://localhost:3000`; it must match `VEILO_DASHBOARD_ORIGIN`, which binds the sign-in challenge and rejects mutating requests from another origin. Control/runner/wallet/gateway/relayer use ports 4101–4105; the marketplace uses 4106 and the seller host 4107 in `.env.example`.
+
+| Path | Screen |
+|---|---|
+| `/` | Public landing page |
+| `/workspace` | Owner workspace: agents, policies, shared treasury, emergency stop |
+| `/agents/new`, `/agents/<id>` | Create or configure an agent |
+| `/market` | In-app catalogue of role templates and the seeded gateway services |
+| `/connectors` | Read-only MCP connectors attached to agents |
+| `/activity`, `/content` | Activity log; editable content drafts and calendar |
+| `/wallet`, `/recovery`, `/privacy` | Pool balance, deposit and exit; recovery center; privacy limits |
+| `/marketplace/…` | Open marketplace: workflows, create, tools, runs, specialists, jobs, seller console, agents, Local approval |
+
+Sign in with the configured owner wallet, then review/activate workspace and agent policies. Wallets listed in `VEILO_GUEST_PUBKEYS` sign in as guests: they can run agents within their policies (rate-limited by `VEILO_GUEST_RUNS_PER_HOUR`) but cannot configure, fund, recover or approve. `VEILO_PUBLIC_VIEW=1` adds a redacted read-only view without sign-in. The header toggles light/dark mode; without a choice the system setting applies. Run [deployment instructions](../deployment.md) to provision/fund roles and deploy a pool before attempting private purchases. A clean clone has no funded keys, proving keys, databases or provider credentials.
 
 ## Proofs, rehearsal and devnet recording
 
@@ -55,7 +73,7 @@ pnpm demo:run -- --local-rehearsal
 
 The integration suite needs the built program (`target/deploy/privacy_pool.so`) and manifest-compatible proving files (`circuits/build/`). The local rehearsal uses throwaway keys, loopback validator/facilitator and **fixture / mock provider**. It writes under ignored `work/demo-rehearsal/evidence/`; its signatures cannot be checked on a devnet explorer.
 
-The parallel deployment branch records an earlier devnet gateway run whose state and acceptance files are absent here. Recover that run’s original state/ledgers and use the corresponding acceptance-checking script version before deciding another paid run is needed; do not reset operation IDs to manufacture a fresh result. See [handoff](../handoff.md#parallel-branch-evidence).
+Devnet run `2026-10-17-1eba868c` and its export are committed under `artifacts/evidence/`. A new run must use its own run ID; do not reset operation IDs or reuse another run's state to manufacture a fresh result. The macOS operator checklist is in [deployment](../deployment.md).
 
 For a new deployment, follow the [devnet runbook](../deployment.md#devnet-deployment-runbook-t09-m2), including key initialization, program-ID alignment/build and circuit manifest checks. Do not regenerate role or proving keys for an existing deployment. The deterministic development setup is unsuitable for production funds.
 

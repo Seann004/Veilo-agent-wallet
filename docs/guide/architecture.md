@@ -1,6 +1,6 @@
 # Architecture
 
-**Verification scope:** see [current status](./status.md). The recorded M2 proof run is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. Full devnet agent acceptance lacks complete evidence here. Marketplace acceptance is **not yet run** in this checkout.
+**Verification scope:** see [current status](./status.md). The recorded M2 proof run is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The Shawn/Prince/Mira demo has one recorded pre-merge **verified on devnet** run with live inference. Marketplace code is on `main`; a private-pool-funded hire is **not yet run** on devnet.
 
 Veilo separates agent planning, financial authority, public-chain enforcement and paid-service delivery. The implemented owner stack is local, with one owner per workspace and distinct processes, credentials and secret access. The accepted v3.2 marketplace adds multiple independent buyer/seller accounts and cloud product records; it does not make a workspace multi-owner. These are application/process credential boundaries on a trusted owner host, not an OS sandbox against a compromised process. Owners can create and configure agents; demo agents are examples of roles running within the same authority boundaries.
 
@@ -48,22 +48,23 @@ TypeScript, Next.js dashboard, Express gateway, durable workers, SQLite WAL, Rus
 
 | Source path | Contents |
 |---|---|
-| `apps/dashboard/` | Owner UI and same-origin proxy to the control API |
+| `apps/dashboard/` | Landing page, owner/guest/public-view workspace, marketplace pages and same-origin proxy to the control API |
 | `services/control/`, `services/runner/` | Policy, reservations, scheduler and restricted workers |
 | `services/wallet/`, `services/relayer/` | Private state, signing, proofs and public chain adapters |
-| `services/gateway/` | x402 routes, credit ledger and provider adapters |
-| `packages/contracts/`, `packages/db/` | Shared schemas, migrations and durable state |
+| `services/gateway/` | x402 routes, credit ledger and provider adapters; also the seller-host profile for marketplace jobs |
+| `services/marketplace/`, `supabase/migrations/` | Marketplace API over Supabase Auth/Postgres/Storage and its schema/RLS |
+| `packages/contracts/`, `packages/db/`, `packages/mcp-client/` | Shared schemas, migrations, durable state and the read-only MCP client |
 | `packages/privacy-sdk/`, `packages/x402-client/` | Witness/encoding logic and constrained payment adapter |
 | `programs/privacy-pool/`, `circuits/` | On-chain program and spend/insert/exit circuits |
 | `tests/`, `scripts/`, `artifacts/` | Acceptance tests, operator commands and public artifact manifests |
 
-These paths exist in the source snapshot. Documentation has its own dependency manifest and lockfile under `docs/`. The funded dashboard/browser-wallet flow remains **not yet run**; local UI checks are recorded separately in build status T14.
+These paths exist in the source snapshot. Documentation has its own dependency manifest and lockfile under `docs/`. The funded dashboard/browser-wallet flow remains **not yet run**; local UI checks are recorded separately in build status T14. The dashboard (`apps/dashboard`) serves a public landing page at `/`, the owner workspace at `/workspace` and the open marketplace under `/marketplace`.
 
-## Marketplace extension — required, not implemented here
+## Marketplace extension
 
-Supabase Auth, Postgres and private Storage will hold marketplace identity, catalogue, jobs, artifact metadata and accounting projections. Local control retains policies/reservations/revocation and local wallet retains secrets/proofs/signing. The cloud never becomes a spending authority. It receives acknowledged state through an outbound, authenticated, digest-bound and expiring connection initiated by local control. Spending pauses while control is offline.
+`services/marketplace` uses Supabase Auth, Postgres and private Storage for marketplace identity, catalogue, jobs, artifact metadata and accounting projections (19 migrations under `supabase/migrations/`). Local control retains policies/reservations/revocation and local wallet retains secrets/proofs/signing. The cloud never becomes a spending authority. It receives acknowledged state through an outbound, authenticated, digest-bound and expiring connection initiated by local control. Spending pauses while control is offline.
 
-Marketplace Web3 sign-in and the existing local wallet challenge are deliberately separate. The local P0 stack still works without Supabase. Seller settlement must go directly to the reviewed recipient; the existing gateway’s single merchant is a blocker for managed paid listings. No pool-contract change is needed solely for the extension. See the [marketplace boundary diagram](./marketplace.md) and [source-based triage](./marketplace-triage.md).
+Marketplace Web3 sign-in and the existing local wallet challenge are deliberately separate. The local P0 stack still works without Supabase. Seller settlement goes directly to the reviewed recipient: managed listings run on the gateway's seller-host profile (`GATEWAY_ROLE=seller-host`), which pays the listing's payout address, not the operator merchant. No pool-contract change is needed solely for the extension. See the [marketplace boundary diagram](./marketplace.md) and [source-based triage](./marketplace-triage.md).
 
 ## Enforcement placement
 

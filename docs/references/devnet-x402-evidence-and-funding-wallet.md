@@ -6,7 +6,7 @@ Date: October 14, 2026. Scope: actual ordinary x402 V2 payment and refund, not a
 
 ## Result
 
-Paid 0.01 devnet USDC (10,000 base units) from Veilo's funded setup wallet to PayAI's Echo Merchant. Received HTTP 200 and the protected resource. Independently fetched both payment and refund transactions through Solana devnet RPC: finalized, no on-chain errors, matching transferChecked mint and amount in both directions. Merchant refunded the full 0.01 test USDC.
+Paid 0.01 devnet USDC (10,000 base units) from Veilo's funded setup wallet to PayAI's Echo Merchant. Received HTTP 200 and the protected resource. Independently fetched both payment and refund transactions through Solana devnet RPC: finalized, no on-chain errors, matching transferChecked mint and amount in both directions. Merchant refunded the full 0.01 USDC.
 
 - Wallet: 3FCio7smQJX7fm5x4Rz2UPPesfHA46FkexC3S3SqkMFd.
 - Merchant: 8sqyMHQwBh8BCXC99pdgt6BpXwLu9xqfL1hDV5SFYf3R.
@@ -18,7 +18,7 @@ Paid 0.01 devnet USDC (10,000 base units) from Veilo's funded setup wallet to Pa
 - [Finalized payment](https://explorer.solana.com/tx/5Br4iPZQWqnc4WxxFDSbnTxkNaDYgcxax3T8VHo6FF8YzryiEZ9zXMEvSzWVmM4zScGjCSa37qKtYHY2BtQDuNvB?cluster=devnet), slot 510976967.
 - [Finalized refund](https://explorer.solana.com/tx/W8WnBPng78B8FXswy3TfRryEBwTykqihB1SuDzGCsya95XFooST3nJVYuadGvKEQbMxXGz1TeyaTeeqwts6B9EU?cluster=devnet), slot 510976975.
 
-Client authorized one payment only, with an exact recipient/network/mint allowlist and 0.01 test-USDC ceiling. No mainnet funds or provider credentials were used. This test used the setup wallet directly and provides no payer privacy; it verifies the standard merchant leg needed after a future private withdrawal.
+Client authorized one payment only, with an exact recipient/network/mint allowlist and 0.01 USDC ceiling. No mainnet funds or provider credentials were used. This test used the setup wallet directly and provides no payer privacy; it verifies the standard merchant leg needed after a future private withdrawal.
 
 ## Recommended Veilo content flow
 
@@ -57,7 +57,7 @@ Advertised capabilities and fee policies can change; startup rechecks /supported
 Veilo development funding wallet
 Network: Solana devnet only
 Public address: 3FCio7smQJX7fm5x4Rz2UPPesfHA46FkexC3S3SqkMFd
-Use this owner address for devnet SOL and test USDC faucets.
+Use this owner address for devnet SOL and USDC faucets.
 This is a local setup wallet, not a deployed pool address.
 Do not send mainnet assets.
 Private key remains locally in work/keys/veilo-devnet-funding.json (restricted permissions); do not upload or commit it.

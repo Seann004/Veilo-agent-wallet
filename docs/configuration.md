@@ -26,7 +26,7 @@ Control, wallet, gateway and relayer run the live check; their `/health` is 200 
 | `DEVNET_RPC_URL` | required | Solana devnet JSON-RPC URL (http/https). Only the origin is ever printed, because provider URLs can embed API keys. |
 | `EXPECTED_DEVNET_GENESIS_HASH` | required | Must be the devnet genesis hash shown above. |
 | `SOLANA_CAIP2_NETWORK` | `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1` | x402 CAIP-2 network id. Only devnet is accepted. |
-| `DEMO_TOKEN_MINT` | required | Pinned devnet test-USDC mint (6 decimals, original SPL Token program). |
+| `DEMO_TOKEN_MINT` | required | Pinned devnet USDC mint (6 decimals, original SPL Token program). |
 | `FACILITATOR_URL` | required | x402 facilitator for the merchant leg (https). Default in the template: `https://facilitator.payai.network`. |
 
 ### Pool deployment
@@ -109,15 +109,15 @@ Every process serves `GET /health`.
 | Variable | Default | Description |
 |---|---|---|
 | `MARKETPLACE_URL` | empty | Marketplace base URL (https, or loopback http for tests). Unset: marketplace hires are disabled. Control only connects outbound; every controller request is signed. |
-| `MARKETPLACE_MAX_PAYMENT_UNITS` | `1000000` | Ceiling on any one marketplace payment, in test-USDC base units. Larger quotes are rejected locally. |
+| `MARKETPLACE_MAX_PAYMENT_UNITS` | `1000000` | Ceiling on any one marketplace payment, in USDC base units. Larger quotes are rejected locally. |
 | `MARKETPLACE_LOCAL_SELLER_ORIGINS` | empty | Comma-separated exact origins of local test sellers. Only these may use http or resolve to loopback/private addresses; every other seller origin must be a public https DNS name, re-resolved on every connection. |
 | `MARKETPLACE_POLL_MS` | `10000` | Payment-request polling interval. |
 | `MARKETPLACE_MIN_QUOTE_REMAINING_SECONDS` | `120` | Minimum time the marketplace quote must still have when the private proof is about to be released. With less left, control cancels the unreleased funding and rejects the hire with `QUOTE_EXPIRED`, because the seller host refuses an expired quote and a withdrawal that finishes later would strand the funds in the one-time wallet. Recommended: set the marketplace's `MARKETPLACE_QUOTE_TTL_SECONDS` to `900` (the marketplace database caps it at 15 minutes) so a private withdrawal fits inside the quote. |
 | `CONTROL_CONTROLLER_KEY_PATH` | `<VEILO_SECRETS_DIR>/control/marketplace-controller.pem` | Ed25519 controller key (0600), generated on first start. Withheld from the runner. |
 | `CONTROL_SELLER_ACCOUNTS_DIR` | `<VEILO_SECRETS_DIR>/control/seller-accounts` | Per-seller-host account tokens (0600 files), created on first use through `POST /v1/accounts`. Withheld from the runner. |
-| `EXTERNAL_X402_MAX_BATCH_UNITS` | `100000` | Ceiling for one external x402 binding's batch (unit price × max calls), in test-USDC base units. |
+| `EXTERNAL_X402_MAX_BATCH_UNITS` | `100000` | Ceiling for one external x402 binding's batch (unit price × max calls), in USDC base units. |
 | `EXTERNAL_X402_LOCAL_ORIGINS` | empty | Comma-separated exact origins of local test x402 resources (tests only). Every other external origin must be a public https DNS name, re-resolved on every request; redirects are refused. |
-| `WORKFLOW_MAX_RUN_UNITS` | `1000000` | Ceiling for one workflow run's approved total, in test-USDC base units. |
+| `WORKFLOW_MAX_RUN_UNITS` | `1000000` | Ceiling for one workflow run's approved total, in USDC base units. |
 | `CONNECTOR_CALLS_PER_TASK` | `5` | Most agent-connector calls one task may make (0–100), counted when the call is reserved, whatever its outcome. Each call also counts against the task's tool-call bound. |
 | `CONNECTOR_CALLS_PER_AGENT_DAY` | `50` | Most agent-connector calls one agent may make in any rolling 24 hours (0–10000). |
 | `CONNECTOR_MAX_TEXT_CHARS` | `16000` | Text kept from one connector reply (at most 64000); images, resources and links in the reply are dropped. |
@@ -225,6 +225,36 @@ The gateway purchase becomes `delivered`, `incomplete` or `paid_no_result` only 
 Inference runs at most once per purchase. A crash or a lost lease resumes from the stored step: a new lease reports the stored output, and an interrupted provider call is reported as uncertain, never re-run. The host repeats pending passes every 30 s.
 
 **Buyer accounts.** `POST /v1/accounts` (seller host only, rate-limited per client address) returns `{accountId, token}`. The token is shown once; only its SHA-256 is stored. An account sees only its own quotes and results, and every execution still needs a valid x402 payment. A remote seller can run this profile on their own infrastructure with their own marketplace seller-host credential, origin and `SELLER_HOST_RECIPIENTS`. The marketplace must list exactly that origin and identity in its quotes.
+
+### Marketplace service and dashboard
+
+`services/marketplace` holds marketplace identity and product records in Supabase. It is optional: `pnpm dev` starts it only when `SUPABASE_URL` is set, and the seller host only when `MARKETPLACE_SELLER_HOST_TOKEN_PATH` is also set. It also requires `EXPECTED_DEVNET_GENESIS_HASH`, `DEVNET_RPC_URL` and `DEMO_TOKEN_MINT`. It never holds wallet keys or local spending authority.
+
+| Variable | Default | Description |
+|---|---|---|
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | required | Supabase project URL and publishable key. |
+| `SUPABASE_SECRET_KEY` | required | Server-side key; it reaches only the marketplace process. Never give it to the dashboard or agents. |
+| `MARKETPLACE_PORT` | `4106` | Listen port. The seller host's own default is also 4106, so set `SELLER_HOST_PORT` (`.env.example` uses 4107) when both run. |
+| `MARKETPLACE_BROWSER_ORIGINS` | `http://localhost:3000` | Comma-separated browser origins the API accepts. |
+| `MARKETPLACE_QUOTE_TTL_SECONDS` | `300` | Quote lifetime. The database caps it at 15 minutes; `.env.example` uses 840 so a private withdrawal fits inside the quote. |
+| `MARKETPLACE_SELLER_HOST_TOKEN_PATH`, `MARKETPLACE_OPERATOR_TOKEN_PATH` | empty | Owner-only bearer token files for the seller host and the operator CLI (`pnpm marketplace:operator`); created by `pnpm setup:local`. Only their SHA-256 is kept in memory. A `*_SHA256` variable may be given instead of the path. |
+| `MARKETPLACE_MANAGED_SELLER_ORIGIN`, `MARKETPLACE_MANAGED_SELLER_IDENTITY` | empty, `veilo-seller-host-devnet` | Seller host that runs managed listings. The identity must equal the seller host's `SELLER_HOST_IDENTITY`. |
+| `MARKETPLACE_DEV_SELLER_ORIGINS` | empty | Exact loopback/private origins admitted for local remote-seller tests only. |
+| `MARKETPLACE_MAX_NETWORK_FEE_LAMPORTS` | `10000000` | Ceiling on the network fee a quote may carry. |
+| `MARKETPLACE_TERMS_VERSION`, `MARKETPLACE_MANAGED_RUNTIME_REVISION` | `2026-10-17`, `v2` | Terms version stamped on quotes; runtime revision for new managed listings. |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_MARKETPLACE_URL` | empty, empty, `http://127.0.0.1:4106` in `.env.example` | Dashboard values, baked in at build time. Only the publishable key belongs here. |
+
+### Dashboard access roles
+
+The dashboard at `http://localhost:3000` serves a public landing page at `/` and the workspace at `/workspace`. Access follows the control service's roles (`VEILO_GUEST_PUBKEYS`, `VEILO_GUEST_RUNS_PER_HOUR`, `VEILO_PUBLIC_VIEW` above):
+
+| Role | Can | Cannot |
+|---|---|---|
+| Owner | Everything: configure and create agents, policies, funding, exit, recovery, approvals, content review, connectors | — |
+| Guest | Sign in with a listed wallet, read the workspace and run agents within their existing policies, rate-limited per hour | Configure, create, stop, fund, recover, decide handoffs, review content or manage connectors |
+| Public viewer | Read the redacted workspace without signing in, only when `VEILO_PUBLIC_VIEW=1` | Any action |
+
+The dashboard only enables or disables controls; control and wallet enforce the same split on every request. The light/dark theme follows the system setting until the viewer picks one, which is kept in browser storage.
 
 ### Runner service
 
