@@ -18,12 +18,13 @@ import { join } from "node:path";
 import { address, createKeyPairSignerFromBytes, createKeyPairSignerFromPrivateKeyBytes, getBase58Decoder, signBytes, type KeyPairSigner } from "@solana/kit";
 import { createClient } from "@supabase/supabase-js";
 import { findRepoRoot, loadConfig, loadDotEnv, verifyChainIdentity } from "@veilo/contracts";
-import { MARKETPLACE_LIMITS, PROVIDER_MANIFESTS, TEST_TOKEN_LABEL, type ToolProvider, type WorkflowVersionInput } from "@veilo/contracts/marketplace";
+import { mcpToolDigest, MARKETPLACE_LIMITS, PROVIDER_MANIFESTS, TEST_TOKEN_LABEL, type ToolProvider, type WorkflowVersionInput } from "@veilo/contracts/marketplace";
 import { createApp } from "../../services/marketplace/src/app";
 import { createRpcChain } from "../../services/marketplace/src/chain";
 import type { MarketplaceConfig } from "../../services/marketplace/src/config";
 import { createDb } from "../../services/marketplace/src/db";
 import { payoutProofMessage } from "../../services/marketplace/src/service";
+import { McpClient } from "../../services/gateway/src/seller-host/mcp";
 import { ata, awaitTx, createAtaIdempotentIx, explorerTx, makeRpc, signAndSend, type SentTx } from "../devnet/lib";
 
 const confirm = process.argv.includes("--confirm");
@@ -336,6 +337,26 @@ async function main(): Promise<void> {
       ["getBalance", "getSignaturesForAddress"],
     );
     tool.set("qn-wallet", { toolKind: "external", toolId: qnWallet.toolId, price: qnWallet.price });
+
+    // 4b. Remote MCP connectors: only tools that read public documentation are proposed, pinned
+    // to the live tools/list read now, and approved only when the digests still match.
+    const CONNECTORS = [
+      { id: "solana-developer-docs", title: "Solana Developer MCP (docs)", endpoint: "https://mcp.solana.com/mcp", tools: ["Solana_Documentation_Search", "get_documentation", "list_sections"] },
+      { id: "meteora-docs", title: "Meteora docs MCP", endpoint: "https://docs.meteora.ag/mcp", tools: ["search_meteora_documentation"] },
+      { id: "coingecko-docs", title: "CoinGecko MCP (docs search)", endpoint: "https://mcp.api.coingecko.com/mcp", tools: ["search_docs"] },
+    ];
+    for (const c of CONNECTORS) {
+      if (done(`connector.${c.id}`)) continue;
+      const client = new McpClient(c.endpoint, { timeoutMs: 20_000, maxBytes: 4_000_000 });
+      await client.initialize();
+      const live = (await client.listTools()).filter((t) => c.tools.includes(t.name));
+      if (live.length !== c.tools.length) throw new Error(`${c.id}: expected tools ${c.tools.join(", ")} not all offered`);
+      await call("POST", "/tools/connectors", sessions.get("ledger-lab")!.token, { id: c.id, title: c.title, endpoint: c.endpoint, tools: live });
+      const recheck = new Map((await client.listTools()).map((t) => [t.name, mcpToolDigest(t)]));
+      if (!live.every((t) => recheck.get(t.name) === mcpToolDigest(t))) throw new Error(`${c.id}: tools changed during review; not approved`);
+      await call("POST", `/operator/connectors/${c.id}/review`, operatorToken, { approve: true, note: "read-only documentation tools; digests verified against the live tools/list" });
+      step(`connector.${c.id}`, { tools: live.map((t) => ({ name: t.name, sha256: mcpToolDigest(t) })) });
+    }
 
     // 5. Workflows. All tools are approved, so each goes live after the automated checks.
     const step_ = (key: string, inputs: WorkflowVersionInput["steps"][number]["inputs"]) => {
