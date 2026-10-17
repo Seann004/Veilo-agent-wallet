@@ -26,7 +26,7 @@ Control, wallet, gateway and relayer run the live check; their `/health` is 200 
 | `DEVNET_RPC_URL` | required | Solana devnet JSON-RPC URL (http/https). Only the origin is ever printed, because provider URLs can embed API keys. |
 | `EXPECTED_DEVNET_GENESIS_HASH` | required | Must be the devnet genesis hash shown above. |
 | `SOLANA_CAIP2_NETWORK` | `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1` | x402 CAIP-2 network id. Only devnet is accepted. |
-| `DEMO_TOKEN_MINT` | required | Pinned devnet test-USDC mint (6 decimals, original SPL Token program). |
+| `DEMO_TOKEN_MINT` | required | Pinned devnet USDC mint (6 decimals, original SPL Token program). |
 | `FACILITATOR_URL` | required | x402 facilitator for the merchant leg (https). Default in the template: `https://facilitator.payai.network`. |
 
 ### Pool deployment
@@ -109,15 +109,15 @@ Every process serves `GET /health`.
 | Variable | Default | Description |
 |---|---|---|
 | `MARKETPLACE_URL` | empty | Marketplace base URL (https, or loopback http for tests). Unset: marketplace hires are disabled. Control only connects outbound; every controller request is signed. |
-| `MARKETPLACE_MAX_PAYMENT_UNITS` | `1000000` | Ceiling on any one marketplace payment, in test-USDC base units. Larger quotes are rejected locally. |
+| `MARKETPLACE_MAX_PAYMENT_UNITS` | `1000000` | Ceiling on any one marketplace payment, in USDC base units. Larger quotes are rejected locally. |
 | `MARKETPLACE_LOCAL_SELLER_ORIGINS` | empty | Comma-separated exact origins of local test sellers. Only these may use http or resolve to loopback/private addresses; every other seller origin must be a public https DNS name, re-resolved on every connection. |
 | `MARKETPLACE_POLL_MS` | `10000` | Payment-request polling interval. |
 | `MARKETPLACE_MIN_QUOTE_REMAINING_SECONDS` | `120` | Minimum time the marketplace quote must still have when the private proof is about to be released. With less left, control cancels the unreleased funding and rejects the hire with `QUOTE_EXPIRED`, because the seller host refuses an expired quote and a withdrawal that finishes later would strand the funds in the one-time wallet. Recommended: set the marketplace's `MARKETPLACE_QUOTE_TTL_SECONDS` to `900` (the marketplace database caps it at 15 minutes) so a private withdrawal fits inside the quote. |
 | `CONTROL_CONTROLLER_KEY_PATH` | `<VEILO_SECRETS_DIR>/control/marketplace-controller.pem` | Ed25519 controller key (0600), generated on first start. Withheld from the runner. |
 | `CONTROL_SELLER_ACCOUNTS_DIR` | `<VEILO_SECRETS_DIR>/control/seller-accounts` | Per-seller-host account tokens (0600 files), created on first use through `POST /v1/accounts`. Withheld from the runner. |
-| `EXTERNAL_X402_MAX_BATCH_UNITS` | `100000` | Ceiling for one external x402 binding's batch (unit price × max calls), in test-USDC base units. |
+| `EXTERNAL_X402_MAX_BATCH_UNITS` | `100000` | Ceiling for one external x402 binding's batch (unit price × max calls), in USDC base units. |
 | `EXTERNAL_X402_LOCAL_ORIGINS` | empty | Comma-separated exact origins of local test x402 resources (tests only). Every other external origin must be a public https DNS name, re-resolved on every request; redirects are refused. |
-| `WORKFLOW_MAX_RUN_UNITS` | `1000000` | Ceiling for one workflow run's approved total, in test-USDC base units. |
+| `WORKFLOW_MAX_RUN_UNITS` | `1000000` | Ceiling for one workflow run's approved total, in USDC base units. |
 | `CONNECTOR_CALLS_PER_TASK` | `5` | Most agent-connector calls one task may make (0–100), counted when the call is reserved, whatever its outcome. Each call also counts against the task's tool-call bound. |
 | `CONNECTOR_CALLS_PER_AGENT_DAY` | `50` | Most agent-connector calls one agent may make in any rolling 24 hours (0–10000). |
 | `CONNECTOR_MAX_TEXT_CHARS` | `16000` | Text kept from one connector reply (at most 64000); images, resources and links in the reply are dropped. |

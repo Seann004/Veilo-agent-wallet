@@ -8,7 +8,7 @@ Veilo separates agent planning, owner authority, wallet signing, on-chain verifi
 
 Team self-assessment of source snapshot `fe13778`, reviewed against the recorded evidence on 17 October 2026. M2 demonstrates the proof-based devnet funding rail; local integration reports 30/30 cases with mock inference. Neither establishes live agent inference, a completed submission gate, an independent audit or production safety. Permission tiers below are implemented controls with local test coverage; full devnet agent acceptance is **not yet run**.
 
-Assets include test-token principal, note/signing/encryption secrets, owner authority, provider quota, ledger integrity and private prompts. Threat actors include malicious services/prompts, impersonating workers, replaying/concurrent callers, compromised gateway/relayer/indexer, hostile host access and faulty circuits/setup/program administrators.
+Assets include devnet USDC principal, note/signing/encryption secrets, owner authority, provider quota, ledger integrity and private prompts. Threat actors include malicious services/prompts, impersonating workers, replaying/concurrent callers, compromised gateway/relayer/indexer, hostile host access and faulty circuits/setup/program administrators.
 
 ## Marketplace threat and authority extension — pending
 
