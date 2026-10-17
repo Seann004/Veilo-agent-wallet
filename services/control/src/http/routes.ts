@@ -638,7 +638,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     if (a.kind !== "worker") throw new ControlError("FORBIDDEN", "worker credential required");
     chargeWorkerCall(ledger, req, a.agentId, undefined, "catalog_lookup");
     const policy = activeAgentPolicy(ledger, a.agentId);
-    const perms = policy ? agentPermissions(policy) : { allowedSkus: [], allowedPaymentPaths: [] };
+    const perms = policy ? agentPermissions(policy) : { allowedSkus: [] as string[], allowedPaymentPaths: [] as string[], allowBrowsing: false };
     const rows = ledger.db
       .prepare(
         `SELECT a.id AS service_id, a.service_key, a.status, s.sku, s.payment_path, s.price_usdc, s.max_fee_usdc, s.usage_units
@@ -648,6 +648,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
       )
       .all(a.workspaceId, LISTING_SERVICE_PREFIX.length, LISTING_SERVICE_PREFIX) as Array<{ service_id: string; service_key: string; status: string; sku: string; payment_path: string; price_usdc: bigint; max_fee_usdc: bigint; usage_units: bigint }>;
     res.json({
+      capabilities: { browse: perms.allowBrowsing },
       items: rows
         .filter((s) => perms.allowedSkus.includes(s.sku) && perms.allowedPaymentPaths.includes(s.payment_path))
         .flatMap((s) => {

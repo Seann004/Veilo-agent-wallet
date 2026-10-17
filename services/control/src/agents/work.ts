@@ -211,8 +211,10 @@ export function validateResearchCitations(
     .prepare(`SELECT id, connector_id, tool FROM agent_connector_call WHERE agent_id = ? AND task_id = ? AND outcome = 'ok'`)
     .all(agentId, a.taskId) as Array<{ id: string; connector_id: string; tool: string }>;
   for (const c of calls) evidence.add(connectorCitation(c.connector_id, c.tool, c.id));
+  // Pages control authorized this task to read are citable; any other link is not.
+  for (const url of ledger.db.prepare(`SELECT url FROM browse_page WHERE task_id = ?`).pluck().all(a.taskId) as string[]) evidence.add(url);
   for (const c of a.citations) {
-    if (!evidence.has(c.url)) throw new ControlError("POLICY_DENIED", "citation does not map to purchased evidence or a connector call of this task");
+    if (!evidence.has(c.url)) throw new ControlError("POLICY_DENIED", "citation does not map to purchased evidence, a connector call or a permitted page of this task");
   }
   const task = ownTask(ledger, agentId, a.taskId);
   const ownerSources = new Set<string>(((JSON.parse(task.input_json) as { sources?: string[] }).sources ?? []).map(String));

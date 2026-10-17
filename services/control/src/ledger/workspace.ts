@@ -73,6 +73,7 @@ export interface PolicyRow {
 export interface AgentPermissions {
   allowedSkus: string[];
   allowedPaymentPaths: string[];
+  allowBrowsing: boolean;
 }
 
 export function getWorkspace(ledger: Ledger): WorkspaceRow | undefined {
@@ -121,7 +122,7 @@ export function listPolicies(ledger: Ledger, workspaceId: string): PolicyRow[] {
 
 export function agentPermissions(policy: PolicyRow): AgentPermissions {
   const parsed = JSON.parse(policy.permissions_json) as Partial<AgentPermissions>;
-  return { allowedSkus: parsed.allowedSkus ?? [], allowedPaymentPaths: parsed.allowedPaymentPaths ?? [] };
+  return { allowedSkus: parsed.allowedSkus ?? [], allowedPaymentPaths: parsed.allowedPaymentPaths ?? [], allowBrowsing: parsed.allowBrowsing === true };
 }
 
 const isoToMs = (v: string | undefined) => (v === undefined ? null : Date.parse(v));
@@ -176,6 +177,7 @@ export function insertAgentPolicyDraft(
   const permissions: AgentPermissions = {
     allowedSkus: [...new Set(input.allowedSkus)],
     allowedPaymentPaths: [...new Set(input.allowedPaymentPaths)],
+    allowBrowsing: input.allowBrowsing === true,
   };
   ledger.db
     .prepare(

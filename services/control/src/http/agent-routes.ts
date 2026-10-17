@@ -17,6 +17,7 @@ import type { Integration } from "../integration";
 import { requireAgent } from "../ledger/workspace";
 import { READERS, actorOf, requireActor, type AuthDeps } from "./actor";
 import { AI_SKUS, type AiService } from "../ai/service";
+import { browsePermit } from "../agents/browse";
 
 function parse<S extends z.ZodType>(schema: S, value: unknown): z.infer<S> {
   const r = schema.safeParse(value ?? {});
@@ -115,6 +116,11 @@ export function agentRouter(deps: AuthDeps & { integration?: Integration | undef
     // The owner's own provider when one is set; operator-sponsored planning is the trial fallback.
     const out = deps.ai?.configured(agent.workspace_id) ? await deps.ai.plan(agent, body) : await sponsoredPlanning(ledger, deps.integration?.gateway, agent, body);
     res.status(out.status).json(out.body);
+  });
+
+  r.post("/worker/browse-permit", worker, (req, res) => {
+    const body = parse(z.object({ taskId: z.uuid(), url: z.string().min(1).max(2048) }).strict(), req.body);
+    res.json(browsePermit(ledger, workerAgent(res), body));
   });
 
   r.post("/worker/ai", worker, async (req, res) => {

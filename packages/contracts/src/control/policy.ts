@@ -45,6 +45,8 @@ export const agentPolicyInputSchema = z
     allowedPaymentPaths: z.array(z.enum(PAYMENT_PATHS)).max(PAYMENT_PATHS.length),
     roleConfig: creditManagerConfigSchema.optional(),
     expiresAt: isoTimestamp.optional(),
+    /** Read-only web browsing for this agent; off unless the owner turns it on. */
+    allowBrowsing: z.boolean().optional(),
   })
   .strict();
 export type AgentPolicyInput = z.infer<typeof agentPolicyInputSchema>;
