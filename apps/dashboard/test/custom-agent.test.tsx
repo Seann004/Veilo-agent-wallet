@@ -159,7 +159,7 @@ describe("custom agent roles and maps", () => {
 
   it("summarizes a custom job's hire proposal without calling it paid", () => {
     const job = { id: "j", kind: "custom", state: "completed", taskId: "t", result: { hire: { proposalId: "p1", state: "pending" }, artifactId: "a1" } } as unknown as Job;
-    expect(summarizeResult(job)).toBe("custom completed · hire proposed (unpaid until you approve it or it matches a pre-approved listing) · result saved to Content");
+    expect(summarizeResult(job)).toBe("custom completed · hire proposed (unpaid until you approve it or it matches a pre-approved listing) · result saved to Outputs");
     const refused = { ...job, result: { hire: { code: "POLICY_DENIED" } } } as unknown as Job;
     expect(summarizeResult(refused)).toBe("custom completed · hire refused (POLICY_DENIED)");
   });

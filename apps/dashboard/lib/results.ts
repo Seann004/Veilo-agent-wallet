@@ -16,6 +16,6 @@ export function summarizeResult(job: Job | undefined, task?: Task): string {
   if (hire && typeof hire === "object") {
     parts.push(typeof hire.proposalId === "string" ? "hire proposed (unpaid until you approve it or it matches a pre-approved listing)" : `hire refused (${String(hire.code)})`);
   }
-  if (typeof r.artifactId === "string") parts.push("result saved to Content");
+  if (typeof r.artifactId === "string") parts.push("result saved to Outputs");
   return parts.join(" · ");
 }
