@@ -25,7 +25,7 @@ export interface AgentPolicyInput {
 
 export const ROLE_TEMPLATES: Record<AgentRole, { name: string; description: string; trigger: Record<string, string | number>; policy: AgentPolicyInput }> = {
   credit_manager: {
-    name: "Shawn",
+    name: "Credit manager",
     description: "Keep shared gateway inference credits above the threshold by buying one credit pack at a time.",
     trigger: { type: "low_credit_balance", pollSeconds: 60 },
     policy: {
@@ -42,7 +42,7 @@ export const ROLE_TEMPLATES: Record<AgentRole, { name: string; description: stri
     },
   },
   research: {
-    name: "Prince",
+    name: "Research agent",
     description: "Answer owner research questions with purchased, cited evidence.",
     trigger: { type: "owner_task" },
     policy: {
@@ -58,7 +58,7 @@ export const ROLE_TEMPLATES: Record<AgentRole, { name: string; description: stri
     },
   },
   content: {
-    name: "Mira",
+    name: "Content agent",
     description: "Turn campaign briefs and approved research into editable drafts and a seven-day calendar.",
     trigger: { type: "owner_task" },
     policy: {

@@ -45,7 +45,7 @@ export function ContentView() {
       {content.loading && !content.data ? <Loading label="content" /> : null}
       <ErrorNotice error={content.error} what="content" onRetry={content.reload} />
       <Section title="Calendar">
-        {calendars.length === 0 ? <p className="muted flush">No calendar yet. Send Mira a campaign brief to get one.</p> : <p className="hint">Planning dates only; nothing is scheduled to post.</p>}
+        {calendars.length === 0 ? <p className="muted flush">No calendar yet. Give a content agent a campaign brief to get one.</p> : <p className="hint">Planning dates only; nothing is scheduled to post.</p>}
         {calendars.map((c) => (
           <div key={c.id}>
             <ContentEditor item={c} onSaved={saved} />
@@ -54,7 +54,7 @@ export function ContentView() {
         ))}
       </Section>
       <Section title="Drafts">
-        {drafts.length === 0 ? <p className="muted flush">No drafts yet. Send Mira a campaign brief to get some.</p> : null}
+        {drafts.length === 0 ? <p className="muted flush">No drafts yet. Give a content agent a campaign brief to get some.</p> : null}
         <div className="stack">
           {drafts.map((d) => (
             <ContentEditor key={`${d.id}-${d.revision}`} item={d} onSaved={saved} />
@@ -62,14 +62,14 @@ export function ContentView() {
         </div>
       </Section>
       <Section title="Research">
-        {briefs.length === 0 ? <p className="muted flush">No research yet. Ask Prince a question, or give a custom agent a job; both save their reports here.</p> : null}
+        {briefs.length === 0 ? <p className="muted flush">No research yet. Give any research or custom agent a job; their reports are saved here.</p> : null}
         <div className="stack">
           {briefs.map((b) => (
             <ContentEditor key={`${b.id}-${b.revision}`} item={b} onSaved={saved} />
           ))}
         </div>
       </Section>
-      <Section title="Research shared with Mira">
+      <Section title="Research shared with content agents">
         {handoffs.data ? <HandoffApprovals handoffs={handoffs.data.items} agents={workspace.agents} onChanged={handoffs.reload} /> : <Loading label="handoffs" />}
         <ErrorNotice error={handoffs.error} onRetry={handoffs.reload} />
       </Section>
