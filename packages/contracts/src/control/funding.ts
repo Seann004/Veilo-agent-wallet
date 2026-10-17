@@ -81,6 +81,24 @@ export type MerchantSignResult =
   | { status: "recovery_required"; reason: string }
   | { status: "signed"; paymentSignatureHeader: string; payer: string; messageHash: string };
 
+/**
+ * Proof that the one-time payer of an unreleased funding attempt controls its key. The wallet
+ * signs exactly payerBindingMessage(operationId, quoteDigest, payer) with that payer key, and only
+ * before the attempt's proof is released.
+ */
+export interface PayerBindingRequest {
+  purchaseId: string;
+  fundingRef: string;
+  /** Marketplace operation ID the payer is being bound to. */
+  operationId: string;
+  quoteDigest: string;
+}
+
+export type PayerBindingResult =
+  | { status: "not_ready"; reason: string }
+  | { status: "refused"; reason: string }
+  | { status: "signed"; payer: string; proof: string };
+
 export interface FundingProvider {
   /** "live" talks to the wallet service; "unavailable" never funds; "test" exists only in automated tests. */
   readonly mode: "live" | "unavailable" | "test";
@@ -88,6 +106,8 @@ export interface FundingProvider {
   release(purchaseId: string, fundingRef: string): Promise<FundingResult>;
   status(purchaseId: string): Promise<FundingResult>;
   signMerchantPayment(request: MerchantSignRequest): Promise<MerchantSignResult>;
+  /** Present only where the provider can prove payer-key possession (marketplace hires). */
+  signPayerBinding?(request: PayerBindingRequest): Promise<PayerBindingResult>;
 }
 
 /** Wire form of the wallet-service funding API (bigints as decimal strings). */
@@ -151,10 +171,25 @@ export const merchantSignResultWire = z.discriminatedUnion("status", [
   }),
 ]);
 
+export const payerBindingRequestWire = z
+  .object({
+    fundingRef: z.string().min(1),
+    operationId: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/),
+    quoteDigest: z.string().regex(/^[0-9a-f]{64}$/),
+  })
+  .strict();
+
+export const payerBindingResultWire = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("not_ready"), reason: z.string() }),
+  z.object({ status: z.literal("refused"), reason: z.string() }),
+  z.object({ status: z.literal("signed"), payer: z.string().min(32).max(44), proof: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{64,90}$/) }),
+]);
+
 /** Wallet-service routes the live provider calls (control service credential as bearer). */
 export const WALLET_FUNDING_ROUTES = {
   prepare: "POST /fundings",
   release: "POST /fundings/:purchaseId/release",
   status: "GET /fundings/:purchaseId",
   signMerchantPayment: "POST /fundings/:purchaseId/merchant-payment",
+  signPayerBinding: "POST /fundings/:purchaseId/payer-binding",
 } as const;

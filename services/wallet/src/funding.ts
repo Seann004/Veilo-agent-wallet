@@ -1,7 +1,8 @@
 import { createPrivateKey, randomUUID, sign } from "node:crypto";
-import { address, type SignatureBytes } from "@solana/kit";
+import { address, getBase58Decoder, type SignatureBytes } from "@solana/kit";
+import { payerBindingMessage } from "@veilo/contracts/marketplace";
 import { isDeepStrictEqual } from "node:util";
-import type { FundingBinding, FundingResult, MerchantSignResult, WithdrawalEvidence } from "@veilo/contracts";
+import type { FundingBinding, FundingResult, MerchantSignResult, PayerBindingResult, WithdrawalEvidence } from "@veilo/contracts";
 import type { WithdrawalIntentWire } from "@veilo/contracts/relayer";
 import {
   addressBytes,
@@ -405,6 +406,30 @@ export class FundingService {
    * Signs the purchase's single x402 payment. The signed header is stored before it is
    * returned; a repeated call returns the stored payment and never signs another transfer.
    */
+  /**
+   * Signs payerBindingMessage(operationId, quoteDigest, payer) with the fresh payer key of an
+   * unreleased attempt. The message is rebuilt here from the stored payer; no caller-supplied
+   * bytes are ever signed, and nothing is signed once the attempt's proof has been released.
+   */
+  async signPayerBinding(purchaseId: string, body: { fundingRef: string; operationId: string; quoteDigest: string }): Promise<PayerBindingResult> {
+    return this.mutex.run(purchaseId, async () => {
+      const { store } = this.d;
+      const f = store.funding(purchaseId);
+      if (!f || body.fundingRef !== purchaseId) return { status: "refused", reason: "no funding for this purchase" };
+      if (f.step !== "prepared") return { status: "refused", reason: "the funding proof was already released or discarded" };
+      if (!/^[A-Za-z0-9._:-]{1,128}$/.test(body.operationId) || !/^[0-9a-f]{64}$/.test(body.quoteDigest)) {
+        return { status: "refused", reason: "invalid operation or quote digest" };
+      }
+      const { address: payer, seed } = store.freshWalletSeed(purchaseId);
+      if (payer !== f.fresh_wallet) return { status: "refused", reason: "fresh wallet does not match the funding attempt" };
+      const key = createPrivateKey({ key: Buffer.concat([PKCS8_ED25519_PREFIX, Buffer.from(seed)]), format: "der", type: "pkcs8" });
+      const message = payerBindingMessage(body.operationId, body.quoteDigest, payer);
+      const proof = getBase58Decoder().decode(sign(null, Buffer.from(message, "utf8"), key));
+      store.event("funding.payer_bound", purchaseId, { operationId: body.operationId, quoteDigest: body.quoteDigest });
+      return { status: "signed", payer, proof };
+    });
+  }
+
   async signMerchant(purchaseId: string, body: { fundingRef: string; paymentRequired: unknown; binding: FundingBinding; exactAmountUsdc: bigint }): Promise<MerchantSignResult> {
     return this.mutex.run(`${purchaseId}:merchant`, async () => {
       const { store } = this.d;
