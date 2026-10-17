@@ -14,7 +14,7 @@ const GLYPH = { ok: "✓", wait: "…", problem: "!", idle: "·" } as const;
  * A token amount: the exact integer base units always, plus a decimal rendering only when the
  * local controller has verified the mint's decimals. Always carries the test-token label.
  */
-export function Money({ amount, decimals, unit = "test tokens" }: { amount: unknown; decimals: number | null | undefined; unit?: string }) {
+export function Money({ amount, decimals, unit = "USDC" }: { amount: unknown; decimals: number | null | undefined; unit?: string }) {
   const raw = toBaseUnits(amount);
   const text = decimals === null || decimals === undefined ? null : formatUnits(amount, decimals);
   if (raw === null) {

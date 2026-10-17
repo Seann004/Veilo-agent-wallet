@@ -11,10 +11,10 @@ describe("CRE-05 treasury accounting display", () => {
   it("counts a credit-pack purchase once as cash and shows later consumption only in microcredits", () => {
     const b = balancesAfterTopUpAndConsumption();
     const { container } = render(<TreasurySummary balances={b} agents={workspace().agents} />);
-    expect(screen.getByTestId("cash-spent").textContent).toBe("1.000000 test-USDC");
+    expect(screen.getByTestId("cash-spent").textContent).toBe("1.000000 USDC");
     const text = container.textContent ?? "";
-    // Purchase (1.00 test-USDC) plus consumption (300,000 microcredits) must never appear as 1.30 test-USDC.
-    expect(text).not.toContain("1.300000 test-USDC");
+    // Purchase (1.00 USDC) plus consumption (300,000 microcredits) must never appear as 1.30 USDC.
+    expect(text).not.toContain("1.300000 USDC");
     expect(text).toContain("Credits purchased1,000,000 microcredits");
     expect(text).toContain("Credits consumed300,000 microcredits");
     expect(text).toContain("Credits available700,000 microcredits");
@@ -31,9 +31,9 @@ describe("CRE-05 treasury accounting display", () => {
     }
     render(<TreasurySummary balances={b} agents={workspace().agents} />);
     const princeRow = screen.getByRole("rowheader", { name: /Prince/ }).closest("tr")!;
-    expect(princeRow.textContent).toContain("2.000000 test-USDC of 2.000000 test-USDC");
-    // Effective remaining is the workspace's 0.2 test-USDC, not Prince's 2.0 or the 4.0 pool value.
-    expect(princeRow.querySelector("td strong")!.textContent).toBe("0.200000 test-USDC");
+    expect(princeRow.textContent).toContain("2.000000 USDC of 2.000000 USDC");
+    // Effective remaining is the workspace's 0.2 USDC, not Prince's 2.0 or the 4.0 pool value.
+    expect(princeRow.querySelector("td strong")!.textContent).toBe("0.200000 USDC");
     expect(screen.getByText(/no agent can spend the whole pool/)).toBeTruthy();
   });
 

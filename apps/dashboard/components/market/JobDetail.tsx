@@ -445,7 +445,7 @@ function RefundRequest({ jobId, decimals, remaining, onChanged }: { jobId: strin
       <h3>Request a refund</h3>
       {remaining !== null && decimals !== null ? (
         <p className="small">
-          Refundable at most: {formatUnits(remaining.toString(), decimals)} test tokens = {remaining.toString()} base units (paid amount minus refunds already
+          Refundable at most: {formatUnits(remaining.toString(), decimals)} USDC = {remaining.toString()} base units (paid amount minus refunds already
           requested).
         </p>
       ) : null}
@@ -454,7 +454,7 @@ function RefundRequest({ jobId, decimals, remaining, onChanged }: { jobId: strin
           <label htmlFor={ids.amount}>Amount *</label>
           <input id={ids.amount} inputMode="decimal" required value={amount} onChange={(e) => setAmount(e.target.value)} aria-invalid={amountError ? true : undefined} aria-describedby={`${ids.amount}-e`} />
           <span id={`${ids.amount}-e`} className={amountError ? "hint field-error" : "hint"} role={amountError ? "alert" : undefined}>
-            {amountError ?? "Decimal amount in test tokens."}
+            {amountError ?? "Decimal amount in USDC."}
           </span>
         </div>
         <div className="field">

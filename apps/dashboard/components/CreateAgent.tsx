@@ -169,7 +169,7 @@ export function CreateAgent() {
         ) : null}
         {!policy ? (
           <p className="notice notice-error" role="alert">
-            Fix the policy amounts: use test-USDC with at most 6 decimals and whole microcredits.
+            Fix the policy amounts: use USDC with at most 6 decimals and whole microcredits.
           </p>
         ) : null}
         <div className="actions">

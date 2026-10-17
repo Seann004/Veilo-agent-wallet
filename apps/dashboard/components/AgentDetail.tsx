@@ -103,7 +103,7 @@ export function ResearchForm({ agent, disabled, onQueued }: { agent: Agent; disa
       </div>
       <div className="grid-2">
         <TextField label="Deadline" type="datetime-local" value={deadline} onChange={setDeadline} />
-        <TextField label="Task budget (test-USDC, optional)" value={budget} onChange={setBudget} hint="Defaults to the policy's per-task budget." />
+        <TextField label="Task budget (USDC, optional)" value={budget} onChange={setBudget} hint="Defaults to the policy's per-task budget." />
       </div>
       <button type="submit" className="btn btn-primary" disabled={disabled || action.busy || question.trim() === ""}>
         Start research task

@@ -88,7 +88,7 @@ function Field({ label, value, onChange, hint, inputMode }: { label: string; val
 const usdcText = (base: string) => formatBaseUnits(base, 6).replace(/,/g, "");
 
 /**
- * Structured policy editor. Amounts are typed in test-USDC and converted to base units without
+ * Structured policy editor. Amounts are typed in USDC and converted to base units without
  * floats; invalid amounts block submission instead of being rounded.
  */
 export function PolicyForm({ initial, workspace, onChange }: { initial: AgentPolicyInput; workspace: Workspace; onChange: (p: AgentPolicyInput | null) => void }) {
@@ -147,10 +147,10 @@ export function PolicyForm({ initial, workspace, onChange }: { initial: AgentPol
         </select>
       </div>
       <div className="grid-3">
-        <Field label="Lifetime allowance (test-USDC)" inputMode="decimal" value={text.lifetime} onChange={(v) => emit({ lifetime: v })} />
-        <Field label="Rolling 24 h cap (test-USDC)" inputMode="decimal" value={text.rolling} onChange={(v) => emit({ rolling: v })} />
-        <Field label="Per-purchase limit (test-USDC)" inputMode="decimal" value={text.maxPurchase} onChange={(v) => emit({ maxPurchase: v })} />
-        <Field label="Per-task budget (test-USDC)" inputMode="decimal" value={text.task} onChange={(v) => emit({ task: v })} />
+        <Field label="Lifetime allowance (USDC)" inputMode="decimal" value={text.lifetime} onChange={(v) => emit({ lifetime: v })} />
+        <Field label="Rolling 24 h cap (USDC)" inputMode="decimal" value={text.rolling} onChange={(v) => emit({ rolling: v })} />
+        <Field label="Per-purchase limit (USDC)" inputMode="decimal" value={text.maxPurchase} onChange={(v) => emit({ maxPurchase: v })} />
+        <Field label="Per-task budget (USDC)" inputMode="decimal" value={text.task} onChange={(v) => emit({ task: v })} />
         <Field label="Usage allowance (microcredits)" inputMode="numeric" value={text.usage} onChange={(v) => emit({ usage: v })} />
         <Field label="Per-task credit cap (microcredits)" inputMode="numeric" value={text.taskCredits} onChange={(v) => emit({ taskCredits: v })} />
       </div>
@@ -187,7 +187,7 @@ export function PolicyForm({ initial, workspace, onChange }: { initial: AgentPol
                   emit({}, tier, skus, next);
                 }}
               />{" "}
-              {p === "private_x402" ? "Private pool → x402 (test-USDC)" : "Prepaid gateway credits"}
+              {p === "private_x402" ? "Private pool → x402 (USDC)" : "Prepaid gateway credits"}
             </label>
           ))}
         </div>
@@ -254,7 +254,7 @@ export function PolicyReview({ policy, workspacePolicy, title }: { policy: Polic
           <tr>
             <th scope="row">Payment paths</th>
             <td>{paths.length ? paths.join(", ") : "none"}</td>
-            <td>Devnet test-USDC mint only</td>
+            <td>Devnet USDC mint only</td>
           </tr>
           {role ? (
             <tr>

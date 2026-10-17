@@ -2,7 +2,7 @@
  * Browser-side copies of marketplace strings. The contracts package pulls node:crypto into any
  * bundle that imports it, so these are duplicated here and pinned to the server by tests.
  */
-export const TEST_TOKEN_LABEL = "Devnet test tokens — no monetary value";
+export const TEST_TOKEN_LABEL = "Solana devnet · USDC";
 
 /** Statement shown in the wallet for the Supabase Web3 sign-in. It must stay on one line. */
 export const SIGN_IN_STATEMENT = "Sign in to Veilo marketplace. This is a login message, not a transaction or spending approval.";

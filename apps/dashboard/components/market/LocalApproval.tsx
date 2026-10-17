@@ -346,7 +346,7 @@ function AgentGrants({ agentId, name }: { agentId: string; name: string }) {
               <option value="">Choose a published listing</option>
               {catalogue.data?.listings.map((l) => (
                 <option key={l.listing_id} value={l.listing_id}>
-                  {l.title} — {l.seller_name} ({m.decimalsFor(l.mint, l.network) === null ? `${String(l.price_base_units)} base units` : `${formatUnits(l.price_base_units, m.decimalsFor(l.mint, l.network)!)} test tokens`})
+                  {l.title} — {l.seller_name} ({m.decimalsFor(l.mint, l.network) === null ? `${String(l.price_base_units)} base units` : `${formatUnits(l.price_base_units, m.decimalsFor(l.mint, l.network)!)} USDC`})
                 </option>
               ))}
             </select>
@@ -355,7 +355,7 @@ function AgentGrants({ agentId, name }: { agentId: string; name: string }) {
             <label htmlFor={ids.max}>Maximum total per hire</label>
             <input id={ids.max} inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} disabled={decimals === null} aria-describedby={`${ids.max}-h`} />
             <span id={`${ids.max}-h`} className={max && parsed && !parsed.ok ? "hint field-error" : "hint"}>
-              {decimals === null ? `Amount entry disabled: ${DECIMALS_UNVERIFIED}.` : max && parsed && !parsed.ok ? parsed.error : "Test tokens; the recipient is pinned to the listing's payout wallet."}
+              {decimals === null ? `Amount entry disabled: ${DECIMALS_UNVERIFIED}.` : max && parsed && !parsed.ok ? parsed.error : "USDC; the recipient is pinned to the listing's payout wallet."}
             </span>
           </div>
         </div>

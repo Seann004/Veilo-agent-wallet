@@ -132,7 +132,7 @@ describe("public recovery acknowledgement", () => {
 describe("reason guidance", () => {
   it("explains known codes and invents nothing for unknown ones", async () => {
     const { reasonGuidance } = await import("../lib/labels");
-    expect(reasonGuidance("NOTE_PENDING")).toMatch(/Deposit test-USDC/);
+    expect(reasonGuidance("NOTE_PENDING")).toMatch(/Deposit USDC/);
     expect(reasonGuidance("SOMETHING_NEW")).toBeNull();
     expect(reasonGuidance(null)).toBeNull();
   });

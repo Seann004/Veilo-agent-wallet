@@ -96,7 +96,7 @@ export function ActivityDrawer({
         {purchase.stateReason ? <p className="small">Reason: {purchase.stateReason}</p> : null}
         <KV
           rows={[
-            ["Payment path", prepaid ? `Prepaid gateway credits — ${LABEL_CREDITS_NO_CHARGE}` : "Private pool → fresh wallet → x402 (test-USDC)"],
+            ["Payment path", prepaid ? `Prepaid gateway credits — ${LABEL_CREDITS_NO_CHARGE}` : "Private pool → fresh wallet → x402 (USDC)"],
             ["Rationale", purchase.rationale ?? <span className="muted">none given</span>],
             [
               "Policy result",

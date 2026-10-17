@@ -45,11 +45,11 @@ export function TreasurySummary({ balances, agents }: { balances: Balances; agen
   return (
     <Section title="Shared treasury">
       <p className="small">
-        Three separate meters. They are never added together: cash is devnet test-USDC with no real value, credits are a prepaid balance bought with that cash, and sponsored planning is paid by the operator.
+        Three separate meters. They are never added together: cash is devnet USDC, credits are a prepaid balance bought with that cash, and sponsored planning is paid by the operator.
       </p>
       <div className="grid-3 meters">
         <div className="meter">
-          <h3>Cash spent (test-USDC)</h3>
+          <h3>Cash spent (USDC)</h3>
           <p className="meter-value">{balances.cash ? usdc(balances.cash.spent) : "—"}</p>
           <p className="small muted">{balances.cash ? `${usdc(balances.cash.reserved)} reserved by live purchases` : "Cash accounting unavailable."}</p>
         </div>
@@ -83,7 +83,7 @@ export function TreasurySummary({ balances, agents }: { balances: Balances; agen
           )}
         </div>
         <div>
-          <h3>Cash (test-USDC)</h3>
+          <h3>Cash (USDC)</h3>
           {balances.cash ? (
             <KV
               rows={[
@@ -159,7 +159,7 @@ export function TreasurySummary({ balances, agents }: { balances: Balances; agen
               />
               {gc.stale ? <p className="notice notice-warn">Balance is stale; Shawn pauses top-up checks until it refreshes.</p> : null}
               <p className="small">
-                Credit packs are bought with test-USDC and counted once in cash spent. Calls that use prepaid credits: “{LABEL_CREDITS_NO_CHARGE}”.
+                Credit packs are bought with USDC and counted once in cash spent. Calls that use prepaid credits: “{LABEL_CREDITS_NO_CHARGE}”.
               </p>
             </>
           ) : (

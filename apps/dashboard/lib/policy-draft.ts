@@ -54,7 +54,7 @@ export function draftPolicyFromText(text: string, base: AgentPolicyInput): Polic
       continue;
     }
     policy[hit[0]] = base6;
-    understood.push(`${hit[1]}: ${num[1]} test-USDC`);
+    understood.push(`${hit[1]}: ${num[1]} USDC`);
   }
   return { policy, understood, ignored };
 }

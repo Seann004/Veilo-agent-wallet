@@ -177,7 +177,7 @@ function Payouts({ d, onChanged }: { d: SellerDashboard; onChanged: () => Promis
       {notReady ? (
         <p className="notice notice-warn" role="status">
           The payout wallet has no token account for mint {m.token?.mint ?? "(unknown)"} yet. Create the associated token account for this mint (for
-          example by receiving a small amount of the test token), then prepare a fresh proof and try again.
+          example by receiving a small amount of USDC), then prepare a fresh proof and try again.
         </p>
       ) : null}
       <ErrorNotice error={action.error} what="payout wallet not verified" />
@@ -411,7 +411,7 @@ function VersionForm({ listingId, d, onCreated }: { listingId: string; d: Seller
           <span id={`${id}-price-h`} className={priceError ? "hint field-error" : "hint"} role={priceError ? "alert" : undefined}>
             {decimals === null
               ? `Amount entry disabled: ${DECIMALS_UNVERIFIED}.`
-              : (priceError ?? `Decimal amount in test tokens, at most ${decimals} decimal places. Platform fee is zero.`)}
+              : (priceError ?? `Decimal amount in USDC, at most ${decimals} decimal places. Platform fee is zero.`)}
           </span>
         </div>
         {field(

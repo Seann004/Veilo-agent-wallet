@@ -79,7 +79,7 @@ function workflow(i: number, extra: Partial<WorkflowEntry> = {}): WorkflowEntry 
 }
 
 describe("workflow browse", () => {
-  it("shows category tabs as links, prices in test tokens, the chain, and hostile text as text", async () => {
+  it("shows category tabs as links, prices in USDC, the chain, and hostile text as text", async () => {
     const list = [0, 1, 2, 3, 4].map((i) => workflow(i));
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ workflows: list })));
     render(withMarket(<WorkflowBrowse />));
@@ -88,7 +88,7 @@ describe("workflow browse", () => {
     expect(within(tabs).getByRole("link", { name: "All" }).getAttribute("aria-current")).toBe("page");
     expect(await screen.findByRole("link", { name: "View all" })).toBeTruthy();
     expect(screen.getAllByText(/per run/).length).toBe(4);
-    expect(screen.getAllByText(/Devnet test tokens/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Solana devnet · USDC/).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("list", { name: "Tool chain" })[0]!.textContent).toContain("RPC");
     expect(screen.getAllByText(HOSTILE).length).toBeGreaterThan(0);
     expect(document.querySelector("script")).toBeNull();

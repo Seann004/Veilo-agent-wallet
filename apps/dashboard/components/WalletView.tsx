@@ -73,7 +73,7 @@ export function DepositStages({ note }: { note: WalletNote }) {
 }
 
 export function NotesTable({ status }: { status: NoteStatus }) {
-  if (status.notes.length === 0) return <p className="muted">No notes yet. Deposit test-USDC below to fund private payments; nothing is spendable privately until a deposit reaches the spendable stage.</p>;
+  if (status.notes.length === 0) return <p className="muted">No notes yet. Deposit USDC below to fund private payments; nothing is spendable privately until a deposit reaches the spendable stage.</p>;
   return (
     <div className="table-wrap">
       <table>
@@ -133,7 +133,7 @@ export function WalletView() {
           Refresh from chain
         </button>
       </Section>
-      <Section title="Deposit test-USDC into the pool">
+      <Section title="Deposit USDC into the pool">
         <p className="small">Steps: prepare → sign in your wallet → register. Then the note moves through submitted, finalized, indexed, approved and spendable. Only spendable notes are counted as available.</p>
         <ConnectWalletPrompt purpose="sign the deposit" />
         <form
@@ -147,7 +147,7 @@ export function WalletView() {
           }}
         >
           <div className="field">
-            <label htmlFor="deposit-amount">Amount (test-USDC)</label>
+            <label htmlFor="deposit-amount">Amount (USDC)</label>
             <input id="deposit-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} aria-invalid={amount !== "" && !base} />
           </div>
           <button type="submit" className="btn btn-primary" disabled={!base || action.busy}>

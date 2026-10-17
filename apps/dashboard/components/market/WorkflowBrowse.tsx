@@ -65,7 +65,7 @@ function featuredCreators(list: WorkflowEntry[]): Array<{ name: string; demo: bo
 
 /**
  * Public workflow marketplace. Category tabs are links, so each category has its own URL; the
- * search filters by name, creator and description. Prices are devnet test tokens.
+ * search filters by name, creator and description. Prices are in devnet USDC.
  */
 export function WorkflowBrowse({ category }: { category?: string }) {
   const m = useMarket();

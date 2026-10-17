@@ -14,7 +14,7 @@ export function groupDigits(digits: string): string {
 
 export const usdc = (amount: string | null | undefined): string => {
   const f = formatBaseUnits(amount, 6);
-  return f === "—" ? f : `${f} test-USDC`;
+  return f === "—" ? f : `${f} USDC`;
 };
 
 export const credits = (units: string | null | undefined): string =>
@@ -39,7 +39,7 @@ export function sumBase(...values: Array<string | null | undefined>): string {
   return total.toString();
 }
 
-/** Parses an owner-entered test-USDC amount ("1.5") into base units without floats. */
+/** Parses an owner-entered USDC amount ("1.5") into base units without floats. */
 export function parseUsdcInput(text: string): string | null {
   const m = /^\s*(\d{1,12})(?:\.(\d{1,6}))?\s*$/.exec(text);
   if (!m) return null;

@@ -277,7 +277,7 @@ function AddToAgent({ w }: { w: WorkflowEntry }) {
             </select>
           </div>
           <div className="field">
-            <label htmlFor={`${formId}-budget`}>Budget {decimals === null ? "(base units)" : "(test tokens)"}</label>
+            <label htmlFor={`${formId}-budget`}>Budget {decimals === null ? "(base units)" : "(USDC)"}</label>
             <input id={`${formId}-budget`} required inputMode="decimal" aria-invalid={budgetError !== null} value={budget} onChange={(e) => setBudget(e.target.value)} />
             {budgetError ? <p className="field-error">{budgetError}</p> : null}
             <p className="hint">

@@ -23,4 +23,4 @@ export const MARKETPLACE_LIMITS = {
 /** Platform fee in basis points. This release enforces zero; any other value is refused. */
 export const MARKETPLACE_FEE_BPS = 0;
 
-export const TEST_TOKEN_LABEL = "Devnet test tokens — no monetary value";
+export const TEST_TOKEN_LABEL = "Solana devnet · USDC";

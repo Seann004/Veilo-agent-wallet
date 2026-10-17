@@ -244,7 +244,7 @@ function PolicyProposalForm({ agent, onDone }: { agent: MarketAgent; onDone: () 
         <label htmlFor={`${id}-${k}`}>{label} *</label>
         <input id={`${id}-${k}`} required inputMode="decimal" value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} disabled={decimals === null} aria-invalid={err ? true : undefined} aria-describedby={`${id}-${k}-h`} />
         <span id={`${id}-${k}-h`} className={err ? "hint field-error" : "hint"} role={err ? "alert" : undefined}>
-          {err ?? "Test tokens, decimal"}
+          {err ?? "USDC, decimal"}
         </span>
       </div>
     );

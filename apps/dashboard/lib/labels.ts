@@ -1,7 +1,7 @@
 import type { AgentRole, AgentStatus, PaymentStates, Purchase } from "./types";
 
 export const GATEWAY_CREDIT_LABEL = "Demo inference credits — backed by the operator's OpenRouter account";
-export const OPERATOR_INFERENCE_LABEL = "Inference is operator-funded (OpenRouter); devnet test tokens do not buy real provider credits.";
+export const OPERATOR_INFERENCE_LABEL = "Inference is operator-funded (OpenRouter); devnet USDC does not buy provider credits.";
 export const SPONSORED_PLANNING_LABEL = "operator-sponsored planning";
 
 export const LABEL_PAID_NO_RESULT = "Paid; result unavailable";
@@ -163,14 +163,14 @@ const REASON_GUIDANCE: Record<string, string> = {
   PRICE_CHANGED: "The quoted price moved past the pinned price, so the request was refused. Check Activity for the payment state.",
   ACCOUNT_STOPPED: "The agent or workspace is stopped, so no new authority is issued.",
   APPROVAL_REQUIRED: "This purchase needs your approval in Activity before it can proceed.",
-  NOTE_PENDING: "No spendable pool note is available yet. Deposit test-USDC in Wallet and wait for it to reach the spendable stage.",
+  NOTE_PENDING: "No spendable pool note is available yet. Deposit USDC in Wallet and wait for it to reach the spendable stage.",
   SETTLEMENT_UNCERTAIN: "The chain outcome is not known yet. This is not a failure: reconcile from Activity.",
   QUOTE_EXPIRED: "The merchant quote expired. Check Activity to confirm nothing was charged; the agent may request a new quote.",
   PROVIDER_UNAVAILABLE: "The inference provider could not serve the call. Check Activity before assuming anything was charged.",
   PAID_NO_RESULT: "Paid, but no result was delivered. Open the payment in Activity.",
   RECOVERY_REQUIRED: "Funds sit in a fresh wallet. Use the Recovery center once the outcome is proven.",
   WRONG_NETWORK: "The network is not Solana devnet. Payments are refused.",
-  WRONG_MINT: "The token mint is not the pinned devnet test-USDC. Payments are refused.",
+  WRONG_MINT: "The token mint is not the pinned devnet USDC. Payments are refused.",
   paused_after_rejection: "The agent paused itself after a rejection and waits for you.",
 };
 

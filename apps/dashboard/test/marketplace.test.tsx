@@ -359,7 +359,7 @@ describe("untrusted content", () => {
     expect(states[0]!.textContent).toContain("Failed");
     expect(states[1]!.textContent).toContain("Paid — settled on chain");
     expect(screen.getByRole("heading", { name: "Request a refund" })).toBeTruthy();
-    expect(screen.getAllByText(/Devnet test tokens — no monetary value/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Solana devnet · USDC/).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /opens Solana devnet explorer/ }).getAttribute("href")).toContain("cluster=devnet");
   });
 
@@ -497,14 +497,14 @@ describe("amount scaling trusts only the local controller", () => {
     expect(screen.getByText(/1500000 base units/)).toBeTruthy();
     expect(screen.getAllByText(/token decimals not verified by your local controller/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/15,000/)).toBeNull();
-    expect(screen.queryByText(/1\.5 test tokens/)).toBeNull();
+    expect(screen.queryByText(/1\.5 USDC/)).toBeNull();
   });
 
   it("scales with the locally verified decimals and still shows the raw integer", async () => {
     vi.stubGlobal("fetch", async () => Response.json({ listing: listing({ decimals: 2, description: "plain" }), samples: [] }));
     render(withMarket(marketValue(vi.fn() as unknown as MarketContextValue["call"]), <ListingDetail slug="research-desk" />));
     await screen.findByText("Research desk");
-    expect(screen.getByText(/1\.5 test tokens/).textContent).toContain("= 1500000 base units");
+    expect(screen.getByText(/1\.5 USDC/).textContent).toContain("= 1500000 base units");
     expect(screen.queryByText(/15,000/)).toBeNull();
   });
 });
