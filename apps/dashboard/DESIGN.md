@@ -37,6 +37,7 @@ All colours are CSS variables in `app/globals.css`. Components never use raw hex
 | `--line` / `--line-2` / `--line-strong` | 12% / 7% / 24% ink | 10% / 6% / 20% white | Borders, dividers |
 | `--fill` / `--fill-2` / `--hover` / `--selected` | ink tints | white tints | Chips, hover, selected rows |
 | `--accent` / `--accent-ink` / `--accent-soft` | `#4b4ddb` / `#3537b8` / `#eeeffe` | `#8b8dff` / `#a9abff` / 14% accent | Focus, links, selected chips |
+| `--role-content-ink` / `--role-credit-ink` | `#c2357a` / `#0f7a6c` | `#f28dbd` / `#66d6bf` | Marketplace role names |
 | `--grad` | `#0b0b12 → #1b1c45 → #3d3f93` | `#3d3f93 → #4b4ddb` | Primary buttons, CTA band |
 | `--ok` / `--warn` / `--danger` (+ `-bg`, `-ink`) | green / amber / red | lighter tints | Status pills and notices |
 | `--danger-solid` | `#b4232f` | `#c9303d` | Destructive solid buttons |

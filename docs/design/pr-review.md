@@ -16,6 +16,8 @@ Astra at low reasoning effort reviewed the branch against `main`, then reviewed 
 
 The real-backend UI pass also found an empty researcher/content role configuration displaying “checks every undefined s.” Policy summaries now render top-up rules only when all displayed credit-manager fields are valid. The new social card also uses the configured dashboard origin for its absolute metadata URL.
 
+Screenshot inspection identified hardcoded light-theme colours on warning text and two marketplace role names. Warnings now use `--warn-ink`; role names use dedicated tokens defined for light, system-dark and explicit-dark modes. Astra reviewed the contrast follow-up without finding a new source regression.
+
 The existing PR documentation failure was reproduced from its CI log: the asset brief linked outside VitePress's published documentation root. That link now targets the permanent GitHub source revision; strict dead-link checking remains enabled. The brief also points readers to the delivered assets rather than calling all of them placeholders.
 
 ## Verification
@@ -30,6 +32,7 @@ The existing PR documentation failure was reproduced from its CI log: the asset 
 - Actual create-agent flow: edit limits and approval tier, Review, Back, confirm preservation, create a draft, open its real detail URL, and confirm the persisted policy. No policy was activated.
 - Actual avatar flow: select colour and shape independently; Woman adds the ribbon, Man and Non-binary do not; save and reload the draft-agent page. Saved appearance persisted with no mobile overflow.
 - Final targeted checks after the policy-summary fix covered all three roles at both widths and themes. Only the credit manager displays a top-up rule; no `undefined` text remains. No browser console errors were captured on the final workspace view.
+- Rendered contrast checks after the colour fix covered 72 warning/role-name samples across 36 targeted page/width/theme views, compositing each element's actual background layers. Minimum contrast was **5.14:1 in light** and **7.93:1 in dark**, exceeding 4.5:1 for all sampled text. The review screenshot below shows the corrected warning.
 - The rendered social image URL resolves to the explicitly configured review origin. Production builds should set `VEILO_DASHBOARD_ORIGIN` to their intended dashboard origin, as also required by owner-session/proxy configuration.
 
 ## Coverage boundaries

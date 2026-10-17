@@ -26,6 +26,8 @@
   color-scheme: light;
   --accent: #4b4ddb;
   --accent-ink: #3537b8;
+  --role-content-ink: #c2357a;
+  --role-credit-ink: #0f7a6c;
   --accent-soft: #eeeffe;
   --grad: linear-gradient(180deg, #0b0b12 0%, #1b1c45 45%, #3d3f93 100%);
   --ok: #0f6b3a;
@@ -68,6 +70,8 @@
     --fill-2: rgba(255, 255, 255, 0.12);
     --accent: #8b8dff;
     --accent-ink: #a9abff;
+    --role-content-ink: #f28dbd;
+    --role-credit-ink: #66d6bf;
     --accent-soft: rgba(139, 141, 255, 0.14);
     --grad: linear-gradient(180deg, #3d3f93 0%, #4b4ddb 100%);
     --ok: #5fd08f;
@@ -110,6 +114,8 @@
   --fill-2: rgba(255, 255, 255, 0.12);
   --accent: #8b8dff;
   --accent-ink: #a9abff;
+  --role-content-ink: #f28dbd;
+  --role-credit-ink: #66d6bf;
   --accent-soft: rgba(139, 141, 255, 0.14);
   --grad: linear-gradient(180deg, #3d3f93 0%, #4b4ddb 100%);
   --ok: #5fd08f;
@@ -789,7 +795,7 @@ h3 {
 .notice-warn {
   background: var(--warn-bg);
   border-color: rgba(122, 75, 0, 0.2);
-  color: #3d2600;
+  color: var(--warn-ink);
 }
 
 .notice-error {
@@ -2643,11 +2649,11 @@ main:has(.agent-view) {
 }
 
 .featured-content .featured-name {
-  color: #c2357a;
+  color: var(--role-content-ink);
 }
 
 .featured-credit_manager .featured-name {
-  color: #0f7a6c;
+  color: var(--role-credit-ink);
 }
 
 .featured-sub {
