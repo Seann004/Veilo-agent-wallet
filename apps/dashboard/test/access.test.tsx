@@ -79,7 +79,7 @@ describe.each<[AccessRole, { stop: boolean; run: boolean; budget: boolean; decid
     render(withRole(<ResearchForm agent={agent(PRINCE, "Prince", "research")} disabled={false} onQueued={vi.fn()} />, role));
     const textarea = screen.getByLabelText("Research question") as HTMLTextAreaElement;
     expect(textarea.disabled).toBe(!allowed.run);
-    expect(screen.queryByLabelText("Task budget (test-USDC, optional)") !== null).toBe(allowed.budget);
+    expect(screen.queryByLabelText("Task budget (USDC, optional)") !== null).toBe(allowed.budget);
   });
 
   it("gates purchase decisions and reconcile", () => {

@@ -104,16 +104,19 @@ function backend(allowlist: () => { status?: number; body: unknown } = () => ({ 
   };
 }
 
+/** Role picker buttons are named by the role label followed by its tagline. */
+const roleButton = (role: keyof typeof ROLE_LABEL) => screen.getByRole("button", { name: new RegExp(`^${ROLE_LABEL[role]}`) });
+
 async function fillCustom(user: ReturnType<typeof userEvent.setup>) {
-  await user.selectOptions(screen.getByLabelText("Role template"), "custom");
-  await user.type(screen.getByLabelText("Name *"), "Scout");
+  await user.click(roleButton("custom"));
+  await user.type(screen.getByLabelText("Name"), "Scout");
   await user.type(screen.getByLabelText("Instructions *"), "Find one specialist.");
   await user.selectOptions(screen.getByLabelText("Starting template"), "analyst");
 }
 
 async function submitTwice(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("button", { name: "Review policy" }));
-  await user.click(screen.getByRole("button", { name: "Create agent with draft policy" }));
+  await user.click(screen.getByRole("button", { name: "Review" }));
+  await user.click(screen.getByRole("button", { name: "Create agent" }));
 }
 
 const createBody = () => calls.find((c) => c.url === "/api/control/agents" && c.method === "POST")?.body as Record<string, unknown> & { policy: { allowedSkus: string[]; allowedPaymentPaths: string[] } };
@@ -160,10 +163,10 @@ describe("create a custom agent", () => {
   it("offers Custom in the role picker and shows its fields only for that role", async () => {
     const user = userEvent.setup();
     renderCreate();
-    const picker = screen.getByLabelText("Role template");
-    expect(within(picker).getByRole("option", { name: "Custom agent" })).toBeTruthy();
+    expect(roleButton("custom").getAttribute("aria-pressed")).toBe("false");
     expect(screen.queryByLabelText("Instructions *")).toBeNull();
-    await user.selectOptions(picker, "custom");
+    await user.click(roleButton("custom"));
+    expect(roleButton("custom").getAttribute("aria-pressed")).toBe("true");
     expect((screen.getByLabelText("Instructions *") as HTMLTextAreaElement).maxLength).toBe(CUSTOM_INSTRUCTIONS_MAX);
     expect(within(screen.getByLabelText("Starting template")).getAllByRole("option").map((o) => (o as HTMLOptionElement).value)).toEqual([...CONTRACT_TEMPLATES]);
     const hiring = screen.getByLabelText("Allow this agent to hire specialists from the marketplace") as HTMLInputElement;
@@ -174,11 +177,11 @@ describe("create a custom agent", () => {
   it("requires instructions before review", async () => {
     const user = userEvent.setup();
     renderCreate();
-    await user.selectOptions(screen.getByLabelText("Role template"), "custom");
-    await user.type(screen.getByLabelText("Name *"), "Scout");
-    expect((screen.getByRole("button", { name: "Review policy" }) as HTMLButtonElement).disabled).toBe(true);
+    await user.click(roleButton("custom"));
+    await user.type(screen.getByLabelText("Name"), "Scout");
+    expect((screen.getByRole("button", { name: "Review" }) as HTMLButtonElement).disabled).toBe(true);
     await user.type(screen.getByLabelText("Instructions *"), "   ");
-    expect((screen.getByRole("button", { name: "Review policy" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Review" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("posts role custom with template and instructions, no hiring permission and no allowlist call by default", async () => {
@@ -187,7 +190,7 @@ describe("create a custom agent", () => {
     renderCreate();
     await fillCustom(user);
     await submitTwice(user);
-    await screen.findByText("Scout created with draft policy v1");
+    await screen.findByText("Scout is ready");
     const body = createBody();
     expect(body).toMatchObject({ name: "Scout", role: "custom", template: "analyst", instructions: "Find one specialist.", trigger: { type: "owner_task" } });
     expect(body.policy.allowedSkus).not.toContain(SPECIALIST_SKU);
@@ -200,12 +203,12 @@ describe("create a custom agent", () => {
     const user = userEvent.setup();
     backend();
     renderCreate();
-    await user.selectOptions(screen.getByLabelText("Role template"), "custom");
+    await user.click(roleButton("custom"));
     await user.type(screen.getByLabelText("Instructions *"), "Left behind");
-    await user.selectOptions(screen.getByLabelText("Role template"), "research");
-    await user.type(screen.getByLabelText("Name *"), "Prince");
+    await user.click(roleButton("research"));
+    await user.type(screen.getByLabelText("Name"), "Prince");
     await submitTwice(user);
-    await screen.findByText("Prince created with draft policy v1");
+    await screen.findByText("Prince is ready");
     const body = createBody();
     expect(body.role).toBe("research");
     expect("template" in body).toBe(false);
@@ -240,7 +243,7 @@ describe("create a custom agent", () => {
     await fillCustom(user);
     await user.click(screen.getByLabelText("Allow this agent to hire specialists from the marketplace"));
     await submitTwice(user);
-    await screen.findByText("Scout created with draft policy v1");
+    await screen.findByText("Scout is ready");
     expect(createBody().policy.allowedSkus).toContain(SPECIALIST_SKU);
     expect(calls.some((c) => c.url.includes("marketplace-allowlist"))).toBe(false);
   });
@@ -259,7 +262,7 @@ describe("create a custom agent", () => {
     await submitTwice(user);
     const alert = await screen.findByText(/The agent was created, but its pre-approved listings were not saved/);
     expect(alert).toBeTruthy();
-    expect(screen.getByText("Scout created with draft policy v1")).toBeTruthy();
+    expect(screen.getByText("Scout is ready")).toBeTruthy();
     fail = false;
     await user.click(screen.getByRole("button", { name: "Retry saving pre-approved listings" }));
     await screen.findByText("1 pre-approved listing(s) saved.");
