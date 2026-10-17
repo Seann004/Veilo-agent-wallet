@@ -18,7 +18,7 @@ export interface SessionInfo {
   publicView: boolean;
 }
 
-export type Capability = "run" | "configure" | "create" | "stop" | "fund" | "recover" | "decide" | "review" | "archive";
+export type Capability = "run" | "configure" | "create" | "stop" | "fund" | "recover" | "decide" | "review" | "archive" | "connectors";
 
 const ALLOWED: Record<Capability, readonly AccessRole[]> = {
   run: ["owner", "guest"],
@@ -30,6 +30,7 @@ const ALLOWED: Record<Capability, readonly AccessRole[]> = {
   decide: ["owner"],
   review: ["owner"],
   archive: ["owner"],
+  connectors: ["owner"],
 };
 
 /** Used when no access is known (outside the shell): nothing is allowed. */

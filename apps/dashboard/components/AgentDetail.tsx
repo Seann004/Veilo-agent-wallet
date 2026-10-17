@@ -10,6 +10,7 @@ import type { Activity, Agent, Balances, ContentItem, Handoff, Job, LimitUsage, 
 import { ActivityDrawer } from "./Activity";
 import { summarizeResult } from "../lib/results";
 import { AgentControls } from "./AgentControls";
+import { AgentConnectors } from "./AgentConnectors";
 import { AgentAvatar, AvatarImage, AvatarPicker } from "./Avatar";
 import { Icon } from "./Icon";
 import { Select } from "./Select";
@@ -654,6 +655,8 @@ export function AgentDetail({ agentId }: { agentId: string }) {
             {purchases.length} purchase{purchases.length === 1 ? "" : "s"} · <Link href="/activity">Activity</Link>
           </p>
         </div>
+
+        <AgentConnectors agent={agent} />
 
         {agent.role === "content" ? (
           <div className="panel">

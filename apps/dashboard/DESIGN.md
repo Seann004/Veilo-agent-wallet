@@ -65,7 +65,7 @@ The theme follows the system by default.
 ## Layout
 
 - **Owner shell** (`components/Shell.tsx`):
-  - The sidebar holds the brand, a "+" (create agent), a collapse toggle, agent search, the agent list (avatar, name, state, status dot) and five nav items: Workspace, Marketplace, Activity, Content, Wallet. Then the owner chip, the theme toggle and Sign out.
+  - The sidebar holds the brand, a "+" (create agent), a collapse toggle, agent search, the agent list (avatar, name, state, status dot) and six nav items: Workspace, Marketplace, Connectors, Activity, Content, Wallet. Then the owner chip, the theme toggle and Sign out.
   - **Collapse:** the sidebar collapses to a 72px icon rail (`veilo.sidebar`) and animates `grid-template-columns`. Below 900px it becomes an off-canvas drawer with a scrim.
   - **Top bar:** devnet badge and demo-credits label, padded to line up with `--content-max`.
 - **Page header:** `.page-head` holds the h1 on the left and at most one action on the right.
@@ -75,6 +75,7 @@ The theme follows the system by default.
   - `/` is the landing page.
   - `/marketplace` is the marketplace landing page.
   - The in-app marketplace is `/market`.
+- **Connectors:** `/connectors` has segmented Yours / Discover tabs (`role="tablist"`, arrow keys), a search box and a "+ Add" menu. Discover is a card grid of operator-approved, keyless, read-only MCP connectors; a card opens a detail drawer and its button opens the attach dialog. Dialogs and drawers use `Modal` (`components/Modal.tsx`), which traps focus, closes on Escape and returns focus. A check or "Connected" appears only for an attachment the control service lists as active.
 - **Breakpoints:** 1100 (agent view stacks), 900 (sidebar becomes a drawer, grids drop to one or two columns), 640 (phone).
 
 ## Components

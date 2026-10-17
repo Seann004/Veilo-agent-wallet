@@ -8,9 +8,11 @@ import { resolveAvatar } from "../lib/avatar-customization";
 import { ROLE_LABEL } from "../lib/labels";
 import { ROLE_TAGLINE } from "../lib/roles";
 import type { Agent, AgentRole } from "../lib/types";
+import type { AttachOutcome, Connector } from "../lib/connectors";
 import { draftPolicyFromText, type PolicyDraftResult } from "../lib/policy-draft";
 import { PolicyForm, PolicyReview, ROLE_TEMPLATES, type AgentPolicyInput } from "./Policy";
 import { AvatarImage, AvatarPicker } from "./Avatar";
+import { CreateConnectorsStep, CreatedConnectors, attachPicked } from "./AgentConnectors";
 import { useCapability, useOwner } from "./Shell";
 import { useAction } from "./hooks";
 import { ErrorNotice, Spinner } from "./ui";
@@ -58,6 +60,8 @@ function CreateAgentForm() {
   const [avatarId, setAvatarId] = useState(ROLE_AVATAR.research);
   const [avatarChosen, setAvatarChosen] = useState(false);
   const [step, setStep] = useState<"edit" | "review">("edit");
+  const [connectors, setConnectors] = useState<Connector[]>([]);
+  const [outcomes, setOutcomes] = useState<AttachOutcome[] | null>(null);
   const action = useAction();
   const nameId = useId();
   const jobId = useId();
@@ -110,6 +114,15 @@ function CreateAgentForm() {
           </Link>
         </div>
         <ErrorNotice error={action.error} />
+        <CreatedConnectors
+          agent={created}
+          picked={connectors}
+          outcomes={outcomes}
+          onRetry={async (retry) => {
+            const again = await attachPicked(created.id, retry);
+            setOutcomes((prev) => (prev ?? []).map((o) => again.find((x) => x.connectorId === o.connectorId) ?? o));
+          }}
+        />
       </section>
     );
   }
@@ -164,6 +177,8 @@ function CreateAgentForm() {
             setAgentAvatar(r.agent.id, avatarId);
             await reloadWorkspace();
             setCreated(r.agent);
+            // The agent exists from here on; attachment failures are reported per connector, not as a create failure.
+            if (connectors.length > 0) setOutcomes(await attachPicked(r.agent.id, connectors));
           });
         }}
       >
@@ -231,12 +246,14 @@ function CreateAgentForm() {
               </div>
               <PolicyForm key={`${role}-${seed}`} initial={base} workspace={workspace} onChange={setPolicy} />
             </section>
+            <CreateConnectorsStep picked={connectors} onChange={setConnectors} />
           </>
         ) : policy ? (
           <section className="panel">
             <h2 className="panel-title">Review</h2>
             <PolicyReview policy={policy} workspacePolicy={wsPolicy} title={name} />
             <p className="small muted">The agent starts switched off. You can activate it on the next screen.</p>
+            <CreateConnectorsStep picked={connectors} onChange={setConnectors} readOnly />
           </section>
         ) : null}
         <div className="form-footer">

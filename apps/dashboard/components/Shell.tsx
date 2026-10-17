@@ -58,6 +58,7 @@ export function OwnerProvider({ value, children }: { value: OwnerContextValue; c
 const NAV: Array<[string, string, IconName, string[]]> = [
   ["/workspace", "Workspace", "home", []],
   ["/market", "Marketplace", "store", []],
+  ["/connectors", "Connectors", "plug", []],
   ["/activity", "Activity", "activity", []],
   ["/content", "Content", "content", []],
   ["/wallet", "Wallet", "wallet", ["/recovery", "/privacy"]],

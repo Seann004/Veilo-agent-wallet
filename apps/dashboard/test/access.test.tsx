@@ -33,7 +33,7 @@ describe("role capabilities", () => {
   it("lets guests run but keeps every other action with the owner", () => {
     const roles: AccessRole[] = ["owner", "guest", "viewer"];
     const table = Object.fromEntries(
-      (["run", "configure", "create", "stop", "fund", "recover", "decide", "review", "archive"] as const).map((c) => [c, roles.filter((r) => can({ role: r, address: null }, c))]),
+      (["run", "configure", "create", "stop", "fund", "recover", "decide", "review", "archive", "connectors"] as const).map((c) => [c, roles.filter((r) => can({ role: r, address: null }, c))]),
     );
     expect(table).toEqual({
       run: ["owner", "guest"],
@@ -45,6 +45,7 @@ describe("role capabilities", () => {
       decide: ["owner"],
       review: ["owner"],
       archive: ["owner"],
+      connectors: ["owner"],
     });
     expect(deniedReason({ role: "owner", address: null }, "stop")).toBeNull();
     expect(deniedReason({ role: "guest", address: null }, "stop")).toMatch(/owner/);
