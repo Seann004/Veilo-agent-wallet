@@ -9,6 +9,8 @@ export interface CatalogItem {
   paymentPath: "private_x402" | "prepaid_credits";
   price: { amount: string };
   usage: { amount: string };
+  /** Present for an owner-approved external x402 binding. */
+  external?: { bindingId: string; label: string; resourcePath: string; unitPrice: string; maxCalls: number; rpcMethods: string[] | null };
 }
 
 export interface RoleContext {

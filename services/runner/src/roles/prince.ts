@@ -13,6 +13,7 @@ import {
   type RoleContext,
   type RoleOutcome,
 } from "./common";
+import { evidenceText, findings as onchainFindings, planCalls, toRecords, validTarget, type ExternalCatalogTerms, type OnchainTarget } from "./prince-onchain";
 
 interface EvidenceRecord {
   n: number;
@@ -57,11 +58,17 @@ function asRecords(result: unknown): EvidenceRecord[] {
  * citation and its proposed actions go through the same restricted tools as everything else.
  */
 export async function runPrince(ctx: RoleContext, fetchPolicy: SafeFetchPolicy): Promise<RoleOutcome> {
-  const input = ctx.task.input as { question: string; sources?: string[]; handoffToAgentId?: string };
+  const input = ctx.task.input as { question: string; sources?: string[]; handoffToAgentId?: string; onchain?: unknown };
   const question = input.question;
   const catalogReply = await tryTool(ctx, "catalog_lookup");
   const budgetReply = await tryTool(ctx, "budget_summary");
   const catalog: CatalogItem[] = Array.isArray(catalogReply.body?.items) ? catalogReply.body.items : [];
+  const target = validTarget(input.onchain);
+  const rpc = catalog.find((c) => c.sku === "external-x402-batch" && c.paymentPath === "private_x402" && c.external);
+  if (target && rpc) return runOnchain(ctx, question, target, rpc, catalog, input.handoffToAgentId);
+  if (input.onchain !== undefined) {
+    ctx.notes.push(target ? "No owner-approved on-chain data service is available to this agent; the demo dataset is used instead." : "The on-chain target is not a valid Solana address; it was ignored.");
+  }
   const taskLimit = BigInt(ctx.task.limits?.taskUsdc ?? "0");
   const maxPurchase = BigInt(budgetReply.body?.maxPurchase ?? "0");
   const available = BigInt(budgetReply.body?.lifetime?.available ?? "0");
@@ -213,4 +220,96 @@ ${analysis.text.slice(0, 6_000)}`,
     taskState: incomplete ? "incomplete" : "completed",
     summary: { artifactId: saved.body.id, dataset: chosen?.item.sku ?? null, evidence: records.length, paid, handoff, proposedToolCalls: sideEffects },
   };
+}
+
+/** Prefers prepaid analysis credits and falls back to one per-call purchase; never retries a paid call. */
+async function analyzeEvidence(
+  ctx: RoleContext,
+  catalog: CatalogItem[],
+  evidence: string,
+  question: string,
+  paid: Array<{ purchaseId: string | null; sku: string; path: string; price: string; usage: string; outcome: string }>,
+): Promise<{ text: string; label: string; purchaseId: string } | undefined> {
+  const analyzeInput = { text: evidence, question: question.slice(0, 1_000) };
+  const prepaid = catalog.find((c) => c.sku === "analyze" && c.paymentPath === "prepaid_credits");
+  const perCall = catalog.find((c) => c.sku === "analyze" && c.paymentPath === "private_x402");
+  let r = prepaid ? await buy(ctx, prepaid, "analyze:prepaid", analyzeInput, "Analyze purchased on-chain data with prepaid credits") : undefined;
+  if (r && prepaid) paid.push({ purchaseId: r.body?.purchase?.id ?? null, sku: "analyze", path: "prepaid_credits", price: "0", usage: prepaid.usage.amount, outcome: outcomeText(r) });
+  const refusedBeforeUse = r !== undefined && !delivered(r) && (r.body?.purchase?.states?.fulfilment === "abandoned" || r.body?.purchase === undefined);
+  if ((!r || refusedBeforeUse) && perCall) {
+    r = await buy(ctx, perCall, "analyze:per-call", analyzeInput, "Per-call analysis: prepaid credits unavailable");
+    paid.push({ purchaseId: r.body?.purchase?.id ?? null, sku: "analyze", path: "private_x402", price: perCall.price.amount, usage: "0", outcome: outcomeText(r) });
+  }
+  if (!r || !delivered(r)) return undefined;
+  const result = r.body.execution?.result as { text?: string; provenance?: { label?: string } } | null;
+  return { text: String(result?.text ?? ""), label: String(result?.provenance?.label ?? ""), purchaseId: r.body.purchase.id as string };
+}
+
+/**
+ * Prince with an on-chain target: buys a bounded batch of read-only RPC calls from an
+ * owner-approved external x402 service, then a paid analysis over those responses. Every
+ * finding cites a purchased response by method, params, slot and settlement signature.
+ */
+async function runOnchain(ctx: RoleContext, question: string, target: OnchainTarget, item: CatalogItem, catalog: CatalogItem[], handoffToAgentId: string | undefined): Promise<RoleOutcome> {
+  const terms = item.external as ExternalCatalogTerms;
+  const calls = planCalls(target, terms);
+  const paid: Array<{ purchaseId: string | null; sku: string; path: string; price: string; usage: string; outcome: string }> = [];
+  if (calls.length === 0) {
+    ctx.notes.push("The approved data service allows none of the read-only calls this target needs.");
+    return { taskState: "incomplete", summary: { paid, notes: ctx.notes } };
+  }
+  const r = await buy(ctx, item, `onchain:${target.mint ?? ""}:${target.wallet ?? ""}`, { bindingId: terms.bindingId, calls }, `Read-only on-chain data for: ${question.slice(0, 200)}`);
+  paid.push({ purchaseId: r.body?.purchase?.id ?? null, sku: item.sku, path: "private_x402", price: item.price.amount, usage: "0", outcome: outcomeText(r) });
+  const records = toRecords(calls, (r.body?.execution?.result ?? null) as Parameters<typeof toRecords>[1]);
+  const facts = onchainFindings(records);
+  const analysis = records.length > 0 ? await analyzeEvidence(ctx, catalog, evidenceText(records), question, paid) : undefined;
+  if (records.length > 0 && !analysis) ctx.notes.push("Paid analysis did not return a usable result; it was not retried.");
+  const cleanAnalysis = analysis ? stripUnlistedUrls(analysis.text, new Set()) : undefined;
+  const incomplete = records.length === 0 || analysis === undefined;
+  const unspent = BigInt(item.price.amount) - BigInt(records.length) * BigInt(terms.unitPrice);
+  const lines = [
+    `# On-chain brief: ${question}`,
+    "",
+    `Data: live Solana mainnet RPC responses bought from ${terms.label} through x402, paid on Solana devnet with test USDC. Responses are the provider's output and are cited as purchased; they are not independently verified.`,
+    incomplete ? "**Status: incomplete** — see the notes below." : "**Status: complete** within the task budget.",
+    "",
+    "## Target",
+    ...(target.mint ? [`- Mint: ${target.mint}`] : []),
+    ...(target.wallet ? [`- Wallet: ${target.wallet}`] : []),
+    "",
+    "## Findings",
+    ...(facts.length > 0 ? facts.map((f) => `- ${f.text} [${f.cite}]`) : ["- [incomplete] No purchased response is available, so no findings are claimed."]),
+    "",
+    "## Analysis",
+    ...(cleanAnalysis
+      ? [`_${analysis?.label}_`, "", cleanAnalysis.text, "", "[unverified] This analysis is model output over the purchased responses; only bracketed numbers refer to purchased calls."]
+      : ["[incomplete] No paid analysis result is available."]),
+    "",
+    "## Evidence (purchased calls)",
+    ...(records.length > 0
+      ? records.map((x) => `[${x.n}] ${x.method}(${JSON.stringify(x.params)}) — slot ${x.slot ?? "unknown"} — settlement ${x.signature ?? "pending"}`)
+      : ["None."]),
+    "",
+    "## Paid services used",
+    ...paid.map((p) => `- ${p.sku} via ${p.path}: ${p.path === "prepaid_credits" ? `${p.usage} gateway microcredits` : `${p.price} test-USDC base units reserved`} — ${p.outcome}${p.purchaseId ? ` (purchase ${p.purchaseId})` : ""}`),
+    ...(unspent > 0n && records.length > 0 ? [`- ${unspent} test-USDC base units of the batch were not spent and stay recoverable by the owner.`] : []),
+    "- All calls in one batch were paid by one one-time payer and are linkable to each other on chain.",
+    `- ${ctx.client.planningCalls} ${SPONSORED_PLANNING_LABEL} call(s); not paid with test USDC or credits.`,
+    ...(ctx.notes.length > 0 ? ["", "## Notes", ...ctx.notes.map((n) => `- ${n}`)] : []),
+  ];
+  const sourcePurchaseIds = [paid[0]?.purchaseId ?? null, analysis?.purchaseId ?? null].filter((x): x is string => x !== null);
+  const saved = await tryTool(ctx, "save_artifact", {
+    kind: "research_brief",
+    title: `On-chain brief: ${question}`.slice(0, 200),
+    content: lines.join("\n"),
+    citations: records.map((x) => ({ url: `solana-rpc:${x.method}#slot=${x.slot ?? "unknown"}`, title: `${x.method} (settlement ${x.signature ?? "pending"})` })),
+    sourcePurchaseIds,
+  });
+  if (saved.status !== 201) return { taskState: "failed", summary: { error: saved.body?.error ?? null, paid } };
+  let handoff: unknown = null;
+  if (handoffToAgentId && !incomplete) {
+    const h = await tryTool(ctx, "request_handoff", { artifactId: saved.body.id, toAgentId: handoffToAgentId, note: "On-chain research brief for campaign planning" });
+    handoff = h.body;
+  }
+  return { taskState: incomplete ? "incomplete" : "completed", summary: { artifactId: saved.body.id, onchain: target, evidence: records.length, paid, handoff } };
 }

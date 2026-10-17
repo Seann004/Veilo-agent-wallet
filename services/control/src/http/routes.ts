@@ -535,16 +535,35 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     res.json({
       items: rows
         .filter((s) => perms.allowedSkus.includes(s.sku) && perms.allowedPaymentPaths.includes(s.payment_path))
-        .map((s) => ({
-          serviceId: s.service_id,
-          service: s.service_key,
-          bindingStatus: s.status,
-          sku: s.sku,
-          paymentPath: s.payment_path,
-          price: { amount: big(s.price_usdc).toString(), unit: "usdc_base_units" },
-          maxFee: { amount: big(s.max_fee_usdc).toString(), unit: "usdc_base_units" },
-          usage: { amount: big(s.usage_units).toString(), unit: "gateway_microcredits" },
-        })),
+        .flatMap((s) => {
+          const ext = externalBindingForService(ledger, s.service_id);
+          // Workflow-scoped bindings are bought only by approved workflow runs.
+          if (ext?.scope === "workflow") return [];
+          return [
+            {
+              serviceId: s.service_id,
+              service: s.service_key,
+              bindingStatus: s.status,
+              sku: s.sku,
+              paymentPath: s.payment_path,
+              price: { amount: big(s.price_usdc).toString(), unit: "usdc_base_units" },
+              maxFee: { amount: big(s.max_fee_usdc).toString(), unit: "usdc_base_units" },
+              usage: { amount: big(s.usage_units).toString(), unit: "gateway_microcredits" },
+              ...(ext
+                ? {
+                    external: {
+                      bindingId: ext.id,
+                      label: ext.label,
+                      resourcePath: ext.resource_path,
+                      unitPrice: big(ext.unit_price_usdc).toString(),
+                      maxCalls: Number(ext.max_calls),
+                      rpcMethods: ext.allowed_rpc_methods_json === null ? null : (JSON.parse(ext.allowed_rpc_methods_json) as string[]),
+                    },
+                  }
+                : {}),
+            },
+          ];
+        }),
     });
   });
 

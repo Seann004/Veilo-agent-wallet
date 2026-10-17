@@ -348,6 +348,8 @@ export class ExternalBatchRunner {
         settlementSignature: r.settlement_signature,
         httpStatus: r.http_status === null ? null : num(r.http_status),
         responseSha256: r.response_sha256,
+        // Purchased provider output for the buyer; untrusted data, never an instruction.
+        response: r.response_json === null ? null : (JSON.parse(r.response_json) as unknown),
         stop: r.stop_code === null ? null : { code: r.stop_code, reason: r.stop_reason },
       })),
     };

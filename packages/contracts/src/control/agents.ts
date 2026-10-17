@@ -21,6 +21,15 @@ export const researchTaskInputSchema = z
     deadline: isoTimestamp.optional(),
     /** Agent that may receive this brief after the owner approves a handoff. */
     handoffToAgentId: uuid.optional(),
+    /** A mint and/or wallet to look up through an owner-approved on-chain data service. */
+    onchain: z
+      .object({
+        mint: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).optional(),
+        wallet: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).optional(),
+      })
+      .strict()
+      .refine((o) => o.mint !== undefined || o.wallet !== undefined, "name a mint or a wallet")
+      .optional(),
   })
   .strict();
 export type ResearchTaskInput = z.infer<typeof researchTaskInputSchema>;
