@@ -132,8 +132,12 @@ export function marketplaceRouter(deps: AuthDeps & { integration?: Integration |
 
   r.get("/worker/marketplace/search", worker, async (req, res) => {
     const agent = customAgent(res);
+    // Every search is charged to a live task of this agent, so the tool-call bound always applies.
     const header = req.headers["x-veilo-task-id"];
-    if (typeof header === "string") chargeToolCall(ledger, agent.id, header, "marketplace_search");
+    if (typeof header !== "string" || header.length === 0) throw new ControlError("INVALID_REQUEST", "x-veilo-task-id header is required");
+    const task = ownTask(ledger, agent.id, header);
+    assertTaskLive(ledger, task);
+    chargeToolCall(ledger, agent.id, task.id, "marketplace_search");
     const q = parse(marketplaceSearchQuerySchema, req.query);
     res.json(await bridge().search(q.q));
   });

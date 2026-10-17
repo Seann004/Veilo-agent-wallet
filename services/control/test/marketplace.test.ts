@@ -462,6 +462,33 @@ describe("seller origin policy", () => {
     expect(isPrivateAddress("93.184.216.34")).toBe(false);
   });
 
+  it("classifies IPv6 numerically, including forms that embed IPv4", () => {
+    for (const ip of [
+      "::ffff:7f00:1",
+      "0:0:0:0:0:ffff:a9fe:a9fe",
+      "::127.0.0.1",
+      "::",
+      "0::1",
+      "2002:a9fe:a9fe::1",
+      "2002:0a00:0001::",
+      "2001:0::1",
+      "64:ff9b::a9fe:a9fe",
+      "64:ff9b:1::a00:1",
+      "fe80::1%en0",
+      "FEBF::1",
+      "fc00::1",
+      "ff02::1",
+      "2001:db8::1",
+      "100::1",
+      "not-an-ip",
+    ]) {
+      expect([ip, isPrivateAddress(ip)]).toEqual([ip, true]);
+    }
+    for (const ip of ["2606:4700:4700::1111", "2a00:1450:4001::200e", "2002:5db8:d822::1", "::ffff:93.184.216.34"]) {
+      expect([ip, isPrivateAddress(ip)]).toEqual([ip, false]);
+    }
+  });
+
   it("re-resolves on every connection and does not follow redirects", async () => {
     const server = createServer((req, res) => {
       if (req.url === "/redirect") {
