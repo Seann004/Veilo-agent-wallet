@@ -13,6 +13,7 @@ import { PolicyForm, PolicyReview, type AgentPolicyInput } from "./Policy";
 import { useOwner } from "./Shell";
 import { useAction, useResource } from "./hooks";
 import { ErrorNotice, KV, Loading, Section } from "./ui";
+import { AgentWorkflows } from "./market/AgentWorkflows";
 
 function policyInputOf(agent: Agent): AgentPolicyInput | null {
   const p = agent.activePolicy;
@@ -350,6 +351,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
         {agentActivity ? <ActivityList activity={agentActivity} workspace={workspace} onChanged={reloadAll} /> : <Loading label="purchases" />}
       </Section>
 
+      <AgentWorkflows agentId={agentId} />
       <Section title="Result history">
         {tasks.data && tasks.data.tasks.length > 0 ? (
           <ul className="plain">

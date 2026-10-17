@@ -47,7 +47,11 @@ const NAV: Array<[string, string]> = [
 ];
 
 const MARKET_NAV: Array<[string, string]> = [
-  ["/marketplace", "Catalogue"],
+  ["/marketplace", "Workflows"],
+  ["/marketplace/create", "Create"],
+  ["/marketplace/tools", "Tools"],
+  ["/marketplace/runs", "Runs"],
+  ["/marketplace/specialists", "Specialists"],
   ["/marketplace/jobs", "Jobs"],
   ["/marketplace/seller", "Seller"],
   ["/marketplace/agents", "Agents"],

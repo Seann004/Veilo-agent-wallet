@@ -1,5 +1,5 @@
-import { Catalogue } from "../../components/market/Catalogue";
+import { WorkflowBrowse } from "../../components/market/WorkflowBrowse";
 
 export default function MarketplacePage() {
-  return <Catalogue />;
+  return <WorkflowBrowse />;
 }
