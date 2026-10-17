@@ -166,5 +166,9 @@ describe("TikTok carousel tools", () => {
     const lost = fakeFetch([new Error("socket hang up")]);
     expect((await new ZernioAdapter({ apiKey: "zk", tiktokAccountId: "acc1" }, opts(lost.fn)).run("create_tiktok_carousel_draft", { carousel: JSON.stringify({ images: ["https://x.example/1.jpg", "https://x.example/2.jpg"] }) }, ctx)).status).toBe("uncertain");
     expect(lastJsonObject('note {"a":1} then {"images":[]}')).toEqual({ images: [] });
+    expect(lastJsonObject('{"caption":"a } brace","images":["https://x.example/1.jpg"]} tail {broken')).toEqual({ caption: "a } brace", images: ["https://x.example/1.jpg"] });
+    const t0 = Date.now();
+    expect(lastJsonObject("{".repeat(4000) + "}".repeat(4000))).toBeNull();
+    expect(Date.now() - t0).toBeLessThan(500);
   });
 });

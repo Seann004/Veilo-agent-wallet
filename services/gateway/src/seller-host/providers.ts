@@ -202,19 +202,41 @@ export class HiggsfieldAdapter extends BaseAdapter {
   }
 }
 
-/** The last JSON object in a step input; earlier text (data notes, fences) is ignored. */
+/**
+ * The last top-level JSON object in a step input; surrounding text (data notes, fences) is
+ * ignored. One forward scan tracks brace depth outside strings, so each candidate is parsed once.
+ */
 export function lastJsonObject(text: string): Record<string, unknown> | null {
-  for (let end = text.lastIndexOf("}"); end >= 0; end = text.lastIndexOf("}", end - 1)) {
-    for (let start = text.lastIndexOf("{", end); start >= 0; start = text.lastIndexOf("{", start - 1)) {
-      try {
-        const v = JSON.parse(text.slice(start, end + 1)) as unknown;
-        if (typeof v === "object" && v !== null && !Array.isArray(v)) return v as Record<string, unknown>;
-      } catch {
-        // keep widening
+  let found: Record<string, unknown> | null = null;
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"' && depth > 0) inString = true;
+    else if (ch === "{") {
+      if (depth === 0) start = i;
+      depth += 1;
+    } else if (ch === "}" && depth > 0) {
+      depth -= 1;
+      if (depth === 0) {
+        try {
+          const v = JSON.parse(text.slice(start, i + 1)) as unknown;
+          if (typeof v === "object" && v !== null && !Array.isArray(v)) found = v as Record<string, unknown>;
+        } catch {
+          // not JSON; keep scanning
+        }
       }
     }
   }
-  return null;
+  return found;
 }
 
 /**
