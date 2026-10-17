@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { GATEWAY_SKUS } from "./catalog";
 import { REQUEST_DIGEST_PATTERN } from "./digest";
+import { specialistJobInputSchema } from "../marketplace/schemas";
 
 const opaqueId = z.string().min(1).max(128).regex(/^[A-Za-z0-9._:-]+$/);
 const digest = z.string().regex(REQUEST_DIGEST_PATTERN, "must be a lowercase hex SHA-256 digest");
@@ -24,6 +25,7 @@ export const skuInputSchemas = {
       startDate: z.iso.date().optional(),
     })
     .strict(),
+  "specialist-job": specialistJobInputSchema,
 } as const;
 
 export const quoteRequestSchema = z

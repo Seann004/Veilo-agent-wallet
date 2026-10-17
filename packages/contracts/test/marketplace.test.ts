@@ -80,3 +80,24 @@ describe("specialist job input", () => {
     expect(specialistJobInputSchema.safeParse({ ...ok, recipient: "x" }).success).toBe(false);
   });
 });
+
+describe("remote seller origin", () => {
+  it("accepts only bare public https origins", async () => {
+    const { remoteOriginProblem } = await import("../src/marketplace");
+    expect(remoteOriginProblem("https://seller.example.com")).toBeNull();
+    for (const bad of [
+      "http://seller.example.com",
+      "https://user:pw@seller.example.com",
+      "https://seller.example.com/path",
+      "https://seller.example.com?x=1",
+      "https://localhost",
+      "https://127.0.0.1",
+      "https://169.254.169.254",
+      "https://[::1]",
+      "https://metadata.google.internal",
+      "https://intranet",
+    ]) {
+      expect(remoteOriginProblem(bad), bad).not.toBeNull();
+    }
+  });
+});

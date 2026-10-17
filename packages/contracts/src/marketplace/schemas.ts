@@ -84,6 +84,33 @@ export function quoteAmounts(base: bigint, feeBps: number = MARKETPLACE_FEE_BPS)
   return { base, fee, total: base + fee };
 }
 
+/**
+ * A seller endpoint is a bare public https origin. Loopback or private test sellers are admitted
+ * only through an explicit operator allowlist outside this schema, and every connection must
+ * still re-check the resolved address because DNS can change after review.
+ */
+export function remoteOriginProblem(value: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return "not a URL";
+  }
+  if (url.protocol !== "https:") return "must use https";
+  if (url.username || url.password) return "must not contain credentials";
+  if (url.origin !== value.replace(/\/$/, "")) return "must be a bare origin without path, query or fragment";
+  const host = url.hostname.toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) return "must be a public host";
+  if (/^[0-9.]+$/.test(host) || host.startsWith("[")) return "must be a DNS name, not an IP literal";
+  if (!host.includes(".")) return "must be a fully qualified host";
+  return null;
+}
+
+export const remoteOriginSchema = z.string().max(300).superRefine((v, ctx) => {
+  const problem = remoteOriginProblem(v);
+  if (problem) ctx.addIssue({ code: "custom", message: `remote origin ${problem}` });
+});
+
 export const listingVersionInputSchema = z
   .object({
     title: z.string().trim().min(3).max(120),
@@ -91,7 +118,7 @@ export const listingVersionInputSchema = z
     description: z.string().trim().min(10).max(8_000),
     runtimeKind: z.enum(RUNTIME_KINDS),
     template: z.enum(MANAGED_TEMPLATES).nullable(),
-    remoteOrigin: z.url({ protocol: /^https?$/ }).nullable(),
+    remoteOrigin: remoteOriginSchema.nullable(),
     sellerInstructions: z.string().trim().max(8_000).default(""),
     inputSchema: z.object({ briefHint: z.string().max(500), maxBriefChars: z.number().int().min(100).max(MARKETPLACE_LIMITS.maxBriefChars) }).strict(),
     outputSchema: z.object({ format: z.enum(["markdown", "json"]), sections: z.array(z.string().min(1).max(80)).max(20) }).strict(),
