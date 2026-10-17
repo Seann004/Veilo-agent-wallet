@@ -281,8 +281,11 @@ function CreateAgentForm() {
 
             <section className="panel">
               <h2 className="panel-title">Spending limits</h2>
-              <div className="field">
-                <label htmlFor={wordsId}>Describe them in your own words (optional)</label>
+              <PolicyForm key={`${role}-${seed}`} initial={base} workspace={workspace} onChange={setPolicy} />
+              <details className="advanced">
+                <summary>Describe limits in words</summary>
+                <div className="field">
+                <label htmlFor={wordsId} className="sr-only">Describe limits in words</label>
                 <div className="inline-input">
                   <input id={wordsId} value={words} onChange={(e) => setWords(e.target.value)} placeholder="Up to 2 USDC total, 0.5 per purchase, 1 per task" />
                   <button
@@ -306,8 +309,8 @@ function CreateAgentForm() {
                     {drafted.ignored.length > 0 ? ` Skipped: ${drafted.ignored.join("; ")}.` : ""} Check the fields below.
                   </p>
                 ) : null}
-              </div>
-              <PolicyForm key={`${role}-${seed}`} initial={base} workspace={workspace} onChange={setPolicy} />
+                </div>
+              </details>
             </section>
             <CreateConnectorsStep picked={connectors} onChange={setConnectors} />
           </>

@@ -99,7 +99,7 @@ function MoneyField({ label, hint, value, onChange, unit = "USDC", inputMode = "
         <input id={id} value={value} inputMode={inputMode} onChange={(e) => onChange(e.target.value)} aria-describedby={`${id}-h`} />
         <span aria-hidden="true">{unit}</span>
       </span>
-      <span id={`${id}-h`} className="hint">
+      <span id={`${id}-h`} className="sr-only">
         {hint}
       </span>
     </div>
@@ -126,8 +126,13 @@ export const TIER_OPTIONS: Array<SelectOption<AgentPolicyInput["tier"]>> = [
 ];
 
 const PATH_LABEL: Record<AgentPolicyInput["allowedPaymentPaths"][number], string> = {
-  private_x402: "Private pool (USDC)",
-  prepaid_credits: "Prepaid credits",
+  private_x402: "USDC from the private pool",
+  prepaid_credits: "AI credits",
+};
+
+const PATH_HINT: Record<AgentPolicyInput["allowedPaymentPaths"][number], string> = {
+  private_x402: "Each purchase is paid privately from your pool.",
+  prepaid_credits: "Model calls use credits that were bought from the pool, with no payment per call.",
 };
 
 /**
@@ -208,16 +213,19 @@ export function PolicyForm({ initial, workspace, onChange }: { initial: AgentPol
           ))}
         </div>
       </div>
-      <div className="field">
-        <span className="field-label">How it pays</span>
-        <div className="chips" role="group" aria-label="How it pays">
-          {(["private_x402", "prepaid_credits"] as const).map((p) => (
-            <ChipToggle key={p} label={PATH_LABEL[p]} on={paths.includes(p)} onToggle={() => togglePath(p)} />
-          ))}
-        </div>
-      </div>
       <details className="advanced">
-        <summary>Advanced: AI credits</summary>
+        <summary>Payment and AI credits</summary>
+        <div className="field">
+          <span className="field-label">Can pay with</span>
+          <div className="chips" role="group" aria-label="Can pay with">
+            {(["private_x402", "prepaid_credits"] as const).map((p) => (
+              <ChipToggle key={p} label={PATH_LABEL[p]} on={paths.includes(p)} onToggle={() => togglePath(p)} />
+            ))}
+          </div>
+          <span className="hint">
+            {PATH_HINT.private_x402} {PATH_HINT.prepaid_credits}
+          </span>
+        </div>
         <div className="money-grid">
           <MoneyField label="Credit allowance" hint="Total, in microcredits" unit="µcr" inputMode="numeric" value={text.usage} onChange={(v) => emit({ usage: v })} />
           <MoneyField label="Credits per task" hint="Per task, in microcredits" unit="µcr" inputMode="numeric" value={text.taskCredits} onChange={(v) => emit({ taskCredits: v })} />
