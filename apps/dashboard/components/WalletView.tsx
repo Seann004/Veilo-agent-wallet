@@ -8,6 +8,7 @@ import { connect, listWallets, onWalletsChanged, signAndSend, type OwnerWallet }
 import { useCapability, useOwner, type ConnectedWallet } from "./Shell";
 import { useAction, useResource } from "./hooks";
 import { SwapPanel } from "./SwapPanel";
+import { Amount } from "./UsdcIcon";
 import { ErrorNotice, Loading, Section, Spinner, TxLink } from "./ui";
 
 export const DEPOSIT_STAGES = ["submitted", "finalized", "indexed", "approved", "spendable"] as const;
@@ -145,15 +146,21 @@ function OwnerWalletView() {
       <div className="stats stats-3">
         <div className="stat">
           <span className="stat-label">Ready to spend</span>
-          <span className="stat-value">{t ? usdc(t.spendable.amount) : "—"}</span>
+          <span className="stat-value">
+            <Amount value={t ? usdc(t.spendable.amount) : "—"} />
+          </span>
         </div>
         <div className="stat">
           <span className="stat-label">Held for purchases</span>
-          <span className="stat-value">{t ? usdc(t.reserved.amount) : "—"}</span>
+          <span className="stat-value">
+            <Amount value={t ? usdc(t.reserved.amount) : "—"} />
+          </span>
         </div>
         <div className="stat">
           <span className="stat-label">On the way</span>
-          <span className="stat-value">{t ? usdc(t.pending.amount) : "—"}</span>
+          <span className="stat-value">
+            <Amount value={t ? usdc(t.pending.amount) : "—"} />
+          </span>
           <span className="stat-sub">Deposits not ready yet</span>
         </div>
       </div>

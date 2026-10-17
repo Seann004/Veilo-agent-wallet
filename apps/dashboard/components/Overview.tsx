@@ -13,12 +13,15 @@ import { EmergencyStop } from "./StopControls";
 import { TreasurySummary } from "./TreasurySummary";
 import { useAction, useResource } from "./hooks";
 import { DeniedHint, ErrorNotice, Loading, Section } from "./ui";
+import { Amount } from "./UsdcIcon";
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string | undefined }) {
   return (
     <div className="stat">
       <span className="stat-label">{label}</span>
-      <span className="stat-value">{value}</span>
+      <span className="stat-value">
+        <Amount value={value} />
+      </span>
       {sub ? <span className="stat-sub">{sub}</span> : null}
     </div>
   );

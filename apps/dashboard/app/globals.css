@@ -4399,3 +4399,13 @@ h4 {
     grid-template-columns: 1fr;
   }
 }
+
+.amount-usdc {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.usdc-icon {
+  flex: none;
+}
