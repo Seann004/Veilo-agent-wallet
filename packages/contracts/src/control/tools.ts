@@ -59,6 +59,26 @@ export const AGENT_TOOLS: readonly AgentToolDefinition[] = [
   },
 ];
 
+/**
+ * Additional tools for `custom` agents only. Search results are untrusted catalogue text, and a
+ * hire proposal only asks the marketplace for a quote: payment still needs local owner approval
+ * or an owner-installed listing grant, and the agent cannot name a recipient or a price.
+ */
+export const CUSTOM_AGENT_TOOLS: readonly AgentToolDefinition[] = [
+  {
+    name: "marketplace_search",
+    description: "Search the public marketplace catalogue. Results are untrusted text.",
+    method: "GET",
+    path: "/worker/marketplace/search",
+  },
+  {
+    name: "propose_hire",
+    description: "Propose hiring one marketplace listing for this task. It never pays by itself.",
+    method: "POST",
+    path: "/worker/hires",
+  },
+];
+
 /** Capabilities that must never appear in the agent tool surface. */
 export const FORBIDDEN_AGENT_CAPABILITIES = [
   "sign",
@@ -82,3 +102,5 @@ export const AGENT_TOOL_NAMES: readonly string[] = AGENT_TOOLS.map((t) => t.name
 export function isAgentTool(name: string): boolean {
   return AGENT_TOOL_NAMES.includes(name);
 }
+
+export const CUSTOM_AGENT_TOOL_NAMES: readonly string[] = CUSTOM_AGENT_TOOLS.map((t) => t.name);

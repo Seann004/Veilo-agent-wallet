@@ -13,6 +13,10 @@ export interface IntegrationPaths {
   planningToken: string;
   /** Runner-only: per-agent worker tokens. */
   runnerCredentials: string;
+  /** Control-only: Ed25519 marketplace controller key (PKCS#8 PEM, 0600). */
+  controllerKey: string;
+  /** Control-only: directory of per-seller-host account tokens (0700, files 0600). */
+  sellerAccountsDir: string;
 }
 
 const abs = (rootDir: string, p: string) => (isAbsolute(p) ? p : resolve(rootDir, p));
@@ -30,6 +34,8 @@ export function integrationPaths(config: VeiloConfig, env: Record<string, string
     gatewayAccountToken: pick("CONTROL_GATEWAY_ACCOUNT_TOKEN_PATH", join(s, "control", "gateway-account.token")),
     planningToken: pick("GATEWAY_PLANNING_CREDENTIAL_PATH", join(s, "gateway", "planning.token")),
     runnerCredentials: config.paths.serviceCredentials.runner ?? join(s, "runner", "worker-credentials.json"),
+    controllerKey: pick("CONTROL_CONTROLLER_KEY_PATH", join(s, "control", "marketplace-controller.pem")),
+    sellerAccountsDir: pick("CONTROL_SELLER_ACCOUNTS_DIR", join(s, "control", "seller-accounts")),
   };
 }
 

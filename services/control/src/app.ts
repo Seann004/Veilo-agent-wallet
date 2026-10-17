@@ -4,6 +4,7 @@ import { ControlError } from "./errors";
 import type { AuthDeps } from "./http/actor";
 import { agentRouter } from "./http/agent-routes";
 import { controlRouter } from "./http/routes";
+import { marketplaceRouter } from "./http/marketplace-routes";
 import { ownerRouter } from "./http/owner-routes";
 import type { Integration } from "./integration";
 import { walletInternalRouter } from "./http/wallet-internal";
@@ -48,6 +49,7 @@ export function createApp(health: ServiceHealth, deps?: ControlDeps): Express {
   app.use(controlRouter(deps));
   app.use(agentRouter(deps));
   app.use(ownerRouter(deps));
+  app.use(marketplaceRouter(deps));
   app.use((_req: Request, res: Response) => {
     res.status(404).json({ error: { code: "NOT_FOUND", message: "no such endpoint" } });
   });

@@ -40,6 +40,8 @@ export interface AgentRow {
   model_profile: string | null;
   description: string | null;
   target_account_id: string | null;
+  template: string | null;
+  instructions: string | null;
   created_at_ms: bigint;
   updated_at_ms: bigint;
 }
@@ -267,6 +269,8 @@ export interface CreateAgentInput {
   description?: string | undefined;
   trigger?: Record<string, unknown> | undefined;
   modelProfile?: string | undefined;
+  template?: string | undefined;
+  instructions?: string | undefined;
   policy: AgentPolicyInput;
 }
 
@@ -276,8 +280,9 @@ export function insertAgent(ledger: Ledger, workspaceId: string, input: CreateAg
   const now = ledger.now();
   ledger.db
     .prepare(
-      `INSERT INTO agent (id, workspace_id, name, role, status, trigger_json, model_profile, description, created_at_ms, updated_at_ms)
-       VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)`,
+      `INSERT INTO agent (id, workspace_id, name, role, status, trigger_json, model_profile, description, template, instructions,
+         created_at_ms, updated_at_ms)
+       VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -287,6 +292,8 @@ export function insertAgent(ledger: Ledger, workspaceId: string, input: CreateAg
       JSON.stringify(input.trigger ?? {}),
       input.modelProfile ?? null,
       input.description ?? null,
+      input.role === "custom" ? (input.template ?? "generalist") : null,
+      input.role === "custom" ? (input.instructions ?? null) : null,
       now,
       now,
     );

@@ -23,6 +23,7 @@ import {
 import { GatewayUnreachableError, type GatewayClient, type GatewayResponse } from "./gateway-client";
 import { KeyedLock } from "./locks";
 import type { PermitSigner } from "./permits";
+import { LISTING_SERVICE_PREFIX, type SellerClients } from "../marketplace/seller-clients";
 
 export interface ExecutionRow {
   purchase_id: string;
@@ -53,6 +54,8 @@ interface QuoteRow {
 
 interface ServiceRow {
   id: string;
+  workspace_id: string;
+  service_key: string;
   origin: string;
   gateway_identity: string | null;
   recipient: string | null;
@@ -76,6 +79,15 @@ export interface OrchestratorDeps {
   gateway: GatewayClient | undefined;
   permits: PermitSigner | undefined;
   funding: FundingProvider;
+  /** Seller-host clients for marketplace listing services; absent when the marketplace is not configured. */
+  sellers?: SellerClients | undefined;
+  /** Called once the one-time payer of a purchase is known, before its merchant leg is signed. */
+  onPayerKnown?: ((purchaseId: string, payer: string) => void) | undefined;
+  /**
+   * Gate checked before a prepared proof is released. "wait" keeps the proof unreleased and
+   * retries later; "refuse" cancels the unreleased operation.
+   */
+  beforeRelease?: ((purchaseId: string) => Promise<{ outcome: "ok" | "wait" | "refuse"; reason?: string }>) | undefined;
   /** How long a purchase request keeps reconciling a pending chain outcome before replying. */
   settleWaitMs?: number;
   settlePollMs?: number;
@@ -118,7 +130,7 @@ export class PurchaseOrchestrator {
   }
 
   get configured(): boolean {
-    return this.deps.gateway !== undefined;
+    return this.deps.gateway !== undefined || this.deps.sellers !== undefined;
   }
 
   execution(purchaseId: string): ExecutionRow | undefined {
@@ -247,12 +259,26 @@ export class PurchaseOrchestrator {
     markOutboxPublished(this.ledger, eventId);
   }
 
+  /**
+   * The client for the purchase's approved service: the operator gateway for its own services,
+   * or the seller host bound by origin and gateway identity for a marketplace listing.
+   */
+  async #clientFor(p: PurchaseRow): Promise<GatewayClient> {
+    const s = this.#service(p);
+    if (s.service_key.startsWith(LISTING_SERVICE_PREFIX)) {
+      if (p.payment_path !== "private_x402") throw new Blocked("SERVICE_NOT_ALLOWED", "marketplace listings are paid only through private x402");
+      if (!this.deps.sellers) throw new Blocked("NOT_READY", "seller-host connections are not configured");
+      return this.deps.sellers.clientFor({ origin: s.origin, gatewayIdentity: s.gateway_identity ?? "", workspaceId: s.workspace_id });
+    }
+    if (!this.deps.gateway) throw new Blocked("NOT_READY", "gateway integration is not configured");
+    return this.deps.gateway;
+  }
+
   async #drive(purchaseId: string): Promise<void> {
-    const gateway = this.deps.gateway;
     let p = getPurchaseRow(this.ledger, purchaseId);
     if (p.authorization_state === "awaiting_approval") throw new Blocked("APPROVAL_REQUIRED", "waiting for owner approval");
     if (p.authorization_state === "rejected") return;
-    if (!gateway) throw new Blocked("NOT_READY", "gateway integration is not configured");
+    const gateway = await this.#clientFor(p);
     const input = this.input(p.id);
     if (!input) throw new Blocked("NOT_READY", "purchase input has not been supplied");
     this.#ensureExecution(p);
@@ -598,10 +624,20 @@ export class PurchaseOrchestrator {
     }
     this.#ack(ev);
     this.#update(p.id, { funding_ref: r.fundingRef, merchant_payer: r.payer });
+    this.deps.onPayerKnown?.(p.id, r.payer);
     return true;
   }
 
   async #fundingRelease(p: PurchaseRow): Promise<boolean> {
+    const gate = this.deps.beforeRelease ? await this.deps.beforeRelease(p.id) : { outcome: "ok" as const };
+    if (gate.outcome === "wait") throw new Blocked("NOT_READY", gate.reason ?? "waiting before releasing the proof");
+    if (gate.outcome === "refuse") {
+      immediate(this.ledger.db, () => {
+        const cur = getPurchaseRow(this.ledger, p.id);
+        if (cur.authorization_state === "reserved" && cur.funding_state === "proof_prepared") cancelUnreleased(this.ledger, cur, "rejected");
+      });
+      throw new Blocked("POLICY_DENIED", gate.reason ?? "release refused");
+    }
     const ex = this.execution(p.id) as ExecutionRow;
     advanceAuthority(this.ledger, p.id, "release_proof");
     this.#intent(p, "wallet.funding.release", { fundingRef: ex.funding_ref });

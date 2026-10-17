@@ -4,7 +4,8 @@ import { baseUnitString } from "./amounts";
 export const POLICY_TIERS = ["observe", "bounded_automatic", "approval_required", "stopped"] as const;
 export type PolicyTier = (typeof POLICY_TIERS)[number];
 
-export const AGENT_ROLES = ["credit_manager", "research", "content"] as const;
+/** `custom` agents are owner-named and driven by owner-written instructions over a fixed tool set. */
+export const AGENT_ROLES = ["credit_manager", "research", "content", "custom"] as const;
 export type AgentRole = (typeof AGENT_ROLES)[number];
 
 export const AGENT_STATUSES = ["draft", "active", "paused", "revoked", "archived"] as const;

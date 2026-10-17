@@ -5,6 +5,8 @@ import {
   agentConfigPatchSchema,
   calendarSchema,
   campaignBriefSchema,
+  customTaskInputSchema,
+  MARKETPLACE_DELEGATION_DEPTH_KEY,
   researchTaskInputSchema,
   createAgentRequestSchema,
   purchaseDecisionRequestSchema,
@@ -39,6 +41,7 @@ import { chargeToolCall, getTask, validateResearchCitations } from "../agents/wo
 import type { Integration } from "../integration";
 import { fullBalances } from "../integration/balances";
 import { RETRY_MARKER } from "../scheduler/scheduler";
+import { LISTING_SERVICE_PREFIX } from "../marketplace/seller-clients";
 import {
   activatePolicyVersion,
   activeAgentPolicy,
@@ -81,6 +84,7 @@ function agentView(ledger: Ledger, a: AgentRow): Record<string, unknown> {
     description: a.description,
     trigger: JSON.parse(a.trigger_json) as unknown,
     modelProfile: a.model_profile,
+    ...(a.role === "custom" ? { template: a.template, instructions: a.instructions } : {}),
     policyVersion: num(a.policy_version),
     activePolicy: policy ? policyView(policy) : null,
     revocationEpoch: num(a.revocation_epoch),
@@ -251,16 +255,22 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     const draft = immediate(ledger.db, () => {
       const agent = requireAgent(ledger, workspaceId, agentId);
       if (agent.status === "revoked" || agent.status === "archived") throw new ControlError("ACCOUNT_STOPPED", `agent is ${agent.status}`);
+      if (agent.role !== "custom" && (body.instructions !== undefined || body.template !== undefined)) {
+        throw new ControlError("INVALID_REQUEST", "only custom agents take a template and instructions");
+      }
       ledger.db
         .prepare(
           `UPDATE agent SET name = ifnull(?, name), description = ifnull(?, description), trigger_json = ifnull(?, trigger_json),
-             model_profile = ifnull(?, model_profile), updated_at_ms = ? WHERE id = ?`,
+             model_profile = ifnull(?, model_profile), template = ifnull(?, template), instructions = ifnull(?, instructions),
+             updated_at_ms = ? WHERE id = ?`,
         )
         .run(
           body.name ?? null,
           body.description ?? null,
           body.trigger ? JSON.stringify(body.trigger) : null,
           body.modelProfile ?? null,
+          body.template ?? null,
+          body.instructions ?? null,
           ledger.now(),
           agentId,
         );
@@ -314,7 +324,14 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     } else {
       let input: Record<string, unknown>;
       let objective = body.objective;
-      if (agent.role === "research") {
+      const jobKind = agent.role === "research" ? "research" : agent.role === "custom" ? "custom" : "content";
+      if (agent.role === "custom") {
+        const parsed = customTaskInputSchema.safeParse(body.input ?? {});
+        if (!parsed.success) throw new ControlError("INVALID_REQUEST", parsed.error.issues.map((i) => `input.${i.path.join(".")}: ${i.message}`).join("; "));
+        if (objective === undefined) throw new ControlError("INVALID_REQUEST", "objective is required for a custom agent task");
+        // Instructions are snapshotted from the owner's agent record; depth 0 marks an owner-started task.
+        input = { ...parsed.data, instructions: agent.instructions, template: agent.template, [MARKETPLACE_DELEGATION_DEPTH_KEY]: 0 };
+      } else if (agent.role === "research") {
         const parsed = researchTaskInputSchema.safeParse({ question: objective, ...(body.input ?? {}) });
         if (!parsed.success) throw new ControlError("INVALID_REQUEST", parsed.error.issues.map((i) => `input.${i.path.join(".")}: ${i.message}`).join("; "));
         input = parsed.data;
@@ -329,7 +346,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
       result = immediate(ledger.db, () => {
         const existing = ledger.db.prepare(`SELECT id FROM job WHERE trigger_key = ?`).pluck().get(triggerKey);
         if (existing !== undefined) {
-          return enqueueJob(ledger, { workspaceId, agentId: agent.id, kind: agent.role === "research" ? "research" : "content", triggerKey });
+          return enqueueJob(ledger, { workspaceId, agentId: agent.id, kind: jobKind, triggerKey });
         }
         const handoffId = typeof input.handoffId === "string" ? input.handoffId : undefined;
         if (handoffId !== undefined) {
@@ -356,7 +373,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
           workspaceId,
           agentId: agent.id,
           taskId: task.id,
-          kind: agent.role === "research" ? "research" : "content",
+          kind: jobKind,
           triggerKey,
         });
       });
@@ -412,6 +429,11 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
       throw new ControlError("POLICY_DENIED", "agent scope mismatch: requests act only for the credential's agent");
     }
     chargeWorkerCall(ledger, req, a.agentId, body.taskId, body.paymentPath === "prepaid_credits" ? "consume_inference_sku" : "request_purchase");
+    const serviceKey = ledger.db.prepare(`SELECT service_key FROM approved_service WHERE id = ?`).pluck().get(body.serviceId) as string | undefined;
+    if (serviceKey?.startsWith(LISTING_SERVICE_PREFIX)) {
+      // Listing bindings exist only for locally authorized marketplace hires; agents propose hires instead.
+      throw new ControlError("SERVICE_NOT_ALLOWED", "marketplace listings are paid only through an authorized marketplace hire");
+    }
     const result = authorizePurchase(ledger, {
       workspaceId: a.workspaceId,
       agentId: a.agentId,
@@ -501,9 +523,10 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
       .prepare(
         `SELECT a.id AS service_id, a.service_key, a.status, s.sku, s.payment_path, s.price_usdc, s.max_fee_usdc, s.usage_units
          FROM service_sku s JOIN approved_service a ON a.id = s.service_id WHERE a.workspace_id = ? AND s.enabled = 1
+           AND substr(a.service_key, 1, ?) <> ?
          ORDER BY a.service_key, s.sku, s.payment_path`,
       )
-      .all(a.workspaceId) as Array<{ service_id: string; service_key: string; status: string; sku: string; payment_path: string; price_usdc: bigint; max_fee_usdc: bigint; usage_units: bigint }>;
+      .all(a.workspaceId, LISTING_SERVICE_PREFIX.length, LISTING_SERVICE_PREFIX) as Array<{ service_id: string; service_key: string; status: string; sku: string; payment_path: string; price_usdc: bigint; max_fee_usdc: bigint; usage_units: bigint }>;
     res.json({
       items: rows
         .filter((s) => perms.allowedSkus.includes(s.sku) && perms.allowedPaymentPaths.includes(s.payment_path))
