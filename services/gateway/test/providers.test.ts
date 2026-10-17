@@ -10,7 +10,7 @@ import {
   safeMediaUrl,
 } from "../src/seller-host/providers";
 
-type Call = { url: string; init?: RequestInit };
+type Call = { url: string; init?: RequestInit | undefined };
 
 function fakeFetch(replies: Array<[number, unknown] | Error>) {
   const calls: Call[] = [];
