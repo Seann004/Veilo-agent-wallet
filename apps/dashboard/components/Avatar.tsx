@@ -54,7 +54,7 @@ export function AvatarPicker({ value, onChange, label = "Avatar" }: { value: str
           <Select label="Gender (optional)" value={choice.gender} options={[...GENDERS]} onChange={(gender) => update({ gender })} />
         </div>
       </div>
-      <p className="hint">Gender is a display preference. Choose any colour or presentation; these choices don’t change how the agent works.</p>
+      <p className="hint">Woman adds a pink ribbon. Other choices have no ribbon. Choose any colour or presentation; these choices don’t change how the agent works.</p>
       <button type="button" className="link-btn" onClick={() => onChange(choice.avatarId)}>Reset appearance</button>
     </fieldset>
   );

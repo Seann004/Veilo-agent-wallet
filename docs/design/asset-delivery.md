@@ -23,7 +23,7 @@ Avatars preserve the ten IDs, labels, suggested colours and role defaults. Each 
 
 ## Customization
 
-The owner approved expanding the initial asset-only code scope. The shared picker in agent creation and agent detail now provides ten independent shapes, ten colours, four visual presentations (smooth, tuft, side sweep, crest), and optional gender (not specified, woman, man, non-binary). Gender never selects a colour or silhouette automatically. It is a local display preference and does not change the agent's role, model, instructions, behaviour or spending policy.
+The owner approved expanding the initial asset-only code scope. The shared picker in agent creation and agent detail now provides ten independent shapes, ten colours, four visual presentations (smooth, tuft, side sweep, crest), and optional gender (not specified, woman, man, non-binary). Selecting Woman adds a fixed pale pink ribbon with a darker pink knot. Man, Non-binary and Not specified add no accessory. The ribbon attaches to each silhouette’s upper edge and keeps the selected body colour and presentation. It is a local display preference and does not change the agent's role, model, instructions, behaviour or spending policy.
 
 The large preview updates while editing. Reset restores the selected shape's original appearance. Existing saved avatar IDs remain compatible. Custom choices use the existing per-agent, per-browser localStorage key and change notification; they are not synced to the service or other devices. Preference values are allowlisted before creating an SVG data URL. `lib/avatar-art.ts` holds the same geometry and palette as the shipped avatar files. File extensions remain SVG, so `lib/avatar-options.ts` did not need changes.
 
@@ -35,7 +35,7 @@ The large preview updates while editing. Reset restores the selected shape's ori
 ## Validation
 
 - `pnpm check`: passed using Node 22 and the pinned pnpm 10.34.6.
-- `pnpm test`: 44 test files passed, 1 skipped; 293 tests passed, 8 skipped. The first sandboxed attempt could not bind local test servers; the complete suite passed with local networking enabled.
+- `pnpm test`: 44 test files passed, 1 skipped; 294 tests passed, 8 skipped. The first sandboxed attempt could not bind local test servers; the complete suite passed with local networking enabled.
 - New tests cover legacy selection compatibility, role defaults, invalid stored data/SVG injection, independent choices, keyboard selection, persistence after remount and reset.
 - Browser: all eleven page routes at 1440×960 and 375×960 in light and dark mode (44 route/viewport/theme combinations). No horizontal overflow and no uncaught page errors.
 - Routes: `/`, `/marketplace`, `/workspace`, `/agents/new`, `/agents/asset-review` (dynamic detail route), `/market`, `/activity`, `/content`, `/wallet`, `/recovery`, `/privacy`.

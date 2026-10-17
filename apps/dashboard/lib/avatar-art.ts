@@ -52,5 +52,10 @@ export function pebbleSvg(index: number, style?: Partial<AvatarStyle>): string {
   const top = style?.presentation === "tuft" ? "M40 23Q28 6 41 8Q49 7 53 23Z"
     : style?.presentation === "sweep" ? "M26 31Q20 10 36 9Q49 8 61 23Z"
     : style?.presentation === "crest" ? "M41 25Q40 6 48 8Q54 3 59 10Q70 8 64 26Z" : "";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 100 100"><path fill="${colour}" d="${PEBBLES[safeIndex]}${top}"/><g fill="#fff"><rect x="37" y="51" width="7" height="12" rx="3.5"/><rect x="54" y="51" width="7" height="12" rx="3.5"/></g></svg>`;
+  // Attach the bow to each silhouette's upper edge, including the low pill and triangle.
+  const ribbonAnchor = [[70, 24], [62, 30], [70, 26], [70, 19], [71, 32], [66, 25], [63, 29], [65, 32], [70, 19], [69, 27]][safeIndex]!;
+  const ribbon = style?.gender === "woman"
+    ? `<g data-accessory="ribbon" transform="translate(${ribbonAnchor[0]} ${ribbonAnchor[1]}) rotate(16)"><path fill="#f7a8ca" d="M-2-3Q-16-16-15-4L-15 3Q-15 12-2 3L-6 13L0 10L6 13L2 3Q15 12 15 3L15-4Q16-16 2-3Z"/><rect x="-3" y="-5" width="6" height="10" rx="2.5" fill="#db2777"/></g>`
+    : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 100 100"><path fill="${colour}" d="${PEBBLES[safeIndex]}${top}"/><g fill="#fff"><rect x="37" y="51" width="7" height="12" rx="3.5"/><rect x="54" y="51" width="7" height="12" rx="3.5"/></g>${ribbon}</svg>`;
 }

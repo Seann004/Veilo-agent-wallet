@@ -38,10 +38,18 @@ describe("avatar display preferences", () => {
       const source = decodeURIComponent(image.getAttribute("src")!);
       expect(source).toContain('fill="#14a38b"');
       expect(source).toContain("M40 23Q28 6 41 8Q49 7 53 23Z");
+      expect(source).toContain('data-accessory="ribbon"');
     }
     cleanup();
     render(<AgentAvatar agent={agent} />);
     expect(document.querySelector("img")!.getAttribute("src")).toBe(resolveAvatar(value).src);
+  });
+
+  it("leaves man, non-binary and unspecified choices without a ribbon", () => {
+    for (const gender of ["man", "nonbinary", "unspecified"] as const) {
+      const value = encodeAvatar({ avatarId: "avatar-08", colour: "#e8457f", presentation: "smooth", gender });
+      expect(decodeURIComponent(resolveAvatar(value).src)).not.toContain('data-accessory="ribbon"');
+    }
   });
 
   it("keeps shape, colour, presentation and gender independent, and restores them after remount", async () => {
