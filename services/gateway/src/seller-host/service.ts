@@ -315,8 +315,9 @@ export class SellerHostService {
   ): Promise<"recorded" | "retry" | { code: string; message: string }> {
     const res = await this.client.paymentEvidence(jobId, { operationId, signature });
     if (res.status === 202 || res.status >= 500 || res.status === 401 || res.status === 408 || res.status === 429) return "retry";
-    // 409: the marketplace already recorded this receipt for the job.
-    if (ok(res) || res.status === 409) {
+    // An already-recorded receipt comes back as 2xx; a 409 is a genuine conflict (another receipt,
+    // a reused or refund signature) and must stay visible rather than be taken as recorded.
+    if (ok(res)) {
       this.update(purchaseId, { evidence_recorded_at: this.ctx.now().toISOString() });
       return "recorded";
     }

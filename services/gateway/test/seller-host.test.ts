@@ -363,6 +363,7 @@ describe("seller-host fulfilment", () => {
     [403, { error: { code: "SERVICE_NOT_ALLOWED", message: "receipt was not authorized by this operation's payer" } }, "SERVICE_NOT_ALLOWED"],
     [403, { error: "forbidden" }, "SERVICE_NOT_ALLOWED"],
     [400, { error: { code: "INVALID_REQUEST", message: "bad evidence" } }, "INVALID_REQUEST"],
+    [409, { error: { code: "IDEMPOTENCY_CONFLICT", message: "settlement signature already funds another purchase" } }, "IDEMPOTENCY_CONFLICT"],
   ])("a refused payment evidence (HTTP %i) closes the purchase as paid without a result, without claiming or running inference", async (status, body, code) => {
     await sellerHost();
     const { token } = h!.account();

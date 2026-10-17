@@ -87,7 +87,7 @@ export class FakeMarketplace {
         return;
       }
       if (j.evidence.some((e) => e.signature === b.signature)) {
-        res.status(409).json({ error: "already recorded" });
+        res.status(200).json({ status: "settled", existing: true });
         return;
       }
       j.evidence.push(b);
