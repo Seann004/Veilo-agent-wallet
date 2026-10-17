@@ -133,6 +133,14 @@ describe("TikTok carousel tools", () => {
     expect(keys).toEqual(["purchase-1:0", "purchase-1:1", "purchase-1:2"]);
   });
 
+  it("the seller's image cap limits how many slides are generated", async () => {
+    const f = fakeFetch([[200, { request_id: "r1" }], [200, { status: "completed", images: [{ url: "https://cdn.higgsfield.ai/1.jpg" }] }], [200, { request_id: "r2" }], [200, { status: "completed", images: [{ url: "https://cdn.higgsfield.ai/2.jpg" }] }]]);
+    const a = providerAdaptersFromEnv({ HIGGSFIELD_API_KEY_ID: "k", HIGGSFIELD_API_KEY_SECRET: "s", HIGGSFIELD_MAX_IMAGES: "2" }, opts(f.fn)).get("higgsfield")!;
+    const r = await a.run("generate_carousel_images", { slides: PLAN }, ctx);
+    expect(JSON.parse((r as { artifact: { text: string } }).artifact.text).images).toHaveLength(2);
+    expect(f.calls.filter((c) => c.init?.method === "POST")).toHaveLength(2);
+  });
+
   it("Higgsfield refuses a plan with fewer than two slides and makes no request", async () => {
     const f = fakeFetch([]);
     expect(await new HiggsfieldAdapter({ id: "k", secret: "s" }, opts(f.fn)).run("generate_carousel_images", { slides: "Slide 1: only one" }, ctx)).toMatchObject({ status: "failed", code: "INPUT_REQUIRED" });

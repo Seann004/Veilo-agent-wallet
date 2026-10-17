@@ -171,6 +171,9 @@ The facilitator support check, the fee-payer pin and finality gating are identic
 | `SELLER_HOST_RECIPIENTS` | empty | Optional comma-separated payout owners. When set, a quote naming any other recipient is refused. A seller running their own host should set it to their payout wallet. |
 | `SELLER_HOST_ACCOUNTS_PER_IP_HOUR` | `5` | Self-service account creations allowed per client address per hour. There is also a global cap of 200 per hour. |
 | `HIGGSFIELD_API_KEY_ID`, `HIGGSFIELD_API_KEY_SECRET` | empty | Seller host only: the seller's own Higgsfield key. Without both, its Higgsfield tools report "Provider not configured" and are never quoted. Higgsfield tools are sold only as workflow steps (its terms forbid a bare pass-through). |
+| `HIGGSFIELD_MAX_IMAGES` | `4` | Seller host only: images generated per carousel, clamped to 2–4. A spend cap on the seller's own Higgsfield credits. |
+| `ZERNIO_API_KEY`, `ZERNIO_TIKTOK_ACCOUNT_ID` | empty | Seller host only: the seller's Zernio key and connected TikTok account. Without both, the TikTok draft tool reports "Provider not configured". Drafts are private (`SELF_ONLY`, `tiktokSettings.draft`) and are never published by Veilo. |
+| `CAROUSEL_SELLER_ORIGIN` | empty | Seed only: the seller host origin the carousel tools are listed on. Unset lists them on a placeholder host that cannot be paid. |
 | `MAKEUGC_API_KEY`, `MAKEUGC_AVATAR_ID` | empty | Seller host only: the seller's own MakeUGC key (paid plan) and the avatar its videos use. |
 
 `GATEWAY_FACILITATOR_FEE_PAYER`, `GATEWAY_QUOTE_TTL_SECONDS`, `GATEWAY_SETTLEMENT_WAIT_MS`, `GATEWAY_PROVIDER_TIMEOUT_MS`, `GATEWAY_PRICING_MAX_AGE_SECONDS`, the inference model and `OPERATOR_MAX_REAL_USD_MICRO` apply as in the operator role. `GATEWAY_MERCHANT_ADDRESS`/`_ATA`, the usage-permit key and the planning credential are ignored: a seller host has no fixed merchant.
@@ -253,3 +256,14 @@ Inference runs at most once per purchase. A crash or a lost lease resumes from t
 ## Owner-only permissions
 
 On POSIX, `setup:local` sets `data/` and `secrets/` to mode 0700, and a `.env` it creates to 0600. On Windows, it removes inherited ACEs and grants full control only to the current user via `icacls`.
+
+## TikTok carousel workflow (run checklist)
+
+Nothing here spends money until the last step.
+
+1. Put `ZERNIO_API_KEY`, `ZERNIO_TIKTOK_ACCOUNT_ID`, `HIGGSFIELD_API_KEY_ID`, `HIGGSFIELD_API_KEY_SECRET` and optionally `HIGGSFIELD_MAX_IMAGES=2` in `.env`.
+2. Pick a local origin for Studio North's seller host, for example `http://127.0.0.1:4116`, and set it as `CAROUSEL_SELLER_ORIGIN` and in both `MARKETPLACE_DEV_SELLER_ORIGINS` and `MARKETPLACE_LOCAL_SELLER_ORIGINS`.
+3. `pnpm marketplace:carousel-preflight` — free reads only (Zernio account list and TikTok privacy options). Every line must say `ok`.
+4. Issue the seller host credential: `pnpm marketplace:operator host-credential <studio-north sellerId>` (printed once) and start a second seller host with `GATEWAY_ROLE=seller-host`, `SELLER_HOST_PORT=4116`, `SELLER_HOST_PUBLIC_ORIGIN` equal to the origin above, its own `SELLER_HOST_DATABASE_PATH`, that credential, and `SELLER_HOST_RECIPIENTS` set to Studio North's payout wallet.
+5. `pnpm marketplace:seed --confirm` lists the planner, the two provider tools and the workflow "TikTok carousel from a topic".
+6. Run it once from `/marketplace/w/tiktok-carousel-from-topic`. This is the only step that spends: at most 0.23 devnet USDC from the private pool, `HIGGSFIELD_MAX_IMAGES` Higgsfield images, and one private TikTok draft.

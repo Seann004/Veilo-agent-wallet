@@ -136,11 +136,14 @@ export function parseCarouselPlan(text: string): { slides: string[]; caption: st
 /** Higgsfield Soul text-to-image: submit, then poll the request status. Server-side key only. */
 export class HiggsfieldAdapter extends BaseAdapter {
   readonly provider = "higgsfield" as const;
+  /** Seller's own spend cap: images generated per carousel, 2 to 4. */
+  readonly maxImages: number;
   constructor(
     private readonly key: { id: string; secret: string } | null,
-    o: AdapterOptions = {},
+    o: AdapterOptions & { maxImages?: number } = {},
   ) {
     super(o);
+    this.maxImages = Math.min(MAX_SLIDES, Math.max(2, Math.trunc(o.maxImages ?? MAX_SLIDES)));
   }
 
   get configured(): boolean {
@@ -156,7 +159,7 @@ export class HiggsfieldAdapter extends BaseAdapter {
     if (plan.slides.length < 2) return { status: "failed", code: "INPUT_REQUIRED", message: "the plan needs at least two \"Slide N:\" lines" };
     const images: string[] = [];
     const ids: string[] = [];
-    for (const [i, prompt] of plan.slides.slice(0, MAX_SLIDES).entries()) {
+    for (const [i, prompt] of plan.slides.slice(0, this.maxImages).entries()) {
       const r = await this.generate(prompt, `${ctx.idempotencyKey}:${i}`);
       if (r.status !== "succeeded") {
         // Earlier slides were already generated (and billed); none is submitted again.
@@ -365,7 +368,7 @@ export function providerAdaptersFromEnv(env: NodeJS.ProcessEnv, o: AdapterOption
   const ugc = v("MAKEUGC_API_KEY") && v("MAKEUGC_AVATAR_ID") ? { apiKey: v("MAKEUGC_API_KEY")!, avatarId: v("MAKEUGC_AVATAR_ID")! } : null;
   const zernio = v("ZERNIO_API_KEY") && v("ZERNIO_TIKTOK_ACCOUNT_ID") ? { apiKey: v("ZERNIO_API_KEY")!, tiktokAccountId: v("ZERNIO_TIKTOK_ACCOUNT_ID")! } : null;
   return new Map<ToolProvider, ProviderAdapter>([
-    ["higgsfield", new HiggsfieldAdapter(hf, o)],
+    ["higgsfield", new HiggsfieldAdapter(hf, { ...o, maxImages: Number(v("HIGGSFIELD_MAX_IMAGES") ?? MAX_SLIDES) || MAX_SLIDES })],
     ["makeugc", new MakeUgcAdapter(ugc, o)],
     ["zernio", new ZernioAdapter(zernio, o)],
   ]);
