@@ -202,6 +202,80 @@ describe("dashboard proxy", () => {
     expect(await down.json()).toEqual({ error: { code: "NOT_READY", message: "the relayer service is not reachable" } });
   });
 
+  it("routes agent connector reads and mutations, keeping mutations behind Origin and CSRF", async () => {
+    const u = upstream((s) => (s.method === "DELETE" ? new Response(null, { status: 204 }) : Response.json({ attached: [] })));
+    const owner = { origin: ORIGIN, "sec-fetch-site": "same-origin", cookie: "veilo_session=vos_o; veilo_csrf=tokO", "x-csrf-token": "tokO" };
+    const get = await proxy(req(`control/agents/${AGENT}/connectors`, { headers: { cookie: "veilo_session=vos_o" } }), "control", ["agents", AGENT, "connectors"], { config, fetchImpl: u.fetchImpl });
+    expect(get.status).toBe(200);
+    const put = await proxy(
+      req(`control/agents/${AGENT}/connectors/solana-developer-docs`, { method: "PUT", headers: owner, body: { tools: ["search_docs"] } }),
+      "control",
+      ["agents", AGENT, "connectors", "solana-developer-docs"],
+      { config, fetchImpl: u.fetchImpl },
+    );
+    expect(put.status).toBe(200);
+    const del = await proxy(req(`control/agents/${AGENT}/connectors/meteora-docs`, { method: "DELETE", headers: owner }), "control", ["agents", AGENT, "connectors", "meteora-docs"], {
+      config,
+      fetchImpl: u.fetchImpl,
+    });
+    expect(del.status).toBe(204);
+    expect(u.seen.map((s) => `${s.method} ${s.url}`)).toEqual([
+      `GET http://127.0.0.1:4101/agents/${AGENT}/connectors`,
+      `PUT http://127.0.0.1:4101/agents/${AGENT}/connectors/solana-developer-docs`,
+      `DELETE http://127.0.0.1:4101/agents/${AGENT}/connectors/meteora-docs`,
+    ]);
+    expect(JSON.parse(u.seen[1]!.body!)).toEqual({ tools: ["search_docs"] });
+    for (const s of u.seen.slice(1)) {
+      expect(s.headers.get("x-csrf-token")).toBe("tokO");
+      expect(s.headers.get("origin")).toBe(ORIGIN);
+      expect(s.headers.get("cookie")).toBe("veilo_session=vos_o");
+    }
+  });
+
+  it("refuses connector mutations without CSRF or from another origin, and unknown connector paths", async () => {
+    const u = upstream();
+    const path = ["agents", AGENT, "connectors", "solana-developer-docs"];
+    const cases: Array<[string, Record<string, string>]> = [
+      ["PUT", { origin: ORIGIN, cookie: "veilo_session=vos_x" }],
+      ["DELETE", { origin: ORIGIN, cookie: "veilo_session=vos_x" }],
+      ["PUT", { origin: "https://evil.example", "x-csrf-token": "t" }],
+      ["DELETE", { origin: ORIGIN, "sec-fetch-site": "cross-site", "x-csrf-token": "t" }],
+    ];
+    for (const [method, headers] of cases) {
+      const res = await proxy(req(`control/${path.join("/")}`, { method, headers, ...(method === "PUT" ? { body: { tools: [] } } : {}) }), "control", path, { config, fetchImpl: u.fetchImpl });
+      expect(res.status, `${method} ${JSON.stringify(headers)}`).toBe(403);
+    }
+    const ok = { origin: ORIGIN, "x-csrf-token": "t" };
+    const notRouted: Array<[string, string[]]> = [
+      ["PUT", ["agents", AGENT, "connectors", "Bad_ID"]],
+      ["PUT", ["agents", AGENT, "connectors", ".."]],
+      ["POST", ["agents", AGENT, "connectors", "solana-developer-docs"]],
+      ["PATCH", ["agents", AGENT, "connectors"]],
+      ["DELETE", ["agents", AGENT, "connectors"]],
+      ["DELETE", ["agents", "not-a-uuid", "connectors", "solana-developer-docs"]],
+      ["DELETE", ["agents", AGENT]],
+    ];
+    for (const [method, p] of notRouted) {
+      const res = await proxy(req(`control/${p.join("/")}`, { method, headers: ok, ...(method === "DELETE" ? {} : { body: {} }) }), "control", p, { config, fetchImpl: u.fetchImpl });
+      expect(res.status, `${method} ${p.join("/")}`).toBe(404);
+    }
+    expect(u.seen).toHaveLength(0);
+  });
+
+  it("passes control's owner-only refusal of a guest's connector change through unchanged", async () => {
+    const u = upstream(() => Response.json({ error: { code: "FORBIDDEN", message: "only the workspace owner can change connectors" } }, { status: 403 }));
+    const path = ["agents", AGENT, "connectors", "solana-developer-docs"];
+    const res = await proxy(
+      req(`control/${path.join("/")}`, { method: "PUT", headers: { origin: ORIGIN, cookie: "veilo_session=vgs_guest", "x-csrf-token": "tokG" }, body: { tools: ["search_docs"] } }),
+      "control",
+      path,
+      { config, fetchImpl: u.fetchImpl },
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: { code: "FORBIDDEN", message: "only the workspace owner can change connectors" } });
+    expect(u.seen[0]!.headers.get("cookie")).toBe("veilo_session=vgs_guest");
+  });
+
   it("targets loopback ports from configuration", () => {
     const c = upstreamConfig({ CONTROL_PORT: "5101", VEILO_DASHBOARD_ORIGIN: "http://localhost:3999/" } as unknown as NodeJS.ProcessEnv);
     expect(c.baseUrl.control).toBe("http://127.0.0.1:5101");

@@ -5,7 +5,7 @@ export const SESSION_COOKIE = "veilo_session";
 export const CSRF_COOKIE = "veilo_csrf";
 export const CSRF_HEADER = "x-csrf-token";
 
-type Method = "GET" | "POST" | "PATCH";
+type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 interface Route {
   method: Method;
   path: RegExp;
@@ -14,6 +14,7 @@ interface Route {
 }
 
 const ID = "[0-9a-f-]{36}";
+const CONNECTOR = "[a-z0-9][a-z0-9-]{2,62}";
 const r = (method: Method, path: string, extra: Partial<Route> = {}): Route => ({ method, path: new RegExp(`^${path}$`), ...extra });
 
 /**
@@ -36,6 +37,9 @@ export const ROUTES: Record<UpstreamService, Route[]> = {
     r("POST", "/agents"),
     r("PATCH", `/agents/${ID}/config`),
     r("POST", `/agents/${ID}/(run|pause|resume|revoke|archive)`),
+    r("GET", `/agents/${ID}/connectors`),
+    r("PUT", `/agents/${ID}/connectors/${CONNECTOR}`),
+    r("DELETE", `/agents/${ID}/connectors/${CONNECTOR}`),
     r("GET", `/purchases/${ID}`),
     r("POST", `/purchases/${ID}/(decision|reconcile)`),
     r("GET", "/content"),
