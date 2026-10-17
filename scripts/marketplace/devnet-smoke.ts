@@ -174,6 +174,7 @@ async function main(): Promise<void> {
     maxNetworkFeeLamports: 10_000_000n,
     quoteTtlSeconds: 300,
     termsVersion: "2026-10-17",
+    managedRuntimeRevision: "v2",
   };
   const server = createApp({ db: createDb(marketConfig), chain: createRpcChain(config.network.rpcUrl), config: marketConfig, now: () => new Date() }).listen(MARKET_PORT, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));

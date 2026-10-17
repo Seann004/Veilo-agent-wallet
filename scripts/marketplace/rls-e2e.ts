@@ -122,6 +122,7 @@ async function main() {
     maxNetworkFeeLamports: 10_000_000n,
     quoteTtlSeconds: 300,
     termsVersion: "2026-10-17",
+    managedRuntimeRevision: "v2",
   };
   const db = createDb(config);
   const server = createApp({ db, chain: fixtureChain, config, now: () => new Date() }).listen(0, "127.0.0.1");

@@ -384,7 +384,7 @@ export function createApp(deps: Deps): Express {
       const actor = await user(req, true);
       const v = listingVersionInputSchema.parse(req.body);
       if (v.remoteOrigin !== null && !sellerOriginAllowed(config, v.remoteOrigin)) throw new MarketError("SERVICE_NOT_ALLOWED", "remote origin must be a public https origin");
-      const runtimeVersionId = v.runtimeKind === "managed_template" ? `managed:${v.template}:v1` : "remote:seller-protocol:v1";
+      const runtimeVersionId = v.runtimeKind === "managed_template" ? `managed:${v.template}:${config.managedRuntimeRevision}` : "remote:seller-protocol:v1";
       const versionId = await db.rpc<string>("mk_create_listing_version", {
         p_user: actor.userId,
         p_listing: uuid.parse(req.params.id),

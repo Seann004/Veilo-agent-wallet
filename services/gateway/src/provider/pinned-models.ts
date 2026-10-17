@@ -32,6 +32,17 @@ export const PINNED_MODELS: Readonly<Record<string, PinnedModel>> = {
     pinnedAt: "2026-10-14T14:08:19Z",
     source: OPENROUTER_MODELS_URL,
   },
+  "deepseek/deepseek-v4-flash": {
+    id: "deepseek/deepseek-v4-flash",
+    promptPicoPerToken: 91_000n,
+    completionPicoPerToken: 182_000n,
+    requestPico: 0n,
+    contextLength: 1_048_575,
+    maxCompletionTokens: 943_717,
+    tokenizer: "DeepSeek (byte-level BPE)",
+    pinnedAt: "2026-10-17T06:52:30Z",
+    source: OPENROUTER_MODELS_URL,
+  },
 };
 
 export function pinnedModel(id: string | undefined): PinnedModel | undefined {

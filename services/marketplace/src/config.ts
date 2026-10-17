@@ -26,6 +26,8 @@ export interface MarketplaceConfig {
   maxNetworkFeeLamports: bigint;
   quoteTtlSeconds: number;
   termsVersion: string;
+  /** Runtime revision new managed listings use; each revision pins one model in runtime_versions. */
+  managedRuntimeRevision: string;
 }
 
 function required(env: NodeJS.ProcessEnv, name: string): string {
@@ -74,5 +76,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, rootDir: string
     maxNetworkFeeLamports: BigInt(env.MARKETPLACE_MAX_NETWORK_FEE_LAMPORTS ?? "10000000"),
     quoteTtlSeconds: Number(env.MARKETPLACE_QUOTE_TTL_SECONDS ?? MARKETPLACE_LIMITS.quoteTtlSeconds),
     termsVersion: env.MARKETPLACE_TERMS_VERSION?.trim() || "2026-10-17",
+    managedRuntimeRevision: env.MARKETPLACE_MANAGED_RUNTIME_REVISION?.trim() || "v2",
   };
 }

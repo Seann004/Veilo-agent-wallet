@@ -150,6 +150,7 @@ const config: MarketplaceConfig = {
   maxNetworkFeeLamports: 10_000_000n,
   quoteTtlSeconds: 300,
   termsVersion: "2026-10-17",
+  managedRuntimeRevision: "v2",
 };
 
 describe("seller origin policy", () => {
