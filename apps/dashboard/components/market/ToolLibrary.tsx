@@ -10,6 +10,13 @@ import { EmptyState, ErrorNotice, Loading, Section } from "../ui";
 import { useMarket } from "./MarketContext";
 import { Address, Money, PlainText, RequireMarketSession, TestTokenNote } from "./parts";
 
+interface Connector {
+  id: string;
+  title: string;
+  endpoint: string;
+  tools: Array<{ name: string; description: string; inputSchema: Record<string, unknown>; sha256: string }>;
+}
+
 interface ToolsResponse {
   tools: ToolEntry[];
   providers: Array<{ provider: string; manifestSha256: string; tools: ToolManifest["tools"] }>;
@@ -57,8 +64,32 @@ export function ToolLibrary() {
           ))}
         </ul>
       ) : null}
+      <Connectors />
       <ConnectTool providers={res.data?.providers ?? []} />
     </>
+  );
+}
+
+/** Operator-approved remote MCP servers. Each tool is pinned by a digest of its name, description and schema. */
+function Connectors() {
+  const m = useMarket();
+  const res = useResource(() => (m.configured ? marketApi<{ connectors: Connector[] }>("/marketplace/connectors") : Promise.resolve({ connectors: [] })), "mcp-connectors");
+  return (
+    <Section title="MCP connectors">
+      <p className="small">
+        Remote MCP servers the operator reviewed. A seller sells one pinned, read-only tool from its own seller host; if the server changes that tool, it is disabled until reviewed
+        again.
+      </p>
+      <ErrorNotice error={res.error} what="connectors could not be loaded" />
+      {res.data && res.data.connectors.length === 0 ? <p className="small muted">No connectors are approved yet.</p> : null}
+      <ul>
+        {(res.data?.connectors ?? []).map((c) => (
+          <li key={c.id}>
+            <PlainText text={c.title} inline /> — <span className="mono">{c.endpoint}</span>: {c.tools.map((t) => t.name).join(", ")}
+          </li>
+        ))}
+      </ul>
+    </Section>
   );
 }
 
@@ -67,9 +98,140 @@ function ConnectTool({ providers }: { providers: ToolsResponse["providers"] }) {
     <Section title="Connect your own tool">
       <RequireMarketSession what="connect a tool">
         <ProviderToolForm providers={providers} />
+        <McpToolForm />
+        <ConnectorProposalForm />
         <ExternalToolForm />
       </RequireMarketSession>
     </Section>
+  );
+}
+
+/** Pins one approved connector tool to a pending remote listing version; the step input fills {{input}}. */
+function McpToolForm() {
+  const m = useMarket();
+  const id = useId();
+  const dash = useResource(() => m.call<SellerDashboard>("/seller/dashboard"), "mcp-seller-dashboard");
+  const conns = useResource(() => marketApi<{ connectors: Connector[] }>("/marketplace/connectors"), "mcp-connectors-form");
+  const act = useAction();
+  const [versionId, setVersionId] = useState("");
+  const [choice, setChoice] = useState("");
+  const [args, setArgs] = useState('{"ids": "{{input}}"}');
+  const [problem, setProblem] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const pending = (dash.data?.versions ?? []).filter((v) => v.review_status === "pending" && v.runtime_kind === "remote_endpoint");
+  const options = (conns.data?.connectors ?? []).flatMap((c) => c.tools.map((t) => ({ key: `${c.id}:${t.name}`, connectorId: c.id, toolName: t.name })));
+  return (
+    <form
+      className="stack"
+      aria-labelledby={`${id}-h`}
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const o = options.find((x) => x.key === choice);
+        let argsTemplate: unknown;
+        try {
+          argsTemplate = JSON.parse(args);
+        } catch {
+          setProblem("Arguments must be JSON.");
+          return;
+        }
+        if (!o) return;
+        setProblem(null);
+        if (await act.run(() => m.call(`/seller/versions/${versionId}/mcp-tool`, { method: "POST", body: { connectorId: o.connectorId, toolName: o.toolName, argsTemplate } }))) setDone(true);
+      }}
+    >
+      <h3 id={`${id}-h`}>MCP tool on your own host</h3>
+      <p className="small">
+        Allow the connector's endpoint in your seller host (SELLER_HOST_MCP_ENDPOINTS); a bearer key, if the server needs one, stays in that host's environment.
+      </p>
+      <ErrorNotice error={act.error} what="the MCP tool could not be pinned" />
+      {problem ? <p className="field-error">{problem}</p> : null}
+      {done ? (
+        <p className="notice notice-help" role="status">
+          Pinned. Submit the version for review.
+        </p>
+      ) : (
+        <>
+          <div className="field">
+            <label htmlFor={`${id}-v`}>Pending remote listing version</label>
+            <select id={`${id}-v`} required value={versionId} onChange={(e) => setVersionId(e.target.value)}>
+              <option value="">Choose a version</option>
+              {pending.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.title} (v{v.version_no})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor={`${id}-t`}>Connector tool</label>
+            <select id={`${id}-t`} required value={choice} onChange={(e) => setChoice(e.target.value)}>
+              <option value="">Choose a tool</option>
+              {options.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.connectorId}: {o.toolName}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor={`${id}-a`}>Arguments (JSON; use "{"{{input}}"}" for the step input)</label>
+            <textarea id={`${id}-a`} rows={3} value={args} onChange={(e) => setArgs(e.target.value)} spellCheck={false} />
+          </div>
+          <button type="submit" className="btn" disabled={act.busy || versionId === "" || choice === ""}>
+            Pin MCP tool
+          </button>
+        </>
+      )}
+    </form>
+  );
+}
+
+/** Proposes a remote MCP server; nothing is contacted until the operator verifies and approves it. */
+function ConnectorProposalForm() {
+  const m = useMarket();
+  const id = useId();
+  const act = useAction();
+  const [json, setJson] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  return (
+    <form
+      className="stack"
+      aria-labelledby={`${id}-h`}
+      onSubmit={async (e) => {
+        e.preventDefault();
+        let body: unknown;
+        try {
+          body = JSON.parse(json);
+        } catch {
+          setProblem("The proposal must be JSON.");
+          return;
+        }
+        setProblem(null);
+        const r = await act.run(() => m.call<{ connectorId: string }>("/tools/connectors", { method: "POST", body }));
+        if (r) setDone(r.connectorId);
+      }}
+    >
+      <h3 id={`${id}-h`}>Propose an MCP server</h3>
+      <p className="small">{'JSON: {"id", "title", "endpoint" (public https), "tools": [{"name", "description", "inputSchema"}]} copied from its tools/list. Read-only tools only.'}</p>
+      <ErrorNotice error={act.error} what="the proposal was refused" />
+      {problem ? <p className="field-error">{problem}</p> : null}
+      {done ? (
+        <p className="notice notice-help" role="status">
+          Proposed {done}. Status: In review.
+        </p>
+      ) : (
+        <>
+          <label htmlFor={`${id}-j`} className="sr-only">
+            Connector proposal JSON
+          </label>
+          <textarea id={`${id}-j`} rows={6} value={json} onChange={(e) => setJson(e.target.value)} spellCheck={false} />
+          <button type="submit" className="btn" disabled={act.busy || json.trim() === ""}>
+            Propose connector
+          </button>
+        </>
+      )}
+    </form>
   );
 }
 

@@ -1,3 +1,4 @@
+import type { McpClient } from "./seller-host/mcp";
 import type { ToolProvider } from "@veilo/contracts/marketplace";
 import type { ProviderAdapter } from "./seller-host/providers";
 import type { KeyObject } from "node:crypto";
@@ -75,6 +76,8 @@ export interface GatewayContext {
   marketplace: MarketplaceClient | undefined;
   /** Provider adapters configured with this seller host's own keys (seller-host role only). */
   providers: ReadonlyMap<ToolProvider, ProviderAdapter>;
+  /** Remote MCP endpoints this seller host may contact and how to make its client (seller-host role only). */
+  mcp: { endpoints: ReadonlySet<string>; client: (endpoint: string, connectorId: string) => McpClient };
   now: () => Date;
   sleep: (ms: number) => Promise<void>;
   hooks: GatewayHooks;

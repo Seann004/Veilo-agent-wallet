@@ -21,6 +21,8 @@ import { Gateway } from "./gateway";
 import { OpenRouterProvider } from "./provider/openrouter";
 import { DEFAULT_ACCOUNT_RATE_LIMIT } from "./seller-host/accounts";
 import { CLAIM_RETRY_DELAYS_MS, gatewayRole, HEARTBEAT_MS, loadSellerHostConfig } from "./seller-host/config";
+import { mcpToolDigest } from "@veilo/contracts/marketplace";
+import { McpClient, mcpConfigFromEnv } from "./seller-host/mcp";
 import { PROVIDER_NOT_CONFIGURED, providerAdaptersFromEnv, providerStatus } from "./seller-host/providers";
 import { MarketplaceClient } from "./seller-host/marketplace-client";
 
@@ -94,6 +96,7 @@ async function main(): Promise<void> {
 
   // Provider keys are read only in the seller-host role and stay in this process.
   const providers = host ? providerAdaptersFromEnv(process.env) : undefined;
+  const mcpConfig = mcpConfigFromEnv(process.env);
   if (providers) {
     for (const s of providerStatus(providers)) console.log(`[${SERVICE}] provider ${s.provider}: ${s.status === "configured" ? "configured" : PROVIDER_NOT_CONFIGURED}`);
   }
@@ -135,6 +138,7 @@ async function main(): Promise<void> {
     ...(local.hooks ? { hooks: local.hooks } : {}),
     ...(host ? { marketplace: new MarketplaceClient({ baseUrl: host.marketplaceUrl, token: host.marketplaceToken }) } : {}),
     ...(providers ? { providers } : {}),
+    ...(host ? { mcp: { endpoints: mcpConfig.endpoints, client: (endpoint: string, connectorId: string) => new McpClient(endpoint, { bearer: mcpConfig.bearerFor(connectorId) }) } } : {}),
     serviceHealth: health,
   });
 
@@ -150,6 +154,29 @@ async function main(): Promise<void> {
     };
     void reportTools();
     setInterval(() => void reportTools(), REFRESH_MS).unref();
+    // Each pinned MCP tool is re-read from its server; the digest the host sees is reported so drift disables it.
+    const reportMcp = async () => {
+      const res = await gateway.ctx.marketplace?.mcpTools().catch(() => undefined);
+      const tools = ((res?.body as { tools?: Array<{ connectorId: string; endpoint: string | null; toolName: string; toolSha256: string }> } | undefined)?.tools ?? []);
+      for (const t of tools) {
+        if (!t.endpoint || !mcpConfig.endpoints.has(t.endpoint)) continue;
+        let sha = t.toolSha256;
+        let reachable: boolean;
+        try {
+          const client = new McpClient(t.endpoint, { bearer: mcpConfig.bearerFor(t.connectorId) });
+          await client.initialize();
+          const live = (await client.listTools()).find((x) => x.name === t.toolName);
+          sha = live ? mcpToolDigest(live) : "0".repeat(64);
+          reachable = true;
+        } catch {
+          // An unreachable server is reported as not configured, never as drift.
+          reachable = false;
+        }
+        await gateway.ctx.marketplace?.mcpStatus({ connectorId: t.connectorId, toolName: t.toolName, toolSha256: sha, reachable }).catch(() => undefined);
+      }
+    };
+    void reportMcp();
+    setInterval(() => void reportMcp(), REFRESH_MS).unref();
   }
   if (host) {
     // Paid jobs keep moving (claim, run, report) even when no buyer is polling for the result.

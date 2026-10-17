@@ -1,4 +1,9 @@
 import {
+  argsTemplateProblem,
+  connectorProposalSchema,
+  mcpManifestDigest,
+  mcpToolDigest,
+  type McpToolPin,
   checkWorkflowPublication,
   MARKETPLACE_LIMITS,
   PROVIDER_MANIFESTS,
@@ -365,14 +370,14 @@ export function registerWorkflowRoutes(app: Express, deps: Deps, h: WorkflowRout
     route(async () => {
       const [listings, profiles, external] = await Promise.all([
         db.anon().from("catalog_entries").select("listing_id, listing_version_id, slug, seller_name, title, summary, runtime_kind, price_base_units, recipient, output_format, network, mint, decimals"),
-        db.anon().from("tool_profiles").select("listing_version_id, tool_kind, provider, tool_name, effect, io, provider_status"),
+        db.anon().from("tool_profiles").select("listing_version_id, tool_kind, provider, tool_name, effect, io, provider_status, mcp_connector_id"),
         db.anon().from("external_tools").select("id, slug, title, summary, origin, resource_path, pay_to, unit_price_base_units, calls_per_step, io, status, network, mint, decimals"),
       ]);
       const prof = new Map(((profiles.data ?? []) as Array<Record<string, unknown> & { listing_version_id: string }>).map((p) => [p.listing_version_id, p]));
       const tools = [
         ...((listings.data ?? []) as Array<Record<string, unknown> & { listing_version_id: string; output_format: string; price_base_units: string | number }>).map((l) => {
-          const p = prof.get(l.listing_version_id) as { tool_kind?: string; provider?: string | null; tool_name?: string | null; effect?: string; io?: ToolIo; provider_status?: string } | undefined;
-          const providerStatus = p?.tool_kind === "provider_adapter" ? (p.provider_status ?? "unknown") : null;
+          const p = prof.get(l.listing_version_id) as { tool_kind?: string; provider?: string | null; tool_name?: string | null; effect?: string; io?: ToolIo; provider_status?: string; mcp_connector_id?: string | null } | undefined;
+          const providerStatus = p?.tool_kind === "provider_adapter" || p?.mcp_connector_id ? (p.provider_status ?? "unknown") : null;
           return {
             toolKind: "listing" as const,
             toolId: l.listing_version_id,
@@ -380,8 +385,8 @@ export function registerWorkflowRoutes(app: Express, deps: Deps, h: WorkflowRout
             title: l.title,
             summary: l.summary,
             by: l.seller_name,
-            kind: p?.tool_kind ?? l.runtime_kind,
-            provider: p?.provider ?? null,
+            kind: p?.mcp_connector_id ? "mcp" : (p?.tool_kind ?? l.runtime_kind),
+            provider: p?.provider ?? (p?.mcp_connector_id ? `mcp:${p.mcp_connector_id}` : null),
             effect: p?.effect ?? "read_only",
             io: p?.io ?? defaultIo(l.output_format),
             priceBaseUnits: String(l.price_base_units),
@@ -497,6 +502,70 @@ export function registerWorkflowRoutes(app: Express, deps: Deps, h: WorkflowRout
       const actor = await h.user(req, true);
       const t = externalToolSchema.parse(req.body);
       return { toolId: await db.rpc<string>("mk_propose_external_tool", { p_user: actor.userId, t: { ...t, network: config.network, mint: config.mint, decimals: config.decimals } }), status: "pending" };
+    }),
+  );
+
+  // ---- remote MCP connectors -----------------------------------------------------------------
+  app.get(
+    "/marketplace/connectors",
+    route(async () => {
+      const { data } = await db.anon().from("connector_definitions").select("id, title, endpoint, transport, manifest_sha256, tools, risk").eq("review_status", "approved");
+      return {
+        connectors: ((data ?? []) as Array<{ tools: McpToolPin[] } & Record<string, unknown>>).map((c) => ({
+          ...c,
+          tools: c.tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema, sha256: mcpToolDigest(t) })),
+        })),
+      };
+    }),
+  );
+  app.post(
+    "/tools/connectors",
+    route(async (req) => {
+      const actor = await h.user(req, true);
+      const c = connectorProposalSchema.parse(req.body);
+      // Proposals are data only; the marketplace never contacts the endpoint. The operator verifies it before approval.
+      return { connectorId: await db.rpc<string>("mk_propose_connector", { p_user: actor.userId, c, p_manifest: mcpManifestDigest(c.tools) }), status: "pending" };
+    }),
+  );
+  app.post(
+    "/seller/versions/:id/mcp-tool",
+    route(async (req) => {
+      const actor = await h.user(req, true);
+      const b = z.object({ connectorId: z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/), toolName: z.string().max(64), argsTemplate: z.record(z.string(), z.unknown()) }).strict().parse(req.body);
+      const c = (await db.admin.from("connector_definitions").select("tools, review_status, risk").eq("id", b.connectorId).maybeSingle()).data as { tools: McpToolPin[]; review_status: string; risk: string } | null;
+      if (!c || c.review_status !== "approved" || c.risk !== "read_only") throw new MarketError("SERVICE_NOT_ALLOWED", "connector is not approved and read-only");
+      const pinned = c.tools.find((t) => t.name === b.toolName);
+      if (!pinned) throw new MarketError("INVALID_REQUEST", "tool is not in the approved connector");
+      const problem = argsTemplateProblem(b.argsTemplate, pinned.inputSchema);
+      if (problem) throw new MarketError("INVALID_REQUEST", problem);
+      const toolSha256 = mcpToolDigest(pinned);
+      await db.rpc("mk_set_mcp_tool_profile", {
+        p_user: actor.userId,
+        p_version: uuid.parse(req.params.id),
+        t: { connectorId: b.connectorId, toolName: b.toolName, toolSha256, argsTemplate: b.argsTemplate, io: { inputs: [{ name: "input", kind: "text", required: true, maxChars: 4000 }], output: { kind: "json" } } },
+      });
+      return { ok: true, toolSha256 };
+    }),
+  );
+  app.get(
+    "/internal/seller-host/mcp-tools",
+    route(async (req) => {
+      const principal = await h.sellerHost(req);
+      if (principal.kind !== "remote") throw new MarketError("FORBIDDEN", "only a seller's own host runs MCP tools");
+      const rows = ((await db.admin.from("tool_profiles").select("tool_name, mcp_connector_id, mcp_tool_sha256").eq("seller_id", principal.sellerId).not("mcp_connector_id", "is", null)).data ?? []) as Array<{ tool_name: string; mcp_connector_id: string; mcp_tool_sha256: string }>;
+      const ids = [...new Set(rows.map((r) => r.mcp_connector_id))];
+      const connectors = ids.length === 0 ? [] : (((await db.admin.from("connector_definitions").select("id, endpoint").in("id", ids)).data ?? []) as Array<{ id: string; endpoint: string }>);
+      const endpoint = new Map(connectors.map((c) => [c.id, c.endpoint]));
+      return { tools: rows.map((r) => ({ connectorId: r.mcp_connector_id, endpoint: endpoint.get(r.mcp_connector_id) ?? null, toolName: r.tool_name, toolSha256: r.mcp_tool_sha256 })) };
+    }),
+  );
+  app.post(
+    "/internal/seller-host/mcp-status",
+    route(async (req) => {
+      const principal = await h.sellerHost(req);
+      if (principal.kind !== "remote") throw new MarketError("FORBIDDEN", "only a seller's own host reports its MCP tools");
+      const b = z.object({ connectorId: z.string().max(64), toolName: z.string().max(64), toolSha256: z.string().regex(/^[0-9a-f]{64}$/), reachable: z.boolean() }).strict().parse(req.body);
+      return { disabledTools: await db.rpc<number>("mk_report_mcp_status", { p_seller: principal.sellerId, p_connector: b.connectorId, p_tool: b.toolName, p_sha: b.toolSha256, p_reachable: b.reachable }) };
     }),
   );
 
@@ -685,7 +754,8 @@ export function registerWorkflowRoutes(app: Express, deps: Deps, h: WorkflowRout
         db.admin.from("workflow_versions").select("id, workflow_id, title, steps, total_max_base_units, created_at").eq("review_status", "pending"),
         db.admin.from("external_tools").select("id, slug, title, origin, resource_path, pay_to, unit_price_base_units, calls_per_step, status, created_at").eq("status", "pending"),
       ]);
-      return { versions: versions.data ?? [], externalTools: tools.data ?? [] };
+      const connectors = await db.admin.from("connector_definitions").select("id, title, endpoint, manifest_sha256, tools, created_at").eq("review_status", "pending");
+      return { versions: versions.data ?? [], externalTools: tools.data ?? [], connectors: connectors.data ?? [] };
     }),
   );
   app.post(
@@ -702,6 +772,15 @@ export function registerWorkflowRoutes(app: Express, deps: Deps, h: WorkflowRout
       h.operator(req);
       const b = z.object({ status: z.enum(["suspended", "live"]) }).strict().parse(req.body);
       await db.rpc("mk_set_workflow_status", { p_workflow: uuid.parse(req.params.id), p_status: b.status });
+      return { ok: true };
+    }),
+  );
+  app.post(
+    "/operator/connectors/:id/review",
+    route(async (req) => {
+      h.operator(req);
+      const b = z.object({ approve: z.boolean(), note: z.string().max(500).nullable() }).strict().parse(req.body);
+      await db.rpc("mk_review_connector", { p_id: z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/).parse(req.params.id), p_approve: b.approve, p_note: b.note });
       return { ok: true };
     }),
   );

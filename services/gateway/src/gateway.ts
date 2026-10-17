@@ -16,6 +16,7 @@ import { PurchaseService } from "./purchases";
 import type { MarketplaceClient } from "./seller-host/marketplace-client";
 import type { ToolProvider } from "@veilo/contracts/marketplace";
 import type { ProviderAdapter } from "./seller-host/providers";
+import { McpClient } from "./seller-host/mcp";
 import { UsageService } from "./usage";
 
 export interface GatewayOptions {
@@ -39,6 +40,8 @@ export interface GatewayOptions {
   marketplace?: MarketplaceClient;
   /** Provider adapters for the seller-host role; absent providers report Provider not configured. */
   providers?: ReadonlyMap<ToolProvider, ProviderAdapter>;
+  /** Remote MCP endpoints for the seller-host role; none means every MCP tool is "Provider not configured". */
+  mcp?: GatewayContext["mcp"];
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
   hooks?: GatewayHooks;
@@ -85,6 +88,7 @@ export class Gateway {
       acceptance: { ready: false, reason: "facilitator support not checked yet", support: undefined, merchantAta: undefined, feePayer: undefined },
       marketplace: options.settings.role === "seller-host" ? options.marketplace : undefined,
       providers: options.settings.role === "seller-host" ? (options.providers ?? new Map()) : new Map(),
+      mcp: options.settings.role === "seller-host" && options.mcp ? options.mcp : { endpoints: new Set(), client: (e) => new McpClient(e) },
       now,
       sleep: options.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
       hooks,

@@ -1,3 +1,4 @@
+import { liveToolMatches, McpError, runMcpTool, type McpJobTool } from "./mcp";
 import { PROVIDER_NOT_CONFIGURED, type ProviderResult } from "./providers";
 import { createHash, randomUUID } from "node:crypto";
 import { GATEWAY_CATALOG } from "@veilo/contracts/gateway";
@@ -39,10 +40,12 @@ export interface SpecialistQuoteTerms {
   runtime: SellerRuntime;
   /** The pinned provider tool this job runs instead of a managed template. */
   tool?: ProviderTool | undefined;
+  /** The pinned remote MCP tool this job runs instead of a managed template. */
+  mcp?: McpJobTool | undefined;
 }
 
 type ProviderTool = NonNullable<SellerHostJobView["tool"]>;
-type BoundRuntime = SellerRuntime & { tool?: ProviderTool | null };
+type BoundRuntime = SellerRuntime & { tool?: ProviderTool | null; mcp?: McpJobTool | null };
 
 type Outcome = "complete" | "incomplete" | "failed" | "uncertain";
 
@@ -153,6 +156,33 @@ export class SellerHostService {
     if (amount <= 0n) throw new GatewayError(409, "SERVICE_NOT_ALLOWED", "Free jobs are not sold through x402");
 
     const runtime = view.runtime;
+    const mcp = view.mcp ?? null;
+    if (mcp !== null) {
+      // An MCP tool runs only on its seller's own host, against an endpoint the host allows, and only
+      // while the live tool still matches the reviewed digest.
+      if (runtime.kind !== "remote_endpoint") throw new GatewayError(409, "SERVICE_NOT_ALLOWED", "MCP tools run on the seller's own host");
+      if (!this.ctx.mcp.endpoints.has(mcp.endpoint)) throw new GatewayError(503, "PROVIDER_UNAVAILABLE", PROVIDER_NOT_CONFIGURED);
+      try {
+        const client = this.ctx.mcp.client(mcp.endpoint, mcp.connectorId);
+        await client.initialize();
+        await liveToolMatches(client, mcp);
+      } catch (error) {
+        if (error instanceof McpError && error.code === "MANIFEST_CHANGED") throw new GatewayError(409, "SERVICE_NOT_ALLOWED", `MCP tool changed since review: ${error.message}`);
+        if (error instanceof McpError) throw new GatewayError(503, "PROVIDER_UNAVAILABLE", error.message);
+        throw error;
+      }
+      return {
+        amount,
+        payTo: q.recipient,
+        merchantAta: q.recipientAta,
+        expiresAt: new Date(Math.min(now + s.quoteTtlSeconds * 1000, expiresAt)),
+        maxInputTokens: SPECIALIST.maxInputTokens as number,
+        maxOutputTokens: SPECIALIST.maxOutputTokens as number,
+        marketplaceQuote: q,
+        runtime,
+        mcp,
+      };
+    }
     const tool = view.tool ?? null;
     if (tool !== null) {
       // A provider tool runs only on its seller's own host, with that host's key and the reviewed manifest.
@@ -223,7 +253,7 @@ export class SellerHostService {
       quoteId,
       jobId,
       JSON.stringify(terms.marketplaceQuote),
-      JSON.stringify({ ...terms.runtime, tool: terms.tool ?? null }),
+      JSON.stringify({ ...terms.runtime, tool: terms.tool ?? null, mcp: terms.mcp ?? null }),
       now,
     );
   }
@@ -410,6 +440,8 @@ export class SellerHostService {
   ): Promise<{ stop: false } | { stop: true; code: GatewayErrorCode | null }> {
     const tool = (bound.runtime as BoundRuntime).tool;
     if (tool) return this.runProvider(purchaseId, bound.jobId, tool, lease, brief);
+    const mcp = (bound.runtime as BoundRuntime).mcp;
+    if (mcp) return this.runMcp(purchaseId, bound.jobId, mcp, lease, brief);
     // Nothing is sent upstream unless the marketplace confirms the lease is live right now.
     if (!this.ctx.inference.existing("purchase", purchaseId) && !(await this.heartbeat(purchaseId, bound.jobId, lease))) {
       this.dropLease(purchaseId);
@@ -538,6 +570,56 @@ export class SellerHostService {
       outcome: uncertain ? "uncertain" : "failed",
       fail_code: uncertain ? "PROVIDER_UNCERTAIN" : "PROVIDER_FAILED",
       result_json: JSON.stringify({ kind: "specialist_job", jobId, provider: tool.provider, status: result.status, message: result.message }),
+    });
+    return { stop: false };
+  }
+
+  /** Calls a pinned MCP tool once per purchase, recording the start first so it is never repeated. */
+  private async runMcp(purchaseId: string, jobId: string, mcp: McpJobTool, lease: Lease, brief: string): Promise<{ stop: false } | { stop: true; code: GatewayErrorCode | null }> {
+    const f = this.row(purchaseId);
+    if (f.result_json !== null && (JSON.parse(f.result_json) as { status?: string }).status === "provider_started") {
+      this.update(purchaseId, {
+        outcome: "uncertain",
+        fail_code: "PROVIDER_UNCERTAIN",
+        result_json: JSON.stringify({ kind: "specialist_job", jobId, connector: mcp.connectorId, status: "uncertain", message: "MCP call was interrupted; it is not repeated" }),
+      });
+      return { stop: false };
+    }
+    if (!this.ctx.mcp.endpoints.has(mcp.endpoint)) return { stop: true, code: "PROVIDER_UNAVAILABLE" };
+    if (!(await this.heartbeat(purchaseId, jobId, lease))) {
+      this.dropLease(purchaseId);
+      return { stop: false };
+    }
+    let started = false;
+    let text: string;
+    try {
+      text = await runMcpTool(this.ctx.mcp.client(mcp.endpoint, mcp.connectorId), mcp, brief, () => {
+        this.update(purchaseId, { result_json: JSON.stringify({ status: "provider_started", connector: mcp.connectorId }) });
+        started = true;
+      });
+    } catch (error) {
+      if (!(error instanceof McpError)) throw error;
+      // Before tools/call nothing ran, so an outage waits and retries; a changed tool or a failed call is final.
+      if (!started && error.code === "PROVIDER_UNAVAILABLE") return { stop: true, code: "PROVIDER_UNAVAILABLE" };
+      // A lost reply after tools/call was sent may mean the call ran: uncertain, never repeated.
+      const uncertain = started && error.code === "PROVIDER_UNAVAILABLE";
+      this.update(purchaseId, {
+        outcome: uncertain ? "uncertain" : "failed",
+        fail_code: uncertain ? "PROVIDER_UNCERTAIN" : error.code === "MANIFEST_CHANGED" ? "MANIFEST_CHANGED" : "PROVIDER_FAILED",
+        result_json: JSON.stringify({ kind: "specialist_job", jobId, connector: mcp.connectorId, status: uncertain ? "uncertain" : "failed", message: error.message }),
+      });
+      return { stop: false };
+    }
+    const artifact = { artifactId: randomUUID(), sha256: sha256(text), mimeType: "text/markdown" as const, bytes: Buffer.byteLength(text, "utf8") };
+    const summary = `${mcp.connectorId}/${mcp.toolName} result (untrusted data)`;
+    this.update(purchaseId, {
+      outcome: "complete",
+      summary,
+      artifact_id: artifact.artifactId,
+      artifact_text: text,
+      artifact_sha256: artifact.sha256,
+      artifact_bytes: artifact.bytes,
+      result_json: JSON.stringify({ kind: "specialist_job", jobId, connector: mcp.connectorId, tool: mcp.toolName, status: "complete", summary, artifacts: [artifact] }),
     });
     return { stop: false };
   }

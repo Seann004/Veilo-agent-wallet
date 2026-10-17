@@ -565,6 +565,51 @@ async function main() {
     record("a Higgsfield tool cannot be hired on its own, only as a workflow step", hfProfile.status === 200 && directHire.status === 403 && forgedKey.status === 403, `profile ${hfProfile.status} hire ${directHire.status} forged ${forgedKey.status}`);
     await call("POST", `/operator/listings/${hfListing.body.listingId}/status`, { token: operatorToken, body: { status: "archived" } });
 
+    // Remote MCP connectors: operator-reviewed, pinned by tool digest, removable at once.
+    const cid = `rls-mcp-${randomUUID().slice(0, 8)}`;
+    const mcpTool = { name: "get_price", description: "Price of a coin", inputSchema: { type: "object", properties: { ids: { type: "string" } }, required: ["ids"] } };
+    const proposed = await call("POST", "/tools/connectors", { token: B.token, body: { id: cid, title: "RLS fixture MCP", endpoint: "https://mcp.rls.veilo.invalid/mcp", tools: [mcpTool] } });
+    const anonConnector = await anon.from("connector_definitions").select("id").eq("id", cid);
+    const mcpListing = await call("POST", "/seller/listings", { token: S.token, body: { slug: `rls-mcp-${randomUUID().slice(0, 8)}` } });
+    const mcpVersion = await call("POST", `/seller/listings/${mcpListing.body.listingId}/versions`, {
+      token: S.token,
+      body: {
+        title: "RLS fixture MCP price tool",
+        summary: "Fixture MCP tool for the access-control test",
+        description: "Fixture MCP tool for the access-control test; not a real service.",
+        runtimeKind: "remote_endpoint",
+        template: null,
+        remoteOrigin: "https://mcp-host.rls.veilo.invalid",
+        sellerInstructions: "",
+        inputSchema: { briefHint: "coin id", maxBriefChars: 2000 },
+        outputSchema: { format: "json", sections: [] },
+        priceBaseUnits: "5000",
+        payoutVersionId: payout.body.payoutVersionId,
+        turnaroundMinutes: 5,
+        refundTerms: "Seller-funded refund if nothing is delivered.",
+        dataHandling: "The coin id is sent to the MCP server.",
+        termsVersion: "2026-10-17",
+      },
+    });
+    const pinEarly = await call("POST", `/seller/versions/${mcpVersion.body.versionId}/mcp-tool`, { token: S.token, body: { connectorId: cid, toolName: "get_price", argsTemplate: { ids: "{{input}}" } } });
+    record("a proposed MCP connector is private and unusable until the operator approves it", proposed.status === 200 && proposed.body?.status === "pending" && (anonConnector.data?.length ?? 0) === 0 && pinEarly.status === 403, `pin ${pinEarly.status}`);
+    await call("POST", `/operator/connectors/${cid}/review`, { token: operatorToken, body: { approve: true, note: "rls test" } });
+    const badArgs = await call("POST", `/seller/versions/${mcpVersion.body.versionId}/mcp-tool`, { token: S.token, body: { connectorId: cid, toolName: "get_price", argsTemplate: { ids: "coin-{{input}}", secret: "x" } } });
+    const pinned = await call("POST", `/seller/versions/${mcpVersion.body.versionId}/mcp-tool`, { token: S.token, body: { connectorId: cid, toolName: "get_price", argsTemplate: { ids: "{{input}}" } } });
+    record("an MCP tool is pinned only with arguments that place the input as a whole value", badArgs.status === 400 && pinned.status === 200 && /^[0-9a-f]{64}$/.test(pinned.body?.toolSha256 ?? ""), `bad ${badArgs.status} pin ${pinned.status}`);
+    await call("POST", `/seller/versions/${mcpVersion.body.versionId}/submit`, { token: S.token });
+    await call("POST", `/operator/versions/${mcpVersion.body.versionId}/review`, { token: operatorToken, body: { approve: true, note: "rls test" } });
+    const mcpWf = await call("POST", "/creator/workflows", { token: S.token, body: { slug: `rls-mcpwf-${randomUUID().slice(0, 8)}`, category: "data" } });
+    const mcpWv = await call("POST", `/creator/workflows/${mcpWf.body.workflowId}/versions`, {
+      token: S.token,
+      body: wfBody({ category: "data", steps: [{ toolKind: "listing", toolId: mcpVersion.body.versionId, maxBaseUnits: "5000", inputs: { input: { from: "run_input", name: "topic" } } }], totalMaxBaseUnits: "5000" }),
+    });
+    const mcpPub = await call("POST", `/creator/versions/${mcpWv.body?.versionId}/publish`, { token: S.token });
+    await call("POST", `/operator/connectors/${cid}/review`, { token: operatorToken, body: { approve: false, note: "rls cleanup" } });
+    const mcpGone = await anon.from("workflow_catalog").select("slug").eq("workflow_id", mcpWf.body.workflowId);
+    const mcpListingGone = await anon.from("catalog_entries").select("slug").eq("listing_id", mcpListing.body.listingId);
+    record("a workflow using an approved MCP tool goes live, and withdrawing the connector removes it at once", mcpPub.body?.status === "live" && (mcpGone.data?.length ?? 0) === 0 && (mcpListingGone.data?.length ?? 0) === 0, `publish ${mcpPub.body?.status}`);
+
     await call("POST", `/operator/listings/${listing.body.listingId}/status`, { token: operatorToken, body: { status: "archived" } });
   } finally {
     server.close();

@@ -34,6 +34,18 @@ export const sellerHostJobViewSchema = z
       .strict()
       .nullable()
       .optional(),
+    /** The listing's pinned remote MCP tool, when it sells one. */
+    mcp: z
+      .object({
+        connectorId: z.string(),
+        endpoint: z.string().url(),
+        toolName: z.string(),
+        toolSha256: z.string().regex(/^[0-9a-f]{64}$/),
+        argsTemplate: z.record(z.string(), z.unknown()),
+      })
+      .strict()
+      .nullable()
+      .optional(),
   })
   .strict();
 export type SellerHostJobView = z.infer<typeof sellerHostJobViewSchema>;

@@ -7,10 +7,18 @@
  *   pnpm marketplace:operator review <versionId> approve|reject [note]
  *   pnpm marketplace:operator host-credential <sellerId>     (prints a new remote seller-host token once)
  *   pnpm marketplace:operator sweep
+ *   pnpm marketplace:operator workflow-queue
+ *   pnpm marketplace:operator workflow-review <versionId> approve|reject [note]
+ *   pnpm marketplace:operator workflow-status <workflowId> suspended|live
+ *   pnpm marketplace:operator external-tool <toolId> approved|suspended [note]
+ *   pnpm marketplace:operator connector-verify <connectorId>  (reads the live tools/list and compares digests)
+ *   pnpm marketplace:operator connector-review <connectorId> approve|reject [note]
  */
 import { readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { findRepoRoot, loadDotEnv } from "@veilo/contracts";
+import { mcpToolDigest, type McpToolPin } from "@veilo/contracts/marketplace";
+import { McpClient } from "../../services/gateway/src/seller-host/mcp";
 
 const rootDir = findRepoRoot();
 loadDotEnv({ rootDir });
@@ -37,10 +45,24 @@ const actions: Record<string, () => Promise<unknown>> = {
   review: () => call("POST", `/operator/versions/${a}/review`, { approve: b === "approve", note: rest.join(" ") || null }),
   "host-credential": () => call("POST", `/operator/sellers/${a}/host-credential`),
   sweep: () => call("POST", "/operator/sweep"),
+  "workflow-queue": () => call("GET", "/operator/workflow-review-queue"),
+  "workflow-review": () => call("POST", `/operator/workflow-versions/${a}/review`, { approve: b === "approve", note: rest.join(" ") || null }),
+  "workflow-status": () => call("POST", `/operator/workflows/${a}/status`, { status: b }),
+  "external-tool": () => call("POST", `/operator/external-tools/${a}/status`, { status: b, note: rest.join(" ") || null }),
+  "connector-review": () => call("POST", `/operator/connectors/${a}/review`, { approve: b === "approve", note: rest.join(" ") || null }),
+  "connector-verify": async () => {
+    const q = (await call("GET", "/operator/workflow-review-queue")) as { connectors: Array<{ id: string; endpoint: string; tools: McpToolPin[] }> };
+    const c = q.connectors.find((x) => x.id === a);
+    if (!c) throw new Error(`no pending connector ${a}`);
+    const client = new McpClient(c.endpoint);
+    await client.initialize();
+    const live = new Map((await client.listTools()).map((t) => [t.name, mcpToolDigest(t)]));
+    return { endpoint: c.endpoint, tools: c.tools.map((t) => ({ name: t.name, proposed: mcpToolDigest(t), live: live.get(t.name) ?? null, matches: live.get(t.name) === mcpToolDigest(t) })) };
+  },
 };
 const action = cmd ? actions[cmd] : undefined;
 if (!action) {
-  console.error("usage: pnpm marketplace:operator queue|approve-seller|suspend-seller|review|host-credential|sweep …");
+  console.error("usage: pnpm marketplace:operator queue|approve-seller|suspend-seller|review|host-credential|sweep|workflow-queue|workflow-review|workflow-status|external-tool|connector-verify|connector-review …");
   process.exit(2);
 }
 action().then(

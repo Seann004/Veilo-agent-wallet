@@ -94,6 +94,7 @@ export function kindGlyph(kind: string, provider: string | null): string {
   if (provider === "makeugc") return "VID";
   if (provider === "zernio") return "POST";
   if (kind === "external_x402") return "RPC";
+  if (kind === "mcp") return "MCP";
   if (kind === "managed_template") return "LLM";
   return "API";
 }

@@ -670,7 +670,18 @@ export function createApp(deps: Deps): Express {
       const tool = (await db.admin.from("tool_profiles").select("provider, tool_name, manifest_sha256").eq("listing_version_id", view.listingVersionId as string).eq("tool_kind", "provider_adapter").maybeSingle()).data as
         | { provider: string; tool_name: string; manifest_sha256: string }
         | null;
-      return { ...view, tool: tool ? { provider: tool.provider, toolName: tool.tool_name, manifestSha256: tool.manifest_sha256 } : null };
+      const mcp = (await db.admin.from("tool_profiles").select("tool_name, mcp_connector_id, mcp_tool_sha256, mcp_args_template").eq("listing_version_id", view.listingVersionId as string).not("mcp_connector_id", "is", null).maybeSingle()).data as
+        | { tool_name: string; mcp_connector_id: string; mcp_tool_sha256: string; mcp_args_template: Record<string, unknown> }
+        | null;
+      const connector = mcp ? ((await db.admin.from("connector_definitions").select("endpoint, review_status").eq("id", mcp.mcp_connector_id).single()).data as { endpoint: string; review_status: string }) : null;
+      return {
+        ...view,
+        tool: tool ? { provider: tool.provider, toolName: tool.tool_name, manifestSha256: tool.manifest_sha256 } : null,
+        mcp:
+          mcp && connector?.review_status === "approved"
+            ? { connectorId: mcp.mcp_connector_id, endpoint: connector.endpoint, toolName: mcp.tool_name, toolSha256: mcp.mcp_tool_sha256, argsTemplate: mcp.mcp_args_template }
+            : null,
+      };
     }),
   );
   app.post(

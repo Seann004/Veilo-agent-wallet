@@ -100,4 +100,12 @@ export class MarketplaceClient {
   toolStatus(body: { provider: string; manifestSha256: string; configured: boolean }): Promise<MarketplaceResponse> {
     return this.#call("POST", "/internal/seller-host/tool-status", body);
   }
+
+  mcpTools(): Promise<MarketplaceResponse> {
+    return this.#call("GET", "/internal/seller-host/mcp-tools");
+  }
+
+  mcpStatus(body: { connectorId: string; toolName: string; toolSha256: string; reachable: boolean }): Promise<MarketplaceResponse> {
+    return this.#call("POST", "/internal/seller-host/mcp-status", body);
+  }
 }
