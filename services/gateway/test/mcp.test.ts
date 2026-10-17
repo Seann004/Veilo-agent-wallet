@@ -2,7 +2,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { mcpToolDigest, type McpToolPin } from "@veilo/contracts/marketplace";
-import { McpClient, McpError, assertPublicHost, liveToolMatches, runMcpTool, type McpJobTool } from "../src/seller-host/mcp";
+import { McpClient, McpError, isPublicAddress, publicFetch, liveToolMatches, runMcpTool, type McpJobTool } from "../src/seller-host/mcp";
 import { buildPaymentHeader, makeHarness, type Harness } from "./harness";
 import { FakeMarketplace } from "./marketplace-fake";
 
@@ -156,12 +156,13 @@ describe("MCP reply bounds and hosts", () => {
     await expect(c.listTools()).rejects.toThrow("size bound");
   });
 
-  it("refuses loopback and private hosts when only public hosts are allowed", async () => {
+  it("refuses loopback, private and non-global addresses, and checks them at connect time", async () => {
     mcp = await new FakeMcp().start();
-    await expect(new McpClient(mcp.url, { publicOnly: true }).initialize()).rejects.toThrow("non-public");
-    for (const h of ["10.1.2.3", "169.254.169.254", "192.168.0.1", "[::1]", "[fd00::1]", "100.64.0.1"]) {
-      await expect(assertPublicHost(h)).rejects.toThrow("non-public");
+    await expect(new McpClient(mcp.url.replace("http:", "https:"), { publicOnly: true }).initialize()).rejects.toThrow();
+    await expect(publicFetch("https://localhost/mcp", { method: "POST" })).rejects.toThrow("non-public");
+    for (const a of ["10.1.2.3", "169.254.169.254", "192.168.0.1", "100.64.0.1", "198.18.0.1", "0.0.0.0", "::1", "fd00::1", "fe80::1", "::ffff:127.0.0.1", "::ffff:7f00:1", "64:ff9b::a9fe:a9fe", "2002:a9fe:a9fe::1", "2001::1", "2001:db8::1"]) {
+      expect(isPublicAddress(a), a).toBe(false);
     }
-    await expect(assertPublicHost("8.8.8.8")).resolves.toBeUndefined();
+    for (const a of ["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"]) expect(isPublicAddress(a), a).toBe(true);
   });
 });
