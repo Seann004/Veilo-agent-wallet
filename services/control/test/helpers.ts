@@ -14,8 +14,10 @@ import {
 import { openControlDatabase, type SqliteDatabase } from "@veilo/db";
 import { createLedger, type Ledger } from "../src/context";
 import { registerApprovedNote } from "../src/ledger/notes";
+import { createTask } from "../src/ledger/summaries";
 import {
   activatePolicyVersion,
+  getAgent,
   insertAgentPolicyDraft,
   insertWorkspacePolicyDraft,
   listAgents,
@@ -159,3 +161,18 @@ export function addNotes(env: TestEnv, values: bigint[]): void {
 
 export const digest = (seed: string): string =>
   Buffer.from(seed.padEnd(32, ".").slice(0, 32)).toString("hex");
+
+const intentTasks = new WeakMap<TestEnv, Map<string, string>>();
+
+/** A queued task per agent and intent key, so repeating an intent reuses the same task scope. */
+export function intentTask(env: TestEnv, agentId: string, key: string): string {
+  let tasks = intentTasks.get(env);
+  if (!tasks) intentTasks.set(env, (tasks = new Map()));
+  const k = `${agentId}:${key}`;
+  let id = tasks.get(k);
+  if (id === undefined) {
+    id = createTask(env.ledger, { workspaceId: env.ws.id, agent: getAgent(env.ledger, agentId)!, objective: key, input: {} }).id;
+    tasks.set(k, id);
+  }
+  return id;
+}

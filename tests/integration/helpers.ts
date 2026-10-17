@@ -3,7 +3,10 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { computeRequestDigest } from "@veilo/contracts/gateway";
-import { openSqliteReadonly } from "../../packages/db/src/index";
+import { openControlDatabase, openSqliteReadonly } from "../../packages/db/src/index";
+import { createLedger } from "../../services/control/src/context";
+import { createTask } from "../../services/control/src/ledger/summaries";
+import { getAgent } from "../../services/control/src/ledger/workspace";
 import { sleep } from "../../scripts/devnet/lib";
 import { WorkerClient, type Reply } from "../../scripts/local-stack/owner-client";
 import { createLocalStack, type LocalStack } from "../../scripts/local-stack/stack";
@@ -64,9 +67,33 @@ export function serviceId(c: Ctx, sku: string, path: string): string {
   return s.id;
 }
 
+const intentTasks = new Map<string, string>();
+
+/**
+ * Worker purchases must be task-scoped. The suite inserts a queued task directly, as a run would,
+ * without enqueueing a job, so the runner never executes it. One task per agent and key keeps a
+ * repeated intent on the same task scope.
+ */
+export function intentTask(c: Ctx, agent: keyof Ctx["agents"], key: string): string {
+  const k = `${agent}:${key}`;
+  const existing = intentTasks.get(k);
+  if (existing !== undefined) return existing;
+  const db = openControlDatabase(join(c.s.dir, "data", "control.sqlite"));
+  try {
+    const ledger = createLedger(db);
+    const workspaceId = (db.prepare("SELECT workspace_id FROM agent WHERE id = ?").pluck().get(c.agents[agent]) as string);
+    const { id } = createTask(ledger, { workspaceId, agent: getAgent(ledger, c.agents[agent])!, objective: runKey(key), input: {} });
+    intentTasks.set(k, id);
+    return id;
+  } finally {
+    db.close();
+  }
+}
+
 export async function intent(c: Ctx, agent: keyof Ctx["workers"], key: string, sku: string, path: "private_x402" | "prepaid_credits", input: Record<string, unknown>): Promise<Reply> {
   return c.workers[agent].call("POST", "/purchase-intents", {
     idempotencyKey: runKey(key),
+    taskId: intentTask(c, agent, key),
     serviceId: serviceId(c, sku, path),
     sku,
     paymentPath: path,

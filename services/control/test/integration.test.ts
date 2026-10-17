@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { computeRequestDigest } from "@veilo/contracts/gateway";
 import { saveArtifact } from "../src/ledger/summaries";
 import { makeStack, type Stack } from "./fixtures/stack";
+import { intentTask } from "./helpers";
 
 let s: Stack | undefined;
 afterEach(async () => {
@@ -22,7 +23,7 @@ async function intent(st: Stack, agent: "Prince" | "Mira" | "Shawn", key: string
   return st.call("/purchase-intents", {
     method: "POST",
     headers: { authorization: `Bearer ${st.worker(agent)}` },
-    body: { idempotencyKey: key, serviceId: serviceId(st, sku, path), sku, paymentPath: path, requestDigest: computeRequestDigest(sku, input), input, ...(taskId ? { taskId } : {}) },
+    body: { idempotencyKey: key, serviceId: serviceId(st, sku, path), sku, paymentPath: path, requestDigest: computeRequestDigest(sku, input), input, taskId: taskId ?? intentTask(st.env, st.env.agents[agent].id, key) },
   });
 }
 

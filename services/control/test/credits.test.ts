@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { GATEWAY_CREDIT_LABEL, computeRequestDigest } from "@veilo/contracts/gateway";
 import { runCreditCheck } from "../src/agents/shawn";
 import { makeStack, type Stack } from "./fixtures/stack";
+import { intentTask } from "./helpers";
 
 let s: Stack | undefined;
 afterEach(async () => {
@@ -20,7 +21,7 @@ async function drain(st: Stack, key: string, sku: "analyze" | "summarize" = "ana
   const r = await st.call("/purchase-intents", {
     method: "POST",
     headers: { authorization: `Bearer ${st.worker("Prince")}` },
-    body: { idempotencyKey: key, serviceId: serviceId(st, sku, "prepaid_credits"), sku, paymentPath: "prepaid_credits", requestDigest: computeRequestDigest(sku, input), input },
+    body: { idempotencyKey: key, serviceId: serviceId(st, sku, "prepaid_credits"), sku, paymentPath: "prepaid_credits", requestDigest: computeRequestDigest(sku, input), input, taskId: intentTask(st.env, st.env.agents.Prince.id, key) },
   });
   return r;
 }

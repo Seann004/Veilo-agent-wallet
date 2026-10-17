@@ -25,7 +25,7 @@ import { getPurchaseRow } from "../src/ledger/purchases";
 import { activatePolicyVersion, insertAgentPolicyDraft } from "../src/ledger/workspace";
 import { immediate } from "@veilo/db";
 import { SellerOriginPolicy } from "../src/marketplace/origin-policy";
-import { activateDefaults, addNotes, createEnv, type TestEnv } from "./helpers";
+import { activateDefaults, addNotes, createEnv, intentTask, type TestEnv } from "./helpers";
 
 const UNIT = 1000n;
 const MAX_CALLS = 3;
@@ -392,7 +392,7 @@ describe("workflow-scoped external bindings", () => {
       const r = await st.call("/purchase-intents", {
         method: "POST",
         headers: { authorization: `Bearer ${st.worker("Prince")}` },
-        body: { idempotencyKey: "scoped-1", serviceId: scoped.service_id, sku: EXTERNAL_BATCH_SKU, paymentPath: "private_x402", requestDigest: computeRequestDigest(EXTERNAL_BATCH_SKU, input), input },
+        body: { idempotencyKey: "scoped-1", serviceId: scoped.service_id, sku: EXTERNAL_BATCH_SKU, paymentPath: "private_x402", requestDigest: computeRequestDigest(EXTERNAL_BATCH_SKU, input), input, taskId: intentTask(st.env, st.env.agents.Prince.id, "scoped-1") },
       });
       expect(r.status).toBe(403);
       expect(r.body.error.code).toBe("SERVICE_NOT_ALLOWED");

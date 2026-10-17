@@ -8,7 +8,7 @@ import { ServiceCredentials } from "../src/auth/credentials";
 import type { SessionSettings } from "../src/auth/session";
 import { redactActivityEvents, redactBalances } from "../src/http/redact";
 import { advanceAuthority } from "../src/ledger/purchases";
-import { activateDefaults, addNotes, addService, createEnv, digest, testKeypair, type TestEnv, type TestKeypair } from "./helpers";
+import { activateDefaults, addNotes, addService, createEnv, digest, intentTask, testKeypair, type TestEnv, type TestKeypair } from "./helpers";
 
 const config = loadConfig({
   DEVNET_RPC_URL: "https://rpc.test.invalid",
@@ -222,7 +222,7 @@ describe("public viewer", () => {
     const intent = await call("/purchase-intents", {
       method: "POST",
       headers: { authorization: `Bearer ${prince}` },
-      body: { idempotencyKey: "v1", serviceId: svc, sku: "research-basic", paymentPath: "private_x402", requestDigest: digest("v1"), rationale: "compare" },
+      body: { idempotencyKey: "v1", serviceId: svc, sku: "research-basic", paymentPath: "private_x402", requestDigest: digest("v1"), rationale: "compare", taskId: intentTask(env, env.agents.Prince.id, "v1") },
     });
     expect(intent.status).toBe(201);
     const purchaseId = intent.body.purchase.id as string;

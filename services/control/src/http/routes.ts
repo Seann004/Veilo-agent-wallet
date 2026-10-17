@@ -522,6 +522,22 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
       );
       throw new ControlError("POLICY_DENIED", "agent scope mismatch: requests act only for the credential's agent");
     }
+    if (body.taskId === undefined) {
+      // Task budget, purchase count and deadline apply only when a task scopes the purchase.
+      immediate(ledger.db, () =>
+        writeAudit(ledger, {
+          workspaceId: a.workspaceId,
+          scope: `agent:${a.agentId}`,
+          actorType: "worker",
+          actorId: a.agentId,
+          action: "purchase.authorize",
+          policyResult: "denied",
+          reasonCode: "POLICY_DENIED",
+          details: { reason: "task scope required" },
+        }),
+      );
+      throw new ControlError("POLICY_DENIED", "worker purchases must be scoped to one of the agent's running tasks");
+    }
     chargeWorkerCall(ledger, req, a.agentId, body.taskId, body.paymentPath === "prepaid_credits" ? "consume_inference_sku" : "request_purchase");
     const serviceKey = ledger.db.prepare(`SELECT service_key FROM approved_service WHERE id = ?`).pluck().get(body.serviceId) as string | undefined;
     if (serviceKey?.startsWith(LISTING_SERVICE_PREFIX)) {

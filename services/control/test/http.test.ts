@@ -6,7 +6,7 @@ import { createApp } from "../src/app";
 import { ServiceCredentials } from "../src/auth/credentials";
 import type { SessionSettings } from "../src/auth/session";
 import { advanceAuthority } from "../src/ledger/purchases";
-import { activateDefaults, addNotes, addService, createEnv, digest, testKeypair, type TestEnv } from "./helpers";
+import { activateDefaults, addNotes, addService, createEnv, digest, intentTask, testKeypair, type TestEnv } from "./helpers";
 
 const config = loadConfig({
   DEVNET_RPC_URL: "https://rpc.test.invalid",
@@ -212,7 +212,7 @@ describe("AUTH-01 agent identity comes from the credential", () => {
     addNotes(env, [100_000n, 100_000n]);
     const prince = await workerToken(env.agents.Prince.id, s);
     const mira = await workerToken(env.agents.Mira.id, s);
-    const intent = { idempotencyKey: "k1", serviceId: svc, sku: "research-basic", paymentPath: "private_x402", requestDigest: digest("k1") };
+    const intent = { idempotencyKey: "k1", serviceId: svc, sku: "research-basic", paymentPath: "private_x402", requestDigest: digest("k1"), taskId: intentTask(env, env.agents.Prince.id, "k1") };
 
     const spoof = await call("/purchase-intents", { method: "POST", headers: { authorization: `Bearer ${prince}` }, body: { ...intent, agentId: env.agents.Mira.id } });
     expect(spoof.status).toBe(403);
@@ -228,8 +228,14 @@ describe("AUTH-01 agent identity comes from the credential", () => {
     const ownRead = await call(`/purchases/${own.body.purchase.id}`, { headers: { authorization: `Bearer ${prince}` } });
     expect(ownRead.status).toBe(200);
 
+    // A worker cannot drop the task scope to escape its task budget, purchase count or deadline.
+    const unscoped = await call("/purchase-intents", { method: "POST", headers: { authorization: `Bearer ${prince}` }, body: { ...intent, taskId: undefined, idempotencyKey: "k-taskless" } });
+    expect(unscoped.status).toBe(403);
+    expect(unscoped.body.error.code).toBe("POLICY_DENIED");
+    expect(Number(env.db.prepare("SELECT count(*) FROM purchase WHERE idempotency_key = 'k-taskless'").pluck().get())).toBe(0);
+
     // Mira's purchase under the same logical key is a separate operation, not Prince's.
-    const miraIntent = await call("/purchase-intents", { method: "POST", headers: { authorization: `Bearer ${mira}` }, body: { ...intent, sku: "analyze" } });
+    const miraIntent = await call("/purchase-intents", { method: "POST", headers: { authorization: `Bearer ${mira}` }, body: { ...intent, sku: "analyze", taskId: intentTask(env, env.agents.Mira.id, "k1") } });
     expect(miraIntent.status).toBe(201);
     expect(miraIntent.body.purchase.id).not.toBe(own.body.purchase.id);
   });
@@ -291,7 +297,7 @@ describe("AUTH-02 worker tools cannot sign, edit policy or publish", () => {
     const created = await call("/purchase-intents", {
       method: "POST",
       headers: { authorization: `Bearer ${prince}` },
-      body: { idempotencyKey: "k", serviceId: svc, sku: "research-basic", paymentPath: "private_x402", requestDigest: digest("k") },
+      body: { idempotencyKey: "k", serviceId: svc, sku: "research-basic", paymentPath: "private_x402", requestDigest: digest("k"), taskId: intentTask(env, env.agents.Prince.id, "k") },
     });
     const id = created.body.purchase.id as string;
     expect((await call(`/purchases/${id}`, { headers: { authorization: `Bearer ${WALLET_SECRET}` } })).status).toBe(200);
@@ -438,7 +444,7 @@ describe("SEC-02 logs and audit contain no secret material", () => {
     await call("/purchase-intents", {
       method: "POST",
       headers: { authorization: `Bearer ${prince}` },
-      body: { idempotencyKey: "x", serviceId: svc, sku: "research-basic", paymentPath: "private_x402", requestDigest: digest("x"), rationale: `token ${prince}` },
+      body: { idempotencyKey: "x", serviceId: svc, sku: "research-basic", paymentPath: "private_x402", requestDigest: digest("x"), rationale: `token ${prince}`, taskId: intentTask(env, env.agents.Prince.id, "x") },
     });
     await call("/purchase-intents", { method: "POST", headers: { authorization: `Bearer ${prince}` }, body: { agentId: env.agents.Mira.id } });
     await call("/workspace", { headers: { authorization: `Bearer ${GATEWAY_ADMIN_SECRET}` } });

@@ -10,6 +10,7 @@ import { deriveAta as referenceAta } from "@veilo/x402-client";
 import { deriveAta, isPrivateAddress } from "../src/marketplace/addresses";
 import { SellerOriginDenied, SellerOriginPolicy } from "../src/marketplace/origin-policy";
 import { makeMarketStack, PRICE, type MarketStack } from "./fixtures/market-stack";
+import { intentTask } from "./helpers";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -790,7 +791,7 @@ describe("custom agent tools", () => {
     const r = await s.call("/purchase-intents", {
       method: "POST",
       headers: scout,
-      body: { idempotencyKey: "direct-1", serviceId, sku: "specialist-job", paymentPath: "private_x402", requestDigest: "c".repeat(64) },
+      body: { idempotencyKey: "direct-1", serviceId, sku: "specialist-job", paymentPath: "private_x402", requestDigest: "c".repeat(64), taskId: intentTask(s.env, s.scout.id, "direct-1") },
     });
     expect(r.status).toBe(403);
     expect(r.body.error.code).toBe("SERVICE_NOT_ALLOWED");
