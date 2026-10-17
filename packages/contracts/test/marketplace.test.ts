@@ -101,3 +101,12 @@ describe("remote seller origin", () => {
     }
   });
 });
+
+describe("payer binding message", () => {
+  it("is domain separated and binds operation, quote and payer", async () => {
+    const { payerBindingMessage } = await import("../src/marketplace");
+    expect(payerBindingMessage("op_1", "a".repeat(64), "49TED53TmAC4EsScoN3zn6iTHZXAcz6J5w9trmnyAVWX")).toBe(
+      `veilo:payer-binding:v1\nop_1\n${"a".repeat(64)}\n49TED53TmAC4EsScoN3zn6iTHZXAcz6J5w9trmnyAVWX`,
+    );
+  });
+});

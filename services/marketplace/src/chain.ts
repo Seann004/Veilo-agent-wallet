@@ -105,6 +105,7 @@ export async function deriveAta(owner: string, mint: string): Promise<string> {
 
 export interface Chain {
   genesisHash(): Promise<string>;
+  finalizedSlot(): Promise<bigint>;
   /** Finalized parsed transaction, or null while it is not yet finalized or unknown. */
   finalizedTransaction(signature: string): Promise<ParsedTransaction | null>;
   tokenAccount(address: string): Promise<{ mint: string; owner: string } | null>;
@@ -138,6 +139,7 @@ export function createRpcChain(rpcUrl: string, fetchImpl: typeof fetch = fetch):
   }
   return {
     genesisHash: () => call<string>("getGenesisHash", []),
+    finalizedSlot: async () => BigInt(await call<number>("getSlot", [{ commitment: "finalized" }])),
     finalizedTransaction: (signature) =>
       call<ParsedTransaction | null>("getTransaction", [signature, { commitment: "finalized", encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }]),
     async tokenAccount(address) {

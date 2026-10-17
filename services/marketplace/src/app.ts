@@ -12,6 +12,7 @@ import {
   listingVersionInputSchema,
   MARKETPLACE_LIMITS,
   paymentEvidenceRequestSchema,
+  payerBindingMessage,
   TEST_TOKEN_LABEL,
 } from "@veilo/contracts/marketplace";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
@@ -572,12 +573,24 @@ export function createApp(deps: Deps): Express {
     route(async (req) => {
       const ctl = await controller(req);
       const body = controllerStatusSchema.parse(req.body);
+      const operationId = z.string().max(128).parse(req.params.operationId);
+      let boundSlot: string | null = null;
+      if (body.payer !== null) {
+        const q = await db.admin.from("payment_operations").select("quote_id, quotes(quote_digest)").eq("operation_id", operationId).maybeSingle();
+        const digest = (q.data?.quotes as { quote_digest?: string } | null)?.quote_digest;
+        if (!digest) throw new MarketError("NOT_FOUND", "operation not found");
+        if (!(await verifyEd25519(body.payer, body.payerProof ?? "", payerBindingMessage(operationId, digest, body.payer)))) {
+          throw new MarketError("FORBIDDEN", "payer binding proof is invalid");
+        }
+        boundSlot = (await deps.chain.finalizedSlot()).toString();
+      }
       await db.rpc("mk_controller_status", {
         p_workspace: ctl.workspaceId,
-        p_operation: z.string().max(128).parse(req.params.operationId),
+        p_operation: operationId,
         p_status: body.status,
         p_detail: body.detail,
         p_payer: body.payer,
+        p_bound_slot: boundSlot,
       });
       return { status: body.status };
     }),

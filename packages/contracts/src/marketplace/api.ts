@@ -107,9 +107,20 @@ export const controllerStatusSchema = z
     status: z.enum(["paying", "uncertain", "failed_unpaid"]),
     detail: z.string().max(500).nullable(),
     payer: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).nullable().default(null),
+    /** Base58 Ed25519 signature by the payer key over payerBindingMessage; required with `payer`. */
+    payerProof: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{64,90}$/).nullable().default(null),
   })
   .strict()
-  .refine((s) => s.status !== "paying" || s.payer !== null, "paying status must name the payer");
+  .refine((s) => s.status !== "paying" || s.payer !== null, "paying status must name the payer")
+  .refine((s) => (s.payer === null) === (s.payerProof === null), "a payer must come with its proof");
+
+/**
+ * Signed by the one-time payer key itself, so a workspace can bind only a payer it controls. The
+ * domain prefix keeps this message distinct from any transaction or other Veilo signature.
+ */
+export function payerBindingMessage(operationId: string, quoteDigest: string, payer: string): string {
+  return `veilo:payer-binding:v1\n${operationId}\n${quoteDigest}\n${payer}`;
+}
 
 export const agentHireProposalSchema = z
   .object({

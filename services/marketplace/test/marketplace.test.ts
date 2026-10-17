@@ -173,7 +173,7 @@ describe("HTTP authentication happens before any data access", () => {
       },
     });
     const db = { admin: trap, asUser: () => trap, anon: () => trap, getUser: async () => null, rpc: async () => { touched.push("rpc"); throw new Error("rpc"); } } as unknown as Db;
-    const chain = { genesisHash: async () => config.genesisHash, finalizedTransaction: async () => null, tokenAccount: async () => null };
+    const chain = { genesisHash: async () => config.genesisHash, finalizedSlot: async () => 1n, finalizedTransaction: async () => null, tokenAccount: async () => null };
     const server = createApp({ db, chain, config, now: () => new Date() }).listen(0, "127.0.0.1");
     await new Promise((r) => server.once("listening", r));
     base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
