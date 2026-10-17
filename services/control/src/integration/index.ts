@@ -1,5 +1,9 @@
 import type { FundingProvider } from "@veilo/contracts";
 import type { Ledger } from "../context";
+import { MarketplaceBridge, type ChainIdentity } from "../marketplace/bridge";
+import type { MarketplaceClient } from "../marketplace/client";
+import type { ControllerIdentity } from "../marketplace/controller-identity";
+import type { SellerClients } from "../marketplace/seller-clients";
 import { Scheduler } from "../scheduler/scheduler";
 import type { GatewayClient } from "./gateway-client";
 import { PurchaseOrchestrator } from "./orchestrator";
@@ -9,20 +13,65 @@ export interface Integration {
   orchestrator: PurchaseOrchestrator;
   gateway: GatewayClient | undefined;
   scheduler: Scheduler;
+  /** Present only when MARKETPLACE_URL is configured. */
+  marketplace?: MarketplaceBridge | undefined;
+}
+
+export interface MarketplaceIntegrationOptions {
+  client: MarketplaceClient;
+  identity: ControllerIdentity;
+  sellers: SellerClients;
+  chain: ChainIdentity;
+  maxPaymentUnits: bigint;
+  pollMs?: number;
 }
 
 export function createIntegration(
   ledger: Ledger,
-  o: { gateway: GatewayClient | undefined; permits: PermitSigner | undefined; funding: FundingProvider; log?: (line: string) => void; leaseMs?: number; settleWaitMs?: number; purchaseSweepMs?: number },
+  o: {
+    gateway: GatewayClient | undefined;
+    permits: PermitSigner | undefined;
+    funding: FundingProvider;
+    log?: (line: string) => void;
+    leaseMs?: number;
+    settleWaitMs?: number;
+    purchaseSweepMs?: number;
+    marketplace?: MarketplaceIntegrationOptions | undefined;
+  },
 ): Integration {
-  const orchestrator = new PurchaseOrchestrator({ ledger, gateway: o.gateway, permits: o.permits, funding: o.funding, ...(o.settleWaitMs !== undefined ? { settleWaitMs: o.settleWaitMs } : {}) });
+  // The orchestrator's hooks reach the bridge, which is built from the orchestrator below.
+  const bridgeRef: { current?: MarketplaceBridge } = {};
+  const orchestrator = new PurchaseOrchestrator({
+    ledger,
+    gateway: o.gateway,
+    permits: o.permits,
+    funding: o.funding,
+    ...(o.marketplace ? { sellers: o.marketplace.sellers, onPayerKnown: (purchaseId: string, payer: string) => bridgeRef.current?.payerKnown(purchaseId, payer),
+          beforeRelease: (purchaseId: string) => bridgeRef.current?.beforeRelease(purchaseId) ?? Promise.resolve({ outcome: "ok" as const }),
+        } : {}),
+    ...(o.settleWaitMs !== undefined ? { settleWaitMs: o.settleWaitMs } : {}),
+  });
+  const marketplace = o.marketplace
+    ? new MarketplaceBridge({
+        ledger,
+        client: o.marketplace.client,
+        identity: o.marketplace.identity,
+        orchestrator,
+        policy: o.marketplace.sellers.policy,
+        chain: o.marketplace.chain,
+        maxPaymentUnits: o.marketplace.maxPaymentUnits,
+        ...(o.log ? { log: o.log } : {}),
+      })
+    : undefined;
+  if (marketplace) bridgeRef.current = marketplace;
   const scheduler = new Scheduler({
     ledger,
     gateway: o.gateway,
     orchestrator,
+    ...(marketplace ? { marketplace, marketplacePollMs: o.marketplace?.pollMs ?? 10_000 } : {}),
     ...(o.log ? { log: o.log } : {}),
     ...(o.leaseMs !== undefined ? { leaseMs: o.leaseMs } : {}),
     ...(o.purchaseSweepMs !== undefined ? { purchaseSweepMs: o.purchaseSweepMs } : {}),
   });
-  return { orchestrator, gateway: o.gateway, scheduler };
+  return { orchestrator, gateway: o.gateway, scheduler, marketplace };
 }

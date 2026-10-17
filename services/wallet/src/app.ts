@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { address, isAddress } from "@solana/kit";
 import { z } from "zod";
-import { baseUnits, fundingBindingWire, fundingRequestWire, healthReport, type ServiceHealth } from "@veilo/contracts";
+import { baseUnits, fundingBindingWire, fundingRequestWire, healthReport, payerBindingRequestWire, type ServiceHealth } from "@veilo/contracts";
 import { EncodingError } from "@veilo/privacy-sdk";
 import { ServiceCallError } from "./adapters";
 import { WalletError } from "./errors";
@@ -113,6 +113,11 @@ export function createApp(health: ServiceHealth, deps?: WalletAppDeps): Express 
   });
   app.get("/fundings/:purchaseId", service, async (req, res) => {
     res.json(wireFunding(await deps.funding.status(uuidParam(req, "purchaseId"))));
+  });
+  app.post("/fundings/:purchaseId/payer-binding", service, ready, async (req, res) => {
+    const b = parse(payerBindingRequestWire, req.body);
+    res.setHeader("Cache-Control", "no-store");
+    res.json(await deps.funding.signPayerBinding(uuidParam(req, "purchaseId"), b));
   });
   app.post("/fundings/:purchaseId/merchant-payment", service, ready, async (req, res) => {
     const b = parse(

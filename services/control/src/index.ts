@@ -18,6 +18,10 @@ import { UnavailableFundingProvider, WalletFundingProvider } from "./integration
 import { GatewayClient } from "./integration/gateway-client";
 import { integrationPaths, readSecret } from "./integration/paths";
 import { PermitSigner } from "./integration/permits";
+import { MarketplaceClient, marketplaceUrlProblem } from "./marketplace/client";
+import { ControllerIdentity } from "./marketplace/controller-identity";
+import { SellerOriginPolicy } from "./marketplace/origin-policy";
+import { SellerClients } from "./marketplace/seller-clients";
 import { expireLeases } from "./ledger/jobs";
 import { seedWorkspace } from "./ledger/workspace";
 
@@ -86,14 +90,37 @@ async function main(): Promise<void> {
     ? new WalletFundingProvider({ baseUrl: `http://${config.bindHost}:${config.ports.wallet}`, serviceToken: walletToken })
     : new UnavailableFundingProvider("CONTROL_SERVICE_CREDENTIAL_PATH is not configured; private funding is unavailable");
   console.log(`[${SERVICE}] private funding provider: ${funding.mode}`);
+  const list = (v: string | undefined) => (v ?? "").split(",").map((x) => x.trim()).filter((x) => x !== "");
   const msEnv = (name: string, fallback: number) => {
     const v = Number(process.env[name] ?? fallback);
     return Number.isInteger(v) && v >= 0 ? v : fallback;
   };
+  const marketplaceUrl = process.env.MARKETPLACE_URL?.trim();
+  let marketplace: Parameters<typeof createIntegration>[1]["marketplace"];
+  if (marketplaceUrl) {
+    const problem = marketplaceUrlProblem(marketplaceUrl);
+    if (problem) throw new VeiloConfigError("INVALID_CONFIG", problem);
+    const maxRaw = process.env.MARKETPLACE_MAX_PAYMENT_UNITS?.trim() || "1000000";
+    if (!/^[1-9][0-9]{0,18}$/.test(maxRaw)) throw new VeiloConfigError("INVALID_CONFIG", "MARKETPLACE_MAX_PAYMENT_UNITS must be a positive integer of base units");
+    const identity = ControllerIdentity.loadOrCreate(paths.controllerKey);
+    const policy = new SellerOriginPolicy({ localTestOrigins: list(process.env.MARKETPLACE_LOCAL_SELLER_ORIGINS) });
+    marketplace = {
+      client: new MarketplaceClient({ baseUrl: marketplaceUrl, identity }),
+      identity,
+      sellers: new SellerClients({ policy, tokenDir: paths.sellerAccountsDir }),
+      chain: { network: config.network.caip2, genesisHash: config.network.genesisHash, mint: config.network.mint, decimals: config.network.mintDecimals },
+      maxPaymentUnits: BigInt(maxRaw),
+      pollMs: msEnv("MARKETPLACE_POLL_MS", 10_000),
+    };
+    console.log(`[${SERVICE}] marketplace controller ${identity.keyId} polls ${new URL(marketplaceUrl).origin}`);
+  } else {
+    console.log(`[${SERVICE}] MARKETPLACE_URL is unset; marketplace hires are disabled`);
+  }
   const integration = createIntegration(ledger, {
     gateway,
     permits,
     funding,
+    marketplace,
     log: (l) => console.log(`[${SERVICE}] ${l}`),
     settleWaitMs: msEnv("CONTROL_PURCHASE_WAIT_MS", 120_000),
     purchaseSweepMs: msEnv("CONTROL_PURCHASE_SWEEP_MS", 15_000),

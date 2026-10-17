@@ -6,3 +6,4 @@ export * from "./tools";
 export * from "./runner-config";
 export * from "./agents";
 export * from "./funding";
+export * from "./marketplace";

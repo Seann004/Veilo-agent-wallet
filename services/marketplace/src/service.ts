@@ -143,11 +143,10 @@ export async function createHire(
  */
 export async function submitEvidence(deps: Deps, operationId: string, signature: string, jobId?: string): Promise<{ status: "settled" | "pending"; receiptId?: string }> {
   const { db } = deps;
-  const op = must(await db.admin.from("payment_operations").select("job_id, quote_id, status").eq("operation_id", operationId).maybeSingle(), "payment operation not found") as {
-    job_id: string;
-    quote_id: string;
-    status: string;
-  };
+  const op = must(
+    await db.admin.from("payment_operations").select("job_id, quote_id, status, expected_payer").eq("operation_id", operationId).maybeSingle(),
+    "payment operation not found",
+  ) as { job_id: string; quote_id: string; status: string; expected_payer: string | null };
   if (jobId && op.job_id !== jobId) throw new MarketError("FORBIDDEN", "operation belongs to another job");
   const quote = must(await db.admin.from("quotes").select("recipient, recipient_ata, mint, network, total_units").eq("id", op.quote_id).single()) as {
     recipient: string;
@@ -156,8 +155,18 @@ export async function submitEvidence(deps: Deps, operationId: string, signature:
     network: string;
     total_units: string | number;
   };
+  // Identical quotes share recipient and amount; only the payer the buyer's controller reported
+  // for this operation can settle it, so another buyer's payment cannot be claimed here.
+  if (op.expected_payer === null) return { status: "pending" };
   const tx = await deps.chain.finalizedTransaction(signature);
-  const outcome = checkTransfer(tx, { signature, mint: quote.mint, recipient: quote.recipient, recipientAta: quote.recipient_ata, amount: BigInt(String(quote.total_units)) });
+  const outcome = checkTransfer(tx, {
+    signature,
+    mint: quote.mint,
+    recipient: quote.recipient,
+    recipientAta: quote.recipient_ata,
+    amount: BigInt(String(quote.total_units)),
+    sourceOwner: op.expected_payer,
+  });
   if (outcome.status === "pending") return { status: "pending" };
   if (outcome.status === "invalid") throw new MarketError("SERVICE_NOT_ALLOWED", `settlement evidence rejected: ${outcome.reason}`);
   const t = outcome.transfer;

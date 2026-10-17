@@ -101,6 +101,19 @@ Every process serves `GET /health`.
 | `CONTROL_PURCHASE_WAIT_MS` | `120000` | How long a purchase request (worker intent, owner reconcile, Shawn check) keeps reconciling a pending chain outcome of the same operation before it replies. Waiting never authorizes, proves or signs anything new. |
 | `CONTROL_PURCHASE_SWEEP_MS` | `15000` | The scheduler reconciles every purchase with unresolved execution at most this often, so a withdrawal or payment that finalizes after its request returned still completes. |
 
+#### Marketplace controller (control)
+
+| Variable | Default | Description |
+|---|---|---|
+| `MARKETPLACE_URL` | empty | Marketplace base URL (https, or loopback http for tests). Unset: marketplace hires are disabled. Control only connects outbound; every controller request is signed. |
+| `MARKETPLACE_MAX_PAYMENT_UNITS` | `1000000` | Ceiling on any one marketplace payment, in test-USDC base units. Larger quotes are rejected locally. |
+| `MARKETPLACE_LOCAL_SELLER_ORIGINS` | empty | Comma-separated exact origins of local test sellers. Only these may use http or resolve to loopback/private addresses; every other seller origin must be a public https DNS name, re-resolved on every connection. |
+| `MARKETPLACE_POLL_MS` | `10000` | Payment-request polling interval. |
+| `CONTROL_CONTROLLER_KEY_PATH` | `<VEILO_SECRETS_DIR>/control/marketplace-controller.pem` | Ed25519 controller key (0600), generated on first start. Withheld from the runner. |
+| `CONTROL_SELLER_ACCOUNTS_DIR` | `<VEILO_SECRETS_DIR>/control/seller-accounts` | Per-seller-host account tokens (0600 files), created on first use through `POST /v1/accounts`. Withheld from the runner. |
+
+A cloud approval never authorizes spending. A payment request is paid only after a local owner approval bound to its operation, quote digest, recipient and total (`POST /marketplace/hires/:operationId/approve`), or when an owner-installed listing grant (`PUT /agents/:id/marketplace-allowlist`) matches a hire that this control service proposed for that agent. Before the pool proof is released, the wallet signs `payerBindingMessage` with the operation's fresh payer key (`POST /fundings/:purchaseId/payer-binding`, control credential only, refused after release), and control waits until the marketplace acknowledges that payer. A definitive refusal cancels the unreleased funding.
+
 `pnpm demo:seed` (requires `VEILO_OWNER_PUBKEY`) is idempotent. It seeds the workspace, the three agents with **draft** policies and the fixed catalog. It creates one shared gateway account and the integration secret files above, plus the runner's worker-credential file. If the gateway merchant and fee payer are configured, it binds the unbound services to that recipient. A rerun changes nothing and never issues credits. If the account exists but its token file is lost, it stops instead of creating a second account.
 
 Wallet note secrets and fresh-wallet keys use a separate SQLite file, `<VEILO_SECRETS_DIR>/wallet-secrets.sqlite`, which only the wallet service opens. The control ledger refuses to open it (role check) and refuses to live inside the secrets directory. The runner receives only `toRunnerConfig`: network, control URL, its own worker-credential path and planner model. Every path in `RUNNER_WITHHELD_ENV` is deleted from its environment: provider key, sponsor/funding/owner-secret key paths, other services' credentials, both database paths and the secrets directory.

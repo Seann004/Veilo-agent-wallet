@@ -12,7 +12,7 @@ import type { AddressInfo } from "node:net";
 import { generateKeyPair, getAddressFromPublicKey, getBase58Decoder, signBytes } from "@solana/kit";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DEVNET_GENESIS_HASH, DEMO_TOKEN_MINT, findRepoRoot, loadDotEnv } from "@veilo/contracts";
-import { CONTROLLER_HEADERS, controllerRegistrationMessage, controllerSigningMessage } from "@veilo/contracts/marketplace";
+import { CONTROLLER_HEADERS, controllerRegistrationMessage, controllerSigningMessage, payerBindingMessage } from "@veilo/contracts/marketplace";
 import { createApp } from "../../services/marketplace/src/app";
 import { deriveAta, type Chain, type ParsedTransaction } from "../../services/marketplace/src/chain";
 import type { MarketplaceConfig } from "../../services/marketplace/src/config";
@@ -75,22 +75,24 @@ const FIXTURE_SIG = "5".repeat(88);
 const FIXTURE_SIG_2 = "6".repeat(88);
 
 async function main() {
-  const [buyerA, buyerB, seller, controllerKey] = await Promise.all([wallet(), wallet(), wallet(), wallet()]);
+  const [buyerA, buyerB, seller, controllerKey, payerA, payerB] = await Promise.all([wallet(), wallet(), wallet(), wallet(), wallet(), wallet()]);
   const sellerAta = await deriveAta(seller.address, DEMO_TOKEN_MINT);
   const quoteTotals = new Map<string, bigint>();
   const fixtureChain: Chain = {
     genesisHash: async () => DEVNET_GENESIS_HASH,
+    finalizedSlot: async () => 10n,
     tokenAccount: async (a) => (a === sellerAta ? { mint: DEMO_TOKEN_MINT, owner: seller.address } : null),
     finalizedTransaction: async (sig) => {
       if (sig !== FIXTURE_SIG && sig !== FIXTURE_SIG_2) return null;
       const amount = [...quoteTotals.values()][0] ?? 0n;
       const tx: ParsedTransaction = {
-        slot: 1,
+        slot: 100,
+        blockTime: Math.floor(Date.now() / 1000),
         meta: { err: null, postTokenBalances: [{ accountIndex: 1, mint: DEMO_TOKEN_MINT, owner: seller.address }] },
         transaction: {
           message: {
             accountKeys: ["11111111111111111111111111111111", sellerAta],
-            instructions: [{ program: "spl-token", parsed: { type: "transferChecked", info: { destination: sellerAta, mint: DEMO_TOKEN_MINT, authority: buyerA.address, tokenAmount: { amount: amount.toString() } } } }],
+            instructions: [{ program: "spl-token", parsed: { type: "transferChecked", info: { destination: sellerAta, mint: DEMO_TOKEN_MINT, authority: payerA.address, tokenAmount: { amount: amount.toString() } } } }],
           },
         },
       };
@@ -238,6 +240,17 @@ async function main() {
 
     const accept = await signedCall("POST", `/controller/payment-requests/${hire.body.quote.operationId}/decision`, { decision: "accepted", code: null, controllerRef: "local-1" }, keyId);
     record("controller accepted the payment locally", accept.status === 200);
+    const early = await signedCall("POST", `/controller/payments/${hire.body.quote.operationId}/evidence`, { operationId: hire.body.quote.operationId, signature: FIXTURE_SIG }, keyId);
+    record("evidence before the payer is bound stays pending", early.status === 202);
+    const op1 = hire.body.quote.operationId as string;
+    const bind = async (op: string, digest: string, payer: Wallet, signer: Wallet = payer) =>
+      signedCall("POST", `/controller/payment-requests/${op}/status`, { status: "paying", detail: null, payer: payer.address, payerProof: await signer.sign(payerBindingMessage(op, digest, payer.address)) }, keyId);
+    const forged = await bind(op1, hire.body.quote.quoteDigest, payerA, buyerB);
+    record("binding a payer requires a signature by that payer's key", forged.status === 403);
+    const paying = await bind(op1, hire.body.quote.quoteDigest, payerA);
+    record("controller bound the one-time payer to the operation", paying.status === 200);
+    const rebind = await bind(op1, hire.body.quote.quoteDigest, payerB);
+    record("a bound payer cannot be replaced", rebind.status === 409);
     const preClaim = await call("POST", `/internal/seller-host/jobs/${jobId}/claim`, { token: managedHostToken });
     record("no execution lease before settlement", preClaim.status === 503);
 
@@ -248,13 +261,17 @@ async function main() {
 
     const hire2 = await call("POST", "/jobs", { token: A.token, body: { listingId: listing.body.listingId, brief: "Second job", idempotencyKey: `idem-${randomUUID()}` } });
     await call("POST", `/jobs/${hire2.body.jobId}/approve`, { token: A.token });
+    await signedCall("POST", `/controller/payment-requests/${hire2.body.quote.operationId}/decision`, { decision: "accepted", code: null, controllerRef: "local-2" }, keyId);
+    const steal = await bind(hire2.body.quote.operationId, hire2.body.quote.quoteDigest, payerA);
+    record("another operation cannot bind a payer that is already bound", steal.status === 409);
+    await bind(hire2.body.quote.operationId, hire2.body.quote.quoteDigest, payerB);
     const reuse = await signedCall("POST", `/controller/payments/${hire2.body.quote.operationId}/evidence`, { operationId: hire2.body.quote.operationId, signature: FIXTURE_SIG }, keyId);
-    record("one settlement signature cannot fund a second job", reuse.status === 409, `status ${reuse.status}`);
+    record("one settlement signature cannot fund a second job", reuse.status === 403 || reuse.status === 409, `status ${reuse.status}`);
 
     const claim = await call("POST", `/internal/seller-host/jobs/${jobId}/claim`, { token: managedHostToken });
     record("seller host claimed a lease after settlement", claim.status === 200);
-    const steal = await call("POST", `/internal/seller-host/jobs/${jobId}/claim`, { token: managedHostToken });
-    record("a second live lease is refused", steal.status === 503);
+    const secondLease = await call("POST", `/internal/seller-host/jobs/${jobId}/claim`, { token: managedHostToken });
+    record("a second live lease is refused", secondLease.status === 503);
     const text = "# Result\n\nFixture deliverable for the access-control test.\n";
     const artifactId = randomUUID();
     const envelope = {

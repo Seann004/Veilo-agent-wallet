@@ -8,6 +8,8 @@ export interface ExpectedTransfer {
   recipient: string;
   recipientAta: string;
   amount: bigint;
+  /** When set, the transfer must be authorized by this wallet (the payer bound to the operation). */
+  sourceOwner?: string | undefined;
 }
 
 export interface VerifiedTransfer {
@@ -18,6 +20,8 @@ export interface VerifiedTransfer {
   recipientAta: string;
   amount: bigint;
   slot: bigint;
+  /** Block time in seconds, as reported by the cluster; null when unavailable. */
+  blockTime: number | null;
 }
 
 export type ReceiptOutcome = { status: "verified"; transfer: VerifiedTransfer } | { status: "pending" } | { status: "invalid"; reason: string };
@@ -31,6 +35,7 @@ interface ParsedIx {
 // The JSON-RPC jsonParsed transaction shape; only the fields read below are typed.
 export interface ParsedTransaction {
   slot: number;
+  blockTime?: number | null;
   meta: {
     err: unknown;
     innerInstructions?: Array<{ index: number; instructions: ParsedIx[] }>;
@@ -75,6 +80,9 @@ export function checkTransfer(tx: ParsedTransaction | null, expected: ExpectedTr
   if (typeof rawAmount !== "string" || !/^\d+$/.test(rawAmount)) return { status: "invalid", reason: "transfer amount unreadable" };
   if (BigInt(rawAmount) !== expected.amount) return { status: "invalid", reason: "transfer amount differs from the quoted total" };
   const authority = info.authority ?? info.multisigAuthority;
+  if (expected.sourceOwner !== undefined && authority !== expected.sourceOwner) {
+    return { status: "invalid", reason: "transfer was not authorized by the expected payer" };
+  }
   return {
     status: "verified",
     transfer: {
@@ -85,6 +93,7 @@ export function checkTransfer(tx: ParsedTransaction | null, expected: ExpectedTr
       recipientAta: expected.recipientAta,
       amount: BigInt(rawAmount),
       slot: BigInt(tx.slot),
+      blockTime: tx.blockTime ?? null,
     },
   };
 }
@@ -96,6 +105,7 @@ export async function deriveAta(owner: string, mint: string): Promise<string> {
 
 export interface Chain {
   genesisHash(): Promise<string>;
+  finalizedSlot(): Promise<bigint>;
   /** Finalized parsed transaction, or null while it is not yet finalized or unknown. */
   finalizedTransaction(signature: string): Promise<ParsedTransaction | null>;
   tokenAccount(address: string): Promise<{ mint: string; owner: string } | null>;
@@ -129,6 +139,7 @@ export function createRpcChain(rpcUrl: string, fetchImpl: typeof fetch = fetch):
   }
   return {
     genesisHash: () => call<string>("getGenesisHash", []),
+    finalizedSlot: async () => BigInt(await call<number>("getSlot", [{ commitment: "finalized" }])),
     finalizedTransaction: (signature) =>
       call<ParsedTransaction | null>("getTransaction", [signature, { commitment: "finalized", encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }]),
     async tokenAccount(address) {

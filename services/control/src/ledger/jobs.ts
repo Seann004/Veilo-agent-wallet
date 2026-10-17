@@ -2,7 +2,7 @@ import { immediate } from "@veilo/db";
 import { num, optIso, iso, type Ledger } from "../context";
 import { ControlError } from "../errors";
 
-export type JobKind = "credit_check" | "research" | "content" | "reconcile";
+export type JobKind = "credit_check" | "research" | "content" | "reconcile" | "custom";
 export type JobState = "queued" | "leased" | "completed" | "failed" | "reconciling" | "cancelled";
 
 export interface JobRow {

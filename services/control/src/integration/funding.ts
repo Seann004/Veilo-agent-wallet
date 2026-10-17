@@ -1,11 +1,14 @@
 import {
   fundingResultWire,
   merchantSignResultWire,
+  payerBindingResultWire,
   type FundingProvider,
   type FundingRequest,
   type FundingResult,
   type MerchantSignRequest,
   type MerchantSignResult,
+  type PayerBindingRequest,
+  type PayerBindingResult,
 } from "@veilo/contracts";
 import type { FetchLike } from "./gateway-client";
 
@@ -105,6 +108,13 @@ export class WalletFundingProvider implements FundingProvider {
 
   async status(purchaseId: string): Promise<FundingResult> {
     return this.#funding(await this.#call("GET", `/fundings/${purchaseId}`, undefined), "recovery_required");
+  }
+
+  async signPayerBinding(q: PayerBindingRequest): Promise<PayerBindingResult> {
+    const r = await this.#call("POST", `/fundings/${q.purchaseId}/payer-binding`, { fundingRef: q.fundingRef, operationId: q.operationId, quoteDigest: q.quoteDigest });
+    if (!r.ok) return { status: "not_ready", reason: r.reason };
+    const parsed = payerBindingResultWire.safeParse(r.body);
+    return parsed.success ? parsed.data : { status: "not_ready", reason: "wallet service returned an unrecognized payer-binding state" };
   }
 
   async signMerchantPayment(q: MerchantSignRequest): Promise<MerchantSignResult> {
