@@ -41,8 +41,11 @@ export function useResource<T>(load: () => Promise<T>, key: string): Resource<T>
 /** Runs one owner action at a time and surfaces its backend error. */
 export function useAction(): { busy: boolean; error: ApiError | undefined; run: <T>(fn: () => Promise<T>) => Promise<T | undefined>; clear: () => void } {
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
   const [error, setError] = useState<ApiError>();
   const run = useCallback(async <T,>(fn: () => Promise<T>) => {
+    if (inFlight.current) return undefined;
+    inFlight.current = true;
     setBusy(true);
     setError(undefined);
     try {
@@ -51,6 +54,7 @@ export function useAction(): { busy: boolean; error: ApiError | undefined; run: 
       setError(asApiError(e));
       return undefined;
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }, []);

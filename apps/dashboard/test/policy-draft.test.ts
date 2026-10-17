@@ -30,4 +30,22 @@ describe("rule-based policy draft", () => {
     expect(draftPolicyFromText("ask me for approval", base).policy.tier).toBe("approval_required");
     expect(draftPolicyFromText("plan only", base).policy.tier).toBe("observe");
   });
+
+  it("distinguishes the 24-hour window from its money amount", () => {
+    for (const text of ["24 hour cap of 1 USDC", "24-hour cap of 1 USDC", "1 USDC per 24h", "rolling 24h cap of 0.25 USDC"]) {
+      const r = draftPolicyFromText(text, base);
+      expect(r.policy.rolling24hTestUsdc).toBe(text.includes("0.25") ? "250000" : "1000000");
+      expect(r.ignored).toEqual([]);
+    }
+  });
+
+  it("skips ambiguous ranges and unsupported windows without raising a limit", () => {
+    for (const text of ["daily cap 1 or 3 USDC", "daily cap -1 USDC", "daily cap 1,000 USDC", "3 hour rolling cap of 1 USDC", "-.5 per purchase", "−.5 per purchase"]) {
+      const r = draftPolicyFromText(text, base);
+      expect(r.policy).toEqual(base);
+      expect(r.understood).toEqual([]);
+      expect(r.ignored).toHaveLength(1);
+    }
+    expect(draftPolicyFromText(".5 per purchase", base).policy.maxPurchaseTestUsdc).toBe("500000");
+  });
 });

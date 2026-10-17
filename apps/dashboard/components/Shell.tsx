@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Wallet, WalletAccount } from "@wallet-standard/base";
 import { api, health as fetchHealth } from "../lib/api";
 import { shortKey } from "../lib/format";
@@ -85,10 +85,35 @@ export function Shell({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState<ConnectedWallet | null>(null);
   const [query, setQuery] = useState("");
   const [navOpen, setNavOpen] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  const sidebar = useRef<HTMLElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const navWasOpen = useRef(false);
   const collapsed = usePref("veilo.sidebar") === "collapsed";
   const [theme, toggleTheme] = useTheme();
   const signedIn = ws.data !== undefined && ws.error?.status !== 401;
   useEffect(() => setNavOpen(false), [pathname]);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 900px)");
+    const update = () => {
+      setMobile(media.matches);
+      if (!media.matches) setNavOpen(false);
+    };
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  useEffect(() => {
+    if (mobile && navOpen) closeButton.current?.focus();
+    else if (mobile && navWasOpen.current) menuButton.current?.focus();
+    else if (!mobile && document.activeElement === closeButton.current) sidebar.current?.querySelector("a")?.focus();
+    navWasOpen.current = navOpen;
+  }, [mobile, navOpen]);
+  const closeNavigation = () => {
+    setNavOpen(false);
+    menuButton.current?.focus();
+  };
 
   const badge = <DevnetBadge health={health.data} healthError={health.error} workspace={ws.data?.workspace} />;
   const inferenceLabel = (
@@ -137,13 +162,33 @@ export function Shell({ children }: { children: ReactNode }) {
         Skip to content
       </a>
       <div className={collapsed ? "app collapsed" : "app"}>
-        <aside id="sidebar" className={navOpen ? "sidebar open" : "sidebar"} aria-label="Workspace navigation">
+        <aside ref={sidebar} id="sidebar" className={navOpen ? "sidebar open" : "sidebar"} aria-label="Workspace navigation"
+          role={mobile ? "dialog" : undefined} aria-modal={mobile && navOpen ? true : undefined} inert={mobile && !navOpen}
+          onKeyDown={(e) => {
+            if (!mobile || !navOpen) return;
+            if (e.key === "Escape") {
+              e.preventDefault();
+              closeNavigation();
+            } else if (e.key === "Tab") {
+              const targets = [...(sidebar.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), [tabindex="0"]') ?? [])]
+                .filter((node) => node.getClientRects().length > 0);
+              const target = e.shiftKey ? targets.at(-1) : targets[0];
+              const edge = e.shiftKey ? targets[0] : targets.at(-1);
+              if (document.activeElement === edge) {
+                e.preventDefault();
+                target?.focus();
+              }
+            }
+          }}>
           <div className="sidebar-head">
             <Link href="/workspace" className="brand" aria-label="Veilo workspace">
               <span className="logo" aria-hidden="true" />
               <span className="brand-text">Veilo</span>
             </Link>
             <span className="sidebar-head-actions">
+              <button ref={closeButton} type="button" className="icon-btn menu-btn" aria-label="Close navigation" onClick={closeNavigation}>
+                <Icon name="close" />
+              </button>
               <Link href="/agents/new" className="icon-btn" aria-label="Create agent" title="Create agent">
                 <Icon name="plus" />
               </Link>
@@ -206,10 +251,10 @@ export function Shell({ children }: { children: ReactNode }) {
             </button>
           </div>
         </aside>
-        {navOpen ? <div className="sidebar-scrim" onClick={() => setNavOpen(false)} aria-hidden="true" /> : null}
-        <div className="app-main">
+        {navOpen ? <button type="button" className="sidebar-scrim" tabIndex={-1} aria-label="Close navigation" onClick={closeNavigation} /> : null}
+        <div className="app-main" inert={mobile && navOpen}>
           <header className="app-top">
-            <button type="button" className="icon-btn menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded={navOpen} onClick={() => setNavOpen(!navOpen)}>
+            <button ref={menuButton} type="button" className="icon-btn menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded={navOpen} onClick={() => setNavOpen(!navOpen)}>
               <Icon name={navOpen ? "close" : "menu"} />
             </button>
             <Link href="/workspace" className="brand top-brand">

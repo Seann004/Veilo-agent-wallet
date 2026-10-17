@@ -35,11 +35,11 @@ The large preview updates while editing. Reset restores the selected shape's ori
 ## Validation
 
 - `pnpm check`: passed using Node 22 and the pinned pnpm 10.34.6.
-- `pnpm test`: 44 test files passed, 1 skipped; 294 tests passed, 8 skipped. The first sandboxed attempt could not bind local test servers; the complete suite passed with local networking enabled.
+- `pnpm test`: final PR review passed 45 test files, 1 skipped; 302 tests passed, 8 skipped. The first sandboxed attempt could not bind local test servers; the complete suite passed with local networking enabled.
 - New tests cover legacy selection compatibility, role defaults, invalid stored data/SVG injection, independent choices, keyboard selection, persistence after remount and reset.
 - Browser: all eleven page routes at 1440×960 and 375×960 in light and dark mode (44 route/viewport/theme combinations). No horizontal overflow and no uncaught page errors.
 - Routes: `/`, `/marketplace`, `/workspace`, `/agents/new`, `/agents/asset-review` (dynamic detail route), `/market`, `/activity`, `/content`, `/wallet`, `/recovery`, `/privacy`.
-- **Coverage limit:** the control service was unreachable. Public pages were reviewed fully; owner routes were reviewed in their actual service-unavailable state. Authenticated owner content, expanded/collapsed sidebar and a real agent-detail page remain unverified. The dynamic route above does not imply an actual agent exists. No backend state, balances or results were fabricated for screenshots.
+- **Initial coverage limit:** the control service was unreachable during the asset-only pass. This was later superseded by the [final PR review](./pr-review.md): 96 page/navigation states against an actual disposable control backend, including authenticated default-agent detail pages and desktop/mobile navigation. Wallet/relayer unavailable states were checked; no paid-work or funded recovery run is claimed. No backend state, balances or results were fabricated for screenshots.
 - The actual avatar picker was separately rendered in an isolated review harness using the repository component and stylesheet, at both requested widths and themes. Keyboard selection, independent customization, local saving, reset and no overflow were confirmed in all four combinations. This does not substitute for a live authenticated owner flow.
 - Both light/dark asset contact sheets were inspected, including small-size eyes, silhouettes, wordmarks and favicon. The social card was inspected at its native size and at 300 px wide. All constrained file sizes and dimensions pass.
 

@@ -2085,16 +2085,20 @@ details > summary {
     z-index: 40;
     width: min(300px, 86vw);
     transform: translateX(-102%);
+    visibility: hidden;
     transition: transform 180ms ease;
     box-shadow: 0 0 40px rgba(0, 0, 0, 0.12);
   }
 
   .sidebar.open {
     transform: none;
+    visibility: visible;
   }
 
   .sidebar-scrim {
     display: block;
+    border: 0;
+    padding: 0;
     position: fixed;
     inset: 0;
     z-index: 30;

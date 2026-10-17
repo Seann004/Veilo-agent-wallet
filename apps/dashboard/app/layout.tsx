@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
+import { upstreamConfig } from "../lib/server/upstream";
 import "./globals.css";
 
 export const metadata = {
+  metadataBase: new URL(upstreamConfig().dashboardOrigin),
   title: "Veilo",
   description: "Budgeted agents that pay from a private pool on Solana devnet",
 };

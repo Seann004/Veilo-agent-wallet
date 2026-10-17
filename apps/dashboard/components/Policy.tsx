@@ -215,7 +215,12 @@ export function PolicyReview({ policy, workspacePolicy, title }: { policy: Polic
   const p = policy as Partial<Policy> & Partial<AgentPolicyInput>;
   const skus = p.permissions?.allowedSkus ?? p.allowedSkus ?? [];
   const paths = p.permissions?.allowedPaymentPaths ?? p.allowedPaymentPaths ?? [];
-  const role = (p.roleConfig ?? null) as AgentPolicyInput["roleConfig"] | null;
+  const role = p.roleConfig;
+  const topUp = role && typeof role.creditPackUnits === "string" && /^\d+$/.test(role.creditPackUnits)
+    && typeof role.creditLowWatermark === "string" && /^\d+$/.test(role.creditLowWatermark)
+    && typeof role.pollSeconds === "number" && Number.isSafeInteger(role.pollSeconds) && role.pollSeconds > 0
+    ? `Buy ${credits(role.creditPackUnits)} when below ${credits(role.creditLowWatermark)}; checks every ${role.pollSeconds} s`
+    : null;
     const ws = (v: string | null | undefined) => (workspacePolicy ? <span className="muted"> · workspace cap {usdc(v)}</span> : null);
     return (
       <div className="policy-compact">
@@ -230,8 +235,8 @@ export function PolicyReview({ policy, workspacePolicy, title }: { policy: Polic
             ["Can buy", skus.length ? skus.map(skuLabel).join(", ") : "Nothing"],
             ["Pays with", paths.length ? paths.map((x) => PATH_LABEL[x as keyof typeof PATH_LABEL] ?? x).join(", ") : "Nothing"],
             ["AI credits", `${credits(p.usageAllowanceUnits)} · ${credits(p.taskCreditUnits)} per task`],
-            ...(role
-              ? [["Top-up rule", `Buy ${credits(role.creditPackUnits)} when below ${credits(role.creditLowWatermark)}; checks every ${role.pollSeconds} s`] as [string, string]]
+            ...(topUp
+              ? [["Top-up rule", topUp] as [string, string]]
               : []),
           ]}
         />

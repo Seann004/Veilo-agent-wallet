@@ -90,7 +90,7 @@ export function ResearchForm({ agent, disabled, onQueued }: { agent: Agent; disa
       className="composer"
       onSubmit={(e) => {
         e.preventDefault();
-        if (question.trim() === "") return;
+        if (disabled || action.busy || question.trim() === "") return;
         void action.run(async () => {
           const list = sources
             .split(/\s+/)
@@ -120,7 +120,7 @@ export function ResearchForm({ agent, disabled, onQueued }: { agent: Agent; disa
           id={qid}
           rows={1}
           value={question}
-          disabled={disabled}
+          disabled={disabled || action.busy}
           placeholder={disabled ? `${agent.name} cannot take tasks right now` : `Ask ${agent.name} a research question`}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={submitOnEnter}
@@ -175,6 +175,7 @@ export function CampaignForm({ agent, disabled, handoffs, onQueued }: { agent: A
       noValidate
       onSubmit={(e) => {
         e.preventDefault();
+        if (disabled || action.busy) return;
         const empty = REQUIRED.filter(([k]) => f[k].trim() === "").map(([, label]) => label);
         setMissing(empty);
         if (empty.length > 0) {
@@ -212,7 +213,7 @@ export function CampaignForm({ agent, disabled, handoffs, onQueued }: { agent: A
           rows={1}
           required
           value={f.topic}
-          disabled={disabled}
+          disabled={disabled || action.busy}
           placeholder={disabled ? `${agent.name} cannot take tasks right now` : `Brief ${agent.name}: campaign topic`}
           onChange={(e) => set("topic")(e.target.value)}
           onKeyDown={submitOnEnter}

@@ -221,7 +221,10 @@ export function CreateAgent() {
           {missing ? <span className="small muted">{missing}</span> : <span />}
           <span className="actions">
             {step === "review" ? (
-              <button type="button" className="btn" onClick={() => setStep("edit")}>
+              <button type="button" className="btn" onClick={() => {
+                if (policy) setBase(policy);
+                setStep("edit");
+              }}>
                 Back
               </button>
             ) : null}

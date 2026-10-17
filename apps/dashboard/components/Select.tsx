@@ -29,18 +29,24 @@ export function Select<T extends string>({
   const [active, setActive] = useState(0);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const listbox = useRef<HTMLUListElement>(null);
   const autoId = useId();
   const listId = `${id ?? autoId}-list`;
   const current = options.find((o) => o.value === value) ?? options[0];
 
   useEffect(() => {
     if (!open) return;
+    listbox.current?.focus({ preventScroll: true });
     const onDown = (e: MouseEvent) => {
       if (!root.current?.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
+
+  useEffect(() => {
+    if (open) listbox.current?.querySelectorAll('[role="option"]')[active]?.scrollIntoView?.({ block: "nearest" });
+  }, [active, open]);
 
   const show = () => {
     setActive(Math.max(0, options.findIndex((o) => o.value === value)));
@@ -62,12 +68,16 @@ export function Select<T extends string>({
     if (e.key === "Escape") {
       e.preventDefault();
       setOpen(false);
+      trigger.current?.focus();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       setActive((i) => Math.min(options.length - 1, i + 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActive((i) => Math.max(0, i - 1));
+    } else if (e.key === "Home" || e.key === "End") {
+      e.preventDefault();
+      setActive(e.key === "Home" ? 0 : options.length - 1);
     } else if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       const o = options[active];
@@ -94,7 +104,7 @@ export function Select<T extends string>({
         <Icon name="chevron" size={16} />
       </button>
       {open ? (
-        <ul className="select-menu" role="listbox" id={listId} aria-label={label} aria-activedescendant={`${listId}-${active}`}>
+        <ul ref={listbox} tabIndex={-1} onKeyDown={onKey} className="select-menu" role="listbox" id={listId} aria-label={label} aria-activedescendant={options[active] ? `${listId}-${active}` : undefined}>
           {options.map((o, i) => (
             <li
               key={o.value}
@@ -102,7 +112,7 @@ export function Select<T extends string>({
               role="option"
               aria-selected={o.value === value}
               className={i === active ? "select-option active" : "select-option"}
-              onMouseEnter={() => setActive(i)}
+              onMouseMove={() => setActive(i)}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => pick(o.value)}
             >
