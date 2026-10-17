@@ -512,6 +512,39 @@ async function main() {
     const extGone = await anon.from("workflow_catalog").select("slug").eq("slug", wf2Slug);
     record("suspending a tool removes every workflow that uses it", (extGone.data?.length ?? 0) === 0);
 
+    // Higgsfield tools are sold only as workflow steps.
+    const hfSlug = `rls-hf-${randomUUID().slice(0, 8)}`;
+    const hfListing = await call("POST", "/seller/listings", { token: S.token, body: { slug: hfSlug } });
+    const hfVersion = await call("POST", `/seller/listings/${hfListing.body.listingId}/versions`, {
+      token: S.token,
+      body: {
+        title: "RLS fixture Higgsfield tool",
+        summary: "Fixture provider tool for the access-control test",
+        description: "Fixture provider tool for the access-control test; not a real service.",
+        runtimeKind: "remote_endpoint",
+        template: null,
+        remoteOrigin: "https://provider-tools.rls.veilo.invalid",
+        sellerInstructions: "",
+        inputSchema: { briefHint: "prompt", maxBriefChars: 2000 },
+        outputSchema: { format: "markdown", sections: [] },
+        priceBaseUnits: "10000",
+        payoutVersionId: payout.body.payoutVersionId,
+        turnaroundMinutes: 30,
+        refundTerms: "Seller-funded refund if nothing is delivered.",
+        dataHandling: "Prompt is sent to the provider.",
+        termsVersion: "2026-10-17",
+      },
+    });
+    const hfProfile = await call("POST", `/seller/versions/${hfVersion.body.versionId}/tool-profile`, {
+      token: S.token,
+      body: { toolKind: "provider_adapter", provider: "higgsfield", toolName: "generate_image", effect: "read_only", io: { inputs: [{ name: "prompt", kind: "text", required: true, maxChars: 2000 }], output: { kind: "image_url" } } },
+    });
+    await call("POST", `/seller/versions/${hfVersion.body.versionId}/submit`, { token: S.token });
+    await call("POST", `/operator/versions/${hfVersion.body.versionId}/review`, { token: operatorToken, body: { approve: true, note: "rls test" } });
+    const directHire = await call("POST", "/jobs", { token: A.token, body: { listingId: hfListing.body.listingId, brief: "a red bicycle", idempotencyKey: `direct-${randomUUID()}` } });
+    record("a Higgsfield tool cannot be hired on its own, only as a workflow step", hfProfile.status === 200 && directHire.status === 403, `profile ${hfProfile.status} hire ${directHire.status}`);
+    await call("POST", `/operator/listings/${hfListing.body.listingId}/status`, { token: operatorToken, body: { status: "archived" } });
+
     await call("POST", `/operator/listings/${listing.body.listingId}/status`, { token: operatorToken, body: { status: "archived" } });
   } finally {
     server.close();

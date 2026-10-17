@@ -23,6 +23,8 @@ export interface Deps {
 }
 
 const JOB_FILES = "job-files";
+/** Higgsfield's terms forbid acting as a pass-through with no added value, so it is never hired on its own. */
+const WORKFLOW_ONLY_PROVIDERS: ReadonlySet<string> = new Set(["higgsfield"]);
 
 interface CatalogRow {
   listing_id: string;
@@ -83,6 +85,11 @@ export async function createHire(
     ata: string;
   };
   if (version.network !== config.network || version.mint !== config.mint) throw new MarketError("WRONG_NETWORK", "listing is not on the configured devnet mint");
+  // Providers whose terms forbid a bare paid pass-through are sold only as steps of a workflow.
+  const tool = (await db.admin.from("tool_profiles").select("provider").eq("listing_version_id", catalog.listing_version_id).maybeSingle()).data as { provider: string | null } | null;
+  if (tool?.provider && WORKFLOW_ONLY_PROVIDERS.has(tool.provider) && !p.idempotencyKey.startsWith("wf:")) {
+    throw new MarketError("SERVICE_NOT_ALLOWED", `${tool.provider} tools are available only as a step of a workflow`);
+  }
   if ((await deriveAta(payout.address, version.mint)) !== payout.ata) throw new MarketError("SERVICE_NOT_ALLOWED", "payout token account mismatch");
   const endpoint = sellerEndpoint(config, catalog, version);
   const amounts = quoteAmounts(BigInt(String(version.price_base_units)));
