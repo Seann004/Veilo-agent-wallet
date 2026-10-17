@@ -114,9 +114,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <div className="signin-page">
         <header className="signin-top">
           <Link href="/" className="brand">
-            <span className="logo" aria-hidden="true">
-              ◆
-            </span>
+            <span className="logo" aria-hidden="true" />
             Veilo
           </Link>
           <span className="top-pills">
@@ -142,9 +140,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <aside id="sidebar" className={navOpen ? "sidebar open" : "sidebar"} aria-label="Workspace navigation">
           <div className="sidebar-head">
             <Link href="/workspace" className="brand" aria-label="Veilo workspace">
-              <span className="logo" aria-hidden="true">
-                ◆
-              </span>
+              <span className="logo" aria-hidden="true" />
               <span className="brand-text">Veilo</span>
             </Link>
             <span className="sidebar-head-actions">
@@ -217,9 +213,7 @@ export function Shell({ children }: { children: ReactNode }) {
               <Icon name={navOpen ? "close" : "menu"} />
             </button>
             <Link href="/workspace" className="brand top-brand">
-              <span className="logo" aria-hidden="true">
-                ◆
-              </span>
+              <span className="logo" aria-hidden="true" />
               Veilo
             </Link>
             {badge}

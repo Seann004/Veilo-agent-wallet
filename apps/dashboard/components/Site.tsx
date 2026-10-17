@@ -5,9 +5,7 @@ export function SiteNav({ current }: { current?: "marketplace" | undefined }) {
   return (
     <header className="site-nav">
       <Link href="/" className="brand">
-        <span className="logo" aria-hidden="true">
-          ◆
-        </span>
+        <span className="logo" aria-hidden="true" />
         Veilo
       </Link>
       <nav aria-label="Site">
@@ -41,9 +39,7 @@ export function SiteFooter() {
   return (
     <footer className="site-footer">
       <span>
-        <span className="logo" aria-hidden="true">
-          ◆
-        </span>{" "}
+        <span className="logo" aria-hidden="true" />{" "}
         Veilo · Solana devnet only · test-USDC, no real funds
       </span>
       <span>

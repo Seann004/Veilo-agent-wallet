@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { AVATARS, ROLE_AVATAR, avatarById, type AvatarOption } from "./avatar-options";
 import type { AgentRole } from "./types";
+import { resolveAvatar } from "./avatar-customization";
 
 export { AVATARS, ROLE_AVATAR, avatarById, type AvatarOption };
 
@@ -42,5 +43,5 @@ export function useAgentAvatar(agentId: string, role: AgentRole): AvatarOption {
     () => read(agentId),
     () => null,
   );
-  return avatarById(chosen) ?? avatarById(ROLE_AVATAR[role]) ?? AVATARS[0]!;
+  return resolveAvatar(chosen ?? ROLE_AVATAR[role]);
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useState } from "react";
 import { api } from "../lib/api";
 import { ROLE_AVATAR, avatarById, setAgentAvatar } from "../lib/avatars";
+import { resolveAvatar } from "../lib/avatar-customization";
 import { ROLE_LABEL } from "../lib/labels";
 import { ROLE_TAGLINE } from "../lib/roles";
 import type { Agent, AgentRole } from "../lib/types";
@@ -54,7 +55,7 @@ export function CreateAgent() {
     const r = new URLSearchParams(window.location.search).get("role");
     if (r && r in ROLE_TEMPLATES) chooseRole(r as AgentRole);
   }, []);
-  const preview = avatarById(avatarId);
+  const preview = resolveAvatar(avatarId);
   const trigger = role === "credit_manager" ? { type: "low_credit_balance", pollSeconds: Number(pollSeconds) } : { type: "owner_task" };
 
   if (created) {
