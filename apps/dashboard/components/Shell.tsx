@@ -62,6 +62,7 @@ const NAV: Array<[string, string, IconName, string[]]> = [
   ["/activity", "Activity", "activity", []],
   ["/content", "Content", "content", []],
   ["/wallet", "Wallet", "wallet", ["/recovery", "/privacy"]],
+  ["/settings", "Settings", "settings", []],
 ];
 
 const inSection = (pathname: string | null, href: string, also: string[]) => [href, ...also].some((h) => pathname?.startsWith(h));
