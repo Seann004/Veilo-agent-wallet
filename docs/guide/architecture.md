@@ -1,6 +1,8 @@
 # Architecture
 
-Veilo separates agent planning, financial authority, public-chain enforcement and paid-service delivery. The deployment model is single-owner and local, with distinct processes, credentials and secret access. Owners can create and configure agents; demo agents are examples of roles running within the same authority boundaries.
+**Verification scope:** see [current status](./status.md). M2 only is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The integrated devnet agent demo is **not yet run**.
+
+Veilo separates agent planning, financial authority, public-chain enforcement and paid-service delivery. The deployment model is single-owner and local, with distinct processes, credentials and secret access. These are application/process credential boundaries on a trusted owner host, not an OS sandbox against a compromised process. Owners can create and configure agents; demo agents are examples of roles running within the same authority boundaries.
 
 ## The architecture in plain language
 
@@ -40,13 +42,13 @@ import delivery from '../diagrams/service-delivery.mmd?raw'
 | x402 facilitator | Verify and settle standard exact SVM payment | Merchant leg only; distinct from the private-withdrawal relayer |
 | OpenRouter / data adapter | Bounded real inference or explicitly labeled research data | Provider availability and commercial funding are operator dependencies |
 
-## Proposed stack and source layout
+## Implemented stack and source layout
 
-TypeScript, Next.js dashboard, Express gateway, durable workers, SQLite WAL, Rust/Anchor pool program and Circom/snarkjs BN254 Groth16 proofs. Exact SDK versions and proof artifacts must be frozen by the implementation team.
+TypeScript, Next.js dashboard, Express gateway, durable workers, SQLite WAL, Rust/Anchor pool program and Circom/snarkjs BN254 Groth16 proofs. Versions are pinned in lockfiles and proof artifacts in `artifacts/circuits/manifest.json`; see [deployment](../deployment.md).
 
-| Intended path | Contents |
+| Source path | Contents |
 |---|---|
-| `apps/dashboard/` | Owner UI and authenticated control API |
+| `apps/dashboard/` | Owner UI and same-origin proxy to the control API |
 | `services/control/`, `services/runner/` | Policy, reservations, scheduler and restricted workers |
 | `services/wallet/`, `services/relayer/` | Private state, signing, proofs and public chain adapters |
 | `services/gateway/` | x402 routes, credit ledger and provider adapters |
@@ -55,7 +57,7 @@ TypeScript, Next.js dashboard, Express gateway, durable workers, SQLite WAL, Rus
 | `programs/privacy-pool/`, `circuits/` | On-chain program and spend/insert/exit circuits |
 | `tests/`, `scripts/`, `artifacts/` | Acceptance tests, operator commands and public artifact manifests |
 
-These are proposed paths, not files observed in this repository. Documentation has its own dependency manifest under `docs/` to avoid constraining the developer's application setup.
+These paths exist in the source snapshot. Documentation has its own dependency manifest and lockfile under `docs/`. The funded dashboard/browser-wallet flow remains **not yet run**; local UI checks are recorded separately in build status T14.
 
 ## Enforcement placement
 

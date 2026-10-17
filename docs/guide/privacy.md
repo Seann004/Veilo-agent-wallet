@@ -1,5 +1,7 @@
 # Privacy and trust
 
+**Verification scope:** see [current status](./status.md). M2 only is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The integrated devnet agent demo is **not yet run**.
+
 ## Intended protection
 
 A shared note-based pool aims to remove the **explicit mapping from a particular deposited note to a withdrawal**. A local proof authorizes the withdrawal without naming the spent deposit. A fresh wallet then pays the merchant through standard x402, and private change remains in the pool.
@@ -42,6 +44,8 @@ Funding privacy does not guarantee anonymity against every observer. Security de
 
 ## Cryptography and setup trust
 
+The current setup uses a deterministic local development powers-of-tau with public beacons. Its toxic waste is derivable: it is unsuitable for production funds. The development setup and unaudited verifier remain material trust risks even though M2 transactions finalized. See [known risks](../security/risks.md).
+
 The Solana proof design uses BN254 Groth16, matching Poseidon parameters and canonical encodings across TypeScript, Circom and Rust.
 
 The deployment manifest must pin circuit/compiler source, curve, hash parameters, public-input order, encoding/vector version, tree depths, proving/verifying-key hashes and setup provenance. Artifact mismatch stops proof generation. A malicious setup, buggy circuit/verifier or excessive upgrade authority can compromise funds/privacy.
@@ -54,7 +58,7 @@ Spend and public exit share one pool-scoped nullifier namespace. Bind withdrawal
 - Do not put agent names, workspace IDs or gateway account identifiers in chain memos, withdrawal accounts or proof public fields.
 - Minimize operator logs; redact secrets, authorization headers and private prompt content before evidence export.
 - Retain enough authenticated purchase/result state to reconcile ambiguous outcomes; disclose retention and clean up only after outstanding operations resolve.
-- Back up notes, change secrets, paths/rebuild data, fresh-wallet counters and pending operations with a consistent encrypted database snapshot.
+- Back up notes, change secrets, paths/rebuild data, fresh-wallet counters and pending operations with an encrypted snapshot. Wallet and control files are copied separately; quiesce writers for an operator snapshot and retain matching gateway state.
 
 The owner machine remains trusted. Local proof generation does not protect secrets from a compromised host.
 

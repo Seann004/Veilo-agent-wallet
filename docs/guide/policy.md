@@ -1,5 +1,7 @@
 # Policy and accounting
 
+**Verification scope:** see [current status](./status.md). M2 only is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The integrated devnet agent demo is **not yet run**.
+
 ## Permission tiers
 
 | Tier | Permitted behavior | Still prohibited |
@@ -9,11 +11,11 @@
 | Approval required | Request explicit owner approval for designated valid purchases | Using approval to bypass hard limits |
 | Stopped | Reconcile existing operations | Releasing new spending authority |
 
-Recovery and owner exit remain available through their separate authenticated paths. Editing policy is a distinct owner action. Natural-language policy edits produce editable posts until owner activation.
+Recovery and owner exit remain available through their separate authenticated paths. Editing policy is a distinct owner action. Structured policy changes create drafts that require owner activation. Natural-language policy drafting is not implemented.
 
 ## Authorization algorithm
 
-1. Authenticate the worker's bound workspace/agent/task scope; do not trust an agent ID supplied in JSON.
+1. Authenticate the worker's bound workspace/agent, and validate supplied task ownership; do not trust an agent ID supplied in JSON.
 2. Resolve the stable operation and immutable request/quote. Changed payload for the same operation conflicts before any payment.
 3. Validate service origin, gateway identity, SKU, network, mint, recipient and quote bounds.
 4. In a single `BEGIN IMMEDIATE` transaction, recheck limits, status, policy version and note availability; create the unique operation/reservation.

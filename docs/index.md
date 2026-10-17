@@ -2,6 +2,10 @@
 
 An owner-controlled workspace for AI agents that buy approved resources within delegated budgets, using a shared private funding pool on Solana devnet.
 
+## Current verification status
+
+Only the M2 pool/Echo smoke is **verified on devnet**. Integrated payments/recovery are **verified on local test validator**; Shawn, Prince and Mira use a **fixture / mock provider** in local rehearsal. The Veilo gateway devnet agent demo with live inference is **not yet run**. See [current status](./guide/status.md), [running Veilo](./guide/running.md), the [demo checklist](./guide/demo.md) and [handoff gaps](./handoff.md). The setup is deterministic and for development test funds only; this is not an audited or mainnet-ready system.
+
 ## What Veilo does
 
 Create agents that can buy approved digital resources and complete jobs within your rules. Give each agent a name, objective, trigger, budget and service permissions. The workspace combines useful agent work, independent spending controls and a private funding path.

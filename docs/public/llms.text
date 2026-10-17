@@ -2,22 +2,28 @@
 
 > Veilo is an owner-controlled AI agent workspace with delegated spending controls and a shared private funding pool on Solana devnet.
 
+Status: only the M2 pool/PayAI Echo run is verified on devnet. Integrated flows are verified on local test validator with a fixture / mock provider. The Veilo gateway devnet agent demo with live inference is not yet run. The deterministic development setup has derivable toxic waste and is for test funds only.
+
 Owners create and configure agents with their own names, jobs, triggers, budgets and approved services. Shawn, Prince and Mira are workflow examples, not a fixed list of agents. The model proposes resources; independent control and wallet services authorize purchases.
 
 The private flow aims to remove the explicit link from a particular deposited note to a payout. Fresh-wallet payments, merchants, amounts and timing remain public. Owners retain local agent attribution; the gateway can link authenticated usage. Do not infer universal anonymity, production readiness, deployed behavior or successful security tests from these documentation pages.
 
 ## Product documentation
 
+- [Current status](./guide/status.html): M2 devnet evidence, local validator/mock workflows and the pending live gate.
+- [Eight-step demo](./guide/demo.html): Operator commands, expected artifacts and explicit pending hashes/screenshots.
+- [Handoff gaps](./handoff.html): Owner decisions, publication boundaries and issues in deployment-owned files.
+- [Attribution](./references/attribution.html): Pinned architectural reference, direct reuse and unresolved license decisions.
 - [Overview](./): Product purpose, owner-created agents, user flow and benefits.
 - [Agent workflows](./guide/agents.html): Custom agents and example research, credit and content workflows.
 - [Architecture](./guide/architecture.html): Planning, policy, wallet, pool, settlement and service boundaries.
 - [Payment lifecycle](./guide/payments.html): Private funding, exact x402 payments, credits and reconciliation.
 - [Policy and accounting](./guide/policy.html): Permission tiers, atomic reservations, caps and revocation.
 - [Privacy and trust](./guide/privacy.html): Deposit linkage privacy, public metadata and off-chain visibility.
-- [Deployment and configuration](./guide/running.html): Service configuration, network guards and artifact manifests.
+- [Running Veilo](./guide/running.html): Application setup, proof builds, rehearsal, backup and documentation builds.
 - [Security model](./security/assessment.html): Authority separation, authentication and secret isolation.
 - [Trust and risk boundaries](./security/risks.html): Residual risks, assumptions and design responses.
-- [Verification requirements](./security/evidence.html): Acceptance scenarios; not a report of passed tests.
+- [Verification requirements](./security/evidence.html): Acceptance scenarios and narrowly mapped recorded local/devnet evidence.
 
 ## Complete context
 

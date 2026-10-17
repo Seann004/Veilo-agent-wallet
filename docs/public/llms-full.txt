@@ -2,22 +2,28 @@
 
 > Veilo is an owner-controlled AI agent workspace with delegated spending controls and a shared private funding pool on Solana devnet.
 
+Status: only the M2 pool/PayAI Echo run is verified on devnet. Integrated flows are verified on local test validator with a fixture / mock provider. The Veilo gateway devnet agent demo with live inference is not yet run. The deterministic development setup has derivable toxic waste and is for test funds only.
+
 Owners create and configure agents with their own names, jobs, triggers, budgets and approved services. Shawn, Prince and Mira are workflow examples, not a fixed list of agents. The model proposes resources; independent control and wallet services authorize purchases.
 
 The private flow aims to remove the explicit link from a particular deposited note to a payout. Fresh-wallet payments, merchants, amounts and timing remain public. Owners retain local agent attribution; the gateway can link authenticated usage. Do not infer universal anonymity, production readiness, deployed behavior or successful security tests from these documentation pages.
 
 ## Product documentation
 
+- [Current status](./guide/status.html): M2 devnet evidence, local validator/mock workflows and the pending live gate.
+- [Eight-step demo](./guide/demo.html): Operator commands, expected artifacts and explicit pending hashes/screenshots.
+- [Handoff gaps](./handoff.html): Owner decisions, publication boundaries and issues in deployment-owned files.
+- [Attribution](./references/attribution.html): Pinned architectural reference, direct reuse and unresolved license decisions.
 - [Overview](./): Product purpose, owner-created agents, user flow and benefits.
 - [Agent workflows](./guide/agents.html): Custom agents and example research, credit and content workflows.
 - [Architecture](./guide/architecture.html): Planning, policy, wallet, pool, settlement and service boundaries.
 - [Payment lifecycle](./guide/payments.html): Private funding, exact x402 payments, credits and reconciliation.
 - [Policy and accounting](./guide/policy.html): Permission tiers, atomic reservations, caps and revocation.
 - [Privacy and trust](./guide/privacy.html): Deposit linkage privacy, public metadata and off-chain visibility.
-- [Deployment and configuration](./guide/running.html): Service configuration, network guards and artifact manifests.
+- [Running Veilo](./guide/running.html): Application setup, proof builds, rehearsal, backup and documentation builds.
 - [Security model](./security/assessment.html): Authority separation, authentication and secret isolation.
 - [Trust and risk boundaries](./security/risks.html): Residual risks, assumptions and design responses.
-- [Verification requirements](./security/evidence.html): Acceptance scenarios; not a report of passed tests.
+- [Verification requirements](./security/evidence.html): Acceptance scenarios and narrowly mapped recorded local/devnet evidence.
 
 ## Complete context
 
@@ -25,9 +31,204 @@ The private flow aims to remove the explicit link from a particular deposited no
 
 ---
 
+# Evidence and current status
+
+Documentation checked against source snapshot `fe13778` and the recorded build status on 17 October 2026. These are recorded results, not a new execution of product tests or an independent audit. The PRD describes requirements; it is not evidence of completion.
+
+| Feature / environment | Status | Evidence and limits |
+|---|---|---|
+| M2 pool deposit, authenticated insertion, approved root, Groth16 withdrawal, change insertion and original/change public exits | **verified on devnet** | [M2 summary](https://github.com/Seann004/Veilo-agent-wallet/blob/fe13778/artifacts/evidence/m2-summary.json) and its eight companion files, recorded 16 October. Two synthetic participants; small set, no measured anonymity. |
+| M2 fresh-wallet merchant payment | **verified on devnet** | [Merchant record](https://github.com/Seann004/Veilo-agent-wallet/blob/fe13778/artifacts/evidence/m2-merchant.json): PayAI Echo, 10,000 base units; Echo refunds payments. The operator-confirmed smoke stands in for control authority. This was not the Veilo gateway, credit issuance or an autonomous agent run. |
+| Integrated private payments, credits, idempotency, cap races, revoke, crash recovery and backup/restore | **verified on local test validator** | [Integration report](https://github.com/Seann004/Veilo-agent-wallet/blob/fe13778/artifacts/evidence/integration-2026-10-17T00-36-54-669Z.json): 30 passed, 0 failed, 0 skipped. Separate services, on-chain Groth16 verification, self-hosted x402 facilitator; **fixture / mock provider** for inference. Local signatures are not devnet signatures. |
+| Shawn, Prince and Mira complete workflow rehearsal | **verified on local test validator**; **fixture / mock provider** | `docs/build-status.md` T11–T15 records `pnpm demo:run -- --local-rehearsal`, steps a–g. Rehearsal outputs live under ignored `work/demo-rehearsal/evidence/`; not bundled in this checkout. Research is fictional CC0 demo fixture data in either environment. |
+| Veilo gateway private devnet credit purchase, autonomous top-up, paid research/content with live bounded inference | **not yet run** | `pnpm demo:run -- --execute --confirm` remains the operator gate. A dry run is not a payment or provider call. Separate OpenRouter smoke evidence does not complete these workflows. |
+| Dashboard with funded devnet activity and browser-wallet signing | **not yet run** | T14 records local backend-driven UI checks and unfunded screenshots. A real extension sign-in/deposit/exit and funded screenshots remain outstanding. |
+| Policy/session/runner/program negative cases outside the integration report | **fixture / mock provider** where applicable; devnet acceptance **not yet run** | Unit, real-proof and LiteSVM results are recorded in [build status](../build-status.md). These are local checks, not a local test-validator run unless explicitly recorded as such. |
+
+Only the M2 evidence above is labeled **verified on devnet** here. Historical ordinary x402 and standalone provider smoke files are separate baselines; neither proves the integrated agent demo. No page claims audit, mainnet readiness, proof-enforced budgets or metadata anonymity.
+
+## Sources of truth
+
+- [Build status](../build-status.md) owns task/gate history; stale historical phrases are listed in the [handoff](../handoff.md).
+- [Security evidence](../security/evidence.md) maps recorded checks to acceptance cases.
+- [Demo script](./demo.md) lists the eight operator steps and missing evidence.
+- [Deployment](../deployment.md), [configuration](../configuration.md) and [protocol](../protocol.md) describe executable setup and the implemented algorithms.
+
+The owner-controlled host remains trusted. Deposits, amounts, fresh payout wallets, merchant transfers, fees and timing are public. Removing an explicit spent-note identifier is narrower than anonymity; see [privacy](./privacy.md).
+
+---
+
+# Eight-step demo and evidence checklist
+
+**Status:** integrated devnet agent demo **not yet run**. Local rehearsal is **verified on local test validator** with a **fixture / mock provider**. Only the separate M2 pool/Echo smoke is **verified on devnet**. Do not fill this checklist with local-validator signatures or historical Echo transactions.
+
+## Prepare once
+
+Follow [running Veilo](./running.md) and [deployment](../deployment.md), including manifest-compatible proof files. Configure the funded demo owner (`FUNDING_KEY_PATH`), sponsor, approval authority, gateway merchant/ATA and devnet facilitator; configure the operator-funded provider and ceiling locally. No secret belongs in evidence.
+
+```sh
+pnpm demo:run
+# When readiness passes, run all steps below in one resumable execution:
+pnpm demo:run -- --execute --confirm
+# After completion:
+pnpm evidence:export
+```
+
+`demo:run` starts isolated backend services on ports 4701–4705, with dashboard Origin `http://localhost:4700`; it does not launch a dashboard. Run state is `work/demo/devnet-state.json`. Preserve it and rerun the same execute command after interruption; do not delete it to force a retry. The script activates seeded policies, changes Mira's limit, revokes Prince and exits change: review this plan before execution.
+
+For UI recording, connect a dashboard to the same run's service ports, owner and Origin. The generated non-provider configuration is `work/demo/devnet/<runId>/demo.env`; launch the dashboard from the repository root with `VEILO_ENV_FILE=work/demo/devnet/<runId>/demo.env pnpm --filter @veilo/dashboard dev` (POSIX shell; set the environment variable separately in PowerShell). The backend processes stop when the script completes; later screenshots require restarting those same databases/credentials. Do not record an empty default workspace as if it were the funded run. Browser extension signing is still **not yet run**; the script signs with owner-local key files.
+
+Evidence root: `artifacts/evidence/demo-<runId>/` (currently absent). In the steps below, names such as `steps.b-shawn-topup` identify JSON keys, not additional commands. Every **TODO** is intentionally unfilled until the operator run and evidence review.
+
+## 1. Show network, pool, membership and policies
+
+**Action:** read-only `pnpm demo:run`; during execution inspect `0-policies` and `a-deposits`. Show the dashboard network/privacy views and three policy cards if connected to this run. Three deposits in the integrated demo belong to one owner; M2's two participants were synthetic. Neither is a measured anonymity set.
+
+**Expected evidence:** deployment/circuit manifests, `summary.json` network/program/pool, `steps.0-policies`, deposits and approvals; public amounts and small-set warning.
+
+**TODO — demo deployment/approval/deposit transaction hashes:** pending operator run. **TODO — screenshot 01:** network, pool limitations and three active policies.
+
+## 2. Show Shawn below threshold and check now
+
+**Action:** `b-shawn-topup` reads zero usable credits (<200,000), resumes Shawn and calls authenticated `POST /agents/:id/run`; the dashboard equivalent is Shawn's “Check now.” The scheduled and manual checks use the same deterministic logic.
+
+**Expected evidence:** `summary.json` → `steps.b-shawn-topup.creditsBefore`, plus purchase/episode state and the post-check balance. The script records the manual invocation; do not call that alone proof of an unattended scheduled execution.
+
+**TODO — screenshot 02:** low balance and the check/episode. **TODO — unattended scheduler evidence:** record a scheduler-triggered top-up separately if submission claims genuine autonomous execution.
+
+## 3. Show proof funding, x402 and one issuance
+
+**Action:** wait for `b-shawn-topup` to deliver the credit pack. Show the purchase's funding and merchant legs, fresh payer and exactly one 1,000,000-unit issuance. The merchant here must be the Veilo gateway; PayAI is the facilitator. M2 used Echo instead.
+
+**Expected evidence:** `steps.b-shawn-topup.purchase`, `ledger.json` purchase `chainAttempts`/states and credits before/after; deployment/key hashes in the export.
+
+**TODO — Shawn withdrawal and gateway settlement hashes:** pending operator run. **TODO — screenshot 03:** purchase drawer and one issuance.
+
+## 4. Run Prince research
+
+**Action:** `c-prince-research` submits the task to the runner. Inspect the approved fixed-price research choice, prepaid `analyze` usage (or explicitly recorded permitted per-call fallback) and saved cited brief.
+
+**Expected evidence:** task/purchases in `ledger.json`, `steps.c-prince-research`, `inference-receipts.json`, and `artifacts/research_brief-*.md`. Sources remain fictional CC0 demo fixture data even when inference is live. Provider receipts must say live/operator-funded; fixture output cannot meet this gate.
+
+**TODO — Prince withdrawal/merchant hashes and live inference receipt:** pending operator run. **TODO — screenshot 04:** approved service, categorized usage and attributable brief.
+
+## 5. Approve handoff and run Mira
+
+**Action:** `d-handoff-mira` approves `POST /handoffs/:id/decision` then starts Mira. Dashboard equivalents are handoff approval and the campaign form. Inspect the **direct private x402** `content-package` purchase, three editable drafts and seven-day calendar. No social publishing is authorized.
+
+**Expected evidence:** `steps.d-handoff-mira`, direct payment in `ledger.json`, live receipt, `artifacts/content_draft-*.md` and `artifacts/content_calendar-*.json`. Distinguish direct USDC spend, credits consumed and sponsored planning costs.
+
+**TODO — Mira withdrawal/merchant hashes and live inference receipt:** pending operator run. **TODO — screenshot 05:** approved handoff, direct purchase, drafts and calendar.
+
+## 6. Repeat a logical purchase
+
+**Action:** `e-duplicate-check` repeats Prince's stable research intent and Shawn's check. Inspect the same purchase ID and zero new purchases; confirm neither settlement nor service execution duplicated. A skipped research repeat is a failed recording gate, not a pass.
+
+**Expected evidence:** `steps.e-duplicate-check` (`samePurchase`, `newPurchases`), unchanged chain-attempt/payment/issuance counts. Local IDEM-01/X402-03/04 fault tests support deeper replay behavior; they remain local evidence.
+
+**TODO — duplicate outcome / no-new-payment comparison:** pending operator run. **TODO — screenshot 06:** same operation/result and unchanged counters. No new signature is expected.
+
+## 7. Reject concurrent over-budget requests and revoke independently
+
+**Action:** `f-over-budget-and-revoke` lowers Mira's remaining allowance below a package, sends two concurrent requests and requires both rejected. It revokes Prince and attempts another worker tool call. This differs from the local CAP-02 final-allowance race, which tests that only fitting exposure is admitted.
+
+**Expected evidence:** `steps.f-over-budget-and-revoke.overBudget`, revoke result and `afterRevoke`; no additional released authority. Pause/revoke cannot cancel a proof/signature already released; show live exposure if present.
+
+**TODO — concurrent rejection / revoked-worker response:** pending operator run. **TODO — screenshot 07:** independent agent stop and limits. No payment signature is expected for denied work.
+
+## 8. Owner exit and recovery, with privacy warning
+
+**Action:** `g-owner-exit` prepares, signs/registers and finalizes a public exit of the largest spendable change note to the owner. Show the warning before signing. Public exit may reveal label/value and aggregate spending by subtraction.
+
+**Expected evidence:** `steps.g-owner-exit`, `summary.json.exit` and the owner's resulting public balance. It exits one change note, not every remaining note, and does not demonstrate funded-wallet recovery.
+
+**TODO — integrated owner-exit hash:** pending operator run. **TODO — screenshot 08:** warning, finalized exit and remaining funds.
+
+For a separate funded-wallet recovery demonstration, use the dashboard Recovery Center only after the existing merchant authority is settled or proven expired, prepare/confirm recovery to the configured owner destination and record its outcome. `demo:run` does not create this scenario. Local REC-03/REV-01/BAK-01 supply existing recovery evidence; M2 records original/change public exits separately.
+
+**TODO — funded-wallet recovery hash and screenshot 09:** separate operator scenario, if claimed. Never fabricate a recovery to fill this field.
+
+## Freeze and review
+
+Export with `pnpm evidence:export`. Retain the exact source commit, lockfile hashes, circuit/setup manifest, UTC execution time and reviewer. Inspect `summary.json`, `ledger.json`, `inference-receipts.json`, useful output artifacts, negative outcomes and screenshots together. The exporter supplies artifact hashes but does not currently attach a source Git commit; add it to the submission record.
+
+The exporter currently adds devnet explorer URLs to every signature it finds, including local integration records. Use each source file's environment to classify it; local signatures do not become devnet evidence. See [handoff gaps](../handoff.md). Secret scanning is useful but does not review private prompts or screenshot contents. Keep notes, witnesses, key files, credentials, decryption roots and encrypted backups owner-local.
+
+---
+
+# Handoff and submission gaps
+
+Documentation prepared against source snapshot `fe13778` on 17 October 2026. [Current status](./guide/status.md), [demo checklist](./guide/demo.md) and [security evidence](./security/evidence.md) are the public record. T16 materials are prepared; final fresh-operator/live-inference acceptance remains open while T15's devnet demo is **not yet run**.
+
+## Pending operator evidence
+
+Run `pnpm demo:run -- --execute --confirm` after readiness/configuration, then `pnpm evidence:export`. Fill the demo checklist's deposit/approval, Shawn, Prince, Mira and exit hashes; attach live inference receipts, research brief, drafts/calendar, duplicate/rejection outcomes and funded dashboard screenshots. Record unattended scheduler execution separately if claiming autonomous top-up: the script explicitly invokes “Check now.” A funded-wallet recovery scenario is separate from the script's public exit.
+
+Attach tested source commit, UTC time, reviewer, lockfile/artifact hashes and every failure/skip. Existing integration JSON records program hash and environment, not the tested Git commit. Existing M2 is a separate synthetic-participant pool/Echo run and cannot fill agent gateway placeholders.
+
+## Issues in files owned by the deployment/build agent
+
+These were observed but deliberately not edited:
+
+- `docs/build-status.md`: T04's early “no signature” blocker precedes an appended successful operator payment. T08 still says no devnet run, while T09's M2 evidence exists. T09 retains “nothing signed,” “remaining operator commands” and “uncommitted fix” history beside its completed run. T11's old root typecheck failure conflicts with T15's later clean check. The T16 row is still not-started and should be updated by its owner after this handoff, without marking the unmet live gate passed. Environment notes describe the historical Windows verification host, not every checkout.
+- `docs/deployment.md`: initial program-ID/keypair notes mix placeholder/build identities and say the deployment identity is created by `deploy:devnet`, though `keys:init` creates it. Fresh operators cannot assume “already run” keys, `.env` or funding-wallet files exist. Historical deployment budget/default-rent measurements and expected “not deployed” dry-run output must be read alongside the later live M2 record, not as current chain state.
+- `docs/deployment.md` / setup: `setup:local` creates an encryption root only when its path is configured, and does not generate service credentials. The [running guide](./guide/running.md) supplies a fresh manual-stack procedure. The isolated demo creates its own credentials and uses different ports/databases.
+- `docs/deployment.md` / backups: each SQLite file is backed up separately; the backup implementation does not establish a simultaneous transaction across control and wallet databases or include the gateway ledger. Quiesce writers for an operator snapshot, retain matching gateway state/credentials and reconcile; do not describe it as a complete multi-service restore without that evidence.
+
+## Issues in scripts and dependencies outside this documentation scope
+
+- `scripts/evidence-export.ts` collects signatures from local `integration-*.json` and assigns devnet explorer links to all of them. Source-file environment labels are authoritative; the aggregate signature index is not a devnet register. It also lacks a source Git commit field.
+- `scripts/demo-run.ts` drives backend services and stops them on completion. It launches no dashboard and does not verify browser-wallet signing. Its manual Shawn trigger does not alone prove unattended scheduling. It demonstrates public exit, not funded-wallet recovery.
+- `groth16-solana` 0.2.0 metadata says MIT, but the published crate's license file is Apache-2.0. Build status T06 calls it MIT without mentioning this discrepancy. Resolve with upstream before a release; see [license map](./references/attribution.md).
+
+## Owner decisions
+
+- Select Veilo's project license, review GPL component distribution and resolve the verifier license discrepancy. `NOTICE` preserves attribution and assigns no project license.
+- Confirm organizer acceptance of Solana devnet, reference reuse and screenshot/presentation limits. A short presentation/video and final organizer sign-off are not supplied by this documentation pass.
+- Choose which internal submission deliberations, private prompts, research objectives and screenshots may be public. Tracked `internal/` files are readable in a public repository; their name offers no confidentiality. The four draft Markdown files now point to canonical public documents; the stale all-not-run CSV was removed and the JSON record remains an explicitly unfilled template.
+- Approve concrete sanitized submission outputs after the operator run. Automated scanning does not determine whether prompts, task objectives or screenshots contain confidential content. Keep raw logs, notes/witnesses, credentials, key files, encryption roots and encrypted backups owner-local.
+
+---
+
+# Source provenance and license map
+
+Reviewed 17 October 2026 against source snapshot `fe13778`, PRD Part VI and the exact published dependency archives noted below. Root `NOTICE` retains the complete zx402 MIT notice; it does not license all of Veilo. **Owner decision: select Veilo's own license.** No root `LICENSE` has been added.
+
+## Architecture and adapted invariants
+
+[zx402](https://github.com/Marcussy34/zx402/tree/9da88d099bb1ad28c0de3e2b0b7e15e2a1fd198d), by Marcus Tan, is the architectural reference pinned by PRD sections 18/23 and Part VI. That local corpus includes its MIT license, copyright 2026 Marcus Tan. Its pooled-note/spend/insert/public-exit flow, private change, fresh-payer x402 and privacy/trust explanations inform Veilo's circuits, privacy SDK, wallet/relayer and guides. The adaptation changes Cardano/BLS12 to Solana accounts/BN254 and adds delegated policies, shared credits and durable multi-agent workflows.
+
+The source map is PRD section 23: `circuits/src/{spend,insert,ragequit}.circom`, `packages/crypto`, `packages/sdk/src/{sdk,x402}.ts` and the reference privacy/payment/trust guides. Veilo's counterparts are `circuits/src/{spend,insert,exit}.circom`, `packages/privacy-sdk`, `packages/x402-client`, `services/{wallet,relayer}` and the public guides. This is a reference/adaptation map, not proof of which lines were copied. The companion upstream archive was not present in this worktree; the MIT notice was checked against the embedded corpus. Retain notices if additional reused files are identified.
+
+Privacy Pools is acknowledged as architectural lineage; this checkout does not identify directly vendored Privacy Pools contracts. zx402's Cardano transactions and performance claims must never be presented as Veilo Solana evidence.
+
+## Direct reuse and tooling
+
+| Source / pinned version | Use in Veilo | License evidence |
+|---|---|---|
+| [circomlib 2.0.5](https://github.com/iden3/circomlib/tree/v2.0.5) | Circuit Poseidon, bit decomposition/comparators | Exact [npm archive](https://registry.npmjs.org/circomlib/-/circomlib-2.0.5.tgz) declares `GPL-3.0`; `bitify.circom` / `comparators.circom` carry 0KIMS 2018 GPL v3-or-later headers. Do not substitute the current default branch's LGPL text. |
+| [circomlibjs 0.1.7](https://github.com/iden3/circomlibjs/blob/v0.1.7/package.json) | Privacy SDK Poseidon and vectors | Exact npm archive and package declaration: `GPL-3.0`. |
+| [snarkjs 0.7.6](https://github.com/iden3/snarkjs/blob/v0.7.6/COPYING) | Proving/setup in circuits and privacy SDK | Exact npm archive includes GPL v3 `COPYING`; package declares `GPL-3.0`. |
+| [circom 2.2.3](https://github.com/iden3/circom/blob/v2.2.3/COPYING) | Docker circuit compiler | GPL v3 `COPYING`. |
+| [groth16-solana 0.2.0](https://crates.io/crates/groth16-solana/0.2.0) | On-chain BN254 verifier in `programs/veilo-crypto` | Exact [crate archive](https://crates.io/api/v1/crates/groth16-solana/0.2.0/download): Cargo metadata says MIT; bundled `LICENSE` says Apache-2.0. **Unresolved discrepancy**, not established dual licensing. |
+| [x402 Foundation SDK](https://github.com/x402-foundation/x402/blob/main/LICENSE), 2.28.0 | `@x402/core`, SVM/HTTP adapters; payment validation and local facilitator | Exact `@x402/core` 2.28.0 npm metadata: Apache-2.0, consistent with upstream license. Preserve notices for each distributed package. |
+| Original Veilo research fixture | `services/gateway/fixtures/research/records.json` | CC0-1.0 dedication in that directory's `LICENSE.md`; Harbourview/figures/organizations are fictional. |
+
+Dependencies are consumed through manifests/lockfiles, not relicensed by `NOTICE`. This table targets reused protocol/crypto sources; it is not a complete SBOM or distribution clearance. Frontend, service, Rust, Docker and transitive packages retain their own notices and must be inventoried for an actual release. The owner must resolve the verifier discrepancy and review GPL distribution obligations before selecting a project license or bundling the prover.
+
+## External service dependencies
+
+PayAI Echo and the facilitator, Solana devnet/RPC and OpenRouter are remote services, not code relicensed here. Operators need their own working accounts/quotas, test assets and role keys. The gateway operator pays commercial inference separately; research demo data is not live search. Competition acceptance of devnet transactions and reuse remains an organizer question.
+
+---
+
 # Veilo documentation
 
 An owner-controlled workspace for AI agents that buy approved resources within delegated budgets, using a shared private funding pool on Solana devnet.
+
+## Current verification status
+
+Only the M2 pool/Echo smoke is **verified on devnet**. Integrated payments/recovery are **verified on local test validator**; Shawn, Prince and Mira use a **fixture / mock provider** in local rehearsal. The Veilo gateway devnet agent demo with live inference is **not yet run**. See [current status](./guide/status.md), [running Veilo](./guide/running.md), the [demo checklist](./guide/demo.md) and [handoff gaps](./handoff.md). The setup is deterministic and for development test funds only; this is not an audited or mainnet-ready system.
 
 ## What Veilo does
 
@@ -90,7 +291,11 @@ The model proposes work. An independent wallet/control service authorizes money.
 
 # Agent workflows
 
+**Verification scope:** see [current status](./status.md). M2 only is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The integrated devnet agent demo is **not yet run**.
+
 ## Owner-created agents
+
+Creation/configuration is implemented through owner control routes. Execution uses the credit-manager, research and content role templates; it is not an arbitrary agent runtime. New research/content agents also need scoped worker credentials in the runner configuration; `demo:seed` initially provisions the seeded Prince/Mira roles. Natural-language policy drafting is not implemented.
 
 Owners create and configure agents with their own names, jobs, triggers, budgets and service permissions. The examples below demonstrate three useful workflows; they do not limit the agents an owner can create. Each agent operates within its configured tools and services and the workspace's shared financial limits.
 
@@ -108,7 +313,7 @@ The owner supplies the question, optional sources and deadline. Prince proposes 
 
 ## Mira — content creation
 
-The owner supplies topic, audience, channels, voice and deliverables, or explicitly approves a Prince handoff. Mira chooses an approved content SKU and, in this example workflow, pays directly through the private devnet x402 path. Real operator-funded inference produces three editable channel-specific posts and a seven-day calendar.
+The owner supplies topic, audience, channels, voice and deliverables, or explicitly approves a Prince handoff. Mira chooses an approved content SKU and, in this example workflow, pays directly through the private devnet x402 path. The local rehearsal uses a **fixture / mock provider** to produce three editable channel-specific posts and a seven-day calendar. Operator-funded live inference with the direct devnet content payment is **not yet run**.
 
 Track editable, needs review, approved for export and archived. Editing, approving or changing a planning date does not buy inference. Regeneration is a new budgeted operation. The current scope has no social credentials or publishing tool.
 
@@ -122,7 +327,9 @@ A model refusal is not a financial control. Malicious retrieved text remains unt
 
 # Architecture
 
-Veilo separates agent planning, financial authority, public-chain enforcement and paid-service delivery. The deployment model is single-owner and local, with distinct processes, credentials and secret access. Owners can create and configure agents; demo agents are examples of roles running within the same authority boundaries.
+**Verification scope:** see [current status](./status.md). M2 only is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The integrated devnet agent demo is **not yet run**.
+
+Veilo separates agent planning, financial authority, public-chain enforcement and paid-service delivery. The deployment model is single-owner and local, with distinct processes, credentials and secret access. These are application/process credential boundaries on a trusted owner host, not an OS sandbox against a compromised process. Owners can create and configure agents; demo agents are examples of roles running within the same authority boundaries.
 
 ## The architecture in plain language
 
@@ -156,13 +363,13 @@ This separates decision-making from financial authority: a model proposing a pur
 | x402 facilitator | Verify and settle standard exact SVM payment | Merchant leg only; distinct from the private-withdrawal relayer |
 | OpenRouter / data adapter | Bounded real inference or explicitly labeled research data | Provider availability and commercial funding are operator dependencies |
 
-## Proposed stack and source layout
+## Implemented stack and source layout
 
-TypeScript, Next.js dashboard, Express gateway, durable workers, SQLite WAL, Rust/Anchor pool program and Circom/snarkjs BN254 Groth16 proofs. Exact SDK versions and proof artifacts must be frozen by the implementation team.
+TypeScript, Next.js dashboard, Express gateway, durable workers, SQLite WAL, Rust/Anchor pool program and Circom/snarkjs BN254 Groth16 proofs. Versions are pinned in lockfiles and proof artifacts in `artifacts/circuits/manifest.json`; see [deployment](../deployment.md).
 
-| Intended path | Contents |
+| Source path | Contents |
 |---|---|
-| `apps/dashboard/` | Owner UI and authenticated control API |
+| `apps/dashboard/` | Owner UI and same-origin proxy to the control API |
 | `services/control/`, `services/runner/` | Policy, reservations, scheduler and restricted workers |
 | `services/wallet/`, `services/relayer/` | Private state, signing, proofs and public chain adapters |
 | `services/gateway/` | x402 routes, credit ledger and provider adapters |
@@ -171,7 +378,7 @@ TypeScript, Next.js dashboard, Express gateway, durable workers, SQLite WAL, Rus
 | `programs/privacy-pool/`, `circuits/` | On-chain program and spend/insert/exit circuits |
 | `tests/`, `scripts/`, `artifacts/` | Acceptance tests, operator commands and public artifact manifests |
 
-These are proposed paths, not files observed in this repository. Documentation has its own dependency manifest under `docs/` to avoid constraining the developer's application setup.
+These paths exist in the source snapshot. Documentation has its own dependency manifest and lockfile under `docs/`. The funded dashboard/browser-wallet flow remains **not yet run**; local UI checks are recorded separately in build status T14.
 
 ## Enforcement placement
 
@@ -188,6 +395,8 @@ Keep encrypted notes and signer/provider secrets separate from runner-readable a
 ---
 
 # Payment lifecycle
+
+**Verification scope:** see [current status](./status.md). M2 only is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The integrated devnet agent demo is **not yet run**.
 
 The private withdrawal and x402 merchant payment are separate transactions. A fresh payment wallet uses ordinary x402; x402 alone does not hide the source of funds.
 
@@ -220,7 +429,7 @@ The gateway validates the immutable quote/account/request binding and atomically
 | Credit-pack purchase | One test-USDC payment attributed to Shawn; one gateway issuance |
 | Prepaid inference | Consume shared gateway credits and requesting agent usage allowance; no second USDC charge |
 
-Mira's accepted demo uses a **direct private x402 content-package purchase**. Shawn demonstrates shared-credit replenishment; Prince may use the prepaid path.
+Mira's scripted demo uses a **direct private x402 content-package purchase**; this has run on the local test validator with a **fixture / mock provider**, and its devnet run is **not yet run**. Shawn demonstrates shared-credit replenishment; Prince may use the prepaid path.
 
 ## Recovery and failure handling
 
@@ -241,6 +450,8 @@ A public exit requires note ownership proof and the original refund authority. I
 
 # Policy and accounting
 
+**Verification scope:** see [current status](./status.md). M2 only is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The integrated devnet agent demo is **not yet run**.
+
 ## Permission tiers
 
 | Tier | Permitted behavior | Still prohibited |
@@ -250,11 +461,11 @@ A public exit requires note ownership proof and the original refund authority. I
 | Approval required | Request explicit owner approval for designated valid purchases | Using approval to bypass hard limits |
 | Stopped | Reconcile existing operations | Releasing new spending authority |
 
-Recovery and owner exit remain available through their separate authenticated paths. Editing policy is a distinct owner action. Natural-language policy edits produce editable posts until owner activation.
+Recovery and owner exit remain available through their separate authenticated paths. Editing policy is a distinct owner action. Structured policy changes create drafts that require owner activation. Natural-language policy drafting is not implemented.
 
 ## Authorization algorithm
 
-1. Authenticate the worker's bound workspace/agent/task scope; do not trust an agent ID supplied in JSON.
+1. Authenticate the worker's bound workspace/agent, and validate supplied task ownership; do not trust an agent ID supplied in JSON.
 2. Resolve the stable operation and immutable request/quote. Changed payload for the same operation conflicts before any payment.
 3. Validate service origin, gateway identity, SKU, network, mint, recipient and quote bounds.
 4. In a single `BEGIN IMMEDIATE` transaction, recheck limits, status, policy version and note availability; create the unique operation/reservation.
@@ -296,6 +507,8 @@ Persist original settlement timestamps. A restart must not move old spending int
 ---
 
 # Privacy and trust
+
+**Verification scope:** see [current status](./status.md). M2 only is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The integrated devnet agent demo is **not yet run**.
 
 ## Intended protection
 
@@ -339,6 +552,8 @@ Funding privacy does not guarantee anonymity against every observer. Security de
 
 ## Cryptography and setup trust
 
+The current setup uses a deterministic local development powers-of-tau with public beacons. Its toxic waste is derivable: it is unsuitable for production funds. The development setup and unaudited verifier remain material trust risks even though M2 transactions finalized. See [known risks](../security/risks.md).
+
 The Solana proof design uses BN254 Groth16, matching Poseidon parameters and canonical encodings across TypeScript, Circom and Rust.
 
 The deployment manifest must pin circuit/compiler source, curve, hash parameters, public-input order, encoding/vector version, tree depths, proving/verifying-key hashes and setup provenance. Artifact mismatch stops proof generation. A malicious setup, buggy circuit/verifier or excessive upgrade authority can compromise funds/privacy.
@@ -351,7 +566,7 @@ Spend and public exit share one pool-scoped nullifier namespace. Bind withdrawal
 - Do not put agent names, workspace IDs or gateway account identifiers in chain memos, withdrawal accounts or proof public fields.
 - Minimize operator logs; redact secrets, authorization headers and private prompt content before evidence export.
 - Retain enough authenticated purchase/result state to reconcile ambiguous outcomes; disclose retention and clean up only after outstanding operations resolve.
-- Back up notes, change secrets, paths/rebuild data, fresh-wallet counters and pending operations with a consistent encrypted database snapshot.
+- Back up notes, change secrets, paths/rebuild data, fresh-wallet counters and pending operations with an encrypted snapshot. Wallet and control files are copied separately; quiesce writers for an operator snapshot and retain matching gateway state.
 
 The owner machine remains trusted. Local proof generation does not protect secrets from a compromised host.
 
@@ -361,65 +576,104 @@ Demonstrate a real deployed verifier, valid spend/change and owner exit, rejecti
 
 ---
 
-# Deployment and configuration
+# Running Veilo
 
-## Run the documentation now
+**Verification scope:** M2 is **verified on devnet**. Integrated payments/recovery are **verified on local test validator**, agent inference uses a **fixture / mock provider**, and the integrated devnet demo is **not yet run**. See [current status](./status.md).
 
-From the repository root, use Node.js 22 or later:
+## Application quickstart
+
+Use Node **>=22.14.0 <23**, **pnpm 10.34.6**, and Docker with a running Linux daemon. Native Rust, Solana, Anchor and circom are provided by the pinned Docker toolchain. Allow time/disk/network for the first image and proof builds.
+
+From the repository root:
+
+```sh
+corepack enable pnpm
+pnpm install --frozen-lockfile
+pnpm toolchain:build
+pnpm setup:local
+pnpm check:devnet
+```
+
+`setup:local` creates `.env` from `.env.example` if missing and local directories. It creates the wallet encryption root only when `OWNER_SERVICE_SECRET_PATH` is configured; it reports service credential paths but does not generate those credentials. Existing secrets are never replaced. Back up the encryption root separately; never commit it.
+
+Edit `.env` locally using [configuration](../configuration.md): set `VEILO_OWNER_PUBKEY`, deployment manifest/program/pool values and role credential/key **paths**. Configure gateway merchant/ATA and facilitator fee payer consistently with the manifest. Missing bindings remain unbound/NOT_READY. For live inference only, the gateway needs an operator-funded OpenRouter key, allowlisted models and a nonzero bounded `OPERATOR_MAX_REAL_USD_MICRO`; test USDC cannot buy provider dollars.
+
+For a new manual local stack, set `OWNER_SERVICE_SECRET_PATH=secrets/owner-service.secret`, `CONTROL_SERVICE_CREDENTIAL_PATH=secrets/control-service.credential`, `WALLET_SERVICE_CREDENTIAL_PATH=secrets/wallet-service.credential` and `RELAYER_SERVICE_CREDENTIAL_PATH=secrets/relayer-service.credential` in `.env`. Generate those three independent credentials without printing them (the directories already exist after setup):
+
+```sh
+node --input-type=module -e 'import {writeFileSync} from "node:fs"; import {randomBytes} from "node:crypto"; for (const role of ["control", "wallet", "relayer"]) writeFileSync(`secrets/${role}-service.credential`, randomBytes(32).toString("hex")+"\n", {flag:"wx", mode:0o600});'
+pnpm setup:local
+```
+
+This command is for a fresh stack only and refuses existing files. Restore missing credentials for an existing ledger instead of resetting identities. On Windows restrict these credential files with owner-only ACLs; POSIX `mode` does not enforce a Windows ACL. The isolated `demo:run` creates its own credentials and does not use these manual-stack files.
+
+```sh
+pnpm demo:seed
+pnpm check
+pnpm test
+pnpm dev
+```
+
+Seed policies start as drafts and seeding never issues credits. Open the dashboard at `http://127.0.0.1:3000`, connect the configured devnet owner wallet and review/activate workspace and agent policies. Control/runner/wallet/gateway/relayer use ports 4101–4105. Run [deployment instructions](../deployment.md) to provision/fund roles and deploy a pool before attempting private purchases. A clean clone has no funded keys, proving keys, databases or provider credentials.
+
+## Proofs, rehearsal and devnet recording
+
+```sh
+pnpm test:circuits
+pnpm test:program
+pnpm test:integration
+pnpm demo:run -- --local-rehearsal
+```
+
+The integration suite needs the built program (`target/deploy/privacy_pool.so`) and manifest-compatible proving files (`circuits/build/`). The local rehearsal uses throwaway keys, loopback validator/facilitator and **fixture / mock provider**. It writes under ignored `work/demo-rehearsal/evidence/`; its signatures cannot be checked on a devnet explorer.
+
+For a new deployment, follow the [devnet runbook](../deployment.md#devnet-deployment-runbook-t09-m2), including key initialization, program-ID alignment/build and circuit manifest checks. Do not regenerate role or proving keys for an existing deployment. The deterministic development setup is unsuitable for production funds.
+
+```sh
+pnpm demo:run
+# After readiness passes and operator budgets/policies are reviewed:
+pnpm demo:run -- --execute --confirm
+pnpm evidence:export
+```
+
+The first command is read-only and makes no inference call. Execution signs deposits, withdrawals/merchant payments and exit, and incurs bounded operator provider costs. Rerun the same execute command to resume recorded operations. The eight-step [demo script](./demo.md) gives expected records and screenshot placeholders.
+
+The script starts isolated backend services; funded dashboard screenshots require a separately configured dashboard connected to those same run databases/service ports. A screenshot of another workspace is not evidence of this run.
+
+## Backup and recovery
+
+Quiesce service writers before `pnpm backup` for an operator snapshot: wallet and control files are copied separately. Use the encrypted wallet/control snapshot and keep `OWNER_SERVICE_SECRET_PATH` separately. Stop the wallet and other writers before `pnpm restore -- --file <encrypted-backup> --include-control`; retain the matching gateway ledger and credentials rather than resetting issued credits. Startup reconciliation blocks new authority until pending operations are resolved. See [configuration](../configuration.md) for the exact scope. A public exit/recovery can reveal spending/linkage and cannot cancel already released authority.
+
+## Documentation site
+
+The documentation has its own npm lockfile:
 
 ```sh
 cd docs
 npm ci
 npm run dev
-```
-
-Build and preview the static site:
-
-```sh
+# Or build and preview:
 npm run build
 npm run preview
 ```
 
-The default production base is `/Veilo-agent-wallet/`. Open the base URL printed by the preview server. For a site at a custom domain root, build with `DOCS_BASE=/ npm run build`.
+The default base is `/Veilo-agent-wallet/`; open the printed base URL. Use `DOCS_BASE=/ npm run build` for a domain root. The build generates `llms.txt`, its intentional compatibility alias `llms.text`, and `llms-full.txt`.
 
-## Deployment requirements
-
-The application uses separately authenticated dashboard/control, runner, wallet, relayer and gateway services. Configure the toolchain and compatible SDK versions, initialize the durable database, load local credentials and verify the selected network before enabling financial operations.
-
-Application startup commands and deployment addresses must come from the implementation's release instructions. This page does not provide an executable application installer.
-
-| Area | Configuration requirement |
-|---|---|
-| Network | Exact devnet genesis, mint, decimals and token program; reject mainnet in demo mode |
-| Credentials | Separate owner, worker, wallet, gateway admin and provider credentials |
-| Database | Migrations, WAL mode, single control writer and consistent backup/restore |
-| Proofs | Compatible source/vector versions and pinned proving/verifying artifacts |
-| Services | Authenticated health checks and bounded provider/facilitator settings |
-| Operations | Recovery destinations, sponsor budgets and reconciliation before new work |
-
-## Public deployment manifest
-
-Record commit, dependency lock hashes, full genesis hash/CAIP network, program/pool/vault addresses, mint/decimals/token program, circuit and key hashes, setup provenance, canonical encoding/public-input order, tree depths, root-history rules, fees, expiry bounds and administrator public keys.
-
-Program/vault addresses are unknown until deployment. Do not substitute the setup wallet for a PDA-controlled pool or invent addresses to complete this page.
-
-## Operator checks
-
-Verify facilitator `/supported` for the exact selected devnet/mint path before enabling payments. Recheck the operator-funded inference balance/model/cost bounds. Record outages visibly and stop affected work rather than auto-charging a real card or switching to mainnet.
-
-Separate deployer, sponsor, merchant and owner roles, while disclosing common operator bootstrap funding. Public dashboard access requires authentication; signer and administration remain private. Budget test-SOL rent and repeated deployment attempts from measured binary/account sizes.
-
-Public operational records may include program addresses and transaction signatures. Never publish keys, private notes, witnesses, authentication headers or sensitive prompt content.
-
-## Documentation dependency maintenance
-
-The docs use VitePress 1.6.4 with a pinned Vite 6.4.4 override, because the default Vite 5 dependency has published development-server advisories. Mermaid is pinned to 12.2.0. The override is intentionally outside VitePress's default Vite range: keep it only while production builds and browser checks pass, and revisit it when upgrading VitePress. Use the committed lockfile and check advisories when changing dependencies.
+VitePress 1.6.4 uses a pinned Vite 6.4.4 override and Mermaid 12.2.0. Revalidate the build and browser behavior when changing these dependencies. A successful documentation build does not run application/security tests.
 
 ---
 
 # Security model
 
+**Verification scope:** see [current status](../guide/status.md). M2 only is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The integrated devnet agent demo is **not yet run**.
+
 Veilo separates agent planning, owner authority, wallet signing, on-chain verification and paid-service delivery. An agent request alone is never sufficient authority to release funds.
+
+## Assessment scope and conclusion
+
+Team self-assessment of source snapshot `fe13778`, reviewed against the recorded evidence on 17 October 2026. M2 demonstrates the proof-based devnet funding rail; local integration reports 30/30 cases with mock inference. Neither establishes live agent inference, a completed submission gate, an independent audit or production safety. Permission tiers below are implemented controls with local test coverage; full devnet agent acceptance is **not yet run**.
+
+Assets include test-token principal, note/signing/encryption secrets, owner authority, provider quota, ledger integrity and private prompts. Threat actors include malicious services/prompts, impersonating workers, replaying/concurrent callers, compromised gateway/relayer/indexer, hostile host access and faulty circuits/setup/program administrators.
 
 ## Permission tiers
 
@@ -444,13 +698,17 @@ Budgets and revocation are enforced by owner-controlled services. They are not c
 
 ## Authentication and secret isolation
 
-Owner sessions require a domain-bound wallet challenge with nonce, expiry and replay protection. Browser mutations require CSRF defenses. Worker credentials bind workspace, agent and task scope independently of IDs supplied in request bodies.
+Owner sessions require a domain-bound wallet challenge with nonce, expiry and replay protection. Browser mutations require CSRF defenses. Worker credentials bind workspace and agent independently of IDs supplied in request bodies. Control separately validates each supplied task against that agent/workspace; the bearer credential itself is not task-scoped.
 
 Keep note databases, decryption keys, signer material and provider credentials inaccessible to the agent runner. Restrict internal endpoints by credential and process boundary. Do not log private witnesses, authorization headers or secret values.
 
 ## Concurrency and recovery
 
 Reserve all applicable allowances and the input note in one control transaction. Keep released proofs and unsettled signatures counted as live exposure. Reconcile an existing operation before issuing replacement authority. Persist payment and service-delivery outcomes separately.
+
+## Administration and setup
+
+The deployment manifest records upgrade, approval and sponsorship authorities. The upgrade authority can replace code; the approved-root authority can restrict private spending. The program has no sweep instruction, and owner public exit does not require approved membership. A common operator can control multiple roles; separate public keys do not prove independent operators. The current deterministic development setup has derivable toxic waste and is for test funds only.
 
 ## Verification
 
@@ -460,26 +718,34 @@ A security design describes required behavior; it does not establish that an imp
 
 # Trust and risk boundaries
 
+**Verification scope:** see [current status](../guide/status.md). M2 only is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The integrated devnet agent demo is **not yet run**.
+
 | Boundary | Risk | Design response |
 |---|---|---|
-| Owner host and wallet | Compromise exposes notes or bypasses local spending policy | Isolated credentials/processes, constrained signer, encrypted consistent backups |
-| Circuits and verifier | Incorrect constraints, encodings or setup can compromise the pool | Matching vectors, artifact hashes, setup provenance and real positive/negative proof tests |
+| Owner host and wallet | Compromise exposes notes or bypasses local spending policy | Isolated credentials/processes, constrained signer, encrypted backups with writers quiesced for an operator snapshot |
+| Circuits and verifier | Incorrect constraints/encodings can compromise the pool; current deterministic development setup has derivable toxic waste | Devnet test funds only; pinned artifacts and local positive/negative proof tests do not replace a production ceremony or independent review |
 | Pool metadata | Small pools and distinctive amounts/timing enable correlation | Explain public information and avoid treating membership size as an anonymity score |
 | Program administration | Upgrade authority can change enforcement; approved-root authority can restrict private spending | Disclose powers separately and preserve owner exit without approved membership |
 | Released authority | Proofs or signed transactions may settle after a stop | Track live exposure until settlement or proven expiry; recheck before release |
 | Gateway and provider | Accounts, requests and prompts permit off-chain linkage | Minimize metadata and retention; authenticate result access; disclose visibility |
 | External execution | A settled payment may have an uncertain or missing service result | Persist execution state and cache results; avoid blind provider/payment retries |
-| Backup and restore | Lost change or reused wallet material can lose funds or duplicate authority | Preserve note/change secrets, counters and pending operations; reconcile after restore |
+| Backup and restore | Lost change or reused wallet material can lose funds or duplicate authority | Wallet/control snapshots are separate and omit the gateway ledger; quiesce writers, retain matching gateway state/credentials and reconcile after restore |
 | Dependencies | Devnet, RPC, facilitator or provider outages interrupt work | Health checks, bounded retries/cost and explicit pause states |
 | Public exit/recovery | Reveals value or linkage | Use bound owner destinations and explain the public nature of the operation |
 
 Independent review and execution evidence are needed to evaluate implementation safety. Privacy depends on correct cryptography and operational behavior; it does not hide every transaction detail from every observer.
 
+## Submission and licensing
+
+Organizer acceptance of devnet/reuse remains unresolved. Veilo’s own license is an owner decision; GPL prover/hash components and the verifier’s MIT-metadata/Apache-license-file discrepancy require review. See [attribution](../references/attribution.md) and [handoff](../handoff.md).
+
 ---
 
 # Verification requirements
 
-Use these acceptance scenarios to evaluate the security and reliability of an implementation. Each result should identify the application version, environment, reproducible scenario, observed behavior and relevant artifacts. The list defines requirements; it does not report passing test results.
+**Verification scope:** see [current status](../guide/status.md). M2 only is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The integrated devnet agent demo is **not yet run**.
+
+Use these acceptance scenarios to evaluate the security and reliability of an implementation. Each result should identify the application version, environment, reproducible scenario, observed behavior and relevant artifacts. The matrix below defines expected outcomes. Recorded coverage is mapped separately; a row alone is not a passing result.
 
 | Case | Scenario | Expected evidence / result |
 |---|---|---|
@@ -531,6 +797,17 @@ Use these acceptance scenarios to evaluate the security and reliability of an im
 | ISO-01 | Runner reads note/provider secrets or arbitrary signing endpoint | Process/credential isolation denies access |
 | ART-01 | Proving/verifying artifact or manifest mismatch | Stop proof/payment generation |
 | ADMIN-01 | Inspect deployed upgrade and approved-set authority | Separate public authority mapping matches manifest; powers disclosed |
+
+## Recorded coverage
+
+| Source | Observed scope | Status / limit |
+|---|---|---|
+| [M2 files](https://github.com/Seann004/Veilo-agent-wallet/blob/fe13778/artifacts/evidence/m2-summary.json) | Deploy, two deposits/inserts, approval, spend, change insert, Echo merchant and original/change exits | **verified on devnet**. PRIV-01/PRIV-07/EXIT happy paths only; no full negative matrix or agent control integration implied. |
+| [Integration JSON](https://github.com/Seann004/Veilo-agent-wallet/blob/fe13778/artifacts/evidence/integration-2026-10-17T00-36-54-669Z.json) | 30/30 passed; IDEM-01, X402-03/04, REC-01/02/03, CRE-01/03, USG-01, LLM-01, QUO-01/02, LED-01, CAP-02, BAK-01, REV-01, SEC-02 | **verified on local test validator**; **fixture / mock provider**. X402-01 is partial: local chain and mock inference cannot meet its devnet/live-inference expectation. |
+| [Build status](../build-status.md) T02–T14 and source tests | Unit/LiteSVM evidence for NET, CAP, AUTH, PRIV, EXP, EXIT, TIER, SESS, ISO, ART and runner/content cases | Historical local results only; not rerun in this documentation pass. Do not describe LiteSVM as a local test validator. |
+| [Demo steps](../guide/demo.md) | Shawn top-up, Prince brief, Mira direct content payment, duplicate/cap/revoke/exit recording | **not yet run** on devnet; local agent rehearsal uses a **fixture / mock provider**. Funded dashboard screenshots also outstanding. |
+
+The integration report's `environment`, `prdCoverage`, `tests`, `failedOrSkipped` and `scenarioEvidence` are the machine-readable record. Its program hash identifies the tested binary, but it does not name the tested Git commit; attach that commit and reviewer at submission freeze. The separate OpenRouter smoke is a baseline, not AGT-01/CNT-01 completion. All remaining matrix rows lack a consolidated, reviewed per-case submission record.
 
 ## Evidence quality
 

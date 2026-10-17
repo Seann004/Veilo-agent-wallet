@@ -1,5 +1,7 @@
 # Payment lifecycle
 
+**Verification scope:** see [current status](./status.md). M2 only is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The integrated devnet agent demo is **not yet run**.
+
 The private withdrawal and x402 merchant payment are separate transactions. A fresh payment wallet uses ordinary x402; x402 alone does not hide the source of funds.
 
 <script setup>
@@ -35,7 +37,7 @@ The gateway validates the immutable quote/account/request binding and atomically
 | Credit-pack purchase | One test-USDC payment attributed to Shawn; one gateway issuance |
 | Prepaid inference | Consume shared gateway credits and requesting agent usage allowance; no second USDC charge |
 
-Mira's accepted demo uses a **direct private x402 content-package purchase**. Shawn demonstrates shared-credit replenishment; Prince may use the prepaid path.
+Mira's scripted demo uses a **direct private x402 content-package purchase**; this has run on the local test validator with a **fixture / mock provider**, and its devnet run is **not yet run**. Shawn demonstrates shared-credit replenishment; Prince may use the prepaid path.
 
 ## Recovery and failure handling
 

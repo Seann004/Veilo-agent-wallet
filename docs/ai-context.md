@@ -16,6 +16,6 @@ Copy the text into your assistant, or give it the published file URL if it can r
 - The model proposes work. Independent services authorize money.
 - Private funding targets the explicit deposit-to-withdrawal link; merchant transfers remain public.
 - The owner retains agent attribution, and the gateway can link authenticated usage.
-- Technical documentation describes required behavior. It does not certify an audit or imply that verification scenarios passed.
+- [Current status](./guide/status.md) distinguishes the M2 devnet run, local fixture workflows and the pending integrated devnet demo. Documentation does not certify an audit or imply every acceptance scenario passed.
 
 The context files are regenerated from the technical pages whenever the documentation is built.
