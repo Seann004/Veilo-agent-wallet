@@ -134,4 +134,27 @@ describe("bring your own model key", () => {
     await ai.models(env.ws.id, { provider: "anthropic", apiKey: "sk-ant-x1234567" });
     expect(seen.at(-1)).toMatchObject({ url: "https://api.anthropic.com/v1/models", headers: { "x-api-key": "sk-ant-x1234567" } });
   });
+
+  it("switches model without the key again, only on the same endpoint, and tests a named model", async () => {
+    env = createEnv();
+    const bodies: Array<{ model: string; max_tokens: number; auth: string; url: string }> = [];
+    const fetchImpl = async (url: string, init?: RequestInit) => {
+      const b = JSON.parse(String(init?.body)) as { model: string; max_tokens: number };
+      bodies.push({ ...b, auth: (init?.headers as Record<string, string>).authorization ?? "", url });
+      if (b.model === "thinker") return new Response(JSON.stringify({ choices: [{ message: { content: null }, finish_reason: "length" }] }), { status: 200 });
+      return new Response(JSON.stringify({ model: b.model, choices: [{ message: { content: "OK" } }] }), { status: 200 });
+    };
+    const ai = new AiService(env.ledger, ProviderKeyVault.ephemeral(), fetchImpl);
+    const zai = { provider: "openai_compatible" as const, baseUrl: "https://api.z.ai/api/paas/v4" };
+    ai.set(env.ws.id, "owner", { ...zai, apiKey: KEY, model: "glm-5.3-flash" });
+    expect(ai.set(env.ws.id, "owner", { ...zai, model: "glm-5.3" })).toMatchObject({ model: "glm-5.3", keyHint: `…${KEY.slice(-4)}` });
+    expect(() => ai.set(env.ws.id, "owner", { provider: "openai_compatible", baseUrl: "https://evil.example.com/v1", model: "m" })).toThrow(/enter the API key/);
+    expect(() => ai.set(env.ws.id, "owner", { provider: "openrouter", model: "m" })).toThrow(/enter the API key/);
+
+    expect(await ai.test(env.ws.id)).toEqual({ ok: true, model: "glm-5.3" });
+    expect(await ai.test(env.ws.id, "glm-5.3-flash")).toEqual({ ok: true, model: "glm-5.3-flash" });
+    expect(bodies.every((b) => b.max_tokens >= 256 && b.auth === `Bearer ${KEY}` && b.url.startsWith("https://api.z.ai/"))).toBe(true);
+    await expect(ai.test(env.ws.id, "thinker")).rejects.toThrow(/whole output budget/);
+    await expect(ai.test(env.ws.id, "bad model")).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+  });
 });

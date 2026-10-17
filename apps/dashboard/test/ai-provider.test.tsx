@@ -77,4 +77,22 @@ describe("AI model settings", () => {
     await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
     expect(calls.find((c) => c.method === "PUT")!.body).toEqual({ provider: "openai_compatible", model: "glm-5.3-flash", apiKey: "zai-key-123456789", baseUrl: "https://api.z.ai/api/coding/paas/v4" });
   });
+
+  it("switches the saved Z.ai model without asking for the key again", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const c = { url: String(input), method: init?.method ?? "GET", body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined };
+      calls.push(c);
+      const saved = { provider: "openai_compatible", baseUrl: "https://api.z.ai/api/paas/v4", model: "glm-5.3-flash", keyHint: "…7890", updatedAt: "2026-10-18T00:00:00Z" };
+      return new Response(JSON.stringify({ provider: c.method === "PUT" ? { ...saved, model: c.body.model } : saved }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    render(withRole(<AiProviderSettings />, "owner"));
+    await screen.findByText(/Leave blank to keep your saved key \(…7890\)/);
+    expect(screen.getByLabelText("Provider").textContent).toContain("Z.ai (GLM)");
+    await user.click(screen.getByLabelText("Model"));
+    await user.click(await screen.findByRole("option", { name: "glm-5.3" }));
+    await user.click(screen.getByRole("button", { name: "Save model" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+    expect(calls.find((c) => c.method === "PUT")!.body).toEqual({ provider: "openai_compatible", model: "glm-5.3", baseUrl: "https://api.z.ai/api/paas/v4" });
+  });
 });

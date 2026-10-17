@@ -70,11 +70,20 @@ export class AiService {
     return r ? { provider: r.provider, baseUrl: r.base_url, model: r.model, keyHint: r.key_hint, updatedAt: new Date(num(r.updated_at_ms)).toISOString() } : null;
   }
 
-  set(workspaceId: string, ownerId: string, input: { provider: AiProviderKind; apiKey: string; model: string; baseUrl?: string | undefined }): Record<string, unknown> {
+  /**
+   * Saves the provider and model. Without a new key the saved one is kept, but only for the same
+   * provider and base URL, so a stored key is never sent to a different endpoint.
+   */
+  set(workspaceId: string, ownerId: string, input: { provider: AiProviderKind; apiKey?: string | undefined; model: string; baseUrl?: string | undefined }): Record<string, unknown> {
     const baseUrl = input.provider === "openai_compatible" ? (input.baseUrl ?? "") : DEFAULT_BASE_URL[input.provider];
     const problem = baseUrlProblem(baseUrl, this.allowLocal);
     if (problem) throw new ControlError("INVALID_REQUEST", problem);
-    const key = input.apiKey.trim();
+    let key = input.apiKey?.trim() ?? "";
+    if (!key) {
+      const saved = this.#row(workspaceId);
+      if (!saved || saved.provider !== input.provider || saved.base_url !== baseUrl.replace(/\/$/, "")) throw new ControlError("INVALID_REQUEST", "enter the API key for this provider");
+      key = this.vault.open(workspaceId, saved.key_ciphertext);
+    }
     if (key.length < 8 || key.length > 400 || /\s/.test(key)) throw new ControlError("INVALID_REQUEST", "API key looks malformed");
     const model = input.model.trim();
     if (!/^[A-Za-z0-9._:/@-]{1,200}$/.test(model)) throw new ControlError("INVALID_REQUEST", "model id has unexpected characters");
@@ -104,8 +113,8 @@ export class AiService {
     return { provider: r.provider, baseUrl: r.base_url, model: r.model, apiKey: this.vault.open(workspaceId, r.key_ciphertext) };
   }
 
-  async #complete(workspaceId: string, messages: readonly PromptMessage[], maxOutputTokens: number, json: boolean) {
-    const endpoint = this.#endpoint(workspaceId);
+  async #complete(workspaceId: string, messages: readonly PromptMessage[], maxOutputTokens: number, json: boolean, model?: string) {
+    const endpoint = { ...this.#endpoint(workspaceId), ...(model ? { model } : {}) };
     // Remote providers go through a fetch that refuses non-public addresses at connect time;
     // only an explicit loopback URL (a local model server) uses a plain fetch.
     const local = isLoopback(new URL(endpoint.baseUrl));
@@ -145,8 +154,11 @@ export class AiService {
   }
 
   /** One short call that proves the key and model work. */
-  async test(workspaceId: string): Promise<{ ok: true; model: string }> {
-    const r = await this.#complete(workspaceId, [{ role: "user", content: "Reply with the single word OK." }], 8, false);
+  /** One short call with the saved key, on the saved model or another one the owner names. */
+  async test(workspaceId: string, model?: string): Promise<{ ok: true; model: string }> {
+    if (model !== undefined && !/^[A-Za-z0-9._:/@-]{1,200}$/.test(model)) throw new ControlError("INVALID_REQUEST", "model id has unexpected characters");
+    // Reasoning models think before answering, so a tiny budget returns no text at all.
+    const r = await this.#complete(workspaceId, [{ role: "user", content: "Reply with the single word OK." }], 256, false, model);
     return { ok: true, model: r.model };
   }
 

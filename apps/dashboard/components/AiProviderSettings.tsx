@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { api } from "../lib/api";
 import { useAction, useResource } from "./hooks";
 import { Select, type SelectOption } from "./Select";
@@ -65,9 +65,24 @@ export function AiProviderSettings() {
   const ids = { preset: useId(), model: useId(), base: useId(), key: useId(), coding: useId() };
   const view = current.data?.provider ?? null;
 
+  // Start the form from what is saved, so switching model is one pick and a save.
+  const [seeded, setSeeded] = useState(false);
+  useEffect(() => {
+    if (seeded || !current.data) return;
+    setSeeded(true);
+    const v = current.data.provider;
+    if (!v) return;
+    setPreset(presetOf(v));
+    setModel(v.model);
+    setCodingPlan(v.baseUrl === ZAI_CODING);
+    if (presetOf(v) === "custom") setBaseUrl(v.baseUrl);
+  }, [current.data, seeded]);
+
   const provider: Provider = preset === "zai" || preset === "custom" ? "openai_compatible" : preset;
   const url = preset === "zai" ? (codingPlan ? ZAI_CODING : ZAI_GENERAL) : preset === "custom" ? baseUrl.trim() : undefined;
-  const choices = [...new Set([...(loaded ?? []), ...SUGGESTED[preset]])];
+  // The saved key may be reused only on the same provider and URL; control enforces the same rule.
+  const sameEndpoint = view !== null && view.provider === provider && (url === undefined || url.replace(/\/$/, "") === view.baseUrl);
+  const choices = [...new Set([...(loaded ?? []), ...SUGGESTED[preset], ...(sameEndpoint ? [view.model] : [])])];
   const modelOptions: Array<SelectOption<string>> = [{ value: "", label: "Choose a model" }, ...choices.map((m) => ({ value: m, label: m }))];
   const label = (v: ProviderView) => PRESETS.find((x) => x.value === presetOf(v))?.label ?? v.provider;
 
@@ -133,7 +148,7 @@ export function AiProviderSettings() {
             void save.run(async () => {
               await api("control", "/ai-provider", {
                 method: "PUT",
-                body: { provider, model: model.trim(), apiKey: apiKey.trim(), ...(url !== undefined ? { baseUrl: url } : {}) },
+                body: { provider, model: model.trim(), ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}), ...(url !== undefined ? { baseUrl: url } : {}) },
               });
               setApiKey("");
               setTested(null);
@@ -160,8 +175,10 @@ export function AiProviderSettings() {
           ) : null}
           <div className="field">
             <label htmlFor={ids.key}>API key</label>
-            <input id={ids.key} required type="password" autoComplete="off" maxLength={400} value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
-            <span className="hint">Stored encrypted on this machine. It is never shown again.</span>
+            <input id={ids.key} required={!sameEndpoint} type="password" autoComplete="off" maxLength={400} value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+            <span className="hint">
+              {sameEndpoint ? `Leave blank to keep your saved key (${view.keyHint}). ` : ""}Stored encrypted on this machine. It is never shown again.
+            </span>
           </div>
           <div className="field">
             <label htmlFor={ids.model}>Model</label>
@@ -174,7 +191,7 @@ export function AiProviderSettings() {
               <button
                 type="button"
                 className="btn btn-small"
-                disabled={load.busy || (!apiKey.trim() && !view) || (preset === "custom" && !url)}
+                disabled={load.busy || (!apiKey.trim() && !sameEndpoint) || (preset === "custom" && !url)}
                 onClick={() =>
                   void load.run(async () => {
                     const r = await api<{ models: string[] }>("control", "/ai-provider/models", {
@@ -196,8 +213,8 @@ export function AiProviderSettings() {
           </div>
           <ErrorNotice error={load.error} what="loading models (you can still type a model id)" />
           <div className="actions">
-            <button type="submit" className="btn btn-primary" disabled={save.busy || !apiKey.trim() || !model.trim()}>
-              {view ? "Replace key" : "Save key"}
+            <button type="submit" className="btn btn-primary" disabled={save.busy || (!apiKey.trim() && !sameEndpoint) || !model.trim()}>
+              {apiKey.trim() ? (view ? "Replace key" : "Save key") : "Save model"}
             </button>
           </div>
         </form>

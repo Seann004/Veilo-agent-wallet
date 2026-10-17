@@ -83,8 +83,11 @@ export async function completeWithProvider(
     const usage = parsed.usage as { input_tokens?: unknown; output_tokens?: unknown } | undefined;
     return { text: out, model: typeof parsed.model === "string" ? parsed.model : e.model, inputTokens: int(usage?.input_tokens), outputTokens: int(usage?.output_tokens) };
   }
-  const choice = (parsed.choices as Array<{ message?: { content?: unknown } }> | undefined)?.[0];
-  if (typeof choice?.message?.content !== "string") throw new ModelCallError("unavailable", "model provider returned no completion", res.status);
+  const choice = (parsed.choices as Array<{ message?: { content?: unknown }; finish_reason?: unknown }> | undefined)?.[0];
+  if (typeof choice?.message?.content !== "string" || choice.message.content === "") {
+    const cut = choice?.finish_reason === "length";
+    throw new ModelCallError("unavailable", cut ? "the model used its whole output budget before answering (reasoning models need more)" : "model provider returned no completion", res.status);
+  }
   const usage = parsed.usage as { prompt_tokens?: unknown; completion_tokens?: unknown } | undefined;
   return { text: choice.message.content, model: typeof parsed.model === "string" ? parsed.model : e.model, inputTokens: int(usage?.prompt_tokens), outputTokens: int(usage?.completion_tokens) };
 }

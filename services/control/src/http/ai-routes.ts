@@ -7,7 +7,7 @@ import { actorOf, requireActor, type AuthDeps } from "./actor";
 const providerSchema = z
   .object({
     provider: z.enum(["openrouter", "anthropic", "openai", "openai_compatible"]),
-    apiKey: z.string().min(1).max(400),
+    apiKey: z.string().max(400).optional(),
     model: z.string().min(1).max(200),
     baseUrl: z.string().max(300).optional(),
   })
@@ -38,7 +38,7 @@ export function aiRouter(deps: AuthDeps & { ai?: AiService | undefined }): Route
   r.put("/ai-provider", owner, (req, res) => {
     const o = ownerOf(res);
     const b = providerSchema.safeParse(req.body ?? {});
-    if (!b.success) throw new ControlError("INVALID_REQUEST", "provider, apiKey and model are required");
+    if (!b.success) throw new ControlError("INVALID_REQUEST", "provider and model are required");
     res.setHeader("Cache-Control", "no-store");
     res.json({ provider: ai().set(o.workspaceId, o.ownerPubkey, b.data) });
   });
@@ -56,8 +56,10 @@ export function aiRouter(deps: AuthDeps & { ai?: AiService | undefined }): Route
     res.json({ models: await ai().models(ownerOf(res).workspaceId, b.data) });
   });
 
-  r.post("/ai-provider/test", owner, async (_req, res) => {
-    res.json(await ai().test(ownerOf(res).workspaceId));
+  r.post("/ai-provider/test", owner, async (req, res) => {
+    const b = z.object({ model: z.string().min(1).max(200).optional() }).strict().safeParse(req.body ?? {});
+    if (!b.success) throw new ControlError("INVALID_REQUEST", "model must be a model id");
+    res.json(await ai().test(ownerOf(res).workspaceId, b.data.model));
   });
 
   return r;
