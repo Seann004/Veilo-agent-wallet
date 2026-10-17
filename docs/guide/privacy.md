@@ -1,5 +1,7 @@
 # Privacy and trust
 
+**Verification scope:** see [current status](./status.md). The recorded M2 proof run is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. Full devnet agent acceptance lacks complete evidence here. Marketplace acceptance is **not yet run** in this checkout.
+
 ## Intended protection
 
 A shared note-based pool aims to remove the **explicit mapping from a particular deposited note to a withdrawal**. A local proof authorizes the withdrawal without naming the spent deposit. A fresh wallet then pays the merchant through standard x402, and private change remains in the pool.
@@ -32,6 +34,12 @@ Funding privacy and owner monitoring serve different audiences: the owner retain
 
 Persistent gateway accounts deliberately link service usage off chain. The protocol does not hide prompts from the provider or establish network-level anonymity.
 
+## Marketplace observer boundary — accepted v3.2 scope
+
+Marketplace identity and job records create additional off-chain linkage. The marketplace operator, sellers, facilitators and model providers can see the buyer–seller relationship and plaintext job content they process. Supabase Web3 identity does not hide a buyer from the cloud operator. Private Storage and RLS restrict application access; they do not establish transaction or metadata anonymity.
+
+Hosted seller execution must receive only permitted job data and no wallet secrets. The required retention default is 30 days, with private participant files and short-lived signed download links; these controls are not implemented or verified here. See [marketplace](./marketplace.md) and [acceptance gaps](./marketplace-triage.md).
+
 ## Correlation and anonymity limits
 
 A small pool, one active participant, distinctive amounts, closely timed deposit/withdrawal/payment and common operator funding can make linkage plausible. Synthetic demo participants are not independent users. Approved-set size is membership information, not a measured anonymity score.
@@ -41,6 +49,8 @@ A separate fee sponsor reduces one obvious source link, but shared RPC endpoints
 Funding privacy does not guarantee anonymity against every observer. Security depends on correct circuits, proof verification, key handling and operational controls.
 
 ## Cryptography and setup trust
+
+The current setup uses a deterministic local development powers-of-tau with public beacons. Its toxic waste is derivable: it is unsuitable for production funds. The development setup and unaudited verifier remain material trust risks even though M2 transactions finalized. See [known risks](../security/risks.md).
 
 The Solana proof design uses BN254 Groth16, matching Poseidon parameters and canonical encodings across TypeScript, Circom and Rust.
 
@@ -54,7 +64,7 @@ Spend and public exit share one pool-scoped nullifier namespace. Bind withdrawal
 - Do not put agent names, workspace IDs or gateway account identifiers in chain memos, withdrawal accounts or proof public fields.
 - Minimize operator logs; redact secrets, authorization headers and private prompt content before evidence export.
 - Retain enough authenticated purchase/result state to reconcile ambiguous outcomes; disclose retention and clean up only after outstanding operations resolve.
-- Back up notes, change secrets, paths/rebuild data, fresh-wallet counters and pending operations with a consistent encrypted database snapshot.
+- Back up notes, change secrets, paths/rebuild data, fresh-wallet counters and pending operations with an encrypted snapshot. Wallet and control files are copied separately; quiesce writers for an operator snapshot and retain matching gateway state.
 
 The owner machine remains trusted. Local proof generation does not protect secrets from a compromised host.
 

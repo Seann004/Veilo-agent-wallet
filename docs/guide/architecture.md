@@ -1,6 +1,8 @@
 # Architecture
 
-Veilo separates agent planning, financial authority, public-chain enforcement and paid-service delivery. The deployment model is single-owner and local, with distinct processes, credentials and secret access. Owners can create and configure agents; demo agents are examples of roles running within the same authority boundaries.
+**Verification scope:** see [current status](./status.md). The recorded M2 proof run is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. Full devnet agent acceptance lacks complete evidence here. Marketplace acceptance is **not yet run** in this checkout.
+
+Veilo separates agent planning, financial authority, public-chain enforcement and paid-service delivery. The implemented owner stack is local, with one owner per workspace and distinct processes, credentials and secret access. The accepted v3.2 marketplace adds multiple independent buyer/seller accounts and cloud product records; it does not make a workspace multi-owner. These are application/process credential boundaries on a trusted owner host, not an OS sandbox against a compromised process. Owners can create and configure agents; demo agents are examples of roles running within the same authority boundaries.
 
 ## The architecture in plain language
 
@@ -40,13 +42,13 @@ import delivery from '../diagrams/service-delivery.mmd?raw'
 | x402 facilitator | Verify and settle standard exact SVM payment | Merchant leg only; distinct from the private-withdrawal relayer |
 | OpenRouter / data adapter | Bounded real inference or explicitly labeled research data | Provider availability and commercial funding are operator dependencies |
 
-## Proposed stack and source layout
+## Implemented stack and source layout
 
-TypeScript, Next.js dashboard, Express gateway, durable workers, SQLite WAL, Rust/Anchor pool program and Circom/snarkjs BN254 Groth16 proofs. Exact SDK versions and proof artifacts must be frozen by the implementation team.
+TypeScript, Next.js dashboard, Express gateway, durable workers, SQLite WAL, Rust/Anchor pool program and Circom/snarkjs BN254 Groth16 proofs. Versions are pinned in lockfiles and proof artifacts in `artifacts/circuits/manifest.json`; see [deployment](../deployment.md).
 
-| Intended path | Contents |
+| Source path | Contents |
 |---|---|
-| `apps/dashboard/` | Owner UI and authenticated control API |
+| `apps/dashboard/` | Owner UI and same-origin proxy to the control API |
 | `services/control/`, `services/runner/` | Policy, reservations, scheduler and restricted workers |
 | `services/wallet/`, `services/relayer/` | Private state, signing, proofs and public chain adapters |
 | `services/gateway/` | x402 routes, credit ledger and provider adapters |
@@ -55,7 +57,13 @@ TypeScript, Next.js dashboard, Express gateway, durable workers, SQLite WAL, Rus
 | `programs/privacy-pool/`, `circuits/` | On-chain program and spend/insert/exit circuits |
 | `tests/`, `scripts/`, `artifacts/` | Acceptance tests, operator commands and public artifact manifests |
 
-These are proposed paths, not files observed in this repository. Documentation has its own dependency manifest under `docs/` to avoid constraining the developer's application setup.
+These paths exist in the source snapshot. Documentation has its own dependency manifest and lockfile under `docs/`. The funded dashboard/browser-wallet flow remains **not yet run**; local UI checks are recorded separately in build status T14.
+
+## Marketplace extension — required, not implemented here
+
+Supabase Auth, Postgres and private Storage will hold marketplace identity, catalogue, jobs, artifact metadata and accounting projections. Local control retains policies/reservations/revocation and local wallet retains secrets/proofs/signing. The cloud never becomes a spending authority. It receives acknowledged state through an outbound, authenticated, digest-bound and expiring connection initiated by local control. Spending pauses while control is offline.
+
+Marketplace Web3 sign-in and the existing local wallet challenge are deliberately separate. The local P0 stack still works without Supabase. Seller settlement must go directly to the reviewed recipient; the existing gateway’s single merchant is a blocker for managed paid listings. No pool-contract change is needed solely for the extension. See the [marketplace boundary diagram](./marketplace.md) and [source-based triage](./marketplace-triage.md).
 
 ## Enforcement placement
 

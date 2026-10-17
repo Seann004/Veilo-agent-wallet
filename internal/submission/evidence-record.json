@@ -1,12 +1,12 @@
 {
-  "case_id": "CAP-02",
+  "case_id": null,
   "status": "not-run",
   "tested_commit": null,
   "environment": null,
   "executed_at_utc": null,
   "reviewer": null,
   "command_or_steps": [],
-  "expected_result": "Concurrent agents cannot exceed the shared available allowance.",
+  "expected_result": null,
   "observed_result": null,
   "program_address": null,
   "mint": null,
@@ -14,5 +14,6 @@
   "artifacts": [],
   "failed_or_skipped_checks": [],
   "finding_ids": [],
-  "redaction_reviewed": false
+  "redaction_reviewed": false,
+  "record_type": "unfilled_template"
 }

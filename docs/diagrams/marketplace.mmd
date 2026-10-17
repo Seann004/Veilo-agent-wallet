@@ -1,0 +1,17 @@
+flowchart TB
+  buyer["Buyer / owner agent<br/>Discover and propose a specialist"]
+  cloud["Marketplace — planned<br/>Supabase identity, catalogue, jobs and private files"]
+  control["Owner-local control<br/>Approve seller, check limits, reserve and reconcile"]
+  wallet["Owner-local wallet<br/>Note secrets, proof and constrained signing"]
+  pool["Existing Solana pool<br/>Proof-authorized fresh-wallet funding"]
+  exact["Ordinary public x402 V2 exact<br/>Verified seller recipient"]
+  seller["Reviewed seller runtime — planned<br/>Run only after verified finality or explicit free quote"]
+  result["Private deliverable and finalized receipt<br/>One payment, one job, one earnings event"]
+  buyer --> cloud
+  control <-->|"Local control initiates outbound connection<br/>Authenticated, digest-bound, expiring requests"| cloud
+  control -->|"Local authority only"| wallet
+  wallet --> pool
+  pool --> exact
+  exact --> seller
+  seller --> result
+  result --> cloud
