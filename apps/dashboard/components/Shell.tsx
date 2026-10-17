@@ -57,7 +57,6 @@ export function OwnerProvider({ value, children }: { value: OwnerContextValue; c
 /** Sidebar entries; the last column lists other paths that count as the same section. */
 const NAV: Array<[string, string, IconName, string[]]> = [
   ["/workspace", "Workspace", "home", []],
-  ["/market", "Catalog", "store", []],
   ["/connectors", "Connectors", "plug", []],
   ["/activity", "Activity", "activity", []],
   ["/content", "Content", "content", []],
@@ -68,7 +67,10 @@ const inSection = (pathname: string | null, href: string, also: string[]) => [hr
 
 /** Marketplace sections in the sidebar; each page shows its section's tabs. Browse is the default. */
 const MARKET_GROUPS: Array<{ label: string; tabs: Array<[string, string]> }> = [
-  { label: "Browse", tabs: [["/marketplace", "Workflows"], ["/marketplace/specialists", "Specialists"], ["/marketplace/tools", "Tools"], ["/marketplace/agents", "Agents"]] },
+  {
+    label: "Browse",
+    tabs: [["/marketplace", "Workflows"], ["/marketplace/specialists", "Specialists"], ["/marketplace/tools", "Tools"], ["/marketplace/agents", "Agents"], ["/marketplace/templates", "Agent templates"]],
+  },
   { label: "Activity", tabs: [["/marketplace/runs", "Runs"], ["/marketplace/jobs", "Jobs"]] },
   { label: "Sell", tabs: [["/marketplace/seller", "Seller"], ["/marketplace/create", "Create a workflow"]] },
   { label: "Approvals", tabs: [["/marketplace/approvals", "Approvals"]] },

@@ -136,7 +136,7 @@ export function MarketBrowser() {
   return (
     <>
       <div className="page-head">
-        <h1>Catalog</h1>
+        <h1>Agent templates</h1>
       </div>
       <div className="filter-row" role="group" aria-label="Show">
         {(

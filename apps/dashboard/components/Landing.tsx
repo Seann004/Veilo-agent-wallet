@@ -29,7 +29,7 @@ export function Landing() {
           <Link href="/workspace" className="btn btn-primary btn-large">
             Open workspace
           </Link>
-          <Link href="/market" className="btn btn-large">
+          <Link href="/marketplace/templates" className="btn btn-large">
             Browse agents
           </Link>
         </div>
@@ -55,7 +55,7 @@ export function Landing() {
       <section className="site-section">
         <div className="section-row">
           <h2>Meet the agents</h2>
-          <Link href="/market">View all</Link>
+          <Link href="/marketplace/templates">View all</Link>
         </div>
         <div className="roster">
           {ROLE_ORDER.map((role) => {
