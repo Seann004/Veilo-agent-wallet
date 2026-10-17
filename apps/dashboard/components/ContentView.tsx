@@ -59,7 +59,7 @@ export function ContentView() {
         </div>
       </Section>
       <Section title="Research briefs">
-        {briefs.length === 0 ? <p className="muted">No research briefs yet. Ask Prince a research question from his agent page.</p> : null}
+        {briefs.length === 0 ? <p className="muted">No research briefs yet. Ask Prince a research question, or give a custom agent a job; both save their reports here.</p> : null}
         <div className="stack">
           {briefs.map((b) => (
             <ContentEditor key={`${b.id}-${b.revision}`} item={b} onSaved={saved} />

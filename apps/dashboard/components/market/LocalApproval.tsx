@@ -281,19 +281,20 @@ function HireCard({ hire: h, workspace, onChanged }: { hire: LocalHire; workspac
 }
 
 function Grants({ workspace }: { workspace: Workspace }) {
-  const agents = workspace.agents.filter((a) => a.status !== "revoked" && a.status !== "archived");
+  // Only custom agents propose hires, so a grant on any other role could never match.
+  const agents = workspace.agents.filter((a) => a.role === "custom" && a.status !== "revoked" && a.status !== "archived");
   return (
     <Section title="Local listing grants">
       <p className="small">
         A grant lets one local agent hire one listing without asking you each time, up to a maximum total. Grants live in your local controller and
         replace any cloud proposal; the controller still applies every budget limit.
       </p>
-      {agents.length === 0 ? <EmptyState>No local agents.</EmptyState> : agents.map((a) => <AgentGrants key={a.id} agentId={a.id} name={a.name} />)}
+      {agents.length === 0 ? <EmptyState>No custom agents. Only custom agents propose hires.</EmptyState> : agents.map((a) => <AgentGrants key={a.id} agentId={a.id} name={a.name} />)}
     </Section>
   );
 }
 
-function AgentGrants({ agentId, name }: { agentId: string; name: string }) {
+export function AgentGrants({ agentId, name }: { agentId: string; name: string }) {
   const m = useMarket();
   const action = useAction();
   const grants = useResource(() => api<{ grants: ListingGrant[] }>("control", `/agents/${agentId}/marketplace-allowlist`), `grants:${agentId}`);

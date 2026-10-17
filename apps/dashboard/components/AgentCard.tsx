@@ -21,6 +21,10 @@ export function summarizeResult(job: Job | undefined, task?: Task): string {
       if (typeof p.sku === "string" && typeof p.outcome === "string") parts.push(`${p.sku}: ${p.outcome}`);
     }
   }
+  const hire = r.hire as { proposalId?: unknown; code?: unknown } | null | undefined;
+  if (hire && typeof hire === "object") {
+    parts.push(typeof hire.proposalId === "string" ? "hire proposed (unpaid until you approve it or it matches a pre-approved listing)" : `hire refused (${String(hire.code)})`);
+  }
   if (typeof r.artifactId === "string") parts.push("result saved to Content");
   return parts.join(" · ");
 }

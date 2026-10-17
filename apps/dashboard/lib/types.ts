@@ -1,5 +1,8 @@
 /** Shapes of owner API responses as consumed by the dashboard (amounts are decimal strings). */
-export type AgentRole = "credit_manager" | "research" | "content";
+export type AgentRole = "credit_manager" | "research" | "content" | "custom";
+/** Mirrors AGENT_TEMPLATES in the control contracts; a test keeps the two equal. */
+export const AGENT_TEMPLATES = ["generalist", "researcher", "writer", "analyst"] as const;
+export type AgentTemplate = (typeof AGENT_TEMPLATES)[number];
 export type AgentStatus = "draft" | "active" | "paused" | "revoked" | "archived";
 
 export interface Policy {
@@ -31,6 +34,9 @@ export interface Agent {
   description: string | null;
   trigger: Record<string, unknown>;
   modelProfile: string | null;
+  /** Present for custom agents only. */
+  template?: AgentTemplate | null;
+  instructions?: string | null;
   policyVersion: number;
   activePolicy: Policy | null;
   revocationEpoch: number;

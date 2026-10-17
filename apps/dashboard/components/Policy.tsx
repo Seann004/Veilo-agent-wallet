@@ -68,6 +68,23 @@ export const ROLE_TEMPLATES: Record<AgentRole, { name: string; description: stri
       allowedPaymentPaths: ["private_x402", "prepaid_credits"],
     },
   },
+  custom: {
+    name: "Custom agent",
+    description: "Follows your instructions to find a marketplace specialist for each job; it pays nobody without your approval.",
+    trigger: { type: "owner_task" },
+    // Marketplace hiring is its only paid action; the specialist SKU is added only when the owner opts in.
+    policy: {
+      tier: "bounded_automatic",
+      lifetimeTestUsdc: "2000000",
+      rolling24hTestUsdc: "2000000",
+      maxPurchaseTestUsdc: "500000",
+      taskLimitTestUsdc: "1000000",
+      usageAllowanceUnits: "0",
+      taskCreditUnits: "0",
+      allowedSkus: [],
+      allowedPaymentPaths: ["private_x402"],
+    },
+  },
 };
 
 function Field({ label, value, onChange, hint, inputMode }: { label: string; value: string; onChange: (v: string) => void; hint?: string; inputMode?: "decimal" | "numeric" }) {

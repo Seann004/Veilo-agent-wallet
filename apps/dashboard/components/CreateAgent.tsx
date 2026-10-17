@@ -6,10 +6,11 @@ import { api } from "../lib/api";
 import { ROLE_LABEL } from "../lib/labels";
 import type { Agent, AgentRole } from "../lib/types";
 import { draftPolicyFromText, type PolicyDraftResult } from "../lib/policy-draft";
+import { CustomAgentFields, EMPTY_CUSTOM, RunnerCredentialNote, grantBody, withHiring, type CustomDraft } from "./CustomAgentFields";
 import { PolicyForm, PolicyReview, ROLE_TEMPLATES, type AgentPolicyInput } from "./Policy";
 import { useOwner } from "./Shell";
 import { useAction } from "./hooks";
-import { ErrorNotice, Section } from "./ui";
+import { ErrorNotice, Loading, Section } from "./ui";
 
 /**
  * Create agent: role template, name, job, trigger and model profile, then a structured review.
@@ -29,6 +30,9 @@ export function CreateAgent() {
   const [drafted, setDrafted] = useState<PolicyDraftResult | null>(null);
   const wordsId = useId();
   const [created, setCreated] = useState<Agent | null>(null);
+  const [custom, setCustom] = useState<CustomDraft>(EMPTY_CUSTOM);
+  const [grantsSaved, setGrantsSaved] = useState(false);
+  const grantsAction = useAction();
   const [step, setStep] = useState<"edit" | "review">("edit");
   const action = useAction();
   const roleId = useId();
@@ -38,15 +42,41 @@ export function CreateAgent() {
   const pollId = useId();
   const wsPolicy = workspace.policies.find((p) => p.scope === "workspace" && p.status === "active");
   const trigger = role === "credit_manager" ? { type: "low_credit_balance", pollSeconds: Number(pollSeconds) } : { type: "owner_task" };
+  const isCustom = role === "custom";
+  const effective = policy && isCustom ? withHiring(policy, custom.hiring) : policy;
+  const pendingGrants = isCustom && custom.hiring ? custom.grants : [];
+  // The allowlist is a separate endpoint, so it is saved after the agent exists and can fail on its own.
+  const saveGrants = (agentId: string) =>
+    grantsAction.run(async () => {
+      await api("control", `/agents/${agentId}/marketplace-allowlist`, { method: "PUT", body: { grants: pendingGrants.map(grantBody) } });
+      setGrantsSaved(true);
+    });
 
   if (created) {
     return (
       <Section title={`${created.name} created with draft policy v1`}>
         <p>The agent cannot spend until you activate its policy.</p>
+        {pendingGrants.length > 0 ? (
+          grantsSaved ? (
+            <p role="status" className="small">
+              {pendingGrants.length} pre-approved listing(s) saved.
+            </p>
+          ) : grantsAction.busy ? (
+            <Loading label="pre-approved listings" />
+          ) : grantsAction.error ? (
+            <div className="notice notice-error" role="alert">
+              <p>The agent was created, but its pre-approved listings were not saved. Until they are, every hire waits for your approval.</p>
+              <ErrorNotice error={grantsAction.error} />
+              <button type="button" className="btn" onClick={() => void saveGrants(created.id)}>
+                Retry saving pre-approved listings
+              </button>
+            </div>
+          ) : null
+        ) : null}
         <button
           type="button"
           className="btn btn-primary"
-          disabled={action.busy}
+          disabled={action.busy || created.status === "active"}
           onClick={() =>
             void action.run(async () => {
               await api("control", `/agents/${created.id}/config`, { method: "PATCH", body: { activatePolicyVersion: 1 } });
@@ -57,9 +87,15 @@ export function CreateAgent() {
         >
           Activate {created.name}
         </button>{" "}
-        <Link href={`/agents/${created.id}`}>Open agent</Link>
+        <Link href={`/agents/${created.id}${created.role === "credit_manager" ? "" : "#run"}`}>Open agent</Link>
         {created.status === "active" ? <p role="status">Activated.</p> : null}
         <ErrorNotice error={action.error} />
+        {created.role !== "credit_manager" ? <RunnerCredentialNote /> : null}
+        {created.role === "custom" && custom.hiring ? (
+          <p className="small">
+            Hires this agent proposes wait for you in <Link href="/marketplace/approvals">Marketplace → Approvals</Link>.
+          </p>
+        ) : null}
       </Section>
     );
   }
@@ -75,14 +111,27 @@ export function CreateAgent() {
             setStep("review");
             return;
           }
-          void action.run(async () => {
-            const r = await api<{ agent: Agent }>("control", "/agents", {
-              method: "POST",
-              body: { name, role, description: job, trigger, modelProfile, policy },
+          void (async () => {
+            const agent = await action.run(async () => {
+              const r = await api<{ agent: Agent }>("control", "/agents", {
+                method: "POST",
+                body: {
+                  name,
+                  role,
+                  description: job,
+                  trigger,
+                  modelProfile,
+                  ...(isCustom ? { template: custom.template, instructions: custom.instructions.trim() } : {}),
+                  policy: effective,
+                },
+              });
+              await reloadWorkspace();
+              return r.agent;
             });
-            await reloadWorkspace();
-            setCreated(r.agent);
-          });
+            if (!agent) return;
+            setCreated(agent);
+            if (pendingGrants.length > 0) await saveGrants(agent.id);
+          })();
         }}
       >
         <fieldset disabled={step === "review"}>
@@ -130,6 +179,7 @@ export function CreateAgent() {
               <p className="small">Trigger: starts when the owner submits a task{role === "content" ? " or approves a research handoff" : ""}.</p>
             )}
           </div>
+          {isCustom ? <CustomAgentFields value={custom} onChange={setCustom} /> : null}
           <div className="field">
             <label htmlFor={wordsId}>Describe the limits in words (optional)</label>
             <textarea id={wordsId} rows={2} value={words} onChange={(e) => setWords(e.target.value)} aria-describedby={`${wordsId}-h`} placeholder="Up to 2 USDC in total, 0.5 per purchase, 1 per task" />
@@ -161,9 +211,10 @@ export function CreateAgent() {
           </div>
           <PolicyForm key={`${role}-${seed}`} initial={base} workspace={workspace} onChange={setPolicy} />
         </fieldset>
-        {step === "review" && policy ? (
+        {step === "review" && effective ? (
           <Section title="Review effective policy">
-            <PolicyReview policy={policy} workspacePolicy={wsPolicy} title={`${name || "New agent"} (draft v1)`} />
+            {isCustom ? <p className="small">Marketplace hiring: {custom.hiring ? `allowed, ${custom.grants.length} pre-approved listing(s)` : "off"}.</p> : null}
+            <PolicyReview policy={effective} workspacePolicy={wsPolicy} title={`${name || "New agent"} (draft v1)`} />
             <p className="small">Creating the agent stores this policy as a draft. You activate it in the next step.</p>
           </Section>
         ) : null}
@@ -178,7 +229,7 @@ export function CreateAgent() {
               Back to edit
             </button>
           ) : null}
-          <button type="submit" className="btn btn-primary" disabled={!policy || action.busy || name.trim() === ""}>
+          <button type="submit" className="btn btn-primary" disabled={!policy || action.busy || name.trim() === "" || (isCustom && custom.instructions.trim() === "")}>
             {step === "edit" ? "Review policy" : "Create agent with draft policy"}
           </button>
         </div>

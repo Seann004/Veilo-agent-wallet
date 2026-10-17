@@ -200,6 +200,10 @@ h3 {
   border-top-color: #b4367a;
 }
 
+.card-custom {
+  border-top-color: #8a5a00;
+}
+
 .card-head {
   display: flex;
   justify-content: space-between;

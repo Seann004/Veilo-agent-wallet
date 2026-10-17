@@ -13,6 +13,7 @@ export const ROLE_LABEL: Record<AgentRole, string> = {
   credit_manager: "Inference-credit manager",
   research: "Research agent",
   content: "Content manager",
+  custom: "Custom agent",
 };
 
 /** Owner-facing agent state: revoked/archived agents and an emergency stop read as stopped. */

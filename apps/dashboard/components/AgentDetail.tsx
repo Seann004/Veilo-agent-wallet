@@ -9,6 +9,7 @@ import type { Activity, Agent, Balances, ContentItem, Handoff, Job, Task } from 
 import { ActivityList } from "./Activity";
 import { summarizeResult } from "./AgentCard";
 import { AgentControls } from "./AgentControls";
+import { CustomAgentPanel } from "./CustomAgentFields";
 import { PolicyForm, PolicyReview, type AgentPolicyInput } from "./Policy";
 import { useOwner } from "./Shell";
 import { useAction, useResource } from "./hooks";
@@ -321,6 +322,8 @@ export function AgentDetail({ agentId }: { agentId: string }) {
           </Section>
         </>
       ) : null}
+
+      {agent.role === "custom" ? <CustomAgentPanel agent={agent} policy={current} canRun={canRun} terminal={terminal} onChanged={reloadAll} /> : null}
 
       <Section title="Active job">
         {activeJob ? (
