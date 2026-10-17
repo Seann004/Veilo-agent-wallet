@@ -555,12 +555,15 @@ export function registerWorkflowRoutes(app: Express, deps: Deps, h: WorkflowRout
       let extQuery = db.admin.from("external_tools").select("id, origin, resource_path, pay_to, pay_to_ata, unit_price_base_units, calls_per_step, fee_payers, rpc_methods, call_template, status");
       if (!creator) extQuery = extQuery.eq("status", "approved");
       const extRows = external.length === 0 ? [] : ((await extQuery.in("id", external)).data ?? []);
+      const listingVersionIds = v.steps.filter((s) => s.toolKind === "listing").map((s) => s.toolId);
+      const parents = listingVersionIds.length === 0 ? [] : ((await db.admin.from("listing_versions").select("id, listing_id").in("id", listingVersionIds)).data ?? []);
+      const listingOf = new Map((parents as Array<{ id: string; listing_id: string }>).map((p) => [p.id, p.listing_id]));
       return {
         version: v,
         live,
         tools: v.steps.map((s) => {
           const f = facts.get(toolKey(s.toolKind as "listing" | "external", s.toolId));
-          return f ? { ...f, priceBaseUnits: f.priceBaseUnits.toString() } : null;
+          return f ? { ...f, priceBaseUnits: f.priceBaseUnits.toString(), listingId: s.toolKind === "listing" ? (listingOf.get(s.toolId) ?? null) : null } : null;
         }),
         externalTools: extRows,
       };

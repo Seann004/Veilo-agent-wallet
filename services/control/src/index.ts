@@ -126,12 +126,15 @@ async function main(): Promise<void> {
   }
   const externalMaxRaw = process.env.EXTERNAL_X402_MAX_BATCH_UNITS?.trim() || "100000";
   if (!/^[1-9][0-9]{0,18}$/.test(externalMaxRaw)) throw new VeiloConfigError("INVALID_CONFIG", "EXTERNAL_X402_MAX_BATCH_UNITS must be a positive integer of base units");
+  const workflowMaxRaw = process.env.WORKFLOW_MAX_RUN_UNITS?.trim() || "1000000";
+  if (!/^[1-9][0-9]{0,18}$/.test(workflowMaxRaw)) throw new VeiloConfigError("INVALID_CONFIG", "WORKFLOW_MAX_RUN_UNITS must be a positive integer of base units");
   const integration = createIntegration(ledger, {
     gateway,
     permits,
     funding,
     marketplace,
     external: { origins: new SellerOriginPolicy({ localTestOrigins: list(process.env.EXTERNAL_X402_LOCAL_ORIGINS) }) },
+    workflowLimits: { maxRunUsdc: BigInt(workflowMaxRaw), maxExternalBatchUsdc: BigInt(externalMaxRaw) },
     log: (l) => console.log(`[${SERVICE}] ${l}`),
     settleWaitMs: msEnv("CONTROL_PURCHASE_WAIT_MS", 120_000),
     purchaseSweepMs: msEnv("CONTROL_PURCHASE_SWEEP_MS", 15_000),

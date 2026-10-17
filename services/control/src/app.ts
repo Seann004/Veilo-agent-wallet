@@ -5,6 +5,7 @@ import type { AuthDeps } from "./http/actor";
 import { agentRouter } from "./http/agent-routes";
 import { controlRouter } from "./http/routes";
 import { externalRouter } from "./http/external-routes";
+import { workflowRouter } from "./http/workflow-routes";
 import { marketplaceRouter } from "./http/marketplace-routes";
 import { ownerRouter } from "./http/owner-routes";
 import type { Integration } from "./integration";
@@ -54,6 +55,7 @@ export function createApp(health: ServiceHealth, deps?: ControlDeps): Express {
   app.use(ownerRouter(deps));
   app.use(marketplaceRouter(deps));
   app.use(externalRouter(deps));
+  app.use(workflowRouter(deps));
   app.use((_req: Request, res: Response) => {
     res.status(404).json({ error: { code: "NOT_FOUND", message: "no such endpoint" } });
   });

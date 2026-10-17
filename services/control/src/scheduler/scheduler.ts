@@ -19,6 +19,8 @@ export interface SchedulerDeps {
   /** Marketplace payment-request polling, run at most every `marketplacePollMs` (wall clock). */
   marketplace?: { poll(): Promise<unknown> } | undefined;
   marketplacePollMs?: number;
+  /** Advances approved workflow runs after each marketplace poll. */
+  workflows?: { advanceActive(): Promise<unknown> } | undefined;
   log?: (line: string) => void;
 }
 
@@ -162,8 +164,9 @@ export class Scheduler {
         this.#lastMarketplacePoll = Date.now();
         await market.poll();
       }
+      await this.deps.workflows?.advanceActive();
     } catch (error) {
-      this.deps.log?.(`[scheduler] marketplace poll failed: ${(error as Error).name}: ${(error as Error).message}`);
+      this.deps.log?.(`[scheduler] marketplace or workflow pass failed: ${(error as Error).name}: ${(error as Error).message}`);
     } finally {
       this.#running = false;
     }
