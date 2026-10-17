@@ -5,7 +5,7 @@ import { useEffect, useId, useState } from "react";
 import { api } from "../lib/api";
 import { ROLE_AVATAR, avatarById, setAgentAvatar } from "../lib/avatars";
 import { resolveAvatar } from "../lib/avatar-customization";
-import { HIDDEN_SKUS, ROLE_LABEL } from "../lib/labels";
+import { HIDDEN_SKUS, ROLE_LABEL, skuGroup } from "../lib/labels";
 import { ROLE_TAGLINE } from "../lib/roles";
 import type { Agent, AgentRole } from "../lib/types";
 import type { AttachOutcome, Connector } from "../lib/connectors";
@@ -72,8 +72,9 @@ function CreateAgentForm() {
   const modelId = useId();
   const pollId = useId();
   const wsPolicy = workspace.policies.find((p) => p.scope === "workspace" && p.status === "active");
-  // A new custom agent may buy anything approved today; its owner narrows it in the limits.
-  const approvedSkus = [...new Set(workspace.services.flatMap((sv) => sv.skus.map((k) => k.sku)))].filter((k) => !HIDDEN_SKUS.has(k)).sort();
+  // A new custom agent starts with approved data and AI work only; swaps and hiring move funds
+  // differently, so the owner turns those on explicitly.
+  const approvedSkus = [...new Set(workspace.services.flatMap((sv) => sv.skus.map((k) => k.sku)))].filter((k) => !HIDDEN_SKUS.has(k) && (skuGroup(k) === "Data" || skuGroup(k) === "AI work")).sort();
   const templateFor = (r: AgentRole): AgentPolicyInput => (r === "custom" && ROLE_TEMPLATES[r].policy.allowedSkus.length === 0 ? { ...ROLE_TEMPLATES[r].policy, allowedSkus: approvedSkus } : ROLE_TEMPLATES[r].policy);
   const chooseRole = (r: AgentRole) => {
     setRole(r);
