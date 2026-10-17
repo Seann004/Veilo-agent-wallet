@@ -64,6 +64,21 @@ export function sellerEndpoint(config: MarketplaceConfig, c: CatalogRow, v: Vers
  * Creates a job and its immutable quote from the published listing version. Price, recipient
  * and token account come from the database, never from the caller.
  */
+/** Resolves a wf:<run>:<index> hire key to a real run step, or refuses the hire. */
+async function workflowStepFor(deps: Deps, workspaceId: string, key: string, listingVersionId: string): Promise<{ runId: string; index: number }> {
+  const m = /^wf:([0-9a-f-]{36}):([0-7])$/.exec(key);
+  if (!m) throw new MarketError("INVALID_REQUEST", "workflow hire keys name a run and a step");
+  const runId = m[1] as string;
+  const index = Number(m[2]);
+  const run = (await deps.db.admin.from("workflow_runs").select("id, buyer_workspace_id, status").eq("id", runId).maybeSingle()).data as { buyer_workspace_id: string; status: string } | null;
+  if (!run || run.buyer_workspace_id !== workspaceId || !["approved", "running"].includes(run.status)) {
+    throw new MarketError("SERVICE_NOT_ALLOWED", "no approved workflow run in this workspace matches the hire key");
+  }
+  const st = (await deps.db.admin.from("workflow_run_steps").select("tool_kind, tool_id").eq("run_id", runId).eq("step_index", index).maybeSingle()).data as { tool_kind: string; tool_id: string } | null;
+  if (!st || st.tool_kind !== "listing" || st.tool_id !== listingVersionId) throw new MarketError("SERVICE_NOT_ALLOWED", "the workflow step does not use this listing version");
+  return { runId, index };
+}
+
 export async function createHire(
   deps: Deps,
   p: { workspaceId: string; listingId: string; brief: string; idempotencyKey: string; agentId: string | null },
@@ -85,9 +100,11 @@ export async function createHire(
     ata: string;
   };
   if (version.network !== config.network || version.mint !== config.mint) throw new MarketError("WRONG_NETWORK", "listing is not on the configured devnet mint");
+  // A workflow step key must name a live run step of this workspace for exactly this listing version.
+  const step = p.idempotencyKey.startsWith("wf:") ? await workflowStepFor(deps, p.workspaceId, p.idempotencyKey, catalog.listing_version_id) : null;
   // Providers whose terms forbid a bare paid pass-through are sold only as steps of a workflow.
   const tool = (await db.admin.from("tool_profiles").select("provider").eq("listing_version_id", catalog.listing_version_id).maybeSingle()).data as { provider: string | null } | null;
-  if (tool?.provider && WORKFLOW_ONLY_PROVIDERS.has(tool.provider) && !p.idempotencyKey.startsWith("wf:")) {
+  if (tool?.provider && WORKFLOW_ONLY_PROVIDERS.has(tool.provider) && step === null) {
     throw new MarketError("SERVICE_NOT_ALLOWED", `${tool.provider} tools are available only as a step of a workflow`);
   }
   if ((await deriveAta(payout.address, version.mint)) !== payout.ata) throw new MarketError("SERVICE_NOT_ALLOWED", "payout token account mismatch");

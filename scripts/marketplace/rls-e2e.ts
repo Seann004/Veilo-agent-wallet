@@ -542,7 +542,8 @@ async function main() {
     await call("POST", `/seller/versions/${hfVersion.body.versionId}/submit`, { token: S.token });
     await call("POST", `/operator/versions/${hfVersion.body.versionId}/review`, { token: operatorToken, body: { approve: true, note: "rls test" } });
     const directHire = await call("POST", "/jobs", { token: A.token, body: { listingId: hfListing.body.listingId, brief: "a red bicycle", idempotencyKey: `direct-${randomUUID()}` } });
-    record("a Higgsfield tool cannot be hired on its own, only as a workflow step", hfProfile.status === 200 && directHire.status === 403, `profile ${hfProfile.status} hire ${directHire.status}`);
+    const forgedKey = await call("POST", "/jobs", { token: A.token, body: { listingId: hfListing.body.listingId, brief: "a red bicycle", idempotencyKey: `wf:${randomUUID()}:0` } });
+    record("a Higgsfield tool cannot be hired on its own, only as a workflow step", hfProfile.status === 200 && directHire.status === 403 && forgedKey.status === 403, `profile ${hfProfile.status} hire ${directHire.status} forged ${forgedKey.status}`);
     await call("POST", `/operator/listings/${hfListing.body.listingId}/status`, { token: operatorToken, body: { status: "archived" } });
 
     await call("POST", `/operator/listings/${listing.body.listingId}/status`, { token: operatorToken, body: { status: "archived" } });
