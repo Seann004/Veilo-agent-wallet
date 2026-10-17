@@ -1,6 +1,6 @@
 # Privacy and trust
 
-**Verification scope:** see [current status](./status.md). M2 only is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The integrated devnet agent demo is **not yet run**.
+**Verification scope:** see [current status](./status.md). The recorded M2 proof run is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. Full devnet agent acceptance lacks complete evidence here. Marketplace acceptance is **not yet run** in this checkout.
 
 ## Intended protection
 
@@ -33,6 +33,12 @@ Funding privacy and owner monitoring serve different audiences: the owner retain
 | Approved-set / upgrade administrators | Disclosed powers to update approved membership or deployed program code, according to configuration |
 
 Persistent gateway accounts deliberately link service usage off chain. The protocol does not hide prompts from the provider or establish network-level anonymity.
+
+## Marketplace observer boundary — accepted v3.2 scope
+
+Marketplace identity and job records create additional off-chain linkage. The marketplace operator, sellers, facilitators and model providers can see the buyer–seller relationship and plaintext job content they process. Supabase Web3 identity does not hide a buyer from the cloud operator. Private Storage and RLS restrict application access; they do not establish transaction or metadata anonymity.
+
+Hosted seller execution must receive only permitted job data and no wallet secrets. The required retention default is 30 days, with private participant files and short-lived signed download links; these controls are not implemented or verified here. See [marketplace](./marketplace.md) and [acceptance gaps](./marketplace-triage.md).
 
 ## Correlation and anonymity limits
 

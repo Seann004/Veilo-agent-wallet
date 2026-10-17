@@ -1,6 +1,6 @@
 # Policy and accounting
 
-**Verification scope:** see [current status](./status.md). M2 only is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The integrated devnet agent demo is **not yet run**.
+**Verification scope:** see [current status](./status.md). The recorded M2 proof run is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. Full devnet agent acceptance lacks complete evidence here. Marketplace acceptance is **not yet run** in this checkout.
 
 ## Permission tiers
 
@@ -12,6 +12,12 @@
 | Stopped | Reconcile existing operations | Releasing new spending authority |
 
 Recovery and owner exit remain available through their separate authenticated paths. Editing policy is a distinct owner action. Structured policy changes create drafts that require owner activation. Natural-language policy drafting is not implemented.
+
+## Marketplace approval and offline control — pending
+
+PRD v3.2 keeps every local limit in force for specialist hires. A cloud identity session or cloud policy record cannot authorize spending: local control must install/acknowledge policy proposals and validate an approved seller plus immutable listing/payout/quote/runtime versions. A changed recipient or unapproved seller must stop locally. Concurrent hires share the same local allowance authority.
+
+The required cloud connection uses authenticated, digest-bound, expiring requests initiated outbound by local control. New automatic spending pauses when control is offline; already released authority remains live exposure. Search/propose tools, schedule dedupe, connector grants and callback/lease checks still need marketplace implementation and negative tests. See [triage](./marketplace-triage.md).
 
 ## Authorization algorithm
 

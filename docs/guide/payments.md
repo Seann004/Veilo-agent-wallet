@@ -1,6 +1,6 @@
 # Payment lifecycle
 
-**Verification scope:** see [current status](./status.md). M2 only is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The integrated devnet agent demo is **not yet run**.
+**Verification scope:** see [current status](./status.md). The recorded M2 proof run is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. Full devnet agent acceptance lacks complete evidence here. Marketplace acceptance is **not yet run** in this checkout.
 
 The private withdrawal and x402 merchant payment are separate transactions. A fresh payment wallet uses ordinary x402; x402 alone does not hide the source of funds.
 
@@ -37,7 +37,13 @@ The gateway validates the immutable quote/account/request binding and atomically
 | Credit-pack purchase | One test-USDC payment attributed to Shawn; one gateway issuance |
 | Prepaid inference | Consume shared gateway credits and requesting agent usage allowance; no second USDC charge |
 
-Mira's scripted demo uses a **direct private x402 content-package purchase**; this has run on the local test validator with a **fixture / mock provider**, and its devnet run is **not yet run**. Shawn demonstrates shared-credit replenishment; Prince may use the prepaid path.
+Mira's scripted demo uses a **direct private x402 content-package purchase**; its local-validator rehearsal uses a **fixture / mock provider**. A later devnet gateway run is reported on the deployment branch, but Mira's complete live result/receipt evidence is missing here. Shawn demonstrates shared-credit replenishment; Prince may use the prepaid path.
+
+## Marketplace settlement — required, not implemented here
+
+A marketplace quote must bind the reviewed listing, runtime and payout versions, exact seller recipient, scope, network, mint, amount and expiry. The fresh signer pays that seller directly through x402 V2 exact. Execution waits for independently verified finality unless the quote is explicitly free. Quotes/receipts show a zero platform fee; seller earnings are finalized receipt history, not a platform balance. Gateway credits do not replace direct seller settlement.
+
+The current gateway has one configured merchant. Managed paid listings stay blocked until per-listing recipients and receipt-to-job uniqueness are implemented and verified; do not route seller funds through the operator. One finalized receipt may fund one job and one earnings event. Refunds are separate seller-funded, finalized transfers to an owner-verified destination, cumulatively capped at the settled amount; failed delivery must remain visibly paid. These are [v3.2 requirements](./marketplace.md), not evidence that marketplace settlement/refunds work.
 
 ## Recovery and failure handling
 

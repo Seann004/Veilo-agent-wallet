@@ -1,6 +1,6 @@
 # Agent workflows
 
-**Verification scope:** see [current status](./status.md). M2 only is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The integrated devnet agent demo is **not yet run**.
+**Verification scope:** see [current status](./status.md). The recorded M2 proof run is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. Full devnet agent acceptance lacks complete evidence here. Marketplace acceptance is **not yet run** in this checkout.
 
 ## Owner-created agents
 
@@ -9,6 +9,12 @@ Creation/configuration is implemented through owner control routes. Execution us
 Owners create and configure agents with their own names, jobs, triggers, budgets and service permissions. The examples below demonstrate three useful workflows; they do not limit the agents an owner can create. Each agent operates within its configured tools and services and the workspace's shared financial limits.
 
 One runner uses different role instructions, tools and independently enforced policies. Names are editable display fields, not authority identities. Owner-created agents cannot autonomously create spending subagents or expand their own permissions.
+
+## Marketplace agents and specialists — pending T19–T22
+
+The v3.2 target allows arbitrarily named agents with their own instructions, triggers and tools. Shawn, Prince and Mira become managed templates. A buyer can manually hire one reviewed specialist, or let an agent search and propose within owner-defined permissions; a new seller needs owner approval. That approval cannot bypass budgets or change an immutable payout recipient.
+
+The current runner and database still restrict execution to three coded roles; free specialist jobs, searchable seller listings, reviewed managed/remote execution and connector grants are not implemented here. Read-only connectors are the default; arbitrary uploaded code and paid recursive delegation are excluded. The existing local Prince-to-Mira handoff is not marketplace hiring. See [marketplace](./marketplace.md) and [T17–T23 triage](./marketplace-triage.md).
 
 ## Shawn — shared-credit replenishment
 

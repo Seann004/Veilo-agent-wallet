@@ -1,6 +1,6 @@
 # Security model
 
-**Verification scope:** see [current status](../guide/status.md). M2 only is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The integrated devnet agent demo is **not yet run**.
+**Verification scope:** see [current status](../guide/status.md). The recorded M2 proof run is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. Full devnet agent acceptance lacks complete evidence here. Marketplace acceptance is **not yet run** in this checkout.
 
 Veilo separates agent planning, owner authority, wallet signing, on-chain verification and paid-service delivery. An agent request alone is never sufficient authority to release funds.
 
@@ -9,6 +9,12 @@ Veilo separates agent planning, owner authority, wallet signing, on-chain verifi
 Team self-assessment of source snapshot `fe13778`, reviewed against the recorded evidence on 17 October 2026. M2 demonstrates the proof-based devnet funding rail; local integration reports 30/30 cases with mock inference. Neither establishes live agent inference, a completed submission gate, an independent audit or production safety. Permission tiers below are implemented controls with local test coverage; full devnet agent acceptance is **not yet run**.
 
 Assets include test-token principal, note/signing/encryption secrets, owner authority, provider quota, ledger integrity and private prompts. Threat actors include malicious services/prompts, impersonating workers, replaying/concurrent callers, compromised gateway/relayer/indexer, hostile host access and faulty circuits/setup/program administrators.
+
+## Marketplace threat and authority extension — pending
+
+The accepted v3.2 design adds independent buyers/sellers and Supabase identity/product records while keeping one owner per workspace. Cloud sign-in is separate from the existing local challenge and never releases spending authority. RLS, explicit grants, sanitized public catalogue projections and private participant Storage are required; direct client writes to quote/job/payment/earnings state are prohibited. Service keys stay server-side. These cloud controls are not implemented or tested here.
+
+New threats include cross-tenant reads, forged seller callbacks, payout/version substitution, duplicate receipt attribution, stale workers, malicious result files and compromised hosted execution. The local runner’s restricted tools do not establish a hosted sandbox. The operator/seller/provider can see job content and relationships. [All 14 marketplace acceptance checks](../guide/marketplace-triage.md) remain open; existing CAP/IDEM/REC results are supporting local foundations only.
 
 ## Permission tiers
 

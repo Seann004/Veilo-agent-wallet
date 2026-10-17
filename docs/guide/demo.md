@@ -1,6 +1,8 @@
 # Eight-step demo and evidence checklist
 
-**Status:** integrated devnet agent demo **not yet run**. Local rehearsal is **verified on local test validator** with a **fixture / mock provider**. Only the separate M2 pool/Echo smoke is **verified on devnet**. Do not fill this checklist with local-validator signatures or historical Echo transactions.
+**Status:** complete integrated devnet acceptance evidence is missing here. The parallel deployment branch records an earlier gateway execution, but its run state, ledger, live inference receipts and task artifacts are absent here; recover/review them before paying again. Local rehearsal is **verified on local test validator** with a **fixture / mock provider**. M2 has its separate devnet proof/Echo record. Do not fill missing agent evidence with local signatures or Echo transactions.
+
+This eight-step script covers the original T00–T16 workspace. The v3.2 marketplace has separate [T17–T23 gates and acceptance checks](./marketplace-triage.md); completing this script does not demonstrate seller hiring, Supabase isolation or marketplace earnings/refunds.
 
 ## Prepare once
 
@@ -26,7 +28,7 @@ Evidence root: `artifacts/evidence/demo-<runId>/` (currently absent). In the ste
 
 **Expected evidence:** deployment/circuit manifests, `summary.json` network/program/pool, `steps.0-policies`, deposits and approvals; public amounts and small-set warning.
 
-**TODO — demo deployment/approval/deposit transaction hashes:** pending operator run. **TODO — screenshot 01:** network, pool limitations and three active policies.
+**TODO — demo deployment/approval/deposit transaction hashes:** pending recovered-run evidence or a newly accepted operator run. **TODO — screenshot 01:** network, pool limitations and three active policies.
 
 ## 2. Show Shawn below threshold and check now
 
@@ -42,7 +44,7 @@ Evidence root: `artifacts/evidence/demo-<runId>/` (currently absent). In the ste
 
 **Expected evidence:** `steps.b-shawn-topup.purchase`, `ledger.json` purchase `chainAttempts`/states and credits before/after; deployment/key hashes in the export.
 
-**TODO — Shawn withdrawal and gateway settlement hashes:** pending operator run. **TODO — screenshot 03:** purchase drawer and one issuance.
+**TODO — Shawn withdrawal and gateway settlement hashes:** pending recovered-run evidence or a newly accepted operator run. **TODO — screenshot 03:** purchase drawer and one issuance.
 
 ## 4. Run Prince research
 
@@ -50,7 +52,7 @@ Evidence root: `artifacts/evidence/demo-<runId>/` (currently absent). In the ste
 
 **Expected evidence:** task/purchases in `ledger.json`, `steps.c-prince-research`, `inference-receipts.json`, and `artifacts/research_brief-*.md`. Sources remain fictional CC0 demo fixture data even when inference is live. Provider receipts must say live/operator-funded; fixture output cannot meet this gate.
 
-**TODO — Prince withdrawal/merchant hashes and live inference receipt:** pending operator run. **TODO — screenshot 04:** approved service, categorized usage and attributable brief.
+**TODO — Prince withdrawal/merchant hashes and live inference receipt:** pending recovered-run evidence or a newly accepted operator run. **TODO — screenshot 04:** approved service, categorized usage and attributable brief.
 
 ## 5. Approve handoff and run Mira
 
@@ -58,7 +60,7 @@ Evidence root: `artifacts/evidence/demo-<runId>/` (currently absent). In the ste
 
 **Expected evidence:** `steps.d-handoff-mira`, direct payment in `ledger.json`, live receipt, `artifacts/content_draft-*.md` and `artifacts/content_calendar-*.json`. Distinguish direct USDC spend, credits consumed and sponsored planning costs.
 
-**TODO — Mira withdrawal/merchant hashes and live inference receipt:** pending operator run. **TODO — screenshot 05:** approved handoff, direct purchase, drafts and calendar.
+**TODO — Mira withdrawal/merchant hashes and live inference receipt:** pending recovered-run evidence or a newly accepted operator run. **TODO — screenshot 05:** approved handoff, direct purchase, drafts and calendar.
 
 ## 6. Repeat a logical purchase
 
@@ -66,7 +68,7 @@ Evidence root: `artifacts/evidence/demo-<runId>/` (currently absent). In the ste
 
 **Expected evidence:** `steps.e-duplicate-check` (`samePurchase`, `newPurchases`), unchanged chain-attempt/payment/issuance counts. Local IDEM-01/X402-03/04 fault tests support deeper replay behavior; they remain local evidence.
 
-**TODO — duplicate outcome / no-new-payment comparison:** pending operator run. **TODO — screenshot 06:** same operation/result and unchanged counters. No new signature is expected.
+**TODO — duplicate outcome / no-new-payment comparison:** pending recovered-run evidence or a newly accepted operator run. **TODO — screenshot 06:** same operation/result and unchanged counters. No new signature is expected.
 
 ## 7. Reject concurrent over-budget requests and revoke independently
 
@@ -74,7 +76,7 @@ Evidence root: `artifacts/evidence/demo-<runId>/` (currently absent). In the ste
 
 **Expected evidence:** `steps.f-over-budget-and-revoke.overBudget`, revoke result and `afterRevoke`; no additional released authority. Pause/revoke cannot cancel a proof/signature already released; show live exposure if present.
 
-**TODO — concurrent rejection / revoked-worker response:** pending operator run. **TODO — screenshot 07:** independent agent stop and limits. No payment signature is expected for denied work.
+**TODO — concurrent rejection / revoked-worker response:** pending recovered-run evidence or a newly accepted operator run. **TODO — screenshot 07:** independent agent stop and limits. No payment signature is expected for denied work.
 
 ## 8. Owner exit and recovery, with privacy warning
 
@@ -82,7 +84,7 @@ Evidence root: `artifacts/evidence/demo-<runId>/` (currently absent). In the ste
 
 **Expected evidence:** `steps.g-owner-exit`, `summary.json.exit` and the owner's resulting public balance. It exits one change note, not every remaining note, and does not demonstrate funded-wallet recovery.
 
-**TODO — integrated owner-exit hash:** pending operator run. **TODO — screenshot 08:** warning, finalized exit and remaining funds.
+**TODO — integrated owner-exit hash:** pending recovered-run evidence or a newly accepted operator run. **TODO — screenshot 08:** warning, finalized exit and remaining funds.
 
 For a separate funded-wallet recovery demonstration, use the dashboard Recovery Center only after the existing merchant authority is settled or proven expired, prepare/confirm recovery to the configured owner destination and record its outcome. `demo:run` does not create this scenario. Local REC-03/REV-01/BAK-01 supply existing recovery evidence; M2 records original/change public exits separately.
 

@@ -1,6 +1,12 @@
 # Running Veilo
 
-**Verification scope:** M2 is **verified on devnet**. Integrated payments/recovery are **verified on local test validator**, agent inference uses a **fixture / mock provider**, and the integrated devnet demo is **not yet run**. See [current status](./status.md).
+**Verification scope:** M2 is **verified on devnet**. Integrated payments/recovery are **verified on local test validator**, agent inference uses a **fixture / mock provider**, and complete devnet agent acceptance evidence is missing here. Marketplace acceptance is **not yet run** in this checkout. See [current status](./status.md).
+
+## Marketplace setup is a separate, pending track
+
+The commands below start the existing local wallet workspace, not the v3.2 marketplace. T18 will add Supabase Auth/Postgres/private Storage; T19–T23 add generic jobs, direct hiring, discovery, connectors and release checks. Supabase is required for that extension but remains unnecessary for the local T00–T16 stack.
+
+No marketplace migration, environment-variable contract, setup script, cloud connection or deployed project is supplied here. Do not invent Supabase key names or use a cloud session as wallet authorization. Follow [marketplace triage](./marketplace-triage.md) and complete the T17 discovery/schema gate before making those changes.
 
 ## Application quickstart
 
@@ -48,6 +54,8 @@ pnpm demo:run -- --local-rehearsal
 ```
 
 The integration suite needs the built program (`target/deploy/privacy_pool.so`) and manifest-compatible proving files (`circuits/build/`). The local rehearsal uses throwaway keys, loopback validator/facilitator and **fixture / mock provider**. It writes under ignored `work/demo-rehearsal/evidence/`; its signatures cannot be checked on a devnet explorer.
+
+The parallel deployment branch records an earlier devnet gateway run whose state and acceptance files are absent here. Recover that run’s original state/ledgers and use the corresponding acceptance-checking script version before deciding another paid run is needed; do not reset operation IDs to manufacture a fresh result. See [handoff](../handoff.md#parallel-branch-evidence).
 
 For a new deployment, follow the [devnet runbook](../deployment.md#devnet-deployment-runbook-t09-m2), including key initialization, program-ID alignment/build and circuit manifest checks. Do not regenerate role or proving keys for an existing deployment. The deterministic development setup is unsuitable for production funds.
 

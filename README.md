@@ -1,14 +1,20 @@
 # Veilo
 
-Veilo is a single-owner workspace for AI agents on Solana devnet. Owners configure jobs, approved services and spending limits; an independent control/wallet service authorizes purchases. A Groth16 note pool can fund fresh payment wallets, which make ordinary x402 merchant transfers. The owner retains local attribution; amounts, wallets, merchant payments and timing remain public.
+Veilo is a single-owner workspace for AI agents on Solana devnet. Owners configure jobs, approved services and spending limits; an independent control/wallet service authorizes purchases. A Groth16 note pool can fund fresh payment wallets, which make ordinary x402 merchant transfers. PRD v3.2 adds a marketplace where buyers hire reviewed specialist agents and sellers receive direct payments; marketplace implementation is pending in this checkout. The owner retains local attribution; amounts, wallets, merchant payments and timing remain public.
 
 ## Current status
 
 - **verified on devnet:** only the recorded [M2 private-pool run](artifacts/evidence/m2-summary.json), including a 0.01 test-USDC payment to **PayAI Echo**, not the Veilo gateway. It used synthetic participants and an operator-confirmed authority stand-in.
 - **verified on local test validator:** private payments, credits, concurrency, revoke, fault recovery and encrypted restore; [30/30 integration cases](artifacts/evidence/integration-2026-10-17T00-36-54-669Z.json), with a **fixture / mock provider**.
-- Shawn, Prince and Mira flows have only local rehearsal evidence with a **fixture / mock provider**. Research datasets are fictional CC0 demo data. Live agent inference and the Veilo gateway devnet demo are **not yet run**: `pnpm demo:run -- --execute --confirm` is the outstanding operator gate. Funded dashboard screenshots and browser-wallet signing are also pending.
+- Shawn, Prince and Mira flows have only local rehearsal evidence with a **fixture / mock provider**. Research datasets are fictional CC0 demo data. Complete live-agent acceptance evidence is missing here. The parallel deployment branch reports an earlier devnet gateway execution without its run-state/receipt/task files in this checkout; recover/review that state before another paid run. Funded dashboard screenshots and browser-wallet signing are also pending.
 
 This is an unaudited prototype with a deterministic development trusted setup whose toxic waste is derivable. Use devnet test funds only. Local caps are off-chain controls; pool membership is not an anonymity score. See [current status](docs/guide/status.md), [build status](docs/build-status.md) and [known risks](docs/security/risks.md).
+
+## Marketplace extension (PRD v3.2)
+
+Accepted scope includes reviewed searchable specialist listings, seller onboarding, one specialist per hire, private job inputs/deliverables/receipts, direct x402 seller payments, explicit zero platform fees and earnings shown as finalized receipt history. Supabase Auth/Postgres/private Storage hold marketplace identity and product data; local control/wallet remain the spending authority. Every workspace still has one owner, and the original local stack must run without Supabase.
+
+**Marketplace acceptance: not yet run in this checkout.** Fixed execution roles, a single-merchant managed gateway and absent cloud identity/job/receipt workflows are concrete gaps. Read the [marketplace guide](docs/guide/marketplace.md) and [T17–T23 triage with all 14 acceptance checks](docs/guide/marketplace-triage.md). These requirements do not imply marketplace features have shipped.
 
 ## Architecture at a glance
 

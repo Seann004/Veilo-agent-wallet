@@ -10,6 +10,7 @@ export default defineConfig({
   themeConfig: {
     siteTitle: 'Veilo / Docs',
     nav: [
+      { text: 'Marketplace', link: '/guide/marketplace' },
       { text: 'Design', link: '/guide/architecture' },
       { text: 'Security', link: '/security/assessment' },
       { text: 'AI context', link: '/ai-context' }
@@ -23,6 +24,10 @@ export default defineConfig({
         { text: 'Handoff gaps', link: '/handoff' },
         { text: 'Agent workflows', link: '/guide/agents' },
         { text: 'Context for AI tools', link: '/ai-context' }
+      ] },
+      { text: 'Marketplace · v3.2 scope', items: [
+        { text: 'Specialist marketplace', link: '/guide/marketplace' },
+        { text: 'Implementation triage & acceptance', link: '/guide/marketplace-triage' }
       ] },
       { text: 'Technical design', items: [
         { text: 'Architecture', link: '/guide/architecture' },
