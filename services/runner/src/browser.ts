@@ -19,6 +19,10 @@ export interface PageReader {
 const MAX_TEXT = 8_000;
 const MAX_LINKS = 20;
 const NAV_TIMEOUT_MS = 20_000;
+const MAX_REDIRECTS = 5;
+const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
+/** Reading text needs documents, scripts, styles and data; everything heavier is refused. */
+const SKIPPED_TYPES = new Set(["image", "media", "font", "manifest", "texttrack", "eventsource", "websocket", "other"]);
 
 // Runs in the page: visible text and outgoing http(s) links only.
 const EXTRACT = `(() => {
@@ -57,9 +61,9 @@ export async function publicUrl(u: URL, cache: Map<string, boolean> = new Map())
 }
 
 /**
- * Read-only browsing in a fresh, cookie-less Chrome context per page. Every request (page,
- * script, image, frame) is fetched here with redirects off and checked against publicUrl, and
- * every redirect target is checked before the browser may follow it; WebSockets are closed,
+ * Read-only browsing in a fresh, cookie-less Chrome context per page. Every request is fetched
+ * here and checked against publicUrl; redirects are followed here hop by hop (at most five, each
+ * checked), heavy resource types and responses over 5 MB are refused, WebSockets are closed,
  * downloads are off, and nothing is typed or submitted. The final page URL is checked again.
  * DNS is resolved separately for the check and for the fetch, so a rebinding window remains;
  * browsing is therefore opt-in per agent and bounded per task by control.
@@ -102,25 +106,32 @@ export class ChromeReader implements PageReader {
         } catch {
           return route.abort("blockedbyclient");
         }
-        if ((req.method() !== "GET" && req.method() !== "HEAD") || !(await allowed(u))) return route.abort("blockedbyclient");
-        let resp;
-        try {
-          // Redirect hops never reach this handler, so each one is fetched and checked here.
-          resp = await route.fetch({ maxRedirects: 0, timeout: NAV_TIMEOUT_MS });
-        } catch {
-          return route.abort("failed");
-        }
-        if (resp.status() >= 300 && resp.status() < 400) {
-          const location = resp.headers()["location"];
-          let next: URL | null;
+        if ((req.method() !== "GET" && req.method() !== "HEAD") || SKIPPED_TYPES.has(req.resourceType()) || !(await allowed(u))) return route.abort("blockedbyclient");
+        // Redirects are followed here, one checked hop at a time; the browser only ever sees the final response.
+        let target = u;
+        for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+          let resp;
           try {
-            next = location ? new URL(location, u) : null;
+            resp = await route.fetch({ url: target.toString(), maxRedirects: 0, timeout: NAV_TIMEOUT_MS });
           } catch {
-            next = null;
+            return route.abort("failed");
           }
-          if (!next || !(await allowed(next))) return route.abort("blockedbyclient");
+          if (resp.status() >= 300 && resp.status() < 400) {
+            let next: URL | null;
+            try {
+              next = resp.headers()["location"] ? new URL(resp.headers()["location"]!, target) : null;
+            } catch {
+              next = null;
+            }
+            if (!next || !(await allowed(next))) return route.abort("blockedbyclient");
+            target = next;
+            continue;
+          }
+          const declared = Number(resp.headers()["content-length"] ?? "0");
+          if (declared > MAX_RESPONSE_BYTES || (await resp.body()).length > MAX_RESPONSE_BYTES) return route.abort("blockedbyclient");
+          return route.fulfill({ response: resp });
         }
-        return route.fulfill({ response: resp });
+        return route.abort("blockedbyclient");
       });
       const page = await context.newPage();
       page.on("dialog", (d) => void d.dismiss());

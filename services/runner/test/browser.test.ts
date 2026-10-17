@@ -17,7 +17,19 @@ beforeAll(async () => {
       return res.end();
     }
     if (req.url === "/to-ok") {
+      res.writeHead(302, { location: "/hop2" });
+      return res.end();
+    }
+    if (req.url === "/hop2") {
       res.writeHead(302, { location: "/ok" });
+      return res.end();
+    }
+    if (req.url === "/hop-to-metadata") {
+      res.writeHead(302, { location: "/to-metadata" });
+      return res.end();
+    }
+    if (req.url === "/loop") {
+      res.writeHead(302, { location: "/loop" });
       return res.end();
     }
     if (req.url === "/ws-page") {
@@ -25,7 +37,7 @@ beforeAll(async () => {
         const ws = new WebSocket("ws://127.0.0.1:1/x"); ws.onopen = () => { document.body.innerText = "socket opened"; };
       </script></body></html>`);
     }
-    res.end("<html><title>ok</title><body>public page text</body></html>");
+    return res.end("<html><title>ok</title><body>public page text</body></html>");
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -54,10 +66,12 @@ describe.skipIf(!existsSync(CHROME))("read-only browser (installed Chrome)", () 
   // The test server stands in for a public site; everything else keeps the real rule.
   const onlyTestServer = (u: URL) => Promise.resolve(u.origin === base);
 
-  it("checks every redirect hop: a public page cannot redirect into a private address", async () => {
+  it("checks every redirect hop: no chain can reach a private address, and loops stop", async () => {
     const reader = new ChromeReader({ executablePath: CHROME, allowUrl: onlyTestServer });
     try {
       await expect(reader.read(`${base}/to-metadata`)).rejects.toThrow();
+      await expect(reader.read(`${base}/hop-to-metadata`)).rejects.toThrow();
+      await expect(reader.read(`${base}/loop`)).rejects.toThrow();
       const ok = await reader.read(`${base}/to-ok`);
       expect(ok.text).toContain("public page text");
     } finally {
