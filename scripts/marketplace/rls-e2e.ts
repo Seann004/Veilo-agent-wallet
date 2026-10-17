@@ -12,7 +12,15 @@ import type { AddressInfo } from "node:net";
 import { generateKeyPair, getAddressFromPublicKey, getBase58Decoder, signBytes } from "@solana/kit";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DEVNET_GENESIS_HASH, DEMO_TOKEN_MINT, findRepoRoot, loadDotEnv } from "@veilo/contracts";
-import { CONTROLLER_HEADERS, controllerRegistrationMessage, controllerSigningMessage, payerBindingMessage } from "@veilo/contracts/marketplace";
+import {
+  CONTROLLER_HEADERS,
+  controllerRegistrationMessage,
+  controllerSigningMessage,
+  payerBindingMessage,
+  runInputsDigest,
+  workflowApprovalDigest,
+  type WorkflowApprovalTerms,
+} from "@veilo/contracts/marketplace";
 import { createApp } from "../../services/marketplace/src/app";
 import { deriveAta, type Chain, type ParsedTransaction } from "../../services/marketplace/src/chain";
 import type { MarketplaceConfig } from "../../services/marketplace/src/config";
@@ -328,6 +336,115 @@ async function main() {
     record("declining one refund keeps the claim open while another approved refund is pending", decline.status === 200 && afterDecline.body?.job?.financial_state === "refund_requested", `financial ${afterDecline.body?.job?.financial_state}`);
     const earlyRefund = await call("POST", `/jobs/${hire2.body.jobId}/refund-requests`, { token: A.token, body: { amount: "1", returnAddress: buyerA.address, reason: "early" } });
     record("a refund cannot be requested while a job can still run", earlyRefund.status === 409 || earlyRefund.status === 503, `status ${earlyRefund.status}`);
+
+    // ---- workflows (§26.7) ---------------------------------------------------------------------
+    const wfSlug = `rls-wf-${randomUUID().slice(0, 8)}`;
+    const wf = await call("POST", "/creator/workflows", { token: S.token, body: { slug: wfSlug, category: "research" } });
+    record("any signed-in creator with a payout profile can create a workflow", wf.status === 200, `status ${wf.status}`);
+    const wfBody = (over: Record<string, unknown> = {}) => ({
+      category: "research",
+      title: "RLS test workflow",
+      summary: "Fixture workflow used by the access-control test.",
+      description: "One paid step over the fixture listing; not a real service.",
+      safetyPromise: "",
+      runInputs: [{ name: "topic", label: "Topic", maxChars: 200 }],
+      steps: [{ toolKind: "listing", toolId: version.body.versionId, maxBaseUnits: "10000", inputs: { brief: { from: "run_input", name: "topic" } } }],
+      totalMaxBaseUnits: "10000",
+      payoutVersionId: payout.body.payoutVersionId,
+      sampleOutput: null,
+      ...over,
+    });
+    const badTotal = await call("POST", `/creator/workflows/${wf.body.workflowId}/versions`, { token: S.token, body: wfBody({ totalMaxBaseUnits: "9000" }) });
+    record("a workflow whose total differs from its step maxima is refused before storage", badTotal.status === 400 && (badTotal.body?.problems ?? []).includes("total must equal the sum of step maxima"));
+    const wv = await call("POST", `/creator/workflows/${wf.body.workflowId}/versions`, { token: S.token, body: wfBody() });
+    const pub = await call("POST", `/creator/versions/${wv.body?.versionId}/publish`, { token: S.token });
+    record("a workflow of approved, published tools goes live without review", wv.body?.decision === "live" && pub.body?.status === "live", `decision ${wv.body?.decision} publish ${pub.body?.status}`);
+    const anonWf = await anon.from("workflow_catalog").select("slug, steps").eq("slug", wfSlug);
+    record("anonymous users read the live workflow from the sanitized catalogue", (anonWf.data?.length ?? 0) === 1 && anonWf.data?.[0]?.steps?.[0]?.recipient === seller.address);
+    const anonDrafts = await anon.from("workflow_versions").select("id").eq("workflow_id", wf.body.workflowId);
+    const otherDrafts = await B.client.from("workflow_versions").select("id").eq("workflow_id", wf.body.workflowId);
+    const ownDrafts = await S.client.from("workflow_versions").select("id").eq("workflow_id", wf.body.workflowId);
+    record("workflow drafts are visible to their creator only", (anonDrafts.data?.length ?? 0) === 0 && (otherDrafts.data?.length ?? 0) === 0 && (ownDrafts.data?.length ?? 0) === 1);
+    const clientWrite = await S.client.from("workflow_catalog").update({ total_base_units: 1 }).eq("slug", wfSlug).select("slug");
+    record("clients cannot write the workflow catalogue", (clientWrite.data?.length ?? 0) === 0);
+
+    const extPayTo = await wallet();
+    const ext = await call("POST", "/tools/external", {
+      token: B.token,
+      body: {
+        slug: `rls-ext-${randomUUID().slice(0, 8)}`,
+        title: "RLS fixture paid RPC",
+        summary: "Fixture external x402 tool for the access-control test.",
+        origin: "https://rpc.example.com",
+        resourcePath: "/solana-mainnet",
+        payTo: extPayTo.address,
+        payToAta: await deriveAta(extPayTo.address, DEMO_TOKEN_MINT),
+        unitPriceBaseUnits: "1000",
+        callsPerStep: 3,
+        feePayers: [controllerKey.address],
+        rpcMethods: ["getSlot"],
+        io: { inputs: [{ name: "query", kind: "text", required: true, maxChars: 500 }], output: { kind: "json" } },
+      },
+    });
+    const anonExt = await anon.from("external_tools").select("id").eq("id", ext.body?.toolId ?? "");
+    record("a proposed external tool waits for review and is not public", ext.status === 200 && ext.body?.status === "pending" && (anonExt.data?.length ?? 0) === 0);
+    const wf2Slug = `rls-wf2-${randomUUID().slice(0, 8)}`;
+    const wf2 = await call("POST", "/creator/workflows", { token: S.token, body: { slug: wf2Slug, category: "data" } });
+    const wv2 = await call("POST", `/creator/workflows/${wf2.body.workflowId}/versions`, {
+      token: S.token,
+      body: wfBody({
+        category: "data",
+        steps: [
+          { toolKind: "external", toolId: ext.body?.toolId, maxBaseUnits: "3000", inputs: { query: { from: "run_input", name: "topic" } } },
+          { toolKind: "listing", toolId: version.body.versionId, maxBaseUnits: "10000", inputs: { brief: { from: "step", step: 0 } } },
+        ],
+        totalMaxBaseUnits: "13000",
+      }),
+    });
+    const pub2 = await call("POST", `/creator/versions/${wv2.body?.versionId}/publish`, { token: S.token });
+    const notLive = await anon.from("workflow_catalog").select("slug").eq("slug", wf2Slug);
+    record("a workflow that uses a tool in review goes to review, not live", wv2.body?.decision === "review" && pub2.body?.status === "in_review" && (notLive.data?.length ?? 0) === 0, `decision ${wv2.body?.decision}`);
+    await call("POST", `/operator/external-tools/${ext.body?.toolId}/status`, { token: operatorToken, body: { status: "approved", note: "rls test" } });
+    const rev2 = await call("POST", `/operator/workflow-versions/${wv2.body?.versionId}/review`, { token: operatorToken, body: { approve: true, note: null } });
+    record("operator review publishes it once its tools are approved", rev2.body?.result === "live", `result ${rev2.body?.result}`);
+
+    const terms: WorkflowApprovalTerms = {
+      workflowVersionId: wv.body.versionId,
+      network: config.network,
+      mint: config.mint,
+      steps: [{ toolKind: "listing", toolId: version.body.versionId, recipient: seller.address, maxBaseUnits: "10000" }],
+      totalMaxBaseUnits: "10000",
+      runInputsDigest: runInputsDigest({ topic: "repair cafes" }),
+    };
+    const runReq = (t: WorkflowApprovalTerms, digest = workflowApprovalDigest(t), key = `wfrun-${randomUUID()}`) =>
+      signedCall("POST", "/controller/workflow-runs", { idempotencyKey: key, terms: t, approvalDigest: digest, localAgentId: null, isTest: false }, keyId);
+    const wrongRecipient = { ...terms, steps: [{ ...terms.steps[0]!, recipient: buyerA.address }] };
+    const badRun = await runReq(wrongRecipient);
+    const badDigest = await runReq(terms, "0".repeat(64));
+    record("a run whose approval names another recipient or digest is refused", badRun.status === 409 && badDigest.status === 409, `statuses ${badRun.status}/${badDigest.status}`);
+    const run = await runReq(terms);
+    record("the local controller records a run bound to the approved terms", run.status === 200 && typeof run.body?.runId === "string");
+    const runA = await A.client.from("workflow_runs").select("id").eq("id", run.body?.runId ?? "");
+    const runB = await B.client.from("workflow_runs").select("id").eq("id", run.body?.runId ?? "");
+    const stepsB = await B.client.from("workflow_run_steps").select("run_id").eq("run_id", run.body?.runId ?? "");
+    record("workflow runs and their steps are private to the buyer", (runA.data?.length ?? 0) === 1 && (runB.data?.length ?? 0) === 0 && (stepsB.data?.length ?? 0) === 0);
+    await signedCall("POST", `/controller/workflow-runs/${run.body?.runId}/report`, { status: "approved", stopReason: null, steps: [] }, keyId);
+    await signedCall("POST", `/controller/workflow-runs/${run.body?.runId}/report`, { status: "running", stopReason: null, steps: [] }, keyId);
+    const fakeDone = await signedCall("POST", `/controller/workflow-runs/${run.body?.runId}/report`, { status: "completed", stopReason: null, steps: [] }, keyId);
+    record("a run cannot complete while a step is unpaid", fakeDone.status === 409, `status ${fakeDone.status}`);
+    const skipAhead = await signedCall("POST", `/controller/workflow-runs/${run.body?.runId}/report`, { status: "rejected", stopReason: null, steps: [] }, keyId);
+    record("run status follows its state machine", skipAhead.status === 409, `status ${skipAhead.status}`);
+
+    const suspend = await call("POST", `/operator/workflows/${wf.body.workflowId}/status`, { token: operatorToken, body: { status: "suspended" } });
+    const gone = await anon.from("workflow_catalog").select("slug").eq("slug", wfSlug);
+    const halted = await A.client.from("workflow_runs").select("status").eq("id", run.body?.runId ?? "").single();
+    const afterSuspend = await runReq(terms);
+    record("operator suspension removes the workflow, halts its runs and refuses new ones", suspend.status === 200 && (gone.data?.length ?? 0) === 0 && halted.data?.status === "halted" && afterSuspend.status === 403, `run ${halted.data?.status} new ${afterSuspend.status}`);
+    const reviewWhileSuspended = await call("POST", `/creator/versions/${wv.body?.versionId}/publish`, { token: S.token });
+    record("a creator cannot republish a suspended workflow", reviewWhileSuspended.status === 403, `status ${reviewWhileSuspended.status}`);
+    await call("POST", `/operator/external-tools/${ext.body?.toolId}/status`, { token: operatorToken, body: { status: "suspended", note: "rls test cleanup" } });
+    const extGone = await anon.from("workflow_catalog").select("slug").eq("slug", wf2Slug);
+    record("suspending a tool removes every workflow that uses it", (extGone.data?.length ?? 0) === 0);
 
     await call("POST", `/operator/listings/${listing.body.listingId}/status`, { token: operatorToken, body: { status: "archived" } });
   } finally {

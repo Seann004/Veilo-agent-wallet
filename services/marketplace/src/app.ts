@@ -30,6 +30,7 @@ import {
 } from "./auth";
 import { must } from "./db";
 import { errorHandler, MarketError } from "./errors";
+import { registerWorkflowRoutes } from "./workflows";
 import { addPayout, completeJob, createHire, downloadLink, sellerOriginAllowed, submitEvidence, type Deps } from "./service";
 
 type Handler = (req: Request & { rawBody?: Buffer }, res: Response) => Promise<unknown>;
@@ -738,6 +739,7 @@ export function createApp(deps: Deps): Express {
     }),
   );
 
+  registerWorkflowRoutes(app, deps, { route, user, workspaceOf, controller, operator, sellerHost });
   app.use((_req, res) => {
     res.status(404).json({ error: { code: "NOT_FOUND", message: "route not found" } });
   });
