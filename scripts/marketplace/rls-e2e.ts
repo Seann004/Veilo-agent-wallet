@@ -462,12 +462,14 @@ async function main() {
     };
     const run2 = await runReq(terms2);
     const run2Id = run2.body?.runId as string;
-    const bindMsg = payerBindingMessage(`wf:${run2Id}:0`, workflowApprovalDigest(terms2), payerB.address);
-    const forgedPayer = await signedCall("POST", `/controller/workflow-runs/${run2Id}/steps/0/payer`, { payer: payerB.address, payerProof: await payerA.sign(bindMsg) }, keyId);
-    const bound = await signedCall("POST", `/controller/workflow-runs/${run2Id}/steps/0/payer`, { payer: payerB.address, payerProof: await payerB.sign(bindMsg) }, keyId);
-    const otherMsg = payerBindingMessage(`wf:${run2Id}:0`, workflowApprovalDigest(terms2), payerA.address);
-    const rebindPayer = await signedCall("POST", `/controller/workflow-runs/${run2Id}/steps/0/payer`, { payer: payerA.address, payerProof: await payerA.sign(otherMsg) }, keyId);
+    const [stepPayer, stepPayer2] = await Promise.all([wallet(), wallet()]);
+    const bindAs = (p: Wallet) => payerBindingMessage(`wf:${run2Id}:0`, workflowApprovalDigest(terms2), p.address);
+    const hirePayer = await signedCall("POST", `/controller/workflow-runs/${run2Id}/steps/0/payer`, { payer: payerA.address, payerProof: await payerA.sign(bindAs(payerA)) }, keyId);
+    const forgedPayer = await signedCall("POST", `/controller/workflow-runs/${run2Id}/steps/0/payer`, { payer: stepPayer.address, payerProof: await payerA.sign(bindAs(stepPayer)) }, keyId);
+    const bound = await signedCall("POST", `/controller/workflow-runs/${run2Id}/steps/0/payer`, { payer: stepPayer.address, payerProof: await stepPayer.sign(bindAs(stepPayer)) }, keyId);
+    const rebindPayer = await signedCall("POST", `/controller/workflow-runs/${run2Id}/steps/0/payer`, { payer: stepPayer2.address, payerProof: await stepPayer2.sign(bindAs(stepPayer2)) }, keyId);
     record("an external step's payer is bound once, only with that payer's own proof", forgedPayer.status === 403 && bound.status === 200 && rebindPayer.status === 409, `forged ${forgedPayer.status} bound ${bound.status} rebind ${rebindPayer.status}`);
+    record("a payer already bound to a hire cannot be bound to a workflow step", hirePayer.status === 409, `status ${hirePayer.status}`);
     const unboundPaid = await signedCall(
       "POST",
       `/controller/workflow-runs/${run.body?.runId}/report`,

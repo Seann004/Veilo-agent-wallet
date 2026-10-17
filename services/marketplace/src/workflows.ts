@@ -214,12 +214,13 @@ export async function verifiedSteps(deps: Deps, workspaceId: string, runId: stri
   const { db, chain, config } = deps;
   const run = (await db.admin.from("workflow_runs").select("id").eq("id", runId).eq("buyer_workspace_id", workspaceId).maybeSingle()).data;
   if (!run) throw new MarketError("NOT_FOUND", "workflow run not found");
-  const rows = ((await db.admin.from("workflow_run_steps").select("step_index, tool_kind, tool_id, max_base_units, payer").eq("run_id", runId)).data ?? []) as Array<{
+  const rows = ((await db.admin.from("workflow_run_steps").select("step_index, tool_kind, tool_id, max_base_units, payer, payer_bound_slot").eq("run_id", runId)).data ?? []) as Array<{
     step_index: number;
     tool_kind: "listing" | "external";
     tool_id: string;
     max_base_units: string | number;
     payer: string | null;
+    payer_bound_slot: string | number | null;
   }>;
   const out: ReportedStep[] = [];
   for (const s of reported) {
@@ -259,12 +260,14 @@ export async function verifiedSteps(deps: Deps, workspaceId: string, runId: stri
     if ((reused.data ?? []).some((r: { run_id: string; step_index: number }) => r.run_id !== runId || r.step_index !== s.index)) {
       throw new MarketError("IDEMPOTENCY_CONFLICT", `step ${s.index} reuses a payment recorded for another step`);
     }
-    if (row.payer === null) throw new MarketError("POLICY_DENIED", `step ${s.index} has no bound payer`);
+    if (row.payer === null || row.payer_bound_slot === null) throw new MarketError("POLICY_DENIED", `step ${s.index} has no bound payer`);
+    const boundSlot = BigInt(String(row.payer_bound_slot));
     const unit = BigInt(String(tool.unit_price_base_units));
     for (const sig of sigs) {
       const outcome = checkTransfer(await chain.finalizedTransaction(sig), { signature: sig, mint: tool.mint, recipient: tool.pay_to, recipientAta: tool.pay_to_ata, amount: unit, sourceOwner: row.payer });
       if (outcome.status === "pending") throw new MarketError("SETTLEMENT_UNCERTAIN", `step ${s.index} payment is not finalized yet`);
       if (outcome.status === "invalid") throw new MarketError("SERVICE_NOT_ALLOWED", `step ${s.index} payment rejected: ${outcome.reason}`);
+      if (outcome.transfer.slot <= boundSlot) throw new MarketError("SERVICE_NOT_ALLOWED", `step ${s.index} payment landed before its payer was bound`);
     }
     out.push({ ...s, paidBaseUnits: (unit * BigInt(sigs.length)).toString(), merchantSignatures: sigs });
   }
@@ -577,7 +580,9 @@ export function registerWorkflowRoutes(app: Express, deps: Deps, h: WorkflowRout
       if (!(await verifyEd25519(b.payer, b.payerProof, payerBindingMessage(workflowStepHireKey(runId, index), run.approval_digest, b.payer)))) {
         throw new MarketError("FORBIDDEN", "payer proof is invalid");
       }
-      await db.rpc("mk_bind_workflow_payer", { p_workspace: ctl.workspaceId, p_run: runId, p_index: index, p_payer: b.payer });
+      // Transfers count only after this slot, so a payment made before the binding cannot be claimed.
+      const boundSlot = (await deps.chain.finalizedSlot()).toString();
+      await db.rpc("mk_bind_workflow_payer", { p_workspace: ctl.workspaceId, p_run: runId, p_index: index, p_payer: b.payer, p_bound_slot: boundSlot });
       return { ok: true };
     }),
   );
