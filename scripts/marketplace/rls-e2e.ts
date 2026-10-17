@@ -570,6 +570,17 @@ async function main() {
     const mcpTool = { name: "get_price", description: "Price of a coin", inputSchema: { type: "object", properties: { ids: { type: "string" } }, required: ["ids"] } };
     const proposed = await call("POST", "/tools/connectors", { token: B.token, body: { id: cid, title: "RLS fixture MCP", endpoint: "https://mcp.rls.veilo.invalid/mcp", tools: [mcpTool] } });
     const anonConnector = await anon.from("connector_definitions").select("id").eq("id", cid);
+    const mineB = await call("GET", "/tools/connectors/mine", { token: B.token });
+    const mineA = await call("GET", "/tools/connectors/mine", { token: A.token });
+    const restA = await A.client.from("connector_definitions").select("id").eq("id", cid);
+    const mineAnon = await call("GET", "/tools/connectors/mine");
+    const ownRow = (mineB.body?.connectors ?? []).find((c: Json) => c.id === cid);
+    record(
+      "a user's connector proposals are listed only to that user",
+      mineB.status === 200 && ownRow?.reviewStatus === "pending" && /^[0-9a-f]{64}$/.test(ownRow?.tools?.[0]?.sha256 ?? "") &&
+        mineA.status === 200 && !(mineA.body?.connectors ?? []).some((c: Json) => c.id === cid) && (restA.data?.length ?? 0) === 0 && mineAnon.status === 401,
+      `B ${mineB.status} A ${mineA.status} rest ${restA.data?.length ?? "error"} anon ${mineAnon.status}`,
+    );
     const mcpListing = await call("POST", "/seller/listings", { token: S.token, body: { slug: `rls-mcp-${randomUUID().slice(0, 8)}` } });
     const mcpVersion = await call("POST", `/seller/listings/${mcpListing.body.listingId}/versions`, {
       token: S.token,
@@ -594,6 +605,8 @@ async function main() {
     const pinEarly = await call("POST", `/seller/versions/${mcpVersion.body.versionId}/mcp-tool`, { token: S.token, body: { connectorId: cid, toolName: "get_price", argsTemplate: { ids: "{{input}}" } } });
     record("a proposed MCP connector is private and unusable until the operator approves it", proposed.status === 200 && proposed.body?.status === "pending" && (anonConnector.data?.length ?? 0) === 0 && pinEarly.status === 403, `pin ${pinEarly.status}`);
     await call("POST", `/operator/connectors/${cid}/review`, { token: operatorToken, body: { approve: true, note: "rls test" } });
+    const reviewed = ((await call("GET", "/tools/connectors/mine", { token: B.token })).body?.connectors ?? []).find((c: Json) => c.id === cid);
+    record("the proposer sees the operator's review status and note", reviewed?.reviewStatus === "approved" && reviewed?.reviewNote === "rls test", `status ${reviewed?.reviewStatus}`);
     const badArgs = await call("POST", `/seller/versions/${mcpVersion.body.versionId}/mcp-tool`, { token: S.token, body: { connectorId: cid, toolName: "get_price", argsTemplate: { ids: "coin-{{input}}", secret: "x" } } });
     const pinned = await call("POST", `/seller/versions/${mcpVersion.body.versionId}/mcp-tool`, { token: S.token, body: { connectorId: cid, toolName: "get_price", argsTemplate: { ids: "{{input}}" } } });
     record("an MCP tool is pinned only with arguments that place the input as a whole value", badArgs.status === 400 && pinned.status === 200 && /^[0-9a-f]{64}$/.test(pinned.body?.toolSha256 ?? ""), `bad ${badArgs.status} pin ${pinned.status}`);

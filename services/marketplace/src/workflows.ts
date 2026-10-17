@@ -527,6 +527,26 @@ export function registerWorkflowRoutes(app: Express, deps: Deps, h: WorkflowRout
       return { connectorId: await db.rpc<string>("mk_propose_connector", { p_user: actor.userId, c, p_manifest: mcpManifestDigest(c.tools) }), status: "pending" };
     }),
   );
+  app.get(
+    "/tools/connectors/mine",
+    route(async (req) => {
+      const actor = await h.user(req);
+      // Read as the caller, so RLS hides other users' pending proposals whatever this filter says.
+      const rows = must(
+        await db.asUser(actor.accessToken).from("connector_definitions").select("id, title, endpoint, review_status, review_note, tools, created_at").eq("proposed_by", actor.userId).order("created_at", { ascending: false }).limit(100),
+      ) as Array<{ id: string; title: string; endpoint: string; review_status: string; review_note: string | null; tools: McpToolPin[] }>;
+      return {
+        connectors: rows.map((c) => ({
+          id: c.id,
+          title: c.title,
+          endpoint: c.endpoint,
+          reviewStatus: c.review_status,
+          reviewNote: c.review_note,
+          tools: c.tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema, sha256: mcpToolDigest(t) })),
+        })),
+      };
+    }),
+  );
   app.post(
     "/seller/versions/:id/mcp-tool",
     route(async (req) => {
