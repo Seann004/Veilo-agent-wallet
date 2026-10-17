@@ -180,6 +180,7 @@ export class FakeMarketplace {
       tamper?: Partial<MarketplaceQuote>;
       state?: string;
       runtime?: Partial<SellerHostJobView["runtime"]>;
+      tool?: SellerHostJobView["tool"];
       expiresAt?: Date;
     } = {},
   ): Promise<{ jobId: string; input: { jobId: string; listingVersionId: string; quoteDigest: string; brief: string }; quote: MarketplaceQuote }> {
@@ -229,6 +230,7 @@ export class FakeMarketplace {
         ...o.runtime,
       },
       inputs: [],
+      ...(o.tool !== undefined ? { tool: o.tool } : {}),
     };
     this.jobs.set(jobId, { view, evidence: [], claims: 0, grants: 0, lease: undefined, heartbeats: 0, completes: [], fails: [] });
     return { jobId, input: { jobId, listingVersionId, quoteDigest: quote.quoteDigest, brief }, quote };

@@ -28,6 +28,12 @@ export const sellerHostJobViewSchema = z
       })
       .strict(),
     inputs: z.array(z.object({ kind: z.string(), body: z.string(), createdAt: z.string() }).strict()),
+    /** The listing's pinned provider tool, when the listing is a provider adapter on the seller's own host. */
+    tool: z
+      .object({ provider: z.enum(["higgsfield", "makeugc", "zernio"]), toolName: z.string(), manifestSha256: z.string().regex(/^[0-9a-f]{64}$/) })
+      .strict()
+      .nullable()
+      .optional(),
   })
   .strict();
 export type SellerHostJobView = z.infer<typeof sellerHostJobViewSchema>;

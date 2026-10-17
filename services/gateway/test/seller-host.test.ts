@@ -6,6 +6,8 @@ import { deriveAta } from "@veilo/x402-client";
 import { gatewayRole, loadSellerHostConfig } from "../src/seller-host/config";
 import { buildPaymentHeader, makeHarness, MINT, type Harness, type HarnessOptions } from "./harness";
 import { FakeMarketplace } from "./marketplace-fake";
+import { PROVIDER_MANIFESTS, toolManifestDigest } from "@veilo/contracts/marketplace";
+import type { ProviderAdapter, ProviderResult } from "../src/seller-host/providers";
 
 const SKU = "specialist-job";
 const DELIVERABLE = "## Summary\nRepair cafes extend product life.\n\n## Key points\n- Fewer discarded appliances.";
@@ -465,5 +467,82 @@ describe("seller-host configuration", () => {
       expect(() => loadSellerHostConfig(c, gw, { ...env, ...extra })).toThrow(/seller-host configuration|GATEWAY_ROLE/);
     }
     expect(loadSellerHostConfig(c, gw, { ...env, MARKETPLACE_URL: "http://127.0.0.1:6199" }).marketplaceUrl).toBe("http://127.0.0.1:6199");
+  });
+});
+
+describe("seller-host provider tools", () => {
+  const IMAGE = "https://cdn.provider.example/generated.png";
+
+  class StubAdapter implements ProviderAdapter {
+    readonly provider = "higgsfield" as const;
+    readonly manifest = PROVIDER_MANIFESTS.higgsfield;
+    readonly manifestSha256 = toolManifestDigest(PROVIDER_MANIFESTS.higgsfield);
+    readonly runs: Array<Record<string, string>> = [];
+    result: ProviderResult = { status: "succeeded", artifact: { kind: "image_url", url: IMAGE, providerJobId: "req_1" } };
+    constructor(public configured: boolean) {}
+    async run(_tool: string, inputs: Record<string, string>) {
+      this.runs.push(inputs);
+      return this.result;
+    }
+  }
+
+  const toolFor = (sha = toolManifestDigest(PROVIDER_MANIFESTS.higgsfield)) => ({ provider: "higgsfield" as const, toolName: "generate_image", manifestSha256: sha });
+  const remote = { kind: "remote_endpoint" as const, template: null };
+
+  async function providerHost(adapter: StubAdapter) {
+    mk = await new FakeMarketplace().start();
+    h = await makeHarness({ sellerHost: { marketplaceUrl: mk.url, token: mk.token }, providers: new Map([["higgsfield", adapter]]) });
+    return { h, mk };
+  }
+
+  it("quotes nothing and takes no payment while the provider is not configured or the manifest differs", async () => {
+    const off = new StubAdapter(false);
+    await providerHost(off);
+    const { token } = h!.account();
+    const job = await mk!.addJob({ runtime: remote, tool: toolFor() });
+    const q = await quoteJob(token, job.input);
+    expect(q.status).toBe(503);
+    expect(q.body.error.message).toBe("Provider not configured");
+    off.configured = true;
+    const changed = await mk!.addJob({ runtime: remote, tool: toolFor("0".repeat(64)) });
+    const q2 = await quoteJob(token, changed.input);
+    expect(q2.status).toBe(409);
+    expect(count("quotes")).toBe(0);
+    expect(off.runs).toHaveLength(0);
+  });
+
+  it("runs the provider once after settlement and delivers the media URL as untrusted text", async () => {
+    const adapter = new StubAdapter(true);
+    await providerHost(adapter);
+    const { token } = h!.account();
+    const job = await mk!.addJob({ runtime: remote, tool: toolFor(), brief: "A red bicycle at dawn" });
+    const { q, header } = await payJob(token, job.input);
+    const [a, b] = await Promise.all([h!.pay(token, q.ref, header), h!.pay(token, q.ref, header)]);
+    for (const r of [a, b]) expect(r.body.state).toBe("delivered");
+    expect(adapter.runs).toEqual([{ prompt: "A red bicycle at dawn" }]);
+    expect(mk!.job(job.jobId).completes[0]!.texts).toEqual([IMAGE]);
+    expect(a.body.result).toMatchObject({ provider: "higgsfield", status: "complete", providerJobId: "req_1" });
+    expect(h!.provider?.calls ?? []).toHaveLength(0);
+  });
+
+  it("a provider call interrupted by a crash becomes uncertain and is never resubmitted", async () => {
+    const adapter = new StubAdapter(true);
+    let crash = true;
+    adapter.run = async (_t, inputs) => {
+      adapter.runs.push(inputs);
+      if (crash) throw new Error("simulated crash during provider call");
+      return adapter.result;
+    };
+    await providerHost(adapter);
+    const { token } = h!.account();
+    const job = await mk!.addJob({ runtime: remote, tool: toolFor() });
+    const { q, header } = await payJob(token, job.input);
+    await h!.pay(token, q.ref, header).catch(() => undefined);
+    crash = false;
+    await h!.gateway.recover();
+    const r = await h!.call("GET", `/v1/purchases/${q.ref.quoteId}/result`, token);
+    expect(adapter.runs).toHaveLength(1);
+    expect(mk!.job(job.jobId).fails.at(-1)).toMatchObject({ code: "PROVIDER_UNCERTAIN", uncertain: true });
+    expect(r.body.state).toBe("paid_no_result");
   });
 });

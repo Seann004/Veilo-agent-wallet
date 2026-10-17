@@ -665,7 +665,13 @@ export function createApp(deps: Deps): Express {
   // ---- seller host (managed or remote, scoped) ------------------------------------------------
   app.get(
     "/internal/seller-host/jobs/:jobId",
-    route(async (req) => hostJob(req, uuid.parse(req.params.jobId))),
+    route(async (req) => {
+      const view = await hostJob(req, uuid.parse(req.params.jobId));
+      const tool = (await db.admin.from("tool_profiles").select("provider, tool_name, manifest_sha256").eq("listing_version_id", view.listingVersionId as string).eq("tool_kind", "provider_adapter").maybeSingle()).data as
+        | { provider: string; tool_name: string; manifest_sha256: string }
+        | null;
+      return { ...view, tool: tool ? { provider: tool.provider, toolName: tool.tool_name, manifestSha256: tool.manifest_sha256 } : null };
+    }),
   );
   app.post(
     "/internal/seller-host/jobs/:jobId/payment-evidence",

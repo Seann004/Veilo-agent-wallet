@@ -1,3 +1,5 @@
+import type { ToolProvider } from "@veilo/contracts/marketplace";
+import type { ProviderAdapter } from "../src/seller-host/providers";
 // Test-only harness: fake chain, facilitator and FIXTURE provider. Not used by the service.
 import { createHash } from "node:crypto";
 import { mkdtempSync } from "node:fs";
@@ -175,6 +177,7 @@ export interface HarnessOptions {
   provider?: FixtureProvider | null;
   /** Runs the gateway in the seller-host role against a (fake) marketplace. */
   sellerHost?: { marketplaceUrl: string; token: string; allowedRecipients?: string[] };
+  providers?: ReadonlyMap<ToolProvider, ProviderAdapter>;
   accountRateLimit?: AccountRateLimit;
   shared?: { chain: FakeChain; facilitator: FakeFacilitator; merchant: KeyPairSigner; clock: FakeClock; permitPem: { privateKeyPem: string; publicKeyPem: string } };
 }
@@ -232,6 +235,7 @@ export async function makeHarness(options: HarnessOptions = {}) {
     sleep: async () => undefined,
     ...(options.hooks ? { hooks: options.hooks } : {}),
     ...(options.sellerHost ? { marketplace: new MarketplaceClient({ baseUrl: options.sellerHost.marketplaceUrl, token: options.sellerHost.token }) } : {}),
+    ...(options.providers ? { providers: options.providers } : {}),
   });
   await gateway.refreshExternal();
   const server: Server = createApp(gateway, options.accountRateLimit ? { accountRateLimit: options.accountRateLimit } : {}).listen(0, "127.0.0.1");

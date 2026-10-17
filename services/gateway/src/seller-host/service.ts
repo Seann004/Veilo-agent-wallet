@@ -1,3 +1,4 @@
+import { PROVIDER_NOT_CONFIGURED, type ProviderResult } from "./providers";
 import { createHash, randomUUID } from "node:crypto";
 import { GATEWAY_CATALOG } from "@veilo/contracts/gateway";
 import {
@@ -36,7 +37,12 @@ export interface SpecialistQuoteTerms {
   maxOutputTokens: number;
   marketplaceQuote: MarketplaceQuote;
   runtime: SellerRuntime;
+  /** The pinned provider tool this job runs instead of a managed template. */
+  tool?: ProviderTool | undefined;
 }
+
+type ProviderTool = NonNullable<SellerHostJobView["tool"]>;
+type BoundRuntime = SellerRuntime & { tool?: ProviderTool | null };
 
 type Outcome = "complete" | "incomplete" | "failed" | "uncertain";
 
@@ -147,6 +153,26 @@ export class SellerHostService {
     if (amount <= 0n) throw new GatewayError(409, "SERVICE_NOT_ALLOWED", "Free jobs are not sold through x402");
 
     const runtime = view.runtime;
+    const tool = view.tool ?? null;
+    if (tool !== null) {
+      // A provider tool runs only on its seller's own host, with that host's key and the reviewed manifest.
+      if (runtime.kind !== "remote_endpoint") throw new GatewayError(409, "SERVICE_NOT_ALLOWED", "Provider tools run on the seller's own host");
+      const adapter = this.ctx.providers.get(tool.provider);
+      if (!adapter || !adapter.configured) throw new GatewayError(503, "PROVIDER_UNAVAILABLE", PROVIDER_NOT_CONFIGURED);
+      if (adapter.manifestSha256 !== tool.manifestSha256) throw new GatewayError(409, "SERVICE_NOT_ALLOWED", "The host runs a different tool manifest than the reviewed one");
+      if (!adapter.manifest.tools.some((t) => t.name === tool.toolName)) throw new GatewayError(409, "SERVICE_NOT_ALLOWED", "Tool is not in the pinned manifest");
+      return {
+        amount,
+        payTo: q.recipient,
+        merchantAta: q.recipientAta,
+        expiresAt: new Date(Math.min(now + s.quoteTtlSeconds * 1000, expiresAt)),
+        maxInputTokens: SPECIALIST.maxInputTokens as number,
+        maxOutputTokens: SPECIALIST.maxOutputTokens as number,
+        marketplaceQuote: q,
+        runtime,
+        tool,
+      };
+    }
     if (runtime.kind !== "managed_template" || runtime.template === null) {
       throw new GatewayError(409, "SERVICE_NOT_ALLOWED", "This host runs managed templates only");
     }
@@ -197,7 +223,7 @@ export class SellerHostService {
       quoteId,
       jobId,
       JSON.stringify(terms.marketplaceQuote),
-      JSON.stringify(terms.runtime),
+      JSON.stringify({ ...terms.runtime, tool: terms.tool ?? null }),
       now,
     );
   }
@@ -382,6 +408,8 @@ export class SellerHostService {
     brief: string,
     maxOutputTokens: number,
   ): Promise<{ stop: false } | { stop: true; code: GatewayErrorCode | null }> {
+    const tool = (bound.runtime as BoundRuntime).tool;
+    if (tool) return this.runProvider(purchaseId, bound.jobId, tool, lease, brief);
     // Nothing is sent upstream unless the marketplace confirms the lease is live right now.
     if (!this.ctx.inference.existing("purchase", purchaseId) && !(await this.heartbeat(purchaseId, bound.jobId, lease))) {
       this.dropLease(purchaseId);
@@ -451,6 +479,67 @@ export class SellerHostService {
         return { stop: false };
       }
     }
+  }
+
+  /**
+   * Runs a provider tool once per purchase. The start is recorded before the provider is called,
+   * so a crash or a re-claimed lease resolves to an uncertain outcome instead of a second job.
+   */
+  private async runProvider(purchaseId: string, jobId: string, tool: ProviderTool, lease: Lease, brief: string): Promise<{ stop: false } | { stop: true; code: GatewayErrorCode | null }> {
+    const f = this.row(purchaseId);
+    const started = f.result_json !== null && (JSON.parse(f.result_json) as { status?: string }).status === "provider_started";
+    if (started) {
+      this.update(purchaseId, {
+        outcome: "uncertain",
+        fail_code: "PROVIDER_UNCERTAIN",
+        result_json: JSON.stringify({ kind: "specialist_job", jobId, provider: tool.provider, status: "uncertain", message: "provider call was interrupted; it is not resubmitted" }),
+      });
+      return { stop: false };
+    }
+    const adapter = this.ctx.providers.get(tool.provider);
+    if (!adapter || !adapter.configured || adapter.manifestSha256 !== tool.manifestSha256) return { stop: true, code: "PROVIDER_UNAVAILABLE" };
+    if (!(await this.heartbeat(purchaseId, jobId, lease))) {
+      this.dropLease(purchaseId);
+      return { stop: false };
+    }
+    const manifestTool = adapter.manifest.tools.find((t) => t.name === tool.toolName);
+    const input = manifestTool?.io.inputs[0]?.name;
+    if (!input) return { stop: true, code: "SERVICE_NOT_ALLOWED" };
+    this.update(purchaseId, { result_json: JSON.stringify({ status: "provider_started", provider: tool.provider }) });
+    const every = this.ctx.settings.sellerHost?.heartbeatMs ?? 15_000;
+    const timer = setInterval(() => {
+      this.heartbeat(purchaseId, jobId, lease).catch(() => undefined);
+    }, every);
+    timer.unref();
+    let result: ProviderResult;
+    try {
+      result = await adapter.run(tool.toolName, { [input]: brief }, { idempotencyKey: purchaseId });
+    } finally {
+      clearInterval(timer);
+    }
+    if (result.status === "succeeded") {
+      // The deliverable is the provider's media URL as text; Veilo never fetches or renders it.
+      const text = result.artifact.url;
+      const artifact = { artifactId: randomUUID(), sha256: sha256(text), mimeType: "text/markdown" as const, bytes: Buffer.byteLength(text, "utf8") };
+      const summary = `${tool.provider} ${result.artifact.kind} (URL is untrusted data; not fetched)`;
+      this.update(purchaseId, {
+        outcome: "complete",
+        summary,
+        artifact_id: artifact.artifactId,
+        artifact_text: text,
+        artifact_sha256: artifact.sha256,
+        artifact_bytes: artifact.bytes,
+        result_json: JSON.stringify({ kind: "specialist_job", jobId, provider: tool.provider, status: "complete", summary, providerJobId: result.artifact.providerJobId, artifacts: [artifact] }),
+      });
+      return { stop: false };
+    }
+    const uncertain = result.status === "uncertain";
+    this.update(purchaseId, {
+      outcome: uncertain ? "uncertain" : "failed",
+      fail_code: uncertain ? "PROVIDER_UNCERTAIN" : "PROVIDER_FAILED",
+      result_json: JSON.stringify({ kind: "specialist_job", jobId, provider: tool.provider, status: result.status, message: result.message }),
+    });
+    return { stop: false };
   }
 
   /** Reports the stored outcome under the current lease. Never re-runs inference. */

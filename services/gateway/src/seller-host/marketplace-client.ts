@@ -95,4 +95,9 @@ export class MarketplaceClient {
   fail(jobId: string, body: { attemptId: string; leaseToken: string; code: string; uncertain: boolean }): Promise<MarketplaceResponse> {
     return this.#call("POST", this.#job(jobId, "/fail"), body);
   }
+
+  /** Reports the manifest digest and configuration of one provider this host runs. */
+  toolStatus(body: { provider: string; manifestSha256: string; configured: boolean }): Promise<MarketplaceResponse> {
+    return this.#call("POST", "/internal/seller-host/tool-status", body);
+  }
 }

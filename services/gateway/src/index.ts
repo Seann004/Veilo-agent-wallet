@@ -21,6 +21,7 @@ import { Gateway } from "./gateway";
 import { OpenRouterProvider } from "./provider/openrouter";
 import { DEFAULT_ACCOUNT_RATE_LIMIT } from "./seller-host/accounts";
 import { CLAIM_RETRY_DELAYS_MS, gatewayRole, HEARTBEAT_MS, loadSellerHostConfig } from "./seller-host/config";
+import { PROVIDER_NOT_CONFIGURED, providerAdaptersFromEnv, providerStatus } from "./seller-host/providers";
 import { MarketplaceClient } from "./seller-host/marketplace-client";
 
 const SERVICE = "gateway";
@@ -91,6 +92,11 @@ async function main(): Promise<void> {
       : null;
   if (local.providerUrl) console.log(`[${SERVICE}] FIXTURE provider: local OpenRouter-compatible mock (not real inference)`);
 
+  // Provider keys are read only in the seller-host role and stay in this process.
+  const providers = host ? providerAdaptersFromEnv(process.env) : undefined;
+  if (providers) {
+    for (const s of providerStatus(providers)) console.log(`[${SERVICE}] provider ${s.provider}: ${s.status === "configured" ? "configured" : PROVIDER_NOT_CONFIGURED}`);
+  }
   const gateway = new Gateway({
     db,
     settings: {
@@ -128,12 +134,23 @@ async function main(): Promise<void> {
     ...(provider ? { providerKeyCheck: () => provider.keyLimitRemainingMicro(AbortSignal.timeout(15_000)) } : {}),
     ...(local.hooks ? { hooks: local.hooks } : {}),
     ...(host ? { marketplace: new MarketplaceClient({ baseUrl: host.marketplaceUrl, token: host.marketplaceToken }) } : {}),
+    ...(providers ? { providers } : {}),
     serviceHealth: health,
   });
 
   await gateway.recover();
   await gateway.refreshExternal();
   setInterval(() => void gateway.refreshExternal(), REFRESH_MS).unref();
+  if (host && providers) {
+    // The marketplace disables a tool whose reviewed manifest differs from what this host runs.
+    const reportTools = async () => {
+      for (const s of providerStatus(providers)) {
+        await gateway.ctx.marketplace?.toolStatus({ provider: s.provider, manifestSha256: s.manifestSha256, configured: s.status === "configured" }).catch(() => undefined);
+      }
+    };
+    void reportTools();
+    setInterval(() => void reportTools(), REFRESH_MS).unref();
+  }
   if (host) {
     // Paid jobs keep moving (claim, run, report) even when no buyer is polling for the result.
     let passing = false;

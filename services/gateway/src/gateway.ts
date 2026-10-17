@@ -14,6 +14,8 @@ import { PricingGuard } from "./provider/pricing";
 import type { ChatProvider, FetchLike } from "./provider/types";
 import { PurchaseService } from "./purchases";
 import type { MarketplaceClient } from "./seller-host/marketplace-client";
+import type { ToolProvider } from "@veilo/contracts/marketplace";
+import type { ProviderAdapter } from "./seller-host/providers";
 import { UsageService } from "./usage";
 
 export interface GatewayOptions {
@@ -35,6 +37,8 @@ export interface GatewayOptions {
   serviceHealth: ServiceHealth;
   /** Required in the seller-host role; ignored otherwise. */
   marketplace?: MarketplaceClient;
+  /** Provider adapters for the seller-host role; absent providers report Provider not configured. */
+  providers?: ReadonlyMap<ToolProvider, ProviderAdapter>;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
   hooks?: GatewayHooks;
@@ -80,6 +84,7 @@ export class Gateway {
       planningTokenHash: options.planningTokenHash,
       acceptance: { ready: false, reason: "facilitator support not checked yet", support: undefined, merchantAta: undefined, feePayer: undefined },
       marketplace: options.settings.role === "seller-host" ? options.marketplace : undefined,
+      providers: options.settings.role === "seller-host" ? (options.providers ?? new Map()) : new Map(),
       now,
       sleep: options.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
       hooks,

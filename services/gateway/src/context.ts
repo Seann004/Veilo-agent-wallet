@@ -1,3 +1,5 @@
+import type { ToolProvider } from "@veilo/contracts/marketplace";
+import type { ProviderAdapter } from "./seller-host/providers";
 import type { KeyObject } from "node:crypto";
 import type { PaymentPayload, PaymentRequirements, SettleResponse, SupportedResponse, VerifyResponse } from "@x402/core/types";
 import type { FacilitatorSupport } from "@veilo/x402-client";
@@ -71,6 +73,8 @@ export interface GatewayContext {
   acceptance: AcceptanceState;
   /** Present only in the seller-host role. */
   marketplace: MarketplaceClient | undefined;
+  /** Provider adapters configured with this seller host's own keys (seller-host role only). */
+  providers: ReadonlyMap<ToolProvider, ProviderAdapter>;
   now: () => Date;
   sleep: (ms: number) => Promise<void>;
   hooks: GatewayHooks;
