@@ -208,14 +208,18 @@ export async function submitEvidence(deps: Deps, operationId: string, signature:
   return { status: "settled", receiptId: r.receiptId };
 }
 
-/** Validates the envelope against the uploaded bodies, stores them, then records completion. */
+/**
+ * Validates the envelope against the uploaded bodies, stores them, then records completion.
+ * Repeating a completion that already committed succeeds without touching its stored artifacts,
+ * and objects are removed only once the database shows no completion references them.
+ */
 export async function completeJob(deps: Deps, jobId: string, body: z.infer<typeof completeRequestSchema>): Promise<void> {
   const env = resultEnvelopeSchema.parse(body.envelope);
   if (env.jobId !== jobId || env.attemptId !== body.attemptId) throw new MarketError("INVALID_REQUEST", "envelope does not match the lease");
   const bodies = new Map(body.artifactBodies.map((a) => [a.artifactId, a.text]));
   if (bodies.size !== env.artifacts.length) throw new MarketError("INVALID_REQUEST", "every artifact needs exactly one body");
-  const stored: Array<Record<string, unknown>> = [];
-  const uploaded: string[] = [];
+  const files = deps.db.admin.storage.from(JOB_FILES);
+  const stored: Array<{ artifactId: string; bucket: string; objectKey: string; sha256: string; mimeType: string; bytes: number }> = [];
   try {
     for (const a of env.artifacts) {
       const text = bodies.get(a.artifactId);
@@ -223,9 +227,9 @@ export async function completeJob(deps: Deps, jobId: string, body: z.infer<typeo
       const bytes = Buffer.from(text, "utf8");
       if (bytes.length !== a.bytes || sha256Hex(bytes) !== a.sha256) throw new MarketError("INVALID_REQUEST", "artifact hash or size does not match its body");
       const objectKey = `jobs/${jobId}/${env.attemptId}/${a.artifactId}`;
-      const { error } = await deps.db.admin.storage.from(JOB_FILES).upload(objectKey, bytes, { contentType: a.mimeType, upsert: false });
-      if (error) throw new MarketError("PROVIDER_UNAVAILABLE", "artifact storage failed");
-      uploaded.push(objectKey);
+      const { error } = await files.upload(objectKey, bytes, { contentType: a.mimeType, upsert: false });
+      // An object left by an earlier try of this completion is reused only if it holds the same bytes.
+      if (error && !(await storedObjectMatches(deps, objectKey, a.sha256))) throw new MarketError("PROVIDER_UNAVAILABLE", "artifact storage failed");
       stored.push({ artifactId: a.artifactId, bucket: JOB_FILES, objectKey, sha256: a.sha256, mimeType: a.mimeType, bytes: a.bytes });
     }
     await deps.db.rpc("mk_complete", {
@@ -238,10 +242,34 @@ export async function completeJob(deps: Deps, jobId: string, body: z.infer<typeo
       p_artifacts: stored,
     });
   } catch (error) {
-    // A stale or rejected completion must not leave orphaned objects behind.
-    if (uploaded.length > 0) await deps.db.admin.storage.from(JOB_FILES).remove(uploaded);
+    const committed = await committedCompletion(deps, jobId, body.attemptId);
+    // Unknown outcome: keep every object rather than risk deleting a paid result.
+    if (committed === null) throw error;
+    const sameResult =
+      stored.length === env.artifacts.length && committed.artifacts.size === stored.length && stored.every((a) => committed.artifacts.get(a.objectKey) === a.sha256);
+    // This attempt's committed artifact rows prove the completion; a result with none relies on the seller host's job lookup.
+    if (committed.succeeded && stored.length > 0 && sameResult) return;
+    const orphans = stored.map((a) => a.objectKey).filter((k) => !committed.artifacts.has(k));
+    if (orphans.length > 0) await files.remove(orphans);
     throw error;
   }
+}
+
+async function storedObjectMatches(deps: Deps, objectKey: string, sha256: string): Promise<boolean> {
+  const { data, error } = await deps.db.admin.storage.from(JOB_FILES).download(objectKey);
+  if (error || !data) return false;
+  return sha256Hex(Buffer.from(await data.arrayBuffer())) === sha256;
+}
+
+/** Reads what the database committed for an attempt; null when that cannot be determined. */
+async function committedCompletion(deps: Deps, jobId: string, attemptId: string): Promise<{ succeeded: boolean; artifacts: Map<string, string> } | null> {
+  const [job, rows] = await Promise.all([
+    deps.db.admin.from("jobs").select("state").eq("id", jobId).maybeSingle(),
+    deps.db.admin.from("artifacts").select("object_key, sha256").eq("job_id", jobId).eq("attempt_id", attemptId).eq("bucket", JOB_FILES),
+  ]);
+  if (job.error || rows.error || !job.data) return null;
+  const artifacts = new Map((rows.data as Array<{ object_key: string; sha256: string }>).map((r) => [r.object_key, r.sha256]));
+  return { succeeded: (job.data as { state: string }).state === "succeeded", artifacts };
 }
 
 export function payoutProofMessage(p: { userId: string; address: string; network: string; mint: string; issuedAt: string }): string {
