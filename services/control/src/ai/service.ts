@@ -29,8 +29,8 @@ type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
 const isLoopback = (u: URL) => ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname);
 
-/** https only, except a loopback address for a local model server. */
-function baseUrlProblem(raw: string): string | null {
+/** https only; http only for a loopback model server, and only when the operator allows local providers. */
+function baseUrlProblem(raw: string, allowLocal: boolean): string | null {
   let u: URL;
   try {
     u = new URL(raw);
@@ -38,6 +38,7 @@ function baseUrlProblem(raw: string): string | null {
     return "base URL is not a URL";
   }
   if (u.username || u.password || u.search || u.hash) return "base URL must not carry credentials, a query or a fragment";
+  if (isLoopback(u) && !allowLocal) return "local model servers are disabled on this deployment (AI_ALLOW_LOCAL_PROVIDER)";
   if (u.protocol !== "https:" && !(u.protocol === "http:" && isLoopback(u))) return "base URL must use https (http only for a local model server)";
   return null;
 }
@@ -52,6 +53,8 @@ export class AiService {
     private readonly ledger: Ledger,
     private readonly vault: ProviderKeyVault,
     private readonly fetchImpl?: FetchLike,
+    /** Operator opt-in for a model server on this machine; off unless AI_ALLOW_LOCAL_PROVIDER=1. */
+    private readonly allowLocal = false,
   ) {}
 
   #row(workspaceId: string): ProviderRow | undefined {
@@ -69,7 +72,7 @@ export class AiService {
 
   set(workspaceId: string, ownerId: string, input: { provider: AiProviderKind; apiKey: string; model: string; baseUrl?: string | undefined }): Record<string, unknown> {
     const baseUrl = input.provider === "openai_compatible" ? (input.baseUrl ?? "") : DEFAULT_BASE_URL[input.provider];
-    const problem = baseUrlProblem(baseUrl);
+    const problem = baseUrlProblem(baseUrl, this.allowLocal);
     if (problem) throw new ControlError("INVALID_REQUEST", problem);
     const key = input.apiKey.trim();
     if (key.length < 8 || key.length > 400 || /\s/.test(key)) throw new ControlError("INVALID_REQUEST", "API key looks malformed");
@@ -105,7 +108,9 @@ export class AiService {
     const endpoint = this.#endpoint(workspaceId);
     // Remote providers go through a fetch that refuses non-public addresses at connect time;
     // only an explicit loopback URL (a local model server) uses a plain fetch.
-    const fetchImpl = this.fetchImpl ?? (isLoopback(new URL(endpoint.baseUrl)) ? undefined : publicFetch);
+    const local = isLoopback(new URL(endpoint.baseUrl));
+    if (local && !this.allowLocal) throw new ControlError("POLICY_DENIED", "local model servers are disabled on this deployment");
+    const fetchImpl = this.fetchImpl ?? (local ? undefined : publicFetch);
     try {
       return await completeWithProvider(endpoint, messages, { maxOutputTokens, json, ...(fetchImpl ? { fetch: fetchImpl } : {}) });
     } catch (error) {

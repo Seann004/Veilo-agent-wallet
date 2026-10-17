@@ -99,7 +99,9 @@ describe("bring your own model key", () => {
     env = createEnv();
     activateDefaults(env);
     const reject = async () => new Response("{}", { status: 401 });
-    const ai = new AiService(env.ledger, ProviderKeyVault.ephemeral(), reject);
+    const ai = new AiService(env.ledger, ProviderKeyVault.ephemeral(), reject, true);
+    const strict = new AiService(env.ledger, ProviderKeyVault.ephemeral(), reject);
+    expect(() => strict.set(env.ws.id, "owner", { provider: "openai_compatible", apiKey: KEY, model: "m", baseUrl: "http://localhost:11434/v1" })).toThrow(/disabled/);
     expect(() => ai.set(env.ws.id, "owner", { provider: "openai_compatible", apiKey: KEY, model: "m", baseUrl: "http://example.com/v1" })).toThrow(ControlError);
     expect(() => ai.set(env.ws.id, "owner", { provider: "openai_compatible", apiKey: KEY, model: "m", baseUrl: "https://u:p@example.com/v1" })).toThrow(ControlError);
     expect(ai.set(env.ws.id, "owner", { provider: "openai_compatible", apiKey: KEY, model: "llama3", baseUrl: "http://localhost:11434/v1" })).toMatchObject({ baseUrl: "http://localhost:11434/v1" });

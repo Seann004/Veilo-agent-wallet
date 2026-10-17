@@ -181,7 +181,7 @@ async function main(): Promise<void> {
   });
 
   const port = config.ports.control;
-  const ai = new AiService(ledger, ProviderKeyVault.fromFile(join(config.paths.secretsDir, "control", "ai-provider.key")));
+  const ai = new AiService(ledger, ProviderKeyVault.fromFile(join(config.paths.secretsDir, "control", "ai-provider.key")), undefined, process.env.AI_ALLOW_LOCAL_PROVIDER === "1");
   createApp(health, { ledger, session, services, integration, connectors, ai, maxExternalBatchUsdc: BigInt(externalMaxRaw) }).listen(port, config.bindHost, () => {
     console.log(`[${SERVICE}] listening on http://${config.bindHost}:${port} (${config.network.caip2})`);
   });
