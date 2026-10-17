@@ -121,6 +121,26 @@ export class ControlClient {
     return this.request(def.method, path, def.method === "GET" ? undefined : clean, { "x-veilo-task-id": ctx.taskId });
   }
 
+  /** Approved read-only connectors the owner attached to this agent: tool names and input schemas only. */
+  connectors(): Promise<ControlReply> {
+    return this.request("GET", "/worker/connectors");
+  }
+
+  /**
+   * One free read-only connector call. It is not a model tool, but it counts against the task's
+   * tool-call bound like one; control applies its own per-task and per-agent caps on top.
+   */
+  async connectorCall(taskId: string, call: { connectorId: string; tool: string; args: Record<string, unknown> }, ctx: { bounds: RunBounds; now: () => number }): Promise<ControlReply> {
+    const deny = (message: string): never => {
+      this.denied.push({ tool: "connector_call", code: "BUDGET_EXCEEDED", message });
+      throw new ToolDenied("BUDGET_EXCEEDED", message);
+    };
+    if (ctx.now() > ctx.bounds.deadlineMs) deny("task duration bound reached");
+    if (this.toolCalls >= ctx.bounds.maxToolCalls) deny("task tool-call limit reached");
+    this.toolCalls += 1;
+    return this.request("POST", "/worker/connector-calls", { taskId, connectorId: call.connectorId, tool: call.tool, args: call.args });
+  }
+
   claim(workerId: string, leaseMs: number): Promise<ControlReply> {
     return this.request("POST", "/worker/jobs/claim", { workerId, leaseMs });
   }
