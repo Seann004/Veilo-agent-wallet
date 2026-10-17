@@ -71,8 +71,9 @@ async function signIn(w: Wallet): Promise<{ token: string; client: SupabaseClien
   return { token, client: createClient(url, publishable, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${token}` } } }) };
 }
 
-const FIXTURE_SIG = "5".repeat(88);
-const FIXTURE_SIG_2 = "6".repeat(88);
+// Fresh per run: receipts are unique per signature and earlier runs' rows stay in the project.
+const FIXTURE_SIG = getBase58Decoder().decode(crypto.getRandomValues(new Uint8Array(64)));
+const FIXTURE_SIG_2 = getBase58Decoder().decode(crypto.getRandomValues(new Uint8Array(64)));
 
 async function main() {
   const [buyerA, buyerB, seller, controllerKey, payerA, payerB] = await Promise.all([wallet(), wallet(), wallet(), wallet(), wallet(), wallet()]);
@@ -255,7 +256,7 @@ async function main() {
     record("no execution lease before settlement", preClaim.status === 503);
 
     const ev = await signedCall("POST", `/controller/payments/${hire.body.quote.operationId}/evidence`, { operationId: hire.body.quote.operationId, signature: FIXTURE_SIG }, keyId);
-    record("fixture receipt matching the quote is recorded (fixture chain)", ev.status === 200 && ev.body.status === "settled");
+    record("fixture receipt matching the quote is recorded (fixture chain)", ev.status === 200 && ev.body.status === "settled", `status ${ev.status} ${JSON.stringify(ev.body)}`);
     const ev2 = await signedCall("POST", `/controller/payments/${hire.body.quote.operationId}/evidence`, { operationId: hire.body.quote.operationId, signature: FIXTURE_SIG }, keyId);
     record("duplicate evidence is a no-op", ev2.status === 200);
 
@@ -311,12 +312,14 @@ async function main() {
     const refundForeign = await call("POST", `/jobs/${jobId}/refund-requests`, { token: A.token, body: { amount: "5000", returnAddress: seller.address, reason: "test" } });
     record("refund return address must be the buyer's own verified wallet", refundForeign.status === 403);
     const refundOver = await call("POST", `/jobs/${jobId}/refund-requests`, { token: A.token, body: { amount: "10001", returnAddress: buyerA.address, reason: "test" } });
-    if (refundOver.status === 200) {
-      const decision = await call("POST", `/refunds/${refundOver.body.refundId}/decision`, { token: S.token, body: { approve: true } });
-      record("refunds cannot exceed the settled payment", decision.status === 400 || decision.status === 409 || decision.status === 500, `status ${decision.status}`);
-    } else {
-      record("refunds cannot exceed the settled payment", true, `request refused with ${refundOver.status}`);
-    }
+    record("a refund above the settled payment is refused as a client error", refundOver.status === 400, `status ${refundOver.status}`);
+    const refundOk = await call("POST", `/jobs/${jobId}/refund-requests`, { token: A.token, body: { amount: "6000", returnAddress: buyerA.address, reason: "partial" } });
+    const refundTwo = await call("POST", `/jobs/${jobId}/refund-requests`, { token: A.token, body: { amount: "6000", returnAddress: buyerA.address, reason: "second" } });
+    const approveOne = await call("POST", `/refunds/${refundOk.body?.refundId}/decision`, { token: S.token, body: { approve: true } });
+    const approveTwo = await call("POST", `/refunds/${refundTwo.body?.refundId}/decision`, { token: S.token, body: { approve: true } });
+    record("two refunds cannot together exceed the settled payment", approveOne.status === 200 && approveTwo.status === 400, `statuses ${approveOne.status}/${approveTwo.status}`);
+    const bDecide = await call("POST", `/refunds/${refundTwo.body?.refundId}/decision`, { token: B.token, body: { approve: true } });
+    record("only the assigned seller can decide a refund", bDecide.status === 404);
 
     await call("POST", `/operator/listings/${listing.body.listingId}/status`, { token: operatorToken, body: { status: "archived" } });
   } finally {
