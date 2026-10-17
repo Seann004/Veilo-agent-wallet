@@ -88,9 +88,9 @@ export function Shell({ children }: { children: ReactNode }) {
 
   const badge = <DevnetBadge health={health.data} healthError={health.error} workspace={ws.data?.workspace} />;
   const inferenceLabel = (
-    <p className="inference-label" role="note">
-      <strong>{GATEWAY_CREDIT_LABEL}.</strong> {OPERATOR_INFERENCE_LABEL}
-    </p>
+    <span className="inference-label" role="note" title={OPERATOR_INFERENCE_LABEL}>
+      {GATEWAY_CREDIT_LABEL}
+    </span>
   );
 
   if (!signedIn || !ws.data) {
@@ -115,9 +115,11 @@ export function Shell({ children }: { children: ReactNode }) {
             </span>
             Veilo
           </Link>
-          {badge}
+          <span className="top-pills">
+            {badge}
+            {inferenceLabel}
+          </span>
         </header>
-        {inferenceLabel}
         <main id="main" tabIndex={-1} className="signin-main">
           {body}
         </main>
@@ -195,14 +197,20 @@ export function Shell({ children }: { children: ReactNode }) {
             <button type="button" className="icon-btn menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded={navOpen} onClick={() => setNavOpen(!navOpen)}>
               <Icon name={navOpen ? "close" : "menu"} />
             </button>
+            <Link href="/workspace" className="brand top-brand">
+              <span className="logo" aria-hidden="true">
+                ◆
+              </span>
+              Veilo
+            </Link>
             {badge}
+            {inferenceLabel}
             {stopped ? (
               <span className="pill pill-danger" role="status">
                 Emergency stop active
               </span>
             ) : null}
           </header>
-          {inferenceLabel}
           <main id="main" tabIndex={-1}>
             {children}
           </main>

@@ -200,8 +200,10 @@ export function RecoveryCenter() {
         <h3>Per agent</h3>
         {workspace.agents.map((a) => (
           <div key={a.id} className="stop-agent">
-            <strong>{a.name}</strong> ({a.status})
-            <AgentControls agent={a} onChanged={reloadAll} />
+            <span>
+              <strong>{a.name}</strong> <span className="muted">· {a.status}</span>
+            </span>
+            <AgentControls agent={a} onChanged={reloadAll} compact />
           </div>
         ))}
         <p className="small">{live.length} payment(s) currently hold released authority and remain visible until resolved.</p>

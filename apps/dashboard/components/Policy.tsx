@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { credits, parseUsdcInput, usdc, formatBaseUnits } from "../lib/format";
 import type { AgentRole, Policy, Workspace } from "../lib/types";
+import { KV } from "./ui";
 
 /** Agent policy body accepted by the control service (base-unit decimal strings). */
 export interface AgentPolicyInput {
@@ -197,11 +198,33 @@ export function PolicyForm({ initial, workspace, onChange }: { initial: AgentPol
 }
 
 /** Effective policy: the agent's limits shown next to the workspace limits that also apply. */
-export function PolicyReview({ policy, workspacePolicy, title }: { policy: Policy | AgentPolicyInput; workspacePolicy: Policy | undefined; title: string }) {
+export function PolicyReview({ policy, workspacePolicy, title, compact }: { policy: Policy | AgentPolicyInput; workspacePolicy: Policy | undefined; title: string; compact?: boolean }) {
   const p = policy as Partial<Policy> & Partial<AgentPolicyInput>;
   const skus = p.permissions?.allowedSkus ?? p.allowedSkus ?? [];
   const paths = p.permissions?.allowedPaymentPaths ?? p.allowedPaymentPaths ?? [];
   const role = (p.roleConfig ?? null) as AgentPolicyInput["roleConfig"] | null;
+  if (compact) {
+    const ws = (v: string | null | undefined) => (workspacePolicy ? <span className="muted"> · workspace {usdc(v)}</span> : null);
+    return (
+      <div className="policy-compact">
+        <h3>{title}</h3>
+        <KV
+          rows={[
+            ["Per purchase", usdc(p.maxPurchaseTestUsdc)],
+            ["Per task", usdc(p.taskLimitTestUsdc)],
+            ["Last 24 h", <>{usdc(p.rolling24hTestUsdc)}{ws(workspacePolicy?.rolling24hTestUsdc)}</>],
+            ["Lifetime", <>{usdc(p.lifetimeTestUsdc)}{ws(workspacePolicy?.lifetimeTestUsdc)}</>],
+            ["Credits", `${credits(p.usageAllowanceUnits)} · ${credits(p.taskCreditUnits)} per task`],
+            ["Services", skus.length ? skus.join(", ") : "none"],
+            ["Paths", paths.length ? paths.join(", ") : "none"],
+            ...(role
+              ? [["Top-up rule", `Buy ${credits(role.creditPackUnits)} below ${credits(role.creditLowWatermark)}; check every ${role.pollSeconds} s; ${role.cooldownSeconds} s cooldown`] as [string, string]]
+              : []),
+          ]}
+        />
+      </div>
+    );
+  }
   return (
     <div className="table-wrap">
       <table>

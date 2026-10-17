@@ -4,133 +4,140 @@ import Link from "next/link";
 import { useState } from "react";
 import { api } from "../lib/api";
 import { AVATARS, ROLE_AVATAR } from "../lib/avatar-options";
-import { credits, shortKey, usdc } from "../lib/format";
+import { credits, usdc } from "../lib/format";
 import { ROLE_LABEL } from "../lib/labels";
 import type { AgentRole, Workspace } from "../lib/types";
+import { Icon } from "./Icon";
 import { ROLE_TEMPLATES } from "./Policy";
 import { SitePage } from "./Site";
 import { useResource } from "./hooks";
 import { ErrorNotice, Loading } from "./ui";
 
 type Filter = "all" | "agents" | "services";
-const ROLES: AgentRole[] = ["credit_manager", "research", "content"];
-const PATH_LABEL: Record<string, string> = { private_x402: "Private pool → x402", prepaid_credits: "Prepaid credits" };
+type Service = Workspace["services"][number];
+const ROLES: AgentRole[] = ["research", "content", "credit_manager"];
+const TAGLINE: Record<AgentRole, string> = {
+  credit_manager: "Keeps inference credits topped up, one pack at a time.",
+  research: "Answers questions with paid, cited sources.",
+  content: "Drafts posts and a seven-day calendar.",
+};
 
-function RoleCard({ role }: { role: AgentRole }) {
+const avatarFor = (role: AgentRole) => AVATARS.find((a) => a.id === ROLE_AVATAR[role]) ?? AVATARS[0]!;
+function hostOf(origin: string): string {
+  try {
+    return new URL(origin).host;
+  } catch {
+    return origin;
+  }
+}
+
+const matches = (q: string, ...fields: string[]) => q === "" || fields.some((f) => f.toLowerCase().includes(q));
+
+function FeaturedRole({ role }: { role: AgentRole }) {
   const t = ROLE_TEMPLATES[role];
-  const avatar = AVATARS.find((a) => a.id === ROLE_AVATAR[role]) ?? AVATARS[0]!;
   return (
-    <article className="roster-card" id={role} aria-labelledby={`role-${role}`}>
-      <img className="avatar" src={avatar.src} alt="" width={56} height={56} />
-      <h3 id={`role-${role}`}>{ROLE_LABEL[role]}</h3>
-      <p>{t.description}</p>
-      <div>
-        <p className="section-title">Default limits (you can change them before activation)</p>
-        <div className="price-line">
-          <span className="muted">Per purchase</span>
-          <span>{usdc(t.policy.maxPurchaseTestUsdc)}</span>
-        </div>
-        <div className="price-line">
-          <span className="muted">Per task</span>
-          <span>{usdc(t.policy.taskLimitTestUsdc)}</span>
-        </div>
-        <div className="price-line">
-          <span className="muted">Rolling 24 h</span>
-          <span>{usdc(t.policy.rolling24hTestUsdc)}</span>
-        </div>
-        {t.policy.usageAllowanceUnits !== "0" ? (
-          <div className="price-line">
-            <span className="muted">Credit allowance</span>
-            <span>{credits(t.policy.usageAllowanceUnits)}</span>
-          </div>
-        ) : null}
-      </div>
-      <div className="roster-meta">
-        {t.policy.allowedPaymentPaths.map((p) => (
-          <span key={p} className="pill">
-            {PATH_LABEL[p] ?? p}
-          </span>
-        ))}
-      </div>
-      <Link href={`/agents/new?role=${role}`} className="btn btn-primary">
-        Hire {ROLE_LABEL[role].toLowerCase()}
-      </Link>
-    </article>
+    <Link href={`/agents/new?role=${role}`} className={`featured featured-${role}`} id={role}>
+      <img className="featured-avatar" src={avatarFor(role).src} alt="" width={84} height={84} />
+      <span className="featured-text">
+        <span className="featured-name">{ROLE_LABEL[role]}</span>
+        <span className="featured-sub">
+          {usdc(t.policy.maxPurchaseTestUsdc)} per purchase · {usdc(t.policy.taskLimitTestUsdc)} per task
+        </span>
+      </span>
+    </Link>
   );
 }
 
-function Services() {
+function RoleRow({ role }: { role: AgentRole }) {
+  return (
+    <li className="market-row">
+      <img className="avatar" src={avatarFor(role).src} alt="" width={40} height={40} />
+      <span className="market-row-text">
+        <strong>{ROLE_LABEL[role]}</strong>
+        <span>{TAGLINE[role]}</span>
+      </span>
+      <Link href={`/agents/new?role=${role}`} className="btn btn-small btn-pill" aria-label={`Hire ${ROLE_LABEL[role].toLowerCase()}`}>
+        Hire
+      </Link>
+    </li>
+  );
+}
+
+function lowestPrice(s: Service): string {
+  const cash = s.skus.filter((k) => k.enabled && k.paymentPath !== "prepaid_credits").map((k) => BigInt(k.priceUsdc));
+  if (cash.length > 0) return `from ${usdc(cash.reduce((a, b) => (b < a ? b : a)).toString())}`;
+  const units = s.skus.filter((k) => k.enabled).map((k) => BigInt(k.usageUnits));
+  return units.length > 0 ? `from ${credits(units.reduce((a, b) => (b < a ? b : a)).toString())}` : "no enabled SKUs";
+}
+
+function ServiceRow({ s }: { s: Service }) {
+  return (
+    <li className="market-row market-row-service">
+      <span className="service-icon" aria-hidden="true">
+        <Icon name="store" size={18} />
+      </span>
+      <details className="market-row-text">
+        <summary>
+          <strong>{s.service_key}</strong>
+          <span>
+            {hostOf(s.origin)} · {lowestPrice(s)}
+          </span>
+        </summary>
+        <ul className="sku-list">
+          {s.skus.map((k) => (
+            <li key={`${k.sku}-${k.paymentPath}`}>
+              <span>
+                {k.sku}
+                {k.enabled ? "" : " (disabled)"}
+              </span>
+              <span>
+                {k.paymentPath === "prepaid_credits" ? credits(k.usageUnits) : usdc(k.priceUsdc)}
+                {k.paymentPath !== "prepaid_credits" && k.maxFeeUsdc !== "0" ? ` + up to ${usdc(k.maxFeeUsdc)} fees` : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </details>
+      <span className={`pill pill-${s.status === "approved" ? "ok" : "warn"}`}>{s.status}</span>
+    </li>
+  );
+}
+
+function Services({ q }: { q: string }) {
   const ws = useResource(() => api<Workspace>("control", "/workspace"), "market-workspace");
   if (ws.loading && !ws.data) return <Loading label="services" />;
   if (ws.error?.status === 401)
     return (
-      <div className="feature">
-        <h3>Sign in to see your services</h3>
-        <p>
-          Services are approved per workspace, with their prices and recipients. <Link href="/workspace">Sign in</Link> to see the ones your agents can buy.
-        </p>
-      </div>
+      <p className="muted">
+        <Link href="/workspace">Sign in</Link> to see the services approved for your workspace.
+      </p>
     );
   if (ws.error) return <ErrorNotice error={ws.error} what="services" onRetry={ws.reload} />;
-  const services = ws.data?.services ?? [];
-  if (services.length === 0) return <p className="muted">No services are approved for this workspace yet.</p>;
+  const services = (ws.data?.services ?? []).filter((s) => matches(q, s.service_key, s.origin, ...s.skus.map((k) => k.sku)));
+  if (services.length === 0) return <p className="muted">{q ? "No services match." : "No services are approved for this workspace yet."}</p>;
   return (
-    <div className="roster">
+    <ul className="market-list">
       {services.map((s) => (
-        <article key={s.id} className="roster-card" aria-labelledby={`svc-${s.id}`}>
-          <div className="card-head">
-            <h3 id={`svc-${s.id}`}>{s.service_key}</h3>
-            <span className={`pill pill-${s.status === "approved" ? "ok" : "warn"}`}>{s.status}</span>
-          </div>
-          <p className="mono">{s.origin}</p>
-          <p className="small">
-            Gateway {s.gateway_identity ?? "not bound"}
-            {s.recipient ? ` · pays ${shortKey(s.recipient)}` : ""}
-          </p>
-          <div>
-            {s.skus.map((k) => (
-              <div key={`${k.sku}-${k.paymentPath}`} className="sku-line">
-                <span>
-                  <strong>{k.sku}</strong>
-                  {k.enabled ? "" : " (disabled)"}
-                  <span className="muted small"> · {PATH_LABEL[k.paymentPath] ?? k.paymentPath}</span>
-                </span>
-                <span className="sku-price">
-                  {k.paymentPath === "prepaid_credits" ? credits(k.usageUnits) : usdc(k.priceUsdc)}
-                  {k.paymentPath !== "prepaid_credits" && k.maxFeeUsdc !== "0" ? <span className="muted small"> + fees up to {usdc(k.maxFeeUsdc)}</span> : null}
-                </span>
-              </div>
-            ))}
-          </div>
-        </article>
+        <ServiceRow key={s.id} s={s} />
       ))}
-    </div>
+    </ul>
   );
 }
 
 export function Marketplace() {
   const [filter, setFilter] = useState<Filter>("all");
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const roles = ROLES.filter((r) => matches(q, ROLE_LABEL[r], TAGLINE[r], ROLE_TEMPLATES[r].description));
   return (
     <SitePage current="marketplace">
-      <nav className="breadcrumb" aria-label="Breadcrumb">
-        <Link href="/">Home</Link>
-        <span aria-hidden="true">/</span>
-        <span aria-current="page">Marketplace</span>
-      </nav>
-      <header className="market-head">
-        <p className="eyebrow">Marketplace</p>
-        <h1>Agents with a role, a budget and a price list</h1>
-        <p className="lede">
-          Hire an agent role, review its limits, then activate it. Every service an agent can buy shows its price and fee cap up front, and each purchase is checked against
-          all of your limits first.
-        </p>
-      </header>
+      <h1 className="market-title">Marketplace</h1>
       <div className="filter-row" role="group" aria-label="Show">
         {(
           [
             ["all", "All"],
-            ["agents", "Agent roles"],
-            ["services", "Paid services"],
+            ["agents", "Agents"],
+            ["services", "Services"],
           ] as Array<[Filter, string]>
         ).map(([k, label]) => (
           <button key={k} type="button" className="chip" aria-pressed={filter === k} onClick={() => setFilter(k)}>
@@ -138,22 +145,48 @@ export function Marketplace() {
           </button>
         ))}
       </div>
-      {filter !== "services" ? (
-        <section className="site-section" aria-labelledby="m-agents">
-          <h2 id="m-agents">Agent roles</h2>
-          <p className="lede">Each role is a template. Hiring creates a draft agent; it cannot spend until you activate its policy.</p>
-          <div className="roster">
+      <label className="market-search">
+        <Icon name="search" size={18} />
+        <span className="sr-only">Search agents and services</span>
+        <input type="search" placeholder="Search agents and services" value={query} onChange={(e) => setQuery(e.target.value)} />
+      </label>
+
+      {filter === "all" && q === "" ? (
+        <section className="market-section" aria-labelledby="m-featured">
+          <h2 id="m-featured">Featured</h2>
+          <div className="featured-grid">
             {ROLES.map((r) => (
-              <RoleCard key={r} role={r} />
+              <FeaturedRole key={r} role={r} />
             ))}
           </div>
         </section>
       ) : null}
+
+      {filter !== "services" ? (
+        <section className="market-section" aria-labelledby="m-agents">
+          <div className="market-section-head">
+            <h2 id="m-agents">Agents</h2>
+            <span className="muted small">Hiring creates a draft; it can't spend until you activate it.</span>
+          </div>
+          {roles.length > 0 ? (
+            <ul className="market-list">
+              {roles.map((r) => (
+                <RoleRow key={r} role={r} />
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">No agents match.</p>
+          )}
+        </section>
+      ) : null}
+
       {filter !== "agents" ? (
-        <section className="site-section" aria-labelledby="m-services">
-          <h2 id="m-services">Paid services</h2>
-          <p className="lede">x402 services approved and bound for your workspace. Listings from other providers are not available yet.</p>
-          <Services />
+        <section className="market-section" aria-labelledby="m-services">
+          <div className="market-section-head">
+            <h2 id="m-services">Services</h2>
+            <span className="muted small">Approved x402 services your agents can buy.</span>
+          </div>
+          <Services q={q} />
         </section>
       ) : null}
     </SitePage>

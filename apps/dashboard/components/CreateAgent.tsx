@@ -84,7 +84,7 @@ export function CreateAgent() {
   return (
     <>
       <h1>Create agent</h1>
-      <p className="lede">An agent is a record plus a constrained worker under its own policy. It cannot create further spending agents.</p>
+      <p className="lede">Pick a role and an avatar, then review the limits. A new agent can't spend until you activate its policy.</p>
       <section className="panel" aria-label="Role and avatar">
         <div className="avatar-hero">
           {preview ? <AvatarImage avatar={preview} size={104} /> : null}
@@ -95,7 +95,7 @@ export function CreateAgent() {
               setAvatarChosen(true);
             }}
           />
-          <span className="hint">The avatar is saved in this browser only.</span>
+          <span className="hint">Saved in this browser only.</span>
         </div>
         <h2 className="section-title">Role</h2>
         <div className="suggestions">

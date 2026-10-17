@@ -14,7 +14,7 @@ export function AgentAvatar({ agent, size = 36 }: { agent: Pick<Agent, "id" | "r
 export function AvatarPicker({ value, onChange, label = "Avatar" }: { value: string; onChange: (id: string) => void; label?: string }) {
   return (
     <fieldset className="avatar-picker">
-      <legend>{label}</legend>
+      <legend className="sr-only">{label}</legend>
       <div className="avatar-grid" role="radiogroup" aria-label={label}>
         {AVATARS.map((a) => (
           <button

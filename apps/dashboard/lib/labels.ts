@@ -21,7 +21,7 @@ export function agentStateLabel(status: AgentStatus, workspaceStopped: boolean):
   if (status === "revoked") return "Stopped (revoked)";
   if (workspaceStopped) return "Stopped (emergency stop)";
   if (status === "paused") return "Paused";
-  if (status === "draft") return "Draft — awaiting owner activation";
+  if (status === "draft") return "Draft";
   return "Active";
 }
 

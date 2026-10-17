@@ -58,6 +58,7 @@ export function Loading({ label }: { label: string }) {
 /** Two-step button for consequential owner actions; the second step must be pressed explicitly. */
 export function ConfirmButton({
   label,
+  display,
   confirmLabel,
   onConfirm,
   disabled,
@@ -65,6 +66,8 @@ export function ConfirmButton({
   warning,
 }: {
   label: string;
+  /** Shorter visible text; `label` stays the accessible name. */
+  display?: ReactNode;
   confirmLabel: string;
   onConfirm: () => void | Promise<void>;
   disabled?: boolean;
@@ -89,8 +92,8 @@ export function ConfirmButton({
   };
   if (!open) {
     return (
-      <button ref={triggerRef} type="button" className={danger ? "btn btn-danger" : "btn"} onClick={() => setOpen(true)} disabled={disabled}>
-        {label}
+      <button ref={triggerRef} type="button" className={danger ? "btn btn-danger" : "btn"} onClick={() => setOpen(true)} disabled={disabled} aria-label={display ? label : undefined}>
+        {display ?? label}
       </button>
     );
   }

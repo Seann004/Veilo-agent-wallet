@@ -6,9 +6,9 @@ import { api } from "../lib/api";
 import { useAgentAvatar, setAgentAvatar } from "../lib/avatars";
 import { credits, parseUsdcInput, usdc, when } from "../lib/format";
 import { REVIEW_LABEL, ROLE_LABEL, agentStateLabel, purchaseLabel, runBlockedReason } from "../lib/labels";
-import type { Activity, Agent, Balances, ContentItem, Handoff, Job, Purchase, Task } from "../lib/types";
+import type { Activity, Agent, Balances, ContentItem, Handoff, Job, LimitUsage, Purchase, Task } from "../lib/types";
 import { ActivityDrawer } from "./Activity";
-import { summarizeResult } from "./AgentCard";
+import { summarizeResult } from "../lib/results";
 import { AgentControls } from "./AgentControls";
 import { AgentAvatar, AvatarImage, AvatarPicker } from "./Avatar";
 import { Icon } from "./Icon";
@@ -307,6 +307,20 @@ function dayLabel(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "short", day: "numeric", month: "short", year: "numeric" }).format(new Date(iso));
 }
 
+function ResultText({ text }: { text: string }) {
+  const [head, ...rest] = text.split(" · ");
+  return (
+    <>
+      <strong className="bubble-title">{head}</strong>
+      {rest.map((line, i) => (
+        <span key={i} className="bubble-line">
+          {line}
+        </span>
+      ))}
+    </>
+  );
+}
+
 /** Thread entries come only from recorded tasks, finished jobs, purchases and saved content. */
 function buildThread(
   tasks: Task[],
@@ -337,7 +351,7 @@ function buildThread(
       key: `j-${j.id}`,
       node: (
         <li className="bubble bubble-agent">
-          {summarizeResult(j, tasks.find((t) => t.id === j.taskId))}
+          <ResultText text={summarizeResult(j, tasks.find((t) => t.id === j.taskId))} />
           <span className="bubble-meta">
             {j.kind.replace(/_/g, " ")} · {when(j.updatedAt)}
           </span>
@@ -414,14 +428,48 @@ function Routines({ agent, stopped }: { agent: Agent; stopped: boolean }) {
   );
 }
 
+/** Share of a limit already used, for the bar only; the text shows the exact amounts. */
+function usedPercent(u: LimitUsage): number {
+  const limit = BigInt(u.limit);
+  if (limit === 0n) return 0;
+  const used = limit - BigInt(u.available);
+  return Math.max(0, Math.min(100, Number((used * 100n) / limit)));
+}
+
+function LimitBar({ label, u }: { label: string; u: LimitUsage | undefined }) {
+  return (
+    <div className="limit">
+      <div className="limit-head">
+        <span>{label}</span>
+        <span>{u ? `${usdc(u.available)} left` : "—"}</span>
+      </div>
+      {u ? (
+        <>
+          <div className="bar" aria-hidden="true">
+            <span style={{ width: `${usedPercent(u)}%` }} />
+          </div>
+          <span className="limit-sub">of {usdc(u.limit)}</span>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function AvatarSettings({ agent }: { agent: Agent }) {
   const current = useAgentAvatar(agent.id, agent.role);
+  const [open, setOpen] = useState(false);
   return (
-    <details>
-      <summary className="small">Change avatar</summary>
-      <AvatarPicker value={current.id} onChange={(id) => setAgentAvatar(agent.id, id)} label={`${agent.name} avatar`} />
-      <p className="hint">Saved in this browser only.</p>
-    </details>
+    <>
+      <button type="button" className="link-btn" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {open ? "Done" : "Change avatar"}
+      </button>
+      {open ? (
+        <div className="avatar-settings">
+          <AvatarPicker value={current.id} onChange={(id) => setAgentAvatar(agent.id, id)} label={`${agent.name} avatar`} />
+          <p className="hint">Saved in this browser only.</p>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -552,46 +600,36 @@ export function AgentDetail({ agentId }: { agentId: string }) {
       <aside className="details-panel" aria-label={`${agent.name} details`}>
         <div className="panel">
           <div className="details-avatar">
-            <AvatarImage avatar={avatar} size={88} />
+            <AvatarImage avatar={avatar} size={72} />
             <strong>{agent.name}</strong>
-            <span className="small muted">
-              policy v{agent.policyVersion} · revocation epoch {agent.revocationEpoch}
-            </span>
+            <span className="small muted">{ROLE_LABEL[agent.role]}</span>
+            <AvatarSettings agent={agent} />
           </div>
-          <AvatarSettings agent={agent} />
-          <AgentControls agent={agent} onChanged={reloadAll} />
+          <AgentControls agent={agent} onChanged={reloadAll} compact />
         </div>
 
         <div className="panel">
-          <h2 className="section-title">Routines</h2>
+          <h2 className="section-title">Status</h2>
           <Routines agent={agent} stopped={stopped} />
-          <h2 className="section-title section-gap">
-            Active job
-          </h2>
-          {activeJob ? (
-            <p className="small flush">
-              {activeJob.kind.replace(/_/g, " ")} · {activeJob.state} · scheduled {when(activeJob.scheduledAt)} · attempt {activeJob.attempts}
-            </p>
-          ) : (
-            <p className="small muted flush">
-              No queued or running job.
-            </p>
-          )}
+          <p className="small muted flush routines-foot">
+            {activeJob ? `${activeJob.kind.replace(/_/g, " ")} ${activeJob.state} · attempt ${activeJob.attempts}` : "No job running"}
+          </p>
         </div>
 
         <div className="panel">
           <h2 className="section-title">Spending</h2>
+          <LimitBar label="Lifetime" u={budget?.lifetime} />
+          <LimitBar label="Last 24 h" u={budget?.rolling24h} />
           <KV
             rows={[
-              ["Lifetime allowance", budget?.lifetime ? `${usdc(budget.lifetime.available)} left of ${usdc(budget.lifetime.limit)}` : "not activated"],
-              ["Rolling 24 h", budget?.rolling24h ? `${usdc(budget.rolling24h.available)} left of ${usdc(budget.rolling24h.limit)}` : "—"],
-              ["Cash spent / reserved", cash ? `${usdc(cash.spent)} / ${usdc(cash.reserved)}` : "—"],
-              ["Credit usage", usage ? `${credits(usage.consumedUnits)} consumed, ${credits(usage.reservedUnits)} reserved` : "—"],
-              ...(usage && usage.packsPurchased > 0 ? [["Credit packs bought", `${usage.packsPurchased} (${usdc(usage.packCashSpent)}, counted once in cash spent)`] as [string, string]] : []),
+              ["Spent", cash ? usdc(cash.spent) : "—"],
+              ["Reserved", cash ? usdc(cash.reserved) : "—"],
+              ["Credits used", usage ? credits(usage.consumedUnits) : "—"],
+              ...(usage && usage.packsPurchased > 0 ? [["Credit packs", `${usage.packsPurchased} (${usdc(usage.packCashSpent)}, in spent)`] as [string, string]] : []),
             ]}
           />
           <p className="small muted section-foot">
-            {purchases.length} purchase{purchases.length === 1 ? "" : "s"} recorded. <Link href="/activity">All activity</Link>
+            {purchases.length} purchase{purchases.length === 1 ? "" : "s"} · <Link href="/activity">Activity</Link>
           </p>
         </div>
 
@@ -602,8 +640,8 @@ export function AgentDetail({ agentId }: { agentId: string }) {
           </div>
         ) : null}
 
-        <div className="panel" id="settings">
-          <h2 className="section-title">Job, trigger and policy</h2>
+        <details className="panel disclosure" id="settings" open={agent.status === "draft" || undefined}>
+          <summary>Policy and settings</summary>
           <KV
             rows={[
               ["Job", agent.description ?? "—"],
@@ -611,10 +649,10 @@ export function AgentDetail({ agentId }: { agentId: string }) {
               ["Model profile", agent.modelProfile ?? "default"],
             ]}
           />
-          {current ? <PolicyReview policy={agent.activePolicy!} workspacePolicy={wsPolicy} title={`Active policy v${agent.activePolicy!.version}`} /> : <p className="notice notice-warn">No active policy: this agent cannot spend.</p>}
+          {current ? <PolicyReview compact policy={agent.activePolicy!} workspacePolicy={wsPolicy} title={`Active policy v${agent.activePolicy!.version}`} /> : <p className="notice notice-warn">No active policy: this agent cannot spend.</p>}
           {drafts.map((d) => (
             <div key={d.id} className="draft-policy">
-              <PolicyReview policy={d} workspacePolicy={wsPolicy} title={`Draft policy v${d.version} (not active)`} />
+              <PolicyReview compact policy={d} workspacePolicy={wsPolicy} title={`Draft policy v${d.version} (not active)`} />
               <button
                 type="button"
                 className="btn btn-primary"
@@ -656,7 +694,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
             </details>
           ) : null}
           <ErrorNotice error={save.error} />
-        </div>
+        </details>
       </aside>
       {openPurchase && activity.data ? (
         <ActivityDrawer purchase={openPurchase} events={activity.data.events} workspace={workspace} onClose={() => setOpenPurchaseId(null)} onChanged={reloadAll} />

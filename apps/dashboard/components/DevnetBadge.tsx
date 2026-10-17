@@ -19,7 +19,7 @@ export function DevnetBadge({ health, healthError, workspace }: { health: Health
     const id = health.chain.identity;
     const matches = id.genesisHash === DEVNET_GENESIS && (!workspace || (workspace.mint === id.mint && workspace.network === id.caip2));
     ok = matches;
-    status = matches ? `confirmed devnet · mint ${shortKey(id.mint)} (${id.mintDecimals} decimals)` : "network or mint mismatch — payments refused";
+    status = matches ? `confirmed devnet · mint ${shortKey(id.mint)}` : "network or mint mismatch — payments refused";
   } else if (health.chain.state === "unavailable") status = "network not confirmed: devnet RPC unavailable";
   else status = "network check pending";
   return (

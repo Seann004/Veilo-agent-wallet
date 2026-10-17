@@ -175,7 +175,7 @@ export function ActivityList({ activity, workspace, onChanged, limit }: { activi
     setOpenId(null);
     if (id) triggers.current.get(id)?.focus();
   };
-  if (purchases.length === 0) return <p className="muted">No purchases recorded yet. Payments appear here once an agent buys a service: activate the workspace and agent policies, then send Prince or Mira a task from their page, or let Shawn check credits.</p>;
+  if (purchases.length === 0) return <p className="muted flush">No payments yet. They appear here when an agent buys a service.</p>;
   return (
     <>
       <ul className="activity">
@@ -209,7 +209,7 @@ export function ActivityList({ activity, workspace, onChanged, limit }: { activi
 }
 
 export function EventLog({ events }: { events: AuditEvent[] }) {
-  if (events.length === 0) return <p className="muted">No audit events yet. Policy changes, stops and purchase decisions are recorded here.</p>;
+  if (events.length === 0) return <p className="muted flush">No audit events yet.</p>;
   return (
     <div className="table-wrap">
       <table>

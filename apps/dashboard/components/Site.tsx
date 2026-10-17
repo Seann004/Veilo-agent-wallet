@@ -21,9 +21,6 @@ export function SiteNav({ current }: { current?: "marketplace" | undefined }) {
             </Link>
           </li>
           <li>
-            <Link href="/#privacy">Privacy</Link>
-          </li>
-          <li>
             <Link href="/#faq">FAQ</Link>
           </li>
         </ul>
@@ -50,7 +47,7 @@ export function SiteFooter() {
         Veilo · Solana devnet only · test-USDC, no real funds
       </span>
       <span>
-        <Link href="/marketplace">Marketplace</Link> · <Link href="/workspace">Workspace</Link> · <Link href="/#privacy">What stays public</Link>
+        <Link href="/marketplace">Marketplace</Link> · <Link href="/workspace">Workspace</Link> · <Link href="/#faq">FAQ</Link>
       </span>
     </footer>
   );
