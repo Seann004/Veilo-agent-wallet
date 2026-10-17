@@ -1,0 +1,166 @@
+import { buildMessages, GATEWAY_CATALOG, skuInputSchemas, validateContentPackage, type PromptMessage } from "@veilo/contracts/gateway";
+import { immediate } from "@veilo/db";
+import { num, type Ledger } from "../context";
+import { ControlError } from "../errors";
+import { writeAudit } from "../ledger/events";
+import type { AgentRow } from "../ledger/workspace";
+import { assertTaskLive, ownTask } from "../agents/work";
+import { completeWithProvider, DEFAULT_BASE_URL, ModelCallError, type AiProviderKind, type ModelEndpoint } from "./model-client";
+import type { ProviderKeyVault } from "./vault";
+
+export const BYOK_LABEL = "Your model provider (bring your own key)";
+/** Model work a task may do on the owner's provider, beyond its planning calls. */
+export const MAX_AI_CALLS_PER_TASK = 4;
+export const AI_SKUS = ["summarize", "analyze", "content-package"] as const;
+export type AiSku = (typeof AI_SKUS)[number];
+
+interface ProviderRow {
+  workspace_id: string;
+  provider: AiProviderKind;
+  base_url: string;
+  model: string;
+  key_ciphertext: string;
+  key_hint: string;
+  updated_at_ms: bigint;
+}
+
+type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
+
+/** https only, except a loopback address for a local model server. */
+function baseUrlProblem(raw: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return "base URL is not a URL";
+  }
+  if (u.username || u.password || u.search || u.hash) return "base URL must not carry credentials, a query or a fragment";
+  const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname);
+  if (u.protocol !== "https:" && !(u.protocol === "http:" && loopback)) return "base URL must use https (http only for a local model server)";
+  return null;
+}
+
+/**
+ * The owner's own model provider (BYOK). Control is the only holder of the key: it decrypts it
+ * per call and sends it to the provider only. Agents get completions, never the key, and every
+ * call is bounded per task and audited without its content.
+ */
+export class AiService {
+  constructor(
+    private readonly ledger: Ledger,
+    private readonly vault: ProviderKeyVault,
+    private readonly fetchImpl?: FetchLike,
+  ) {}
+
+  #row(workspaceId: string): ProviderRow | undefined {
+    return this.ledger.db.prepare(`SELECT * FROM ai_provider WHERE workspace_id = ?`).get(workspaceId) as ProviderRow | undefined;
+  }
+
+  configured(workspaceId: string): boolean {
+    return this.#row(workspaceId) !== undefined;
+  }
+
+  view(workspaceId: string): Record<string, unknown> | null {
+    const r = this.#row(workspaceId);
+    return r ? { provider: r.provider, baseUrl: r.base_url, model: r.model, keyHint: r.key_hint, updatedAt: new Date(num(r.updated_at_ms)).toISOString() } : null;
+  }
+
+  set(workspaceId: string, ownerId: string, input: { provider: AiProviderKind; apiKey: string; model: string; baseUrl?: string | undefined }): Record<string, unknown> {
+    const baseUrl = input.provider === "openai_compatible" ? (input.baseUrl ?? "") : DEFAULT_BASE_URL[input.provider];
+    const problem = baseUrlProblem(baseUrl);
+    if (problem) throw new ControlError("INVALID_REQUEST", problem);
+    const key = input.apiKey.trim();
+    if (key.length < 8 || key.length > 400 || /\s/.test(key)) throw new ControlError("INVALID_REQUEST", "API key looks malformed");
+    const model = input.model.trim();
+    if (!/^[A-Za-z0-9._:/@-]{1,200}$/.test(model)) throw new ControlError("INVALID_REQUEST", "model id has unexpected characters");
+    immediate(this.ledger.db, () => {
+      this.ledger.db
+        .prepare(
+          `INSERT INTO ai_provider (workspace_id, provider, base_url, model, key_ciphertext, key_hint, updated_by, updated_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(workspace_id) DO UPDATE SET provider = excluded.provider, base_url = excluded.base_url, model = excluded.model,
+             key_ciphertext = excluded.key_ciphertext, key_hint = excluded.key_hint, updated_by = excluded.updated_by, updated_at_ms = excluded.updated_at_ms`,
+        )
+        .run(workspaceId, input.provider, baseUrl.replace(/\/$/, ""), model, this.vault.seal(workspaceId, key), `…${key.slice(-4)}`, ownerId, this.ledger.now());
+      writeAudit(this.ledger, { workspaceId, scope: "ai-provider", actorType: "owner", actorId: ownerId, action: "ai_provider.set", policyResult: "allowed", details: { provider: input.provider, model } });
+    });
+    return this.view(workspaceId)!;
+  }
+
+  clear(workspaceId: string, ownerId: string): void {
+    immediate(this.ledger.db, () => {
+      this.ledger.db.prepare(`DELETE FROM ai_provider WHERE workspace_id = ?`).run(workspaceId);
+      writeAudit(this.ledger, { workspaceId, scope: "ai-provider", actorType: "owner", actorId: ownerId, action: "ai_provider.clear", policyResult: "allowed" });
+    });
+  }
+
+  #endpoint(workspaceId: string): ModelEndpoint {
+    const r = this.#row(workspaceId);
+    if (!r) throw new ControlError("NOT_READY", "no model provider is set; add your own API key under Settings");
+    return { provider: r.provider, baseUrl: r.base_url, model: r.model, apiKey: this.vault.open(workspaceId, r.key_ciphertext) };
+  }
+
+  async #complete(workspaceId: string, messages: readonly PromptMessage[], maxOutputTokens: number, json: boolean) {
+    try {
+      return await completeWithProvider(this.#endpoint(workspaceId), messages, { maxOutputTokens, json, ...(this.fetchImpl ? { fetch: this.fetchImpl } : {}) });
+    } catch (error) {
+      // A rejection (bad key, unknown model, rate limit) is the owner's to fix; anything else may be transient.
+      if (error instanceof ModelCallError) throw new ControlError(error.kind === "rejected" ? "INVALID_REQUEST" : "PROVIDER_UNAVAILABLE", error.message);
+      throw error;
+    }
+  }
+
+  /** One short call that proves the key and model work. */
+  async test(workspaceId: string): Promise<{ ok: true; model: string }> {
+    const r = await this.#complete(workspaceId, [{ role: "user", content: "Reply with the single word OK." }], 8, false);
+    return { ok: true, model: r.model };
+  }
+
+  /** Agent planning on the owner's provider, counted against the task's planning calls. */
+  async plan(agent: AgentRow, body: { taskId: string; purpose: string; messages: PromptMessage[]; maxOutputTokens?: number | undefined }): Promise<{ status: number; body: Record<string, unknown> }> {
+    const callIndex = this.#count(agent, body.taskId, "planning", body.purpose);
+    try {
+      const r = await this.#complete(agent.workspace_id, body.messages, Math.min(body.maxOutputTokens ?? 800, 1_000), false);
+      return { status: 200, body: { label: BYOK_LABEL, callIndex, gateway: { outcome: { status: "succeeded", text: r.text, model: r.model, mode: "byok" } } } };
+    } catch (error) {
+      if (!(error instanceof ControlError)) throw error;
+      return { status: 503, body: { label: BYOK_LABEL, callIndex, gateway: { outcome: { status: "failed", code: error.code, message: error.message } } } };
+    }
+  }
+
+  /** One SKU's model work (summary, analysis, content package) on the owner's provider, at no USDC cost. */
+  async run(agent: AgentRow, body: { taskId: string; sku: AiSku; input: unknown }): Promise<Record<string, unknown>> {
+    const parsed = skuInputSchemas[body.sku].safeParse(body.input);
+    if (!parsed.success) throw new ControlError("INVALID_REQUEST", `input does not fit ${body.sku}`);
+    this.#count(agent, body.taskId, "ai", body.sku);
+    const spec = GATEWAY_CATALOG[body.sku];
+    const input = parsed.data as Record<string, unknown>;
+    const r = await this.#complete(agent.workspace_id, buildMessages(body.sku, input), spec.maxOutputTokens ?? 1_000, body.sku === "content-package");
+    if (body.sku === "content-package") {
+      const v = validateContentPackage(r.text, input.channels as string[]);
+      if (!v.valid) throw new ControlError("PROVIDER_UNAVAILABLE", `the model's content package failed validation: ${v.issues.slice(0, 3).join("; ")}`);
+      return { label: BYOK_LABEL, sku: body.sku, model: r.model, result: { json: v.content } };
+    }
+    return { label: BYOK_LABEL, sku: body.sku, model: r.model, result: { text: r.text } };
+  }
+
+  #count(agent: AgentRow, taskId: string, kind: "planning" | "ai", purpose: string): number {
+    return immediate(this.ledger.db, () => {
+      const t = ownTask(this.ledger, agent.id, taskId);
+      assertTaskLive(this.ledger, t);
+      const used = kind === "planning" ? num(t.planning_calls) : num((t as unknown as { ai_calls: bigint }).ai_calls);
+      const max = kind === "planning" ? num(t.max_planning_calls) : MAX_AI_CALLS_PER_TASK;
+      if (used >= max) throw new ControlError("BUDGET_EXCEEDED", `task ${kind === "planning" ? "planning" : "model"}-call limit reached`);
+      this.ledger.db.prepare(`UPDATE task SET ${kind === "planning" ? "planning_calls" : "ai_calls"} = ${kind === "planning" ? "planning_calls" : "ai_calls"} + 1, updated_at_ms = ? WHERE id = ?`).run(this.ledger.now(), t.id);
+      writeAudit(this.ledger, {
+        workspaceId: t.workspace_id,
+        scope: `agent:${agent.id}`,
+        actorType: "worker",
+        actorId: agent.id,
+        action: kind === "planning" ? "planning.byok" : "ai.byok",
+        policyResult: "allowed",
+        details: { taskId: t.id, callIndex: used + 1, purpose },
+      });
+      return used + 1;
+    });
+  }
+}

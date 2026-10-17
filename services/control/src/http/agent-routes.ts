@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import type { z } from "zod";
+import { z } from "zod";
 import {
   contentPatchSchema,
   contentQuerySchema,
@@ -16,6 +16,7 @@ import { claimWorkerJob, completeWorkerJob, heartbeatWorkerJob, ownTask, sponsor
 import type { Integration } from "../integration";
 import { requireAgent } from "../ledger/workspace";
 import { READERS, actorOf, requireActor, type AuthDeps } from "./actor";
+import { AI_SKUS, type AiService } from "../ai/service";
 
 function parse<S extends z.ZodType>(schema: S, value: unknown): z.infer<S> {
   const r = schema.safeParse(value ?? {});
@@ -36,7 +37,7 @@ const param = (req: Request, name: string): string => {
  * Content/handoff reads for every workspace role, owner-only edits and decisions, and the runner's
  * job/planning endpoints. None of these perform inference, purchases or publishing on behalf of an edit or approval.
  */
-export function agentRouter(deps: AuthDeps & { integration?: Integration | undefined }): Router {
+export function agentRouter(deps: AuthDeps & { integration?: Integration | undefined; ai?: AiService | undefined }): Router {
   const { ledger } = deps;
   const r = Router();
   const owner = requireActor(deps, ["owner"]);
@@ -109,8 +110,17 @@ export function agentRouter(deps: AuthDeps & { integration?: Integration | undef
   });
 
   r.post("/worker/planning", worker, async (req, res) => {
-    const out = await sponsoredPlanning(ledger, deps.integration?.gateway, workerAgent(res), parse(planningProxyRequestSchema, req.body));
+    const agent = workerAgent(res);
+    const body = parse(planningProxyRequestSchema, req.body);
+    // The owner's own provider when one is set; operator-sponsored planning is the trial fallback.
+    const out = deps.ai?.configured(agent.workspace_id) ? await deps.ai.plan(agent, body) : await sponsoredPlanning(ledger, deps.integration?.gateway, agent, body);
     res.status(out.status).json(out.body);
+  });
+
+  r.post("/worker/ai", worker, async (req, res) => {
+    if (!deps.ai) throw new ControlError("NOT_READY", "model provider settings are not available");
+    const body = parse(z.object({ taskId: z.uuid(), sku: z.enum(AI_SKUS), input: z.unknown() }).strict(), req.body);
+    res.json(await deps.ai.run(workerAgent(res), body));
   });
 
   return r;

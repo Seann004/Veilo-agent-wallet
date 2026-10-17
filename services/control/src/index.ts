@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { isAddress } from "@solana/kit";
 import {
   VeiloConfigError,
@@ -28,6 +29,8 @@ import { SellerOriginPolicy } from "./marketplace/origin-policy";
 import { SellerClients } from "./marketplace/seller-clients";
 import { expireLeases } from "./ledger/jobs";
 import { seedWorkspace } from "./ledger/workspace";
+import { AiService } from "./ai/service";
+import { ProviderKeyVault } from "./ai/vault";
 
 const SERVICE = "control";
 
@@ -178,7 +181,8 @@ async function main(): Promise<void> {
   });
 
   const port = config.ports.control;
-  createApp(health, { ledger, session, services, integration, connectors, maxExternalBatchUsdc: BigInt(externalMaxRaw) }).listen(port, config.bindHost, () => {
+  const ai = new AiService(ledger, ProviderKeyVault.fromFile(join(config.paths.secretsDir, "control", "ai-provider.key")));
+  createApp(health, { ledger, session, services, integration, connectors, ai, maxExternalBatchUsdc: BigInt(externalMaxRaw) }).listen(port, config.bindHost, () => {
     console.log(`[${SERVICE}] listening on http://${config.bindHost}:${port} (${config.network.caip2})`);
   });
   if (process.env.VEILO_LOG_CONFIG === "1") console.log(JSON.stringify(describeConfig(config)));
