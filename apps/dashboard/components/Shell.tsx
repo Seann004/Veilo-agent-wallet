@@ -58,7 +58,7 @@ export function Shell({ children }: { children: ReactNode }) {
   else if (ws.error?.status === 401 || ws.data === undefined) {
     body =
       ws.error && ws.error.status !== 401 ? (
-        <ErrorNotice error={ws.error} what="the control service could not load the workspace" />
+        <ErrorNotice error={ws.error} what="the control service could not load the workspace" onRetry={ws.reload} />
       ) : (
         <ConnectScreen
           onSignedIn={async (c) => {

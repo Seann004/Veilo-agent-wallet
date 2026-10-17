@@ -64,7 +64,7 @@ export function PrivacyPanel() {
       </Section>
       <Section title="Pool membership">
         {ps.loading && !ps.data ? <Loading label="public pool state" /> : null}
-        <ErrorNotice error={ps.error} what="public pool state from the relayer" />
+        <ErrorNotice error={ps.error} what="public pool state from the relayer" onRetry={ps.reload} />
         {ps.data && m ? (
           <>
             {m.weak ? (

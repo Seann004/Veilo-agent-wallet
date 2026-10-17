@@ -47,7 +47,7 @@ export function ConnectWalletPrompt({ purpose }: { purpose: string }) {
   return (
     <div className="notice">
       <p>Connect the owner wallet to {purpose}. It signs in the wallet; Veilo never sees your keys.</p>
-      {w.wallets.length === 0 ? <p className="muted">No compatible wallet detected.</p> : null}
+      {w.wallets.length === 0 ? <p className="muted">No compatible wallet detected. Install Phantom (or another Wallet Standard wallet with Solana devnet support), unlock it and reload this page.</p> : null}
       {w.wallets.map((x) => (
         <button key={x.name} type="button" className="btn" onClick={() => void w.connectTo(x)}>
           Connect {x.name}
@@ -73,7 +73,7 @@ export function DepositStages({ note }: { note: WalletNote }) {
 }
 
 export function NotesTable({ status }: { status: NoteStatus }) {
-  if (status.notes.length === 0) return <p className="muted">No notes yet.</p>;
+  if (status.notes.length === 0) return <p className="muted">No notes yet. Deposit test-USDC below to fund private payments; nothing is spendable privately until a deposit reaches the spendable stage.</p>;
   return (
     <div className="table-wrap">
       <table>
@@ -128,7 +128,7 @@ export function WalletView() {
         ) : notes.loading ? (
           <Loading label="notes" />
         ) : null}
-        <ErrorNotice error={notes.error} what="wallet service" />
+        <ErrorNotice error={notes.error} what="wallet service" onRetry={notes.reload} />
         <button type="button" className="btn" onClick={() => void notes.reload()}>
           Refresh from chain
         </button>

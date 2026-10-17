@@ -329,7 +329,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
         ) : (
           <p className="muted">No queued or running job.</p>
         )}
-        <ErrorNotice error={tasks.error} what="tasks" />
+        <ErrorNotice error={tasks.error} what="tasks" onRetry={tasks.reload} />
       </Section>
 
       <Section title="Spending">

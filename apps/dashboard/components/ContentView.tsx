@@ -39,10 +39,10 @@ export function ContentView() {
         </select>
       </div>
       {content.loading && !content.data ? <Loading label="content" /> : null}
-      <ErrorNotice error={content.error} what="content" />
+      <ErrorNotice error={content.error} what="content" onRetry={content.reload} />
       <Section title="Seven-day calendar">
         <p className="small">Dates are planning dates, not publishing commitments.</p>
-        {calendars.length === 0 ? <p className="muted">No calendars yet.</p> : null}
+        {calendars.length === 0 ? <p className="muted">No calendars yet. Submit a campaign brief to Mira from her agent page.</p> : null}
         {calendars.map((c) => (
           <div key={c.id}>
             <ContentEditor item={c} onSaved={saved} />
@@ -51,7 +51,7 @@ export function ContentView() {
         ))}
       </Section>
       <Section title="Drafts">
-        {drafts.length === 0 ? <p className="muted">No drafts yet.</p> : null}
+        {drafts.length === 0 ? <p className="muted">No drafts yet. Submit a campaign brief to Mira from her agent page.</p> : null}
         <div className="stack">
           {drafts.map((d) => (
             <ContentEditor key={`${d.id}-${d.revision}`} item={d} onSaved={saved} />
@@ -59,7 +59,7 @@ export function ContentView() {
         </div>
       </Section>
       <Section title="Research briefs">
-        {briefs.length === 0 ? <p className="muted">No research briefs yet.</p> : null}
+        {briefs.length === 0 ? <p className="muted">No research briefs yet. Ask Prince a research question from his agent page.</p> : null}
         <div className="stack">
           {briefs.map((b) => (
             <ContentEditor key={`${b.id}-${b.revision}`} item={b} onSaved={saved} />
@@ -68,7 +68,7 @@ export function ContentView() {
       </Section>
       <Section title="Handoffs">
         {handoffs.data ? <HandoffApprovals handoffs={handoffs.data.items} agents={workspace.agents} onChanged={handoffs.reload} /> : <Loading label="handoffs" />}
-        <ErrorNotice error={handoffs.error} />
+        <ErrorNotice error={handoffs.error} onRetry={handoffs.reload} />
       </Section>
     </>
   );

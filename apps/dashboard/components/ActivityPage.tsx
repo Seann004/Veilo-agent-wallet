@@ -16,7 +16,7 @@ export function ActivityPage() {
   return (
     <>
       <h1>Activity</h1>
-      <ErrorNotice error={activity.error} what="activity" />
+      <ErrorNotice error={activity.error} what="activity" onRetry={activity.reload} />
       <Section
         title="Payments"
         actions={
