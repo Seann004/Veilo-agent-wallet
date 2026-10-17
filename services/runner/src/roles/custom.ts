@@ -183,8 +183,15 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
   let swap: { outcome: string; result: Record<string, unknown> | null } | undefined;
   if (wantsSwap && swapItem) {
     const r = await buy(ctx, swapItem, "swap", {}, "The owner's task asked for a USDC to SOL swap");
-    swap = { outcome: outcomeText(r), result: (r.body?.execution?.result as Record<string, unknown> | undefined) ?? null };
-    if (!delivered(r)) ctx.notes.push(`The swap did not complete (${swap.outcome}); control keeps reconciling it.`);
+    const p = r.body?.purchase;
+    // An authorized swap that is still settling is not a failure: control finishes it after this task ends.
+    const settling = p !== undefined && p.states?.recovery === "none" && !["abandoned", "paid_without_result"].includes(p.states?.fulfilment) && !delivered(r);
+    swap = {
+      outcome: delivered(r) ? "Swapped" : settling ? "Requested; settling privately" : outcomeText(r),
+      result: (r.body?.execution?.result as Record<string, unknown> | undefined) ?? null,
+    };
+    if (settling) ctx.notes.push("The swap is still settling on devnet. Control completes it on its own; the final transaction appears under Activity.");
+    else if (!delivered(r)) ctx.notes.push(`The swap did not go through (${outcomeText(r)}).`);
   }
 
   const gathered: ConnectorResult[] = [];
