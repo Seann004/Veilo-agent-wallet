@@ -5,6 +5,7 @@ import type { FundingBinding } from "@veilo/contracts";
 import type { PoolContext } from "./pool";
 import type { ChainPort, ControlPort, ProverPort, RelayerPort } from "./ports";
 import type { WalletStore } from "./store";
+import type { SwapQuoter } from "./swap";
 
 /**
  * Produces the single signed x402 payment for a validated challenge. The production
@@ -30,8 +31,10 @@ export interface WalletDeps {
   merchant: MerchantSigner;
   /** Verified deployment context (manifest checked against local configuration). */
   pool: () => Promise<PoolContext>;
-  /** Preconfigured owner recovery account; recovery never pays anywhere else. */
+  /** Preconfigured owner recovery account; recovery and swap output never go anywhere else. */
   ownerRecoveryAddress: Address | null;
+  /** Devnet swap quoter; swaps are unavailable without it. */
+  swapQuoter?: SwapQuoter;
   /** Slots of margin required before an intent's bound when handing a proof to the relayer. */
   releaseMarginSlots?: bigint;
   now?: () => number;

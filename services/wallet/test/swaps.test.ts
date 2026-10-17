@@ -1,0 +1,118 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { address, getCompiledTransactionMessageDecoder, type Instruction } from "@solana/kit";
+import { advanceAuthority, recordFundingFinalized } from "@veilo/control/src/ledger/purchases";
+import { DEVNET_SOL_USDC_WHIRLPOOL, ORCA_WHIRLPOOL_PROGRAM, SWAP_SLIPPAGE_BPS, WRAPPED_SOL_MINT, type FundingBinding, type FundingResult } from "@veilo/contracts";
+import { decodeWireTransaction } from "@veilo/x402-client";
+import { SWAP_SIGNATURE_PRODUCED } from "../src/funding";
+import type { SwapQuoter } from "../src/swap";
+import { authorize, BINDING, createWorld, depositAndApprove, fundingInput, randomAddress, type TestWallet, type World } from "./harness";
+
+let world: World;
+let w: TestWallet;
+let quotes = 0;
+const quoter: SwapQuoter = {
+  async quote({ fresh }) {
+    quotes += 1;
+    const swapIx: Instruction = {
+      programAddress: address(ORCA_WHIRLPOOL_PROGRAM),
+      accounts: [{ address: fresh, role: 2 }],
+      data: new Uint8Array([1, 2, 3]),
+    };
+    return { swapIx, minOutLamports: 7_000_000n, estOutLamports: 7_070_000n };
+  },
+};
+
+beforeEach(async () => {
+  world = await createWorld();
+  w = world.open();
+  w.deps.swapQuoter = quoter;
+  quotes = 0;
+});
+afterEach(() => world.cleanup());
+
+const ledger = () => world.control.env.ledger;
+const SWAP = (): FundingBinding => ({
+  ...BINDING,
+  swap: { dex: "orca_whirlpool", whirlpool: DEVNET_SOL_USDC_WHIRLPOOL, inputMint: world.ctx.mint, outputMint: WRAPPED_SOL_MINT, slippageBps: SWAP_SLIPPAGE_BPS },
+});
+
+async function funded(key: string, binding: FundingBinding): Promise<string> {
+  await depositAndApprove(world, w, 1_000_000n);
+  const p = authorize(world, key);
+  advanceAuthority(ledger(), p.id, "prepare_proof");
+  expect((await w.funding.prepare({ ...fundingInput(world, p.id), binding })).status).toBe("prepared");
+  advanceAuthority(ledger(), p.id, "release_proof");
+  await w.funding.release(p.id, p.id);
+  const fin = (await w.funding.status(p.id)) as Extract<FundingResult, { status: "finalized" }>;
+  expect(fin.status).toBe("finalized");
+  recordFundingFinalized(ledger(), p.id, { payout: fin.evidence.payout, tokenFees: fin.evidence.tokenFees, change: fin.evidence.change, changeCommitment: fin.evidence.changeCommitment, observedAtMs: fin.evidence.observedAtMs });
+  return p.id;
+}
+
+describe("devnet swap signing", () => {
+  it("signs nothing before control authorizes it, then signs once and unwraps only to the owner address", async () => {
+    const binding = SWAP();
+    const id = await funded("s1", binding);
+    expect((await w.funding.signSwap(id, id, binding)).status).toBe("not_ready");
+    expect(quotes).toBe(0);
+    advanceAuthority(ledger(), id, "sign_merchant");
+    const r = await w.funding.signSwap(id, id, binding);
+    expect(r).toMatchObject({ status: "finalized", minOutLamports: 7_000_000n, destination: world.recoveryOwner, sponsorLamports: 2_049_280n });
+    expect(await w.funding.signSwap(id, id, binding)).toEqual(r);
+    expect(quotes).toBe(1);
+    expect(world.relayer.swaps.size).toBe(1);
+    expect(w.store.events(id).some((e) => e.kind === SWAP_SIGNATURE_PRODUCED)).toBe(true);
+
+    const { req } = [...world.relayer.swaps.values()][0]!;
+    expect(req.destination).toBe(world.recoveryOwner);
+    const tx = decodeWireTransaction(req.transaction);
+    const msg = getCompiledTransactionMessageDecoder().decode(tx.messageBytes);
+    expect(msg.staticAccounts[0]).toBe(world.ctx.sponsor);
+    expect(msg.instructions).toHaveLength(5);
+    expect(tx.signatures[req.freshWallet]).toBeTruthy();
+    expect(tx.signatures[world.ctx.sponsor]).toBeNull();
+    expect(await w.funding.merchantOutcome(id)).toBe("finalized");
+  });
+
+  it("refuses a binding that is not the pinned swap, a changed binding and a missing owner address", async () => {
+    const binding = SWAP();
+    const id = await funded("s2", binding);
+    advanceAuthority(ledger(), id, "sign_merchant");
+    const otherPool = { ...binding, swap: { ...binding.swap!, whirlpool: randomAddress() } };
+    expect((await w.funding.signSwap(id, id, otherPool)).status).toBe("recovery_required");
+    expect((await w.funding.signSwap(id, id, BINDING)).status).toBe("recovery_required");
+    w.deps.ownerRecoveryAddress = null;
+    expect((await w.funding.signSwap(id, id, binding)).status).toBe("recovery_required");
+    expect(quotes).toBe(0);
+    expect(world.relayer.swaps.size).toBe(0);
+  });
+
+  it("reports a failed swap as failed and an expired one as unsettled, keeping the USDC recoverable", async () => {
+    const binding = SWAP();
+    world.relayer.swapOutcome = "failed";
+    const failed = await funded("s3", binding);
+    advanceAuthority(ledger(), failed, "sign_merchant");
+    expect((await w.funding.signSwap(failed, failed, binding)).status).toBe("failed");
+    expect(await w.funding.merchantOutcome(failed)).toBe("failed");
+
+    world.relayer.swapOutcome = "expired";
+    const expired = await funded("s4", binding);
+    advanceAuthority(ledger(), expired, "sign_merchant");
+    expect((await w.funding.signSwap(expired, expired, binding)).status).toBe("failed");
+    expect(await w.funding.merchantOutcome(expired)).toBe("expired_unsettled");
+  });
+
+  it("keeps a signed swap and resubmits the same bytes when the relayer was down", async () => {
+    const binding = SWAP();
+    const id = await funded("s5", binding);
+    advanceAuthority(ledger(), id, "sign_merchant");
+    world.relayer.mode = "down";
+    expect((await w.funding.signSwap(id, id, binding)).status).toBe("not_ready");
+    const stored = w.store.swap(id)!;
+    expect(stored.state).toBe("signed");
+    world.relayer.mode = "land";
+    expect((await w.funding.swapOutcome(id)).status).toBe("finalized");
+    expect([...world.relayer.swaps.values()][0]!.req.transaction).toBe(stored.transaction_b64);
+    expect(quotes).toBe(1);
+  });
+});

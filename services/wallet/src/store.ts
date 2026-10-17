@@ -101,6 +101,22 @@ export interface ExternalCallRow {
   signed_at_ms: bigint;
 }
 
+export interface SwapRow {
+  purchase_id: string;
+  swap_id: string;
+  fresh_wallet: string;
+  destination: string;
+  input_amount: bigint;
+  min_out: bigint;
+  est_out: bigint;
+  transaction_b64: string;
+  last_valid_block_height: bigint;
+  signature: string | null;
+  state: "signed" | "submitted" | "finalized" | "failed" | "expired";
+  sponsor_lamports: bigint;
+  signed_at_ms: bigint;
+}
+
 export interface DepositRow {
   id: string;
   note_id: string;
@@ -512,6 +528,28 @@ export class WalletStore {
          WHERE purchase_id = ? AND call_index = ? AND state = 'signed'`,
       )
       .run(state, settlementSignature, this.now(), purchaseId, callIndex);
+  }
+
+  // Swaps ---------------------------------------------------------------------------------
+
+  swap(purchaseId: string): SwapRow | undefined {
+    return this.db.prepare(`SELECT * FROM swap WHERE purchase_id = ?`).get(purchaseId) as SwapRow | undefined;
+  }
+
+  insertSwap(s: Omit<SwapRow, "state" | "signature" | "sponsor_lamports" | "signed_at_ms">): void {
+    const now = this.now();
+    this.db
+      .prepare(
+        `INSERT INTO swap (purchase_id, swap_id, fresh_wallet, destination, input_amount, min_out, est_out, transaction_b64, last_valid_block_height, state, signed_at_ms, updated_at_ms)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'signed', ?, ?)`,
+      )
+      .run(s.purchase_id, s.swap_id, s.fresh_wallet, s.destination, s.input_amount, s.min_out, s.est_out, s.transaction_b64, s.last_valid_block_height, now, now);
+  }
+
+  updateSwap(purchaseId: string, f: { state: SwapRow["state"]; signature?: string | null; sponsorLamports?: bigint }): void {
+    this.db
+      .prepare(`UPDATE swap SET state = ?, signature = ifnull(?, signature), sponsor_lamports = ifnull(?, sponsor_lamports), updated_at_ms = ? WHERE purchase_id = ?`)
+      .run(f.state, f.signature ?? null, f.sponsorLamports ?? null, this.now(), purchaseId);
   }
 
   // Deposits, exits, recoveries -----------------------------------------------------------

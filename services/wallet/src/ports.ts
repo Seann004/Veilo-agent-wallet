@@ -1,5 +1,5 @@
 import type { Address } from "@solana/kit";
-import type { PublicStateWire, RecoveryRequestWire, RecoveryViewWire, WithdrawalRequestWire, WithdrawalViewWire } from "@veilo/contracts/relayer";
+import type { PublicStateWire, RecoveryRequestWire, RecoveryViewWire, SwapRequestWire, SwapViewWire, WithdrawalRequestWire, WithdrawalViewWire } from "@veilo/contracts/relayer";
 import type { CircuitWitness, DeploymentManifest, GeneratedProof } from "@veilo/privacy-sdk";
 
 /** Control purchase view (subset of `purchaseView`). */
@@ -55,6 +55,8 @@ export interface RelayerPort {
   withdrawal(withdrawalId: string): Promise<WithdrawalViewWire | null>;
   submitRecovery(req: RecoveryRequestWire): Promise<RecoveryViewWire>;
   recovery(recoveryId: string): Promise<RecoveryViewWire | null>;
+  submitSwap(req: SwapRequestWire): Promise<SwapViewWire>;
+  swap(swapId: string): Promise<SwapViewWire | null>;
 }
 
 export interface SignatureStatus {

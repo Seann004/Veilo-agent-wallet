@@ -62,6 +62,7 @@ import { openRelayerDb, sponsorTotals } from "../../services/relayer/src/db";
 import { verifyDeployment } from "../../services/relayer/src/deployment";
 import { Indexer, readApprovedLabels } from "../../services/relayer/src/indexer";
 import { loadSponsorKey } from "../../services/relayer/src/sponsor";
+import { SwapService } from "../../services/relayer/src/swaps";
 import { RelayerError, RecoveryService, WithdrawalService } from "../../services/relayer/src/withdrawals";
 import {
   ata,
@@ -342,6 +343,7 @@ async function buildWorld(roles: RolesFile, manifest: DeploymentManifest, feePay
   const ctx = { db: relayerDb, chain, sponsor, manifest: () => manifest, spendVk: JSON.parse(readFileSync(join(rootDir, "artifacts", "circuits", "spend.vkey.json"), "utf8")) as VerificationKey, sponsorCapLamports: BigInt(process.env.RELAYER_SPONSOR_LAMPORT_CAP?.trim() || "100000000") };
   const withdrawals = new WithdrawalService(ctx);
   const recoveries = new RecoveryService(ctx);
+  const swaps = new SwapService(ctx);
   const crank = new InsertCrank({
     db: relayerDb,
     chain,
@@ -359,6 +361,8 @@ async function buildWorld(roles: RolesFile, manifest: DeploymentManifest, feePay
     withdrawal: (id) => relayerCall(() => withdrawals.view(id)),
     submitRecovery: (req) => relayerCall(() => recoveries.submit(req)),
     recovery: (id) => relayerCall(() => recoveries.view(id)),
+    submitSwap: (req) => relayerCall(() => swaps.submit(req)),
+    swap: (id) => relayerCall(() => swaps.view(id)),
   };
   const deps: WalletDeps = {
     store,

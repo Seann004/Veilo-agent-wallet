@@ -1,5 +1,5 @@
 import { createPrivateKey, randomUUID, sign } from "node:crypto";
-import { address, getBase58Decoder, type SignatureBytes } from "@solana/kit";
+import { address, createKeyPairFromPrivateKeyBytes, getBase58Decoder, getBase64EncodedWireTransaction, partiallySignTransaction, type SignatureBytes } from "@solana/kit";
 import { payerBindingMessage } from "@veilo/contracts/marketplace";
 import { isDeepStrictEqual } from "node:util";
 import type {
@@ -9,8 +9,10 @@ import type {
   FundingResult,
   MerchantSignResult,
   PayerBindingResult,
+  SwapResult,
   WithdrawalEvidence,
 } from "@veilo/contracts";
+import { DEVNET_SOL_USDC_WHIRLPOOL, WRAPPED_SOL_MINT } from "@veilo/contracts";
 import type { WithdrawalIntentWire } from "@veilo/contracts/relayer";
 import {
   addressBytes,
@@ -31,7 +33,11 @@ import { describeError, isTransientRpcError } from "./diagnostics";
 import { WalletError } from "./errors";
 import { verifiedPublicState, type PoolContext, type VerifiedPublicState } from "./pool";
 import { PortUnavailableError } from "./ports";
-import type { ExternalCallRow, FundingRow, NoteRecord } from "./store";
+import type { ExternalCallRow, FundingRow, NoteRecord, SwapRow } from "./store";
+import { buildSwapTransaction } from "./swap";
+
+/** Wallet event recorded immediately before the fresh wallet signs its one swap. */
+export const SWAP_SIGNATURE_PRODUCED = "swap.signature_produced";
 
 /** Wallet event recorded immediately before the fresh wallet signs its one merchant payment. */
 export const MERCHANT_SIGNATURE_PRODUCED = "merchant.signature_produced";
@@ -605,11 +611,128 @@ export class FundingService {
   }
 
   /**
+   * Signs the funded fresh wallet's one devnet swap: all of its USDC into the pinned whirlpool
+   * for at least the quoted minimum of SOL, unwrapped to the owner's configured address. Only
+   * after control recorded sign_merchant for this purchase; a stored swap is resubmitted with
+   * the same bytes and never signed again.
+   */
+  async signSwap(purchaseId: string, fundingRef: string, binding: FundingBinding): Promise<SwapResult> {
+    return this.mutex.run(`${purchaseId}:merchant`, async () => {
+      const { store, chain } = this.d;
+      const prior = store.swap(purchaseId);
+      if (prior) return this.#swapProgress(prior);
+      if (store.events(purchaseId).some((e) => e.kind === SWAP_SIGNATURE_PRODUCED)) {
+        return { status: "recovery_required", reason: "a swap signature was produced but not stored; reconcile before any new signature" };
+      }
+      const f = store.funding(purchaseId);
+      if (!f || fundingRef !== purchaseId) return { status: "recovery_required", reason: "no funding for this purchase" };
+      if (f.step !== "finalized") return { status: "not_ready", reason: "funding withdrawal is not finalized" };
+      if (!isDeepStrictEqual(binding, JSON.parse(f.binding_json))) return { status: "recovery_required", reason: "service binding changed after funding" };
+      const terms = binding.swap;
+      const ctx = await this.d.pool();
+      if (!terms || terms.whirlpool !== DEVNET_SOL_USDC_WHIRLPOOL || terms.outputMint !== WRAPPED_SOL_MINT || terms.inputMint !== ctx.mint) {
+        return { status: "recovery_required", reason: "binding is not the pinned devnet USDC to SOL swap" };
+      }
+      if (store.merchantPayment(purchaseId) || store.externalCalls(purchaseId).length > 0) return { status: "recovery_required", reason: "this funding already paid a merchant" };
+      const destination = this.d.ownerRecoveryAddress;
+      if (!destination) return { status: "recovery_required", reason: "no owner address is configured to receive the swap output" };
+      if (!this.d.swapQuoter) return { status: "not_ready", reason: "devnet swaps are not configured" };
+      const cp = await this.d.control.purchase(purchaseId);
+      if (cp.states.funding !== "finalized" || cp.states.merchant !== "signed") {
+        return { status: "not_ready", reason: `control has not authorized the swap (merchant ${cp.states.merchant})` };
+      }
+      const freshUsdc = (await associatedTokenAddress(address(f.fresh_wallet), ctx.mint)).address;
+      if ((await chain.tokenBalance(freshUsdc)) !== f.payout) return { status: "not_ready", reason: "the fresh wallet does not hold exactly the funded USDC" };
+
+      const { address: freshAddress, seed } = store.freshWalletSeed(purchaseId);
+      if (freshAddress !== f.fresh_wallet) return { status: "recovery_required", reason: "fresh wallet does not match the funding attempt" };
+      let quote;
+      try {
+        quote = await this.d.swapQuoter.quote({ fresh: address(freshAddress), usdcMint: ctx.mint, inputAmount: f.payout, slippageBps: terms.slippageBps });
+      } catch (error) {
+        return { status: "not_ready", reason: `swap quote unavailable; nothing was signed (${describeError(error)})` };
+      }
+      if (quote.minOutLamports <= 0n) return { status: "not_ready", reason: "the pool quotes no SOL for this amount; nothing was signed" };
+      const bh = await chain.latestBlockhash();
+      const unsigned = await buildSwapTransaction({
+        sponsor: ctx.sponsor,
+        fresh: address(freshAddress),
+        usdcMint: ctx.mint,
+        swapIx: quote.swapIx,
+        destination,
+        blockhash: bh.blockhash,
+        lastValidBlockHeight: bh.lastValidBlockHeight,
+      });
+      // Recorded before signing, so a crash after this point never signs a second swap.
+      store.event(SWAP_SIGNATURE_PRODUCED, purchaseId, {});
+      const signed = await partiallySignTransaction([await createKeyPairFromPrivateKeyBytes(seed)], unsigned);
+      store.tx(() => {
+        store.insertSwap({
+          purchase_id: purchaseId,
+          swap_id: randomUUID(),
+          fresh_wallet: freshAddress,
+          destination,
+          input_amount: f.payout,
+          min_out: quote.minOutLamports,
+          est_out: quote.estOutLamports,
+          transaction_b64: getBase64EncodedWireTransaction(signed),
+          last_valid_block_height: bh.lastValidBlockHeight,
+        });
+        store.event("swap.signed", purchaseId, { minOut: quote.minOutLamports.toString(), estOut: quote.estOutLamports.toString() });
+      });
+      return this.#swapProgress(store.swap(purchaseId)!);
+    });
+  }
+
+  async swapOutcome(purchaseId: string): Promise<SwapResult> {
+    const s = this.d.store.swap(purchaseId);
+    if (!s) return { status: "not_ready", reason: "no swap was signed for this purchase" };
+    return this.#swapProgress(s);
+  }
+
+  /** Submits a stored swap if it was never acknowledged, then reports the relayer's chain outcome. */
+  async #swapProgress(s: SwapRow): Promise<SwapResult> {
+    const { store, relayer } = this.d;
+    const amounts = { minOutLamports: s.min_out, estOutLamports: s.est_out, destination: s.destination };
+    if (s.state === "finalized") return { status: "finalized", signature: s.signature!, sponsorLamports: s.sponsor_lamports, ...amounts };
+    if (s.state === "failed" || s.state === "expired") return { status: "failed", signature: s.signature, reason: s.state === "failed" ? "the swap failed on-chain" : "the swap expired before landing" };
+    let view;
+    try {
+      view = s.state === "signed"
+        ? await relayer.submitSwap({ swapId: s.swap_id, transaction: s.transaction_b64, lastValidBlockHeight: s.last_valid_block_height.toString(), freshWallet: address(s.fresh_wallet), destination: address(s.destination) })
+        : await relayer.swap(s.swap_id);
+    } catch (error) {
+      return { status: "not_ready", reason: `relayer unavailable (${describeError(error)}); the signed swap is kept and resubmitted unchanged` };
+    }
+    if (!view) return { status: "not_ready", reason: "the relayer has no record of this swap yet" };
+    if (view.state === "submitted") {
+      if (s.state === "signed") store.updateSwap(s.purchase_id, { state: "submitted", signature: view.signature });
+      return { status: "submitted", signature: view.signature, ...amounts };
+    }
+    if (view.state === "finalized") {
+      const sponsorLamports = BigInt(view.sponsorFeeLamports) + BigInt(view.sponsorRentLamports);
+      store.updateSwap(s.purchase_id, { state: "finalized", signature: view.signature, sponsorLamports });
+      store.event("swap.finalized", s.purchase_id, { signature: view.signature });
+      return { status: "finalized", signature: view.signature, sponsorLamports, ...amounts };
+    }
+    store.updateSwap(s.purchase_id, { state: view.state, signature: view.signature });
+    return { status: "failed", signature: view.signature, reason: view.error ?? `the swap ${view.state}` };
+  }
+
+  /**
    * Merchant-leg outcome from chain evidence: finalized when the signed message landed,
    * expired_unsettled only once its blockhash can no longer land and no such transaction exists.
    * For an external batch it is "signed" while any call may still settle.
    */
   async merchantOutcome(purchaseId: string): Promise<"none" | "signed" | "finalized" | "expired_unsettled" | "failed"> {
+    const swap = this.d.store.swap(purchaseId);
+    if (swap) {
+      const r = await this.#swapProgress(swap);
+      if (r.status === "finalized") return "finalized";
+      if (r.status !== "failed") return "signed";
+      // An expired swap never landed, so the fresh wallet still holds its USDC.
+      return this.d.store.swap(purchaseId)!.state === "expired" ? "expired_unsettled" : "failed";
+    }
     const calls = this.d.store.externalCalls(purchaseId);
     if (calls.length > 0) {
       const outcomes = await Promise.all(calls.map((c) => this.#externalOutcome(c)));

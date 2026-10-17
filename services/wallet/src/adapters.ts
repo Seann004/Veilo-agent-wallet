@@ -5,10 +5,13 @@ import { address, signature as toSignature, type Address, type Blockhash } from 
 import {
   publicStateWire,
   recoveryViewWire,
+  swapViewWire,
   withdrawalViewWire,
   type PublicStateWire,
   type RecoveryRequestWire,
   type RecoveryViewWire,
+  type SwapRequestWire,
+  type SwapViewWire,
   type WithdrawalRequestWire,
   type WithdrawalViewWire,
 } from "@veilo/contracts/relayer";
@@ -146,6 +149,13 @@ export class HttpRelayerPort implements RelayerPort {
   async recovery(id: string): Promise<RecoveryViewWire | null> {
     const v = await this.c.call("GET", `/recoveries/${id}`, undefined, true);
     return v === null ? null : recoveryViewWire.parse(v);
+  }
+  async submitSwap(req: SwapRequestWire): Promise<SwapViewWire> {
+    return swapViewWire.parse(await this.c.call("POST", "/swaps", req));
+  }
+  async swap(id: string): Promise<SwapViewWire | null> {
+    const v = await this.c.call("GET", `/swaps/${id}`, undefined, true);
+    return v === null ? null : swapViewWire.parse(v);
   }
 }
 
