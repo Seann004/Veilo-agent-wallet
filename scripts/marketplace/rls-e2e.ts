@@ -384,6 +384,7 @@ async function main() {
         feePayers: [controllerKey.address],
         rpcMethods: ["getSlot"],
         io: { inputs: [{ name: "query", kind: "text", required: true, maxChars: 500 }], output: { kind: "json" } },
+        callTemplate: [0, 1, 2].map((id) => ({ method: "POST", path: "/solana-mainnet", body: { jsonrpc: "2.0", id, method: "getSlot", params: [{ commitment: "finalized" }] } })),
       },
     });
     const anonExt = await anon.from("external_tools").select("id").eq("id", ext.body?.toolId ?? "");
@@ -434,12 +435,27 @@ async function main() {
     record("a run cannot complete while a step is unpaid", fakeDone.status === 409, `status ${fakeDone.status}`);
     const skipAhead = await signedCall("POST", `/controller/workflow-runs/${run.body?.runId}/report`, { status: "rejected", stopReason: null, steps: [] }, keyId);
     record("run status follows its state machine", skipAhead.status === 409, `status ${skipAhead.status}`);
+    const fakePaid = await signedCall(
+      "POST",
+      `/controller/workflow-runs/${run.body?.runId}/report`,
+      { status: "running", stopReason: null, steps: [{ index: 0, paymentStatus: "paid", executionStatus: "delivered", jobId: jobId, paidBaseUnits: "10000", fundingSignature: null, merchantSignatures: [FIXTURE_SIG], artifactSha256: null, stopReason: null }] },
+      keyId,
+    );
+    record("a controller cannot claim a step paid with another job's receipt", fakePaid.status === 403, `status ${fakePaid.status}`);
+    const draftSlug = `rls-wf3-${randomUUID().slice(0, 8)}`;
+    const wf3 = await call("POST", "/creator/workflows", { token: S.token, body: { slug: draftSlug, category: "research" } });
+    const wv3 = await call("POST", `/creator/workflows/${wf3.body.workflowId}/versions`, { token: S.token, body: wfBody() });
+    const peek = await signedCall("GET", `/controller/workflow-versions/${wv3.body?.versionId}`, undefined, keyId);
+    const peekLive = await signedCall("GET", `/controller/workflow-versions/${wv.body?.versionId}`, undefined, keyId);
+    record("a buyer's controller reads live workflow versions only, never another creator's draft", peek.status === 404 && peekLive.status === 200, `draft ${peek.status} live ${peekLive.status}`);
 
     const suspend = await call("POST", `/operator/workflows/${wf.body.workflowId}/status`, { token: operatorToken, body: { status: "suspended" } });
     const gone = await anon.from("workflow_catalog").select("slug").eq("slug", wfSlug);
     const halted = await A.client.from("workflow_runs").select("status").eq("id", run.body?.runId ?? "").single();
     const afterSuspend = await runReq(terms);
     record("operator suspension removes the workflow, halts its runs and refuses new ones", suspend.status === 200 && (gone.data?.length ?? 0) === 0 && halted.data?.status === "halted" && afterSuspend.status === 403, `run ${halted.data?.status} new ${afterSuspend.status}`);
+    const resume = await signedCall("POST", `/controller/workflow-runs/${run.body?.runId}/report`, { status: "approved", stopReason: null, steps: [] }, keyId);
+    record("a halted run cannot resume while its workflow is suspended", resume.status === 403, `status ${resume.status}`);
     const reviewWhileSuspended = await call("POST", `/creator/versions/${wv.body?.versionId}/publish`, { token: S.token });
     record("a creator cannot republish a suspended workflow", reviewWhileSuspended.status === 403, `status ${reviewWhileSuspended.status}`);
     await call("POST", `/operator/external-tools/${ext.body?.toolId}/status`, { token: operatorToken, body: { status: "suspended", note: "rls test cleanup" } });

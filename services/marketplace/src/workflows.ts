@@ -10,6 +10,7 @@ import {
   WORKFLOW_CATEGORIES,
   workflowApprovalDigest,
   workflowApprovalTermsSchema,
+  workflowStepHireKey,
   workflowVersionInputSchema,
   type ToolFacts,
   type ToolIo,
@@ -18,6 +19,7 @@ import {
 import type { Express, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import type { ControllerActor, UserActor } from "./auth";
+import { checkTransfer } from "./chain";
 import { must } from "./db";
 import { MarketError } from "./errors";
 import type { Deps } from "./service";
@@ -66,8 +68,45 @@ const externalToolSchema = z
     feePayers: z.array(address).min(1).max(4),
     rpcMethods: z.array(z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,63}$/)).min(1).max(32).optional(),
     io: toolIoSchema,
+    callTemplate: z
+      .array(z.object({ method: z.enum(["GET", "POST"]), path: z.string().regex(/^\/[A-Za-z0-9._~/-]{0,200}$/), body: z.unknown().optional() }).strict())
+      .min(1)
+      .max(100),
   })
-  .strict();
+  .strict()
+  .superRefine((t, ctx) => {
+    const problem = callTemplateProblem(t);
+    if (problem) ctx.addIssue({ code: "custom", message: problem });
+  });
+
+const PLACEHOLDER = /^\{\{([a-z][a-z0-9_]{0,39})\}\}$/;
+
+/** Every call stays on the approved path and names an allowed method; placeholders name declared inputs. */
+export function callTemplateProblem(t: { resourcePath: string; callsPerStep: number; rpcMethods?: string[] | undefined; io: ToolIo; callTemplate: Array<{ method: string; path: string; body?: unknown }> }): string | null {
+  if (t.callTemplate.length !== t.callsPerStep) return "the call template must list exactly one call per paid call";
+  const prefix = t.resourcePath.endsWith("/*") ? t.resourcePath.slice(0, -1) : null;
+  const inputs = new Set(t.io.inputs.map((i) => i.name));
+  for (const [i, c] of t.callTemplate.entries()) {
+    const onPath = prefix === null ? c.path === t.resourcePath : c.path.startsWith(prefix) && c.path.length > prefix.length;
+    if (!onPath || c.path.split("/").some((seg) => seg === "." || seg === "..")) return `call ${i} leaves the approved resource path`;
+    if (c.method === "GET" && c.body !== undefined) return `call ${i} GET cannot carry a body`;
+    if (c.body !== undefined && Buffer.byteLength(JSON.stringify(c.body)) > 4096) return `call ${i} body is too large`;
+    if (t.rpcMethods) {
+      const m = (c.body as { method?: unknown } | undefined)?.method;
+      if (typeof m !== "string" || !t.rpcMethods.includes(m)) return `call ${i} RPC method is not allowed`;
+    }
+    const bad: string[] = [];
+    JSON.stringify(c.body ?? null, (_k, v: unknown) => {
+      if (typeof v === "string" && v.includes("{{")) {
+        const m = PLACEHOLDER.exec(v);
+        if (!m || !inputs.has(m[1] as string)) bad.push(v);
+      }
+      return v;
+    });
+    if (bad.length > 0) return `call ${i} has a placeholder that is not a whole declared input`;
+  }
+  return null;
+}
 
 const runReportSchema = z
   .object({
@@ -159,6 +198,72 @@ export async function loadToolFacts(deps: Deps, steps: ReadonlyArray<{ toolKind:
     }
   }
   return facts;
+}
+
+type ReportedStep = z.infer<typeof runReportSchema>["steps"][number];
+
+/**
+ * A controller's "paid" claim is never trusted on its own. A listing step is paid only by the
+ * receipt the marketplace already verified for that step's job; an external step only by
+ * finalized transfers of exactly the unit price to the tool's recipient, each used once.
+ */
+export async function verifiedSteps(deps: Deps, workspaceId: string, runId: string, reported: ReportedStep[]): Promise<ReportedStep[]> {
+  const { db, chain, config } = deps;
+  const run = (await db.admin.from("workflow_runs").select("id").eq("id", runId).eq("buyer_workspace_id", workspaceId).maybeSingle()).data;
+  if (!run) throw new MarketError("NOT_FOUND", "workflow run not found");
+  const rows = ((await db.admin.from("workflow_run_steps").select("step_index, tool_kind, tool_id, max_base_units").eq("run_id", runId)).data ?? []) as Array<{
+    step_index: number;
+    tool_kind: "listing" | "external";
+    tool_id: string;
+    max_base_units: string | number;
+  }>;
+  const out: ReportedStep[] = [];
+  for (const s of reported) {
+    if (s.paymentStatus !== "paid") {
+      out.push({ ...s, paidBaseUnits: null, merchantSignatures: [] });
+      continue;
+    }
+    const row = rows.find((r) => r.step_index === s.index);
+    if (!row) throw new MarketError("INVALID_REQUEST", `step ${s.index} is not part of this run`);
+    if (row.tool_kind === "listing") {
+      if (s.jobId === null) throw new MarketError("INVALID_REQUEST", `step ${s.index} has no job`);
+      const job = (await db.admin.from("jobs").select("id, buyer_workspace_id, listing_version_id, idempotency_key").eq("id", s.jobId).maybeSingle()).data as {
+        buyer_workspace_id: string;
+        listing_version_id: string;
+        idempotency_key: string;
+      } | null;
+      if (!job || job.buyer_workspace_id !== workspaceId || job.listing_version_id !== row.tool_id || job.idempotency_key !== workflowStepHireKey(runId, s.index)) {
+        throw new MarketError("POLICY_DENIED", `step ${s.index} job is not this step's hire`);
+      }
+      const receipt = (await db.admin.from("chain_receipts").select("signature, amount").eq("job_id", s.jobId).maybeSingle()).data as { signature: string; amount: string | number } | null;
+      if (!receipt) throw new MarketError("SETTLEMENT_UNCERTAIN", `step ${s.index} has no verified receipt yet`);
+      if (BigInt(String(receipt.amount)) > BigInt(String(row.max_base_units))) throw new MarketError("PRICE_CHANGED", `step ${s.index} paid more than its maximum`);
+      out.push({ ...s, paidBaseUnits: String(receipt.amount), merchantSignatures: [receipt.signature] });
+      continue;
+    }
+    const tool = (await db.admin.from("external_tools").select("pay_to, pay_to_ata, mint, unit_price_base_units, calls_per_step").eq("id", row.tool_id).single()).data as {
+      pay_to: string;
+      pay_to_ata: string;
+      mint: string;
+      unit_price_base_units: string | number;
+      calls_per_step: number;
+    };
+    const sigs = [...new Set(s.merchantSignatures)];
+    if (sigs.length === 0 || sigs.length !== s.merchantSignatures.length || sigs.length > tool.calls_per_step) throw new MarketError("INVALID_REQUEST", `step ${s.index} reports an invalid set of payments`);
+    if (tool.mint !== config.mint) throw new MarketError("WRONG_MINT", "external tool mint differs from this marketplace");
+    const reused = await db.admin.from("workflow_run_steps").select("run_id, step_index").overlaps("merchant_signatures", sigs);
+    if ((reused.data ?? []).some((r: { run_id: string; step_index: number }) => r.run_id !== runId || r.step_index !== s.index)) {
+      throw new MarketError("IDEMPOTENCY_CONFLICT", `step ${s.index} reuses a payment recorded for another step`);
+    }
+    const unit = BigInt(String(tool.unit_price_base_units));
+    for (const sig of sigs) {
+      const outcome = checkTransfer(await chain.finalizedTransaction(sig), { signature: sig, mint: tool.mint, recipient: tool.pay_to, recipientAta: tool.pay_to_ata, amount: unit });
+      if (outcome.status === "pending") throw new MarketError("SETTLEMENT_UNCERTAIN", `step ${s.index} payment is not finalized yet`);
+      if (outcome.status === "invalid") throw new MarketError("SERVICE_NOT_ALLOWED", `step ${s.index} payment rejected: ${outcome.reason}`);
+    }
+    out.push({ ...s, paidBaseUnits: (unit * BigInt(sigs.length)).toString(), merchantSignatures: sigs });
+  }
+  return out;
 }
 
 /** Badge shown for a tool in the library: payment availability and provider configuration are separate facts. */
@@ -415,21 +520,33 @@ export function registerWorkflowRoutes(app: Express, deps: Deps, h: WorkflowRout
     route(async (req) => {
       const ctl = await h.controller(req);
       const b = runReportSchema.parse(req.body);
-      await db.rpc("mk_report_workflow_run", { p_workspace: ctl.workspaceId, p_run: uuid.parse(req.params.id), p_status: b.status, p_stop: b.stopReason, p_steps: b.steps });
+      const runId = uuid.parse(req.params.id);
+      const steps = await verifiedSteps(deps, ctl.workspaceId, runId, b.steps);
+      await db.rpc("mk_report_workflow_run", { p_workspace: ctl.workspaceId, p_run: runId, p_status: b.status, p_stop: b.stopReason, p_steps: steps });
       return { ok: true };
     }),
   );
   app.get(
     "/controller/workflow-versions/:id",
     route(async (req) => {
-      await h.controller(req);
+      const ctl = await h.controller(req);
       const v = must(await db.admin.from("workflow_versions").select("id, workflow_id, steps, run_inputs, total_max_base_units, network, mint, decimals, review_status").eq("id", uuid.parse(req.params.id)).maybeSingle(), "workflow version not found") as {
+        id: string;
+        workflow_id: string;
         steps: Array<{ toolKind: string; toolId: string; maxBaseUnits: string; inputs: unknown }>;
       } & Record<string, unknown>;
+      const live = (await db.admin.from("workflow_catalog").select("version_id").eq("version_id", v.id).maybeSingle()).data !== null;
+      const wf = (await db.admin.from("workflows").select("creator_user_id, status").eq("id", v.workflow_id).single()).data as { creator_user_id: string; status: string };
+      const ws = (await db.admin.from("workspaces").select("owner_user_id").eq("id", ctl.workspaceId).single()).data as { owner_user_id: string };
+      const creator = ws.owner_user_id === wf.creator_user_id;
+      // Only live versions are visible to buyers; a creator's controller may load its own drafts to test them.
+      if (!live && !creator) throw new MarketError("NOT_FOUND", "workflow version not found");
+      if (wf.status === "suspended") throw new MarketError("POLICY_DENIED", "workflow is suspended");
       const facts = await loadToolFacts(deps, v.steps);
       const external = v.steps.filter((s) => s.toolKind === "external").map((s) => s.toolId);
-      const extRows = external.length === 0 ? [] : ((await db.admin.from("external_tools").select("id, origin, resource_path, pay_to, pay_to_ata, unit_price_base_units, calls_per_step, fee_payers, rpc_methods, status").in("id", external)).data ?? []);
-      const live = (await db.admin.from("workflow_catalog").select("version_id").eq("version_id", v.id as string).maybeSingle()).data !== null;
+      let extQuery = db.admin.from("external_tools").select("id, origin, resource_path, pay_to, pay_to_ata, unit_price_base_units, calls_per_step, fee_payers, rpc_methods, call_template, status");
+      if (!creator) extQuery = extQuery.eq("status", "approved");
+      const extRows = external.length === 0 ? [] : ((await extQuery.in("id", external)).data ?? []);
       return {
         version: v,
         live,

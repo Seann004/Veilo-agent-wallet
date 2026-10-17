@@ -250,3 +250,8 @@ export function stepQuoteProblem(
   if (quote.totalBaseUnits !== BigInt(s.maxBaseUnits)) return "step price changed";
   return null;
 }
+
+/** The hire key a controller uses for a workflow step; the marketplace accepts a step's job only under it. */
+export function workflowStepHireKey(runId: string, index: number): string {
+  return `wf:${runId}:${index}`;
+}
