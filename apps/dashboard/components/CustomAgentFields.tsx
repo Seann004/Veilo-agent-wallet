@@ -10,11 +10,12 @@ import { DECIMALS_UNVERIFIED } from "../lib/market/messages";
 import type { CatalogEntry } from "../lib/market/types";
 import { AGENT_TEMPLATES, type Agent, type AgentTemplate } from "../lib/types";
 import type { AgentPolicyInput } from "./Policy";
+import { useCapability } from "./Shell";
 import { useAction, useResource } from "./hooks";
 import { AgentGrants } from "./market/LocalApproval";
 import { EnsureMarket, useMarket } from "./market/MarketContext";
 import { PlainText } from "./market/parts";
-import { ErrorNotice, KV, Loading, Section } from "./ui";
+import { DeniedHint, ErrorNotice, KV, Loading, Section } from "./ui";
 
 /** Server limits from the control contracts (createAgentRequestSchema, runAgentRequestSchema, customTaskInputSchema). */
 export const CUSTOM_INSTRUCTIONS_MAX = 8_000;
@@ -309,6 +310,9 @@ export function CustomAgentPanel({
   onChanged: () => Promise<void>;
 }) {
   const toggle = useAction();
+  const run = useCapability("run");
+  const configure = useCapability("configure");
+  const editable = !terminal && configure.allowed;
   const hiring = hiringAllowed(agent.activePolicy?.permissions?.allowedSkus);
   return (
     <>
@@ -320,11 +324,12 @@ export function CustomAgentPanel({
           ]}
         />
         <p className="small muted">{TEMPLATE_HINT}</p>
-        {!terminal ? <InstructionsEditor agent={agent} onSaved={onChanged} /> : null}
+        {editable ? <InstructionsEditor agent={agent} onSaved={onChanged} /> : null}
       </Section>
       <Section title={`New job for ${agent.name}`} id="run">
         <RunnerCredentialNote />
-        <CustomRunForm agent={agent} disabled={!canRun} onQueued={onChanged} />
+        <CustomRunForm agent={agent} disabled={!canRun || !run.allowed} onQueued={onChanged} />
+        {!run.allowed ? <DeniedHint reason={run.reason} /> : null}
         <p className="small">Each job saves a scouting report to <Link href="/content">Content</Link> (under Research briefs).</p>
       </Section>
       <Section title="Marketplace hiring">
@@ -332,7 +337,7 @@ export function CustomAgentPanel({
           Hiring is <strong>{hiring ? "allowed" : "off"}</strong> in the active policy.
         </p>
         <HiringCopy />
-        {policy && !terminal ? (
+        {policy && editable ? (
           <button
             type="button"
             className="btn"
@@ -349,7 +354,8 @@ export function CustomAgentPanel({
         ) : null}
         <p className="small">The change is saved as a policy draft; it takes effect only after you activate it under Settings below.</p>
         <ErrorNotice error={toggle.error} />
-        {hiring && !terminal ? (
+        {!terminal && !configure.allowed ? <DeniedHint reason={configure.reason} /> : null}
+        {hiring && editable ? (
           <EnsureMarket>
             <AgentGrants agentId={agent.id} name={`Pre-approved listings for ${agent.name}`} />
           </EnsureMarket>

@@ -14,7 +14,7 @@ import { OwnerProvider } from "../components/Shell";
 import { ROLE_LABEL } from "../lib/labels";
 import { summarizeResult } from "../lib/results";
 import { AGENT_TEMPLATES, type Agent, type Job } from "../lib/types";
-import { accessFor } from "./access-fixtures";
+import { accessFor, withRole } from "./access-fixtures";
 import { agent, workspace } from "./fixtures";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/agents/new", useParams: () => ({}) }));
@@ -332,5 +332,27 @@ describe("custom agent page", () => {
     expect(Object.keys(body)).toEqual(["policy"]);
     expect(body.policy.allowedSkus).toEqual([SPECIALIST_SKU]);
     expect(screen.getByRole("link", { name: "seller console" }).getAttribute("href")).toBe("/marketplace/seller");
+  });
+
+  it("lets a guest run jobs but not edit instructions or hiring", async () => {
+    const user = userEvent.setup();
+    const hiringAgent = customAgent({ activePolicy: { ...customAgent().activePolicy!, permissions: { ...customAgent().activePolicy!.permissions, allowedSkus: [SPECIALIST_SKU] } } });
+    render(withRole(<MarketContextProvider value={market()}><CustomAgentPanel agent={hiringAgent} policy={withHiring(policy, true)} canRun terminal={false} onChanged={vi.fn()} /></MarketContextProvider>, "guest"));
+    await user.type(screen.getByLabelText(/^Job for Scout/), "Find a reviewer.");
+    expect((screen.getByRole("button", { name: "Start job" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByRole("button", { name: "Save instructions" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Draft a policy/ })).toBeNull();
+    expect(screen.queryByText(/Pre-approved listings for Scout/)).toBeNull();
+    expect(screen.getByText("Only the workspace owner can do this.")).toBeTruthy();
+  });
+
+  it("keeps every custom agent control disabled for the public viewer", async () => {
+    const user = userEvent.setup();
+    render(withRole(<MarketContextProvider value={market()}><CustomAgentPanel agent={customAgent()} policy={policy} canRun terminal={false} onChanged={vi.fn()} /></MarketContextProvider>, "viewer"));
+    await user.type(screen.getByLabelText(/^Job for Scout/), "Find a reviewer.");
+    expect((screen.getByRole("button", { name: "Start job" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Sign in to run agents.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save instructions" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Draft a policy/ })).toBeNull();
   });
 });

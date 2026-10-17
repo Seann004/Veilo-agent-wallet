@@ -621,7 +621,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
         {agent.role === "research" ? <ResearchForm agent={agent} disabled={!canRun} onQueued={reloadAll} /> : null}
         {agent.role === "content" ? <CampaignForm agent={agent} disabled={!canRun} handoffs={handoffs.data?.items ?? []} onQueued={reloadAll} /> : null}
         {agent.role === "custom" ? <CustomAgentPanel agent={agent} policy={current} canRun={canRun} terminal={terminal} onChanged={reloadAll} /> : null}
-        <AgentWorkflows agentId={agentId} />
+        {configure.allowed ? <AgentWorkflows agentId={agentId} /> : null}
       </section>
 
       <aside className="details-panel" aria-label={`${agent.name} details`}>
