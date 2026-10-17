@@ -10,11 +10,11 @@ export function errorGuidance(error: ApiError): string | null {
   const byCode = reasonGuidance(error.code);
   if (byCode) return byCode;
   if (error.code === "NOT_READY") {
-    return "A service or credential this view needs is not available. This is a missing capability, not a failed payment or a stopped agent. Start or configure the service (docs/configuration.md), then retry.";
+    return "This part isn't set up yet. It's not a failed payment or a stopped agent. Start the service (see docs/configuration.md), then retry.";
   }
-  if (error.status === 0 || error.code === "INTERNAL_ERROR") return "The dashboard could not complete the request. Check that the dashboard server is running, then retry.";
-  if (error.status === 403) return "The request was refused. Reload the page; if it persists, sign out and sign in again.";
-  if (error.status >= 500) return "The service reported an error. Nothing is assumed about the outcome of any payment: check Activity for the real state before retrying.";
+  if (error.status === 0 || error.code === "INTERNAL_ERROR") return "Couldn't reach the server. Check it's running, then retry.";
+  if (error.status === 403) return "Not allowed. Reload the page; if it keeps happening, sign out and back in.";
+  if (error.status >= 500) return "The service hit an error. Check Activity for the real payment state before retrying.";
   return null;
 }
 
@@ -24,10 +24,17 @@ export function ErrorNotice({ error, what, onRetry }: { error: ApiError | undefi
   const notReady = error.code === "NOT_READY";
   const guidance = errorGuidance(error);
   return (
-    <div role="alert" className={notReady ? "notice notice-warn" : "notice notice-error"}>
-      <strong>{notReady ? "Not ready" : "Error"}</strong>
-      {what ? ` — ${what}` : ""}: {error.message} <span className="code">({error.code})</span>
-      {guidance ? <p className="small notice-help">{guidance}</p> : null}
+    <div role="alert" className={notReady ? "notice notice-warn error-notice" : "notice notice-error error-notice"}>
+      <div>
+        <strong>
+          {notReady ? "Not available" : "Something went wrong"}
+          {what ? `: ${what}` : ""}
+        </strong>
+        {guidance ? <p className="small flush">{guidance}</p> : null}
+        <p className="small muted flush error-detail">
+          {error.message} ({error.code})
+        </p>
+      </div>
       {onRetry ? (
         <button type="button" className="btn btn-small" onClick={() => void onRetry()}>
           Retry
@@ -47,10 +54,14 @@ export function EmptyState({ children, action }: { children: ReactNode; action?:
   );
 }
 
+export function Spinner({ size = 16 }: { size?: number }) {
+  return <span className="spinner" style={{ width: size, height: size }} aria-hidden="true" />;
+}
+
 export function Loading({ label }: { label: string }) {
   return (
-    <p role="status" aria-live="polite" className="muted">
-      Loading {label}…
+    <p role="status" aria-live="polite" className="loading muted">
+      <Spinner /> Loading {label}…
     </p>
   );
 }
@@ -58,6 +69,7 @@ export function Loading({ label }: { label: string }) {
 /** Two-step button for consequential owner actions; the second step must be pressed explicitly. */
 export function ConfirmButton({
   label,
+  display,
   confirmLabel,
   onConfirm,
   disabled,
@@ -65,6 +77,8 @@ export function ConfirmButton({
   warning,
 }: {
   label: string;
+  /** Shorter visible text; `label` stays the accessible name. */
+  display?: ReactNode;
   confirmLabel: string;
   onConfirm: () => void | Promise<void>;
   disabled?: boolean;
@@ -89,8 +103,8 @@ export function ConfirmButton({
   };
   if (!open) {
     return (
-      <button ref={triggerRef} type="button" className={danger ? "btn btn-danger" : "btn"} onClick={() => setOpen(true)} disabled={disabled}>
-        {label}
+      <button ref={triggerRef} type="button" className={danger ? "btn btn-danger" : "btn"} onClick={() => setOpen(true)} disabled={disabled} aria-label={display ? label : undefined}>
+        {display ?? label}
       </button>
     );
   }
@@ -160,4 +174,9 @@ export function KV({ rows }: { rows: Array<[ReactNode, ReactNode]> }) {
       ))}
     </dl>
   );
+}
+
+/** Short reason next to a control the current role cannot use. Renders nothing when allowed. */
+export function DeniedHint({ reason }: { reason: string | null }) {
+  return reason ? <p className="hint access-hint">{reason}</p> : null;
 }

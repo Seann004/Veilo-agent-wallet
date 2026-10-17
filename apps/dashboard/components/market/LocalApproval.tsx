@@ -88,7 +88,7 @@ export function LocalApproval() {
       {ws.loading && !ws.data ? <Loading label="local workspace" /> : null}
       {ws.error?.status === 401 ? (
         <p className="notice notice-warn" role="status">
-          Sign in to your local owner workspace first (<Link href="/">Overview</Link>). Local approvals need the owner session that holds spending
+          Sign in to your local owner workspace first (<Link href="/workspace">Workspace</Link>). Local approvals need the owner session that holds spending
           authority.
         </p>
       ) : (

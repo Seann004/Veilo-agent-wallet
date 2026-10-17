@@ -88,7 +88,7 @@ export function ControllerPanel() {
       </div>
       {ownerSignedOut ? (
         <p className="notice notice-warn" role="status">
-          Sign in to your local owner workspace first (<Link href="/">Overview</Link>), then link the controller.
+          Sign in to your local owner workspace first (<Link href="/workspace">Workspace</Link>), then link the controller.
         </p>
       ) : null}
       <ErrorNotice error={action.error} what="the controller could not be linked" />

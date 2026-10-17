@@ -10,9 +10,9 @@ export const LABEL_STOPPED_AUTHORIZED = "Stopped; one payment already authorized
 export const LABEL_CREDITS_NO_CHARGE = "Credits purchased; no extra on-chain charge for this call";
 
 export const ROLE_LABEL: Record<AgentRole, string> = {
-  credit_manager: "Inference-credit manager",
-  research: "Research agent",
-  content: "Content manager",
+  credit_manager: "Credit manager",
+  research: "Researcher",
+  content: "Content writer",
   custom: "Custom agent",
 };
 
@@ -22,7 +22,7 @@ export function agentStateLabel(status: AgentStatus, workspaceStopped: boolean):
   if (status === "revoked") return "Stopped (revoked)";
   if (workspaceStopped) return "Stopped (emergency stop)";
   if (status === "paused") return "Paused";
-  if (status === "draft") return "Draft — awaiting owner activation";
+  if (status === "draft") return "Draft";
   return "Active";
 }
 
@@ -182,15 +182,15 @@ export function reasonGuidance(code: string | null | undefined): string | null {
 
 /** Why an agent cannot start work right now; null when it can. */
 export function runBlockedReason(status: AgentStatus, workspaceStopped: boolean): string | null {
-  if (workspaceStopped) return "Emergency stop is active. Resume the workspace in Overview before starting work.";
+  if (workspaceStopped) return "Everything is stopped. Resume from the Workspace page to start work again.";
   switch (status) {
     case "draft":
-      return "The policy is still a draft. Activate it before this agent can run.";
+      return "This agent is off. Activate it to start work.";
     case "paused":
       return "This agent is paused. Resume it to start work.";
     case "revoked":
     case "archived":
-      return "This agent is permanently stopped and cannot run.";
+      return "This agent is stopped for good.";
     default:
       return null;
   }

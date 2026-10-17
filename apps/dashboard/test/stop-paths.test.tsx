@@ -9,6 +9,7 @@ import { RecoveryCenter, classifyRecovery } from "../components/RecoveryCenter";
 import { OwnerProvider } from "../components/Shell";
 import { EmergencyStop, STOP_KEEPS_RECOVERY } from "../components/StopControls";
 import type { Workspace } from "../lib/types";
+import { accessFor, withRole } from "./access-fixtures";
 import { PRINCE, SHAWN, agent, purchase, recordingFetch, workspace } from "./fixtures";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/recovery", useParams: () => ({}) }));
@@ -27,14 +28,14 @@ afterEach(() => {
 });
 
 function withOwner(ws: Workspace, node: ReactNode) {
-  return <OwnerProvider value={{ workspace: ws, reloadWorkspace: async () => undefined, connected: null, setConnected: () => undefined }}>{node}</OwnerProvider>;
+  return <OwnerProvider value={{ workspace: ws, reloadWorkspace: async () => undefined, connected: null, setConnected: () => undefined, access: accessFor("owner", ws) }}>{node}</OwnerProvider>;
 }
 
 describe("stop paths", () => {
   it("pauses an agent with the keyboard and revokes only after an explicit confirmation", async () => {
     const user = userEvent.setup();
     const onChanged = vi.fn();
-    render(<AgentControls agent={agent(PRINCE, "Prince", "research")} onChanged={onChanged} />);
+    render(withRole(<AgentControls agent={agent(PRINCE, "Prince", "research")} onChanged={onChanged} />));
     await user.tab();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Pause Prince" }));
     await user.keyboard("{Enter}");
@@ -53,7 +54,7 @@ describe("stop paths", () => {
   });
 
   it("disables pause/revoke for a revoked agent but still allows archive", () => {
-    render(<AgentControls agent={agent(PRINCE, "Prince", "research", "revoked")} onChanged={vi.fn()} />);
+    render(withRole(<AgentControls agent={agent(PRINCE, "Prince", "research", "revoked")} onChanged={vi.fn()} />));
     expect((screen.getByRole("button", { name: "Pause Prince" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Revoke Prince" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Archive Prince" }) as HTMLButtonElement).disabled).toBe(false);
@@ -61,7 +62,7 @@ describe("stop paths", () => {
 
   it("triggers the global emergency stop and states that recovery and exit stay available", async () => {
     const user = userEvent.setup();
-    render(<EmergencyStop stopped={false} onChanged={vi.fn()} />);
+    render(withRole(<EmergencyStop stopped={false} onChanged={vi.fn()} />));
     expect(screen.getByText(STOP_KEEPS_RECOVERY)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Emergency stop all agents" }));
     await user.click(screen.getByRole("button", { name: "Confirm emergency stop" }));
@@ -87,7 +88,7 @@ describe("stop paths", () => {
     render(withOwner(ws, <RecoveryCenter />));
     const prepare = await screen.findByRole("button", { name: "Prepare recovery" });
     expect((prepare as HTMLButtonElement).disabled).toBe(false);
-    expect(screen.getByText(/Not yet safe: a released withdrawal or signed merchant payment may still settle/)).toBeTruthy();
+    expect(screen.getByText(/Not yet safe: a payment already sent may still go through/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Prepare public exit" })).toBeTruthy();
     expect(screen.getByText(/a public exit is linkable/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Resume workspace" })).toBeTruthy();
@@ -111,7 +112,7 @@ describe("keyboard operability", () => {
   it("opens the activity drawer from the keyboard, closes on Escape and returns focus", async () => {
     const user = userEvent.setup();
     const ws = workspace();
-    render(<ActivityList activity={{ events: [], purchases: [purchase()] }} workspace={ws} onChanged={vi.fn()} />);
+    render(withRole(<ActivityList activity={{ events: [], purchases: [purchase()] }} workspace={ws} onChanged={vi.fn()} />, "owner", ws));
     await user.tab();
     const row = screen.getByRole("button", { name: /Shawn · inference-credit-pack/ });
     expect(document.activeElement).toBe(row);

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ContentCalendar, ContentEditor } from "../components/Content";
 import type { CalendarEntry, ContentItem } from "../lib/types";
+import { withRole } from "./access-fixtures";
 import { draft, recordingFetch } from "./fixtures";
 
 let rec: ReturnType<typeof recordingFetch>;
@@ -27,8 +28,8 @@ describe("CNT-02 content edits and approval cause no charge", () => {
   it("editing and approving a draft call only the content edit and review endpoints", async () => {
     const user = userEvent.setup();
     const onSaved = vi.fn();
-    render(<ContentEditor item={draft()} onSaved={onSaved} />);
-    expect(screen.getByText(/No charge: editing, review changes and calendar edits run no inference/)).toBeTruthy();
+    render(withRole(<ContentEditor item={draft()} onSaved={onSaved} />));
+    expect(screen.getByText(/Editing is free: it uses no AI, buys nothing and publishes nothing/)).toBeTruthy();
 
     const text = screen.getByLabelText("Draft text");
     await user.clear(text);
@@ -51,7 +52,7 @@ describe("CNT-02 content edits and approval cause no charge", () => {
     const user = userEvent.setup();
     const entries: CalendarEntry[] = Array.from({ length: 7 }, (_, i) => ({ day: i + 1, date: `2026-10-${String(16 + i)}`, channel: "LinkedIn", draftArtifactId: null, action: `Plan ${i + 1}` }));
     const cal = draft({ id: "99999999-9999-4999-8999-999999999999", kind: "content_calendar", title: "Calendar", calendar: entries, content: JSON.stringify(entries) });
-    render(<ContentCalendar item={cal} drafts={[]} onSaved={vi.fn()} />);
+    render(withRole(<ContentCalendar item={cal} drafts={[]} onSaved={vi.fn()} />));
     expect(screen.getAllByRole("listitem")).toHaveLength(7);
     const day3 = screen.getByLabelText("Day 3 planned action");
     await user.clear(day3);

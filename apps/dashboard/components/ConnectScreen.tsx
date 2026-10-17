@@ -7,8 +7,11 @@ import type { ConnectedWallet } from "./Shell";
 import { useAction } from "./hooks";
 import { ErrorNotice } from "./ui";
 
-/** Owner sign-in: connect a Wallet Standard wallet and sign a one-time challenge message. */
-export function ConnectScreen({ onSignedIn }: { onSignedIn: (c: ConnectedWallet) => Promise<void> }) {
+/** The control service answers POLICY_DENIED when the wallet is neither the owner nor an approved guest. */
+export const NOT_ALLOWED_WALLET = "This wallet is not the workspace owner or an approved guest. Switch to an allowed wallet in your wallet app and try again.";
+
+/** Sign-in for the owner or an approved guest: connect a Wallet Standard wallet and sign a one-time challenge. */
+export function ConnectScreen({ onSignedIn, onCancel }: { onSignedIn: (c: ConnectedWallet) => Promise<void>; onCancel?: (() => void) | undefined }) {
   const [wallets, setWallets] = useState<OwnerWallet[]>([]);
   const action = useAction();
   useEffect(() => {
@@ -26,13 +29,15 @@ export function ConnectScreen({ onSignedIn }: { onSignedIn: (c: ConnectedWallet)
       await onSignedIn({ wallet: w.wallet, account });
     });
 
+  const notAllowed = action.error?.status === 403 && action.error.code === "POLICY_DENIED";
   return (
     <div className="panel connect">
-      <h1>Owner sign-in</h1>
+      <h1>Sign in</h1>
       <p>
-        Connect the workspace owner wallet and sign a one-time sign-in message. The message authorizes no transaction. Veilo never asks for
-        your seed phrase or private key.
+        Connect the workspace owner wallet or an approved guest wallet and sign a one-time sign-in message. The message authorizes no
+        transaction. Veilo never asks for your seed phrase or private key.
       </p>
+      <p className="hint">Guests can view everything and run agents. Funding, policy, approvals and stop controls stay with the owner.</p>
       {wallets.length === 0 ? (
         <p className="notice notice-warn" role="status">
           No compatible wallet detected. Install or unlock Phantom (or another Wallet Standard wallet) with Solana devnet support, then reload.
@@ -53,7 +58,18 @@ export function ConnectScreen({ onSignedIn }: { onSignedIn: (c: ConnectedWallet)
           Waiting for the wallet…
         </p>
       ) : null}
-      <ErrorNotice error={action.error} what="sign-in failed" />
+      {notAllowed ? (
+        <p className="notice notice-error" role="alert">
+          {NOT_ALLOWED_WALLET}
+        </p>
+      ) : (
+        <ErrorNotice error={action.error} what="sign-in failed" />
+      )}
+      {onCancel ? (
+        <button type="button" className="btn btn-small" onClick={onCancel}>
+          Back to the read-only view
+        </button>
+      ) : null}
     </div>
   );
 }

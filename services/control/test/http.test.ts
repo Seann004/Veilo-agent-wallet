@@ -107,7 +107,8 @@ describe("owner session", () => {
     await start();
     const ch = await call("/session/challenge", { method: "POST", body: { address: h!.env.owner.address } });
     expect(ch.body.message).toContain("localhost:3000 wants you to sign in");
-    expect(ch.body.message).toContain(`Chain ID: ${DEVNET_CAIP2}`);
+    expect(ch.body.message).toContain("Chain ID: devnet\n");
+    expect(ch.body.nonce).toMatch(/^[A-Za-z0-9]{8,}$/);
     expect(ch.body.message).toContain(`Nonce: ${ch.body.nonce}`);
     expect(ch.body.message).toMatch(/Issued At: .*\nExpiration Time: /);
     const s = await login();

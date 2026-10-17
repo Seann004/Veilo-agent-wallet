@@ -4,10 +4,11 @@ import { useId, useState } from "react";
 import { api } from "../lib/api";
 import { REVIEW_LABEL } from "../lib/labels";
 import type { ContentItem, Handoff, ReviewState } from "../lib/types";
-import { ContentCalendar, ContentEditor, NO_CHARGE_NOTE } from "./Content";
+import { ContentCalendar, ContentEditor } from "./Content";
 import { HandoffApprovals } from "./AgentDetail";
 import { useOwner } from "./Shell";
 import { useResource } from "./hooks";
+import { Select } from "./Select";
 import { ErrorNotice, Loading, Section } from "./ui";
 
 export function ContentView() {
@@ -25,24 +26,26 @@ export function ContentView() {
 
   return (
     <>
-      <h1>Content</h1>
-      <p className="notice">{NO_CHARGE_NOTE} Approved drafts are ready for manual export; Veilo has no social accounts or publishing authority.</p>
-      <div className="field inline">
-        <label htmlFor={filterId}>Review state</label>
-        <select id={filterId} value={filter} onChange={(e) => setFilter(e.target.value as "" | ReviewState)}>
-          <option value="">All</option>
-          {Object.entries(REVIEW_LABEL).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
-            </option>
-          ))}
-        </select>
+      <div className="page-head">
+        <h1>Content</h1>
+      </div>
+      <p className="lede page-lede">What your agents wrote. Veilo never posts anything; copy approved drafts out yourself.</p>
+      <div className="field-inline-select">
+        <label htmlFor={filterId} className="small muted">
+          Show
+        </label>
+        <Select
+          id={filterId}
+          label="Show"
+          value={filter}
+          onChange={setFilter}
+          options={[{ value: "" as "" | ReviewState, label: "All content" }, ...Object.entries(REVIEW_LABEL).map(([k, v]) => ({ value: k as ReviewState, label: v }))]}
+        />
       </div>
       {content.loading && !content.data ? <Loading label="content" /> : null}
       <ErrorNotice error={content.error} what="content" onRetry={content.reload} />
-      <Section title="Seven-day calendar">
-        <p className="small">Dates are planning dates, not publishing commitments.</p>
-        {calendars.length === 0 ? <p className="muted">No calendars yet. Submit a campaign brief to Mira from her agent page.</p> : null}
+      <Section title="Calendar">
+        {calendars.length === 0 ? <p className="muted flush">No calendar yet. Send Mira a campaign brief to get one.</p> : <p className="hint">Planning dates only; nothing is scheduled to post.</p>}
         {calendars.map((c) => (
           <div key={c.id}>
             <ContentEditor item={c} onSaved={saved} />
@@ -51,22 +54,22 @@ export function ContentView() {
         ))}
       </Section>
       <Section title="Drafts">
-        {drafts.length === 0 ? <p className="muted">No drafts yet. Submit a campaign brief to Mira from her agent page.</p> : null}
+        {drafts.length === 0 ? <p className="muted flush">No drafts yet. Send Mira a campaign brief to get some.</p> : null}
         <div className="stack">
           {drafts.map((d) => (
             <ContentEditor key={`${d.id}-${d.revision}`} item={d} onSaved={saved} />
           ))}
         </div>
       </Section>
-      <Section title="Research briefs">
-        {briefs.length === 0 ? <p className="muted">No research briefs yet. Ask Prince a research question, or give a custom agent a job; both save their reports here.</p> : null}
+      <Section title="Research">
+        {briefs.length === 0 ? <p className="muted flush">No research yet. Ask Prince a question, or give a custom agent a job; both save their reports here.</p> : null}
         <div className="stack">
           {briefs.map((b) => (
             <ContentEditor key={`${b.id}-${b.revision}`} item={b} onSaved={saved} />
           ))}
         </div>
       </Section>
-      <Section title="Handoffs">
+      <Section title="Research shared with Mira">
         {handoffs.data ? <HandoffApprovals handoffs={handoffs.data.items} agents={workspace.agents} onChanged={handoffs.reload} /> : <Loading label="handoffs" />}
         <ErrorNotice error={handoffs.error} onRetry={handoffs.reload} />
       </Section>

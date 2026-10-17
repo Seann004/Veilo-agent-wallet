@@ -5,14 +5,16 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AGENT_ROLES, AGENT_TEMPLATES as CONTRACT_TEMPLATES, createAgentRequestSchema, runAgentRequestSchema, customTaskInputSchema, agentPolicyInputSchema } from "@veilo/contracts";
 import { SPECIALIST_SKU } from "@veilo/contracts/marketplace";
-import { AgentCard, summarizeResult } from "../components/AgentCard";
 import { CreateAgent } from "../components/CreateAgent";
 import { CUSTOM_INSTRUCTIONS_MAX, CustomAgentPanel, CustomRunForm, TEMPLATE_LABEL, withHiring } from "../components/CustomAgentFields";
 import { MarketContextProvider, type MarketContextValue } from "../components/market/MarketContext";
+import { AgentRow } from "../components/Overview";
 import { ROLE_TEMPLATES } from "../components/Policy";
 import { OwnerProvider } from "../components/Shell";
 import { ROLE_LABEL } from "../lib/labels";
+import { summarizeResult } from "../lib/results";
 import { AGENT_TEMPLATES, type Agent, type Job } from "../lib/types";
+import { accessFor } from "./access-fixtures";
 import { agent, workspace } from "./fixtures";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/agents/new", useParams: () => ({}) }));
@@ -81,7 +83,7 @@ function market(): MarketContextValue {
 
 function renderCreate(node: ReactNode = <CreateAgent />) {
   return render(
-    <OwnerProvider value={{ workspace: workspace(), reloadWorkspace: async () => undefined, connected: null, setConnected: () => undefined }}>
+    <OwnerProvider value={{ workspace: workspace(), reloadWorkspace: async () => undefined, connected: null, setConnected: () => undefined, access: accessFor("owner") }}>
       <MarketContextProvider value={market()}>{node}</MarketContextProvider>
     </OwnerProvider>,
   );
@@ -136,11 +138,14 @@ describe("custom agent roles and maps", () => {
     expect(withHiring({ ...base, allowedPaymentPaths: [] }, true).allowedPaymentPaths).toEqual(["private_x402"]);
   });
 
-  it("renders a custom agent card with its own label and class", () => {
-    const { container } = render(<AgentCard agent={customAgent()} budget={undefined} balances={undefined} task={undefined} job={undefined} workspaceStopped={false} onChanged={vi.fn()} />);
-    expect(screen.getByText("Custom agent")).toBeTruthy();
-    expect(container.querySelector("article.card-custom")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Run Scout" }).getAttribute("href")).toBe(`/agents/${CUSTOM_ID}#run`);
+  it("renders a custom agent row with its own label and a link to its page", () => {
+    render(
+      <ul>
+        <AgentRow agent={customAgent()} budget={undefined} task={undefined} job={undefined} stopped={false} />
+      </ul>,
+    );
+    expect(screen.getByText(/Custom agent/)).toBeTruthy();
+    expect(screen.getByRole("link").getAttribute("href")).toBe(`/agents/${CUSTOM_ID}`);
   });
 
   it("summarizes a custom job's hire proposal without calling it paid", () => {

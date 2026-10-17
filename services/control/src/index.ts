@@ -14,6 +14,7 @@ import { McpClient } from "@veilo/mcp-client";
 import { createApp } from "./app";
 import { ServiceCredentials } from "./auth/credentials";
 import type { SessionSettings } from "./auth/session";
+import { parseGuestPubkeys, parseGuestRunsPerHour, parsePublicView } from "./auth/access-config";
 import { AgentConnectors, connectorLimitsFromEnv, parseConnectorCatalog } from "./connectors/agent-connectors";
 import { createLedger } from "./context";
 import { createIntegration } from "./integration";
@@ -61,6 +62,12 @@ async function main(): Promise<void> {
     console.log(`[${SERVICE}] VEILO_OWNER_PUBKEY is unset; owner login is unavailable until a workspace is seeded`);
   }
 
+  const guestPubkeys = parseGuestPubkeys(process.env.VEILO_GUEST_PUBKEYS, ownerPubkey);
+  const publicView = parsePublicView(process.env.VEILO_PUBLIC_VIEW);
+  const guestRunsPerHour = parseGuestRunsPerHour(process.env.VEILO_GUEST_RUNS_PER_HOUR);
+  if (guestPubkeys.length > 0) console.log(`[${SERVICE}] ${guestPubkeys.length} guest wallet(s) may sign in (${guestRunsPerHour} runs per hour each)`);
+  if (publicView) console.log(`[${SERVICE}] public read-only view is enabled`);
+
   const dashboardOrigin = process.env.VEILO_DASHBOARD_ORIGIN?.trim() || `http://localhost:${config.ports.dashboard}`;
   const session: SessionSettings = {
     domain: new URL(dashboardOrigin).host,
@@ -69,6 +76,9 @@ async function main(): Promise<void> {
     challengeTtlMs: 5 * 60_000,
     sessionTtlMs: 12 * 3_600_000,
     secureCookies: dashboardOrigin.startsWith("https:"),
+    guestPubkeys,
+    publicView,
+    guestRunsPerHour,
   };
   const services = ServiceCredentials.fromFiles(
     { wallet: config.paths.serviceCredentials.wallet, relayer: config.paths.serviceCredentials.relayer },

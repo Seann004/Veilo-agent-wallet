@@ -1,8 +1,11 @@
 "use client";
 
 import { useId, useState } from "react";
-import { credits, parseUsdcInput, usdc, formatBaseUnits } from "../lib/format";
+import { credits, formatBaseUnits, parseUsdcInput, trimFraction, usdc } from "../lib/format";
 import type { AgentRole, Policy, Workspace } from "../lib/types";
+import { Icon } from "./Icon";
+import { Select, type SelectOption } from "./Select";
+import { KV } from "./ui";
 
 /** Agent policy body accepted by the control service (base-unit decimal strings). */
 export interface AgentPolicyInput {
@@ -87,22 +90,45 @@ export const ROLE_TEMPLATES: Record<AgentRole, { name: string; description: stri
   },
 };
 
-function Field({ label, value, onChange, hint, inputMode }: { label: string; value: string; onChange: (v: string) => void; hint?: string; inputMode?: "decimal" | "numeric" }) {
+function MoneyField({ label, hint, value, onChange, unit = "USDC", inputMode = "decimal" }: { label: string; hint: string; value: string; onChange: (v: string) => void; unit?: string; inputMode?: "decimal" | "numeric" }) {
   const id = useId();
   return (
-    <div className="field">
+    <div className="field money-field">
       <label htmlFor={id}>{label}</label>
-      <input id={id} value={value} inputMode={inputMode} onChange={(e) => onChange(e.target.value)} aria-describedby={hint ? `${id}-h` : undefined} />
-      {hint ? (
-        <span id={`${id}-h`} className="hint">
-          {hint}
-        </span>
-      ) : null}
+      <span className="input-unit">
+        <input id={id} value={value} inputMode={inputMode} onChange={(e) => onChange(e.target.value)} aria-describedby={`${id}-h`} />
+        <span aria-hidden="true">{unit}</span>
+      </span>
+      <span id={`${id}-h`} className="hint">
+        {hint}
+      </span>
     </div>
   );
 }
 
-const usdcText = (base: string) => formatBaseUnits(base, 6).replace(/,/g, "");
+function ChipToggle({ label, on, onToggle }: { label: string; on: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" className="chip chip-toggle" aria-pressed={on} onClick={onToggle}>
+      {on ? <Icon name="check" size={14} /> : null}
+      {label}
+    </button>
+  );
+}
+
+const usdcText = (base: string) => trimFraction(formatBaseUnits(base, 6).replace(/,/g, ""));
+const skuLabel = (sku: string) => sku.charAt(0).toUpperCase() + sku.slice(1).replace(/-/g, " ");
+
+export const TIER_OPTIONS: Array<SelectOption<AgentPolicyInput["tier"]>> = [
+  { value: "bounded_automatic", label: "Automatically, within limits", hint: "Buys what a task needs, up to your limits" },
+  { value: "approval_required", label: "Needs approval", hint: "Each purchase waits for you" },
+  { value: "observe", label: "Plan only", hint: "Plans tasks but never buys" },
+  { value: "stopped", label: "Stopped", hint: "No new work; open payments still settle" },
+];
+
+const PATH_LABEL: Record<AgentPolicyInput["allowedPaymentPaths"][number], string> = {
+  private_x402: "Private pool (USDC)",
+  prepaid_credits: "Prepaid credits",
+};
 
 /**
  * Structured policy editor. Amounts are typed in USDC and converted to base units without
@@ -142,74 +168,62 @@ export function PolicyForm({ initial, workspace, onChange }: { initial: AgentPol
       allowedPaymentPaths: nextPaths,
     });
   };
+  const toggleSku = (sku: string) => {
+    const next = skus.includes(sku) ? skus.filter((x) => x !== sku) : [...skus, sku];
+    setSkus(next);
+    emit({}, tier, next);
+  };
+  const togglePath = (p: AgentPolicyInput["allowedPaymentPaths"][number]) => {
+    const next = paths.includes(p) ? paths.filter((x) => x !== p) : [...paths, p];
+    setPaths(next);
+    emit({}, tier, skus, next);
+  };
 
   return (
-    <fieldset className="policy-form">
-      <legend>Spending policy (draft until you activate it)</legend>
+    <div className="policy-form">
       <div className="field">
-        <label htmlFor={tierId}>Authority tier</label>
-        <select
+        <label htmlFor={tierId}>How it spends</label>
+        <Select
           id={tierId}
+          label="How it spends"
           value={tier}
-          onChange={(e) => {
-            const v = e.target.value as AgentPolicyInput["tier"];
+          options={TIER_OPTIONS}
+          onChange={(v) => {
             setTier(v);
             emit({}, v);
           }}
-        >
-          <option value="observe">Observe (plan only)</option>
-          <option value="bounded_automatic">Bounded automatic</option>
-          <option value="approval_required">Approval required</option>
-          <option value="stopped">Stopped (reconcile only)</option>
-        </select>
+        />
       </div>
-      <div className="grid-3">
-        <Field label="Lifetime allowance (USDC)" inputMode="decimal" value={text.lifetime} onChange={(v) => emit({ lifetime: v })} />
-        <Field label="Rolling 24 h cap (USDC)" inputMode="decimal" value={text.rolling} onChange={(v) => emit({ rolling: v })} />
-        <Field label="Per-purchase limit (USDC)" inputMode="decimal" value={text.maxPurchase} onChange={(v) => emit({ maxPurchase: v })} />
-        <Field label="Per-task budget (USDC)" inputMode="decimal" value={text.task} onChange={(v) => emit({ task: v })} />
-        <Field label="Usage allowance (microcredits)" inputMode="numeric" value={text.usage} onChange={(v) => emit({ usage: v })} />
-        <Field label="Per-task credit cap (microcredits)" inputMode="numeric" value={text.taskCredits} onChange={(v) => emit({ taskCredits: v })} />
+      <div className="money-grid">
+        <MoneyField label="Total budget" hint="Over the agent's lifetime" value={text.lifetime} onChange={(v) => emit({ lifetime: v })} />
+        <MoneyField label="Per day" hint="In any 24 hours" value={text.rolling} onChange={(v) => emit({ rolling: v })} />
+        <MoneyField label="Per purchase" hint="Most it pays for one item" value={text.maxPurchase} onChange={(v) => emit({ maxPurchase: v })} />
+        <MoneyField label="Per task" hint="Most one task can spend" value={text.task} onChange={(v) => emit({ task: v })} />
       </div>
-      <fieldset>
-        <legend>Allowed services (SKUs)</legend>
-        <div className="checks">
+      <div className="field">
+        <span className="field-label">What it can buy</span>
+        <div className="chips" role="group" aria-label="What it can buy">
           {allSkus.map((sku) => (
-            <label key={sku}>
-              <input
-                type="checkbox"
-                checked={skus.includes(sku)}
-                onChange={(e) => {
-                  const next = e.target.checked ? [...skus, sku] : skus.filter((s) => s !== sku);
-                  setSkus(next);
-                  emit({}, tier, next);
-                }}
-              />{" "}
-              {sku}
-            </label>
+            <ChipToggle key={sku} label={skuLabel(sku)} on={skus.includes(sku)} onToggle={() => toggleSku(sku)} />
           ))}
         </div>
-      </fieldset>
-      <fieldset>
-        <legend>Allowed payment paths</legend>
-        <div className="checks">
+      </div>
+      <div className="field">
+        <span className="field-label">How it pays</span>
+        <div className="chips" role="group" aria-label="How it pays">
           {(["private_x402", "prepaid_credits"] as const).map((p) => (
-            <label key={p}>
-              <input
-                type="checkbox"
-                checked={paths.includes(p)}
-                onChange={(e) => {
-                  const next = e.target.checked ? [...paths, p] : paths.filter((x) => x !== p);
-                  setPaths(next);
-                  emit({}, tier, skus, next);
-                }}
-              />{" "}
-              {p === "private_x402" ? "Private pool → x402 (USDC)" : "Prepaid gateway credits"}
-            </label>
+            <ChipToggle key={p} label={PATH_LABEL[p]} on={paths.includes(p)} onToggle={() => togglePath(p)} />
           ))}
         </div>
-      </fieldset>
-    </fieldset>
+      </div>
+      <details className="advanced">
+        <summary>Advanced: AI credits</summary>
+        <div className="money-grid">
+          <MoneyField label="Credit allowance" hint="Total, in microcredits" unit="µcr" inputMode="numeric" value={text.usage} onChange={(v) => emit({ usage: v })} />
+          <MoneyField label="Credits per task" hint="Per task, in microcredits" unit="µcr" inputMode="numeric" value={text.taskCredits} onChange={(v) => emit({ taskCredits: v })} />
+        </div>
+      </details>
+    </div>
   );
 }
 
@@ -218,74 +232,31 @@ export function PolicyReview({ policy, workspacePolicy, title }: { policy: Polic
   const p = policy as Partial<Policy> & Partial<AgentPolicyInput>;
   const skus = p.permissions?.allowedSkus ?? p.allowedSkus ?? [];
   const paths = p.permissions?.allowedPaymentPaths ?? p.allowedPaymentPaths ?? [];
-  const role = (p.roleConfig ?? null) as AgentPolicyInput["roleConfig"] | null;
-  return (
-    <div className="table-wrap">
-      <table>
-        <caption>{title}</caption>
-        <thead>
-          <tr>
-            <th scope="col">Scope</th>
-            <th scope="col">This agent</th>
-            <th scope="col">Workspace (also enforced)</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <th scope="row">Tier</th>
-            <td>{String(p.tier).replace(/_/g, " ")}</td>
-            <td>{workspacePolicy ? workspacePolicy.tier.replace(/_/g, " ") : "not activated"}</td>
-          </tr>
-          <tr>
-            <th scope="row">Lifetime</th>
-            <td>{usdc(p.lifetimeTestUsdc)}</td>
-            <td>{usdc(workspacePolicy?.lifetimeTestUsdc)}</td>
-          </tr>
-          <tr>
-            <th scope="row">Rolling 24 h</th>
-            <td>{usdc(p.rolling24hTestUsdc)}</td>
-            <td>{usdc(workspacePolicy?.rolling24hTestUsdc)}</td>
-          </tr>
-          <tr>
-            <th scope="row">Per purchase</th>
-            <td>{usdc(p.maxPurchaseTestUsdc)}</td>
-            <td>—</td>
-          </tr>
-          <tr>
-            <th scope="row">Per task</th>
-            <td>{usdc(p.taskLimitTestUsdc)}</td>
-            <td>—</td>
-          </tr>
-          <tr>
-            <th scope="row">Gateway usage</th>
-            <td>
-              {credits(p.usageAllowanceUnits)} lifetime, {credits(p.taskCreditUnits)} per task
-            </td>
-            <td>—</td>
-          </tr>
-          <tr>
-            <th scope="row">Services</th>
-            <td>{skus.length ? skus.join(", ") : "none"}</td>
-            <td>Only approved, bound services</td>
-          </tr>
-          <tr>
-            <th scope="row">Payment paths</th>
-            <td>{paths.length ? paths.join(", ") : "none"}</td>
-            <td>Devnet USDC mint only</td>
-          </tr>
-          {role ? (
-            <tr>
-              <th scope="row">Top-up rule</th>
-              <td>
-                Buy {credits(role.creditPackUnits)} when available credits fall below {credits(role.creditLowWatermark)}; check every {role.pollSeconds} s;{" "}
-                {role.cooldownSeconds} s between successful top-ups; one outstanding top-up.
-              </td>
-              <td>SOL sponsor allowance {workspacePolicy?.sponsorLamportLimit ?? "—"} lamports</td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
-      <p className="small muted">These limits are enforced by the owner wallet service off chain; they are not cryptographic caps.</p>
-    </div>
-  );
+  const role = p.roleConfig;
+  const topUp = role && typeof role.creditPackUnits === "string" && /^\d+$/.test(role.creditPackUnits)
+    && typeof role.creditLowWatermark === "string" && /^\d+$/.test(role.creditLowWatermark)
+    && typeof role.pollSeconds === "number" && Number.isSafeInteger(role.pollSeconds) && role.pollSeconds > 0
+    ? `Buy ${credits(role.creditPackUnits)} when below ${credits(role.creditLowWatermark)}; checks every ${role.pollSeconds} s`
+    : null;
+    const ws = (v: string | null | undefined) => (workspacePolicy ? <span className="muted"> · workspace cap {usdc(v)}</span> : null);
+    return (
+      <div className="policy-compact">
+        <h3>{title}</h3>
+        <KV
+          rows={[
+            ["Spends", TIER_OPTIONS.find((t) => t.value === p.tier)?.label ?? String(p.tier)],
+            ["Per purchase", usdc(p.maxPurchaseTestUsdc)],
+            ["Per task", usdc(p.taskLimitTestUsdc)],
+            ["Per day", <>{usdc(p.rolling24hTestUsdc)}{ws(workspacePolicy?.rolling24hTestUsdc)}</>],
+            ["Total budget", <>{usdc(p.lifetimeTestUsdc)}{ws(workspacePolicy?.lifetimeTestUsdc)}</>],
+            ["Can buy", skus.length ? skus.map(skuLabel).join(", ") : "Nothing"],
+            ["Pays with", paths.length ? paths.map((x) => PATH_LABEL[x as keyof typeof PATH_LABEL] ?? x).join(", ") : "Nothing"],
+            ["AI credits", `${credits(p.usageAllowanceUnits)} · ${credits(p.taskCreditUnits)} per task`],
+            ...(topUp
+              ? [["Top-up rule", topUp] as [string, string]]
+              : []),
+          ]}
+        />
+      </div>
+    );
 }

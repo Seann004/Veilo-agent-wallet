@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { TreasurySummary } from "../components/TreasurySummary";
-import { formatBaseUnits, parseUsdcInput } from "../lib/format";
+import { formatBaseUnits, parseUsdcInput, usdc } from "../lib/format";
 import { balancesAfterTopUpAndConsumption, workspace } from "./fixtures";
 
 afterEach(cleanup);
@@ -11,10 +11,10 @@ describe("CRE-05 treasury accounting display", () => {
   it("counts a credit-pack purchase once as cash and shows later consumption only in microcredits", () => {
     const b = balancesAfterTopUpAndConsumption();
     const { container } = render(<TreasurySummary balances={b} agents={workspace().agents} />);
-    expect(screen.getByTestId("cash-spent").textContent).toBe("1.000000 USDC");
+    expect(screen.getByTestId("cash-spent").textContent).toBe("1.00 USDC");
     const text = container.textContent ?? "";
     // Purchase (1.00 USDC) plus consumption (300,000 microcredits) must never appear as 1.30 USDC.
-    expect(text).not.toContain("1.300000 USDC");
+    expect(text).not.toContain("1.30 USDC");
     expect(text).toContain("Credits purchased1,000,000 microcredits");
     expect(text).toContain("Credits consumed300,000 microcredits");
     expect(text).toContain("Credits available700,000 microcredits");
@@ -31,9 +31,9 @@ describe("CRE-05 treasury accounting display", () => {
     }
     render(<TreasurySummary balances={b} agents={workspace().agents} />);
     const princeRow = screen.getByRole("rowheader", { name: /Prince/ }).closest("tr")!;
-    expect(princeRow.textContent).toContain("2.000000 USDC of 2.000000 USDC");
+    expect(princeRow.textContent).toContain("2.00 USDC of 2.00 USDC");
     // Effective remaining is the workspace's 0.2 USDC, not Prince's 2.0 or the 4.0 pool value.
-    expect(princeRow.querySelector("td strong")!.textContent).toBe("0.200000 USDC");
+    expect(princeRow.querySelector("td strong")!.textContent).toBe("0.20 USDC");
     expect(screen.getByText(/no agent can spend the whole pool/)).toBeTruthy();
   });
 
@@ -48,6 +48,9 @@ describe("CRE-05 treasury accounting display", () => {
   it("formats and parses amounts with integer arithmetic", () => {
     expect(formatBaseUnits("123456789", 6)).toBe("123.456789");
     expect(formatBaseUnits("9223372036854775807", 6)).toBe("9,223,372,036,854.775807");
+    expect(usdc("1500000")).toBe("1.50 USDC");
+    expect(usdc("1")).toBe("0.000001 USDC");
+    expect(usdc("123456789")).toBe("123.456789 USDC");
     expect(parseUsdcInput("1.5")).toBe("1500000");
     expect(parseUsdcInput("0.000001")).toBe("1");
     expect(parseUsdcInput("1.0000001")).toBeNull();

@@ -3,13 +3,13 @@
 import { useId, useState } from "react";
 import { api } from "../lib/api";
 import { usdc, when } from "../lib/format";
-import { hasLiveAuthority, legStateLabel } from "../lib/labels";
+import { agentStateLabel, hasLiveAuthority } from "../lib/labels";
 import type { Activity, NoteStatus, Purchase } from "../lib/types";
 import { signAndSend } from "../lib/wallet";
 import { AgentControls } from "./AgentControls";
-import { useOwner } from "./Shell";
+import { useCapability, useOwner } from "./Shell";
 import { EmergencyStop } from "./StopControls";
-import { ConnectWalletPrompt, useOwnerWallet } from "./WalletView";
+import { ConnectWalletPrompt, OwnerOnlyNotice, useOwnerWallet } from "./WalletView";
 import { useAction, useResource } from "./hooks";
 import { ErrorNotice, Loading, Section, TxLink } from "./ui";
 
@@ -64,9 +64,9 @@ function RecoveryRow({ p, agentName, agentStopped, onChanged }: { p: Purchase; a
   return (
     <li className="recovery-row">
       <p>
-        <strong>{agentName}</strong> · {p.sku} · {usdc(p.price.amount)} · funding {legStateLabel(p.states.funding)}, merchant {legStateLabel(p.states.merchant)} · {when(p.updatedAt)}
+        <strong>{agentName}</strong> · {p.sku} · {usdc(p.price.amount)} · {when(p.updatedAt)}
       </p>
-      {cls === "pending" ? <p className="small">Not yet safe: a released withdrawal or signed merchant payment may still settle. Recovery waits for a proven outcome.</p> : null}
+      {cls === "pending" ? <p className="small muted">Not yet safe: a payment already sent may still go through. Recovery opens once the outcome is known.</p> : null}
       {cls === "safe" && !view ? (
         <button type="button" className="btn" disabled={action.busy} onClick={() => void action.run(async () => setView(await api<RecoveryView>("wallet", "/recovery/prepare", { method: "POST", body: { purchaseId: p.id } })))}>
           Prepare recovery
@@ -114,17 +114,16 @@ function PublicExit({ notes, onChanged }: { notes: NoteStatus; onChanged: () => 
   const exitable = notes.notes.filter((n) => ["indexed", "approved", "spendable"].includes(n.state) && n.value.amount !== "0");
   return (
     <>
-      <p className="notice notice-warn">
-        <strong>Privacy impact:</strong> a public exit is linkable. It reveals the note&apos;s original deposit, its value and your refund address; spending since the deposit can be inferred
-        by subtraction. It needs no operator approval and works during an emergency stop.
+      <p className="hint flush">
+        Sends a deposit back to your wallet. Heads up: a public exit is linkable — anyone can see which deposit it was, how much, and roughly how much you spent.
       </p>
-      <ConnectWalletPrompt purpose="sign a public exit as the note's refund authority" />
-      {exitable.length === 0 ? <p className="muted">No exitable notes. A deposit becomes exitable once it is indexed on chain.</p> : null}
+      <ConnectWalletPrompt purpose="sign the withdrawal" />
+      {exitable.length === 0 ? <p className="muted flush">Nothing to withdraw yet. Deposits can be withdrawn once they&apos;re recorded.</p> : null}
       <ul className="plain">
         {exitable.map((n) => (
           <li key={n.id}>
-            {n.origin} note · {usdc(n.value.amount)} · {n.state}{" "}
-            <button type="button" className="btn" disabled={action.busy} onClick={() => void action.run(async () => setPrepared(await api("wallet", "/exits/prepare", { method: "POST", body: { noteId: n.id } })))}>
+            {n.origin === "deposit" ? "Deposit" : "Change"} · {usdc(n.value.amount)}{" "}
+            <button type="button" className="btn btn-small" disabled={action.busy} onClick={() => void action.run(async () => setPrepared(await api("wallet", "/exits/prepare", { method: "POST", body: { noteId: n.id } })))}>
               Prepare public exit
             </button>
           </li>
@@ -165,6 +164,12 @@ function PublicExit({ notes, onChanged }: { notes: NoteStatus; onChanged: () => 
 }
 
 export function RecoveryCenter() {
+  const recover = useCapability("recover");
+  if (!recover.allowed) return <OwnerOnlyNotice what="Recovery and withdrawal" reason={recover.reason} />;
+  return <OwnerRecoveryCenter />;
+}
+
+function OwnerRecoveryCenter() {
   const { workspace, reloadWorkspace } = useOwner();
   const activity = useResource(() => api<Activity>("control", "/activity?limit=200"), "activity");
   const notes = useResource(() => api<NoteStatus>("wallet", "/notes/status"), "notes");
@@ -191,28 +196,35 @@ export function RecoveryCenter() {
       </ul>
     );
 
+  const stuck = [...groups.safe, ...groups.pending];
+  const history = [...groups.in_recovery, ...groups.recovered];
   return (
     <>
-      <h1>Recovery center</h1>
-      <p className="small">Recovery and public exit are owner-only and stay available during an emergency stop or after an agent is paused or revoked.</p>
-      <Section title="Stop authority">
+      <p className="lede page-lede">Get money back from stuck payments or take funds out of the pool. This keeps working even when everything is stopped.</p>
+      <Section title="Stop spending">
         <EmergencyStop stopped={workspace.workspace.stopped} onChanged={reloadAll} />
-        <h3>Per agent</h3>
-        {workspace.agents.map((a) => (
-          <div key={a.id} className="stop-agent">
-            <strong>{a.name}</strong> ({a.status})
-            <AgentControls agent={a} onChanged={reloadAll} />
-          </div>
-        ))}
-        <p className="small">{live.length} payment(s) currently hold released authority and remain visible until resolved.</p>
+        {workspace.agents
+          .filter((a) => a.status !== "archived")
+          .map((a) => (
+            <div key={a.id} className="stop-agent">
+              <span>
+                <strong>{a.name}</strong> <span className="muted">· {agentStateLabel(a.status, workspace.workspace.stopped)}</span>
+              </span>
+              <AgentControls agent={a} onChanged={reloadAll} compact />
+            </div>
+          ))}
+        {live.length > 0 ? <p className="small section-foot">{live.length} payment(s) already sent may still settle. They stay listed until they do.</p> : null}
       </Section>
-      {activity.loading && !activity.data ? <Loading label="purchases" /> : null}
+      {activity.loading && !activity.data ? <Loading label="payments" /> : null}
       <ErrorNotice error={activity.error} what="activity" onRetry={activity.reload} />
-      <Section title="Safe to recover">{list(groups.safe, "No funded fresh wallet is safe to recover.")}</Section>
-      <Section title="Pending — not yet safe to recover">{list(groups.pending, "No payment outcome is pending.")}</Section>
-      <Section title="Recovery in progress / recovered">{list([...groups.in_recovery, ...groups.recovered], "No recoveries yet.")}</Section>
-      <Section title="Owner public exit">
-        {notes.data ? <PublicExit notes={notes.data} onChanged={reloadAll} /> : notes.loading ? <Loading label="notes" /> : null}
+      <Section title="Stuck payments">
+        {stuck.length === 0 ? <p className="muted flush">Nothing to recover.</p> : null}
+        {groups.safe.length > 0 ? list(groups.safe, "") : null}
+        {groups.pending.length > 0 ? list(groups.pending, "") : null}
+      </Section>
+      {history.length > 0 ? <Section title="Recoveries">{list(history, "")}</Section> : null}
+      <Section title="Withdraw from the pool">
+        {notes.data ? <PublicExit notes={notes.data} onChanged={reloadAll} /> : notes.loading ? <Loading label="deposits" /> : null}
         <ErrorNotice error={notes.error} what="wallet service" onRetry={notes.reload} />
       </Section>
     </>

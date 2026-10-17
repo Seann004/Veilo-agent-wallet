@@ -39,8 +39,9 @@ function Usage({ u, label }: { u: LimitUsage | undefined; label: string }) {
 export function TreasurySummary({ balances, agents }: { balances: Balances; agents: Agent[] }) {
   const ws = balances.workspace;
   const wsActive = ws.policyVersion !== null ? ws : null;
+  // Absent in the public view: pool balance movements could be matched to on-chain withdrawals.
   const buckets = balances.tokens.buckets;
-  const poolSpendable = buckets.approved_unreserved ?? "0";
+  const poolSpendable = buckets?.approved_unreserved ?? "0";
   const gc = balances.gatewayCredits;
   return (
     <Section title="Shared treasury">
@@ -186,14 +187,18 @@ export function TreasurySummary({ balances, agents }: { balances: Balances; agen
         </div>
         <div>
           <h3>Pool funds and recoverable funds</h3>
-          <KV
-            rows={[
-              ["Spendable pool notes (approved, unreserved)", <strong key="p">{usdc(poolSpendable)}</strong>],
-              ...Object.entries(BUCKET_LABEL)
-                .filter(([k]) => k !== "approved_unreserved")
-                .map(([k, label]) => [label, usdc(buckets[k] ?? "0")] as [string, string]),
-            ]}
-          />
+          {buckets ? (
+            <KV
+              rows={[
+                ["Spendable pool notes (approved, unreserved)", <strong key="p">{usdc(poolSpendable)}</strong>],
+                ...Object.entries(BUCKET_LABEL)
+                  .filter(([k]) => k !== "approved_unreserved")
+                  .map(([k, label]) => [label, usdc(buckets[k] ?? "0")] as [string, string]),
+              ]}
+            />
+          ) : (
+            <p className="small muted">Pool balances are hidden in the public view.</p>
+          )}
           <p className="small muted">
             Funded fresh-wallet balances are recoverable to the owner account once no signed merchant payment can still settle. Recovered funds
             return outside the pool; private spending requires a new deposit.
