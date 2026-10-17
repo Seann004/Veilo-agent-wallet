@@ -1,11 +1,14 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { DEMO_TOKEN_MINT, DEVNET_GENESIS_HASH } from "@veilo/contracts";
-import { openControlDatabase, openSqlite } from "@veilo/db";
+import { immediate, openControlDatabase, openSqlite } from "@veilo/db";
+import { createLedger } from "../src/context";
+import { revokeAgent } from "../src/ledger/authority";
+import { insertAgent } from "../src/ledger/workspace";
 import { testKeypair } from "./helpers";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
@@ -78,6 +81,34 @@ describe("pnpm demo:seed", () => {
     expect(Number(c.prepare("SELECT count(*) FROM approved_service WHERE status = 'unbound'").pluck().get())).toBe(2);
     expect(Number(c.prepare("SELECT count(*) FROM service_sku").pluck().get())).toBe(9);
     c.close();
+
+    // Agents created later get a credential on the next run; existing entries stay as they were.
+    const db = openControlDatabase(join(dir, "data", "control.sqlite"));
+    const ledger = createLedger(db);
+    const wsId = String(db.prepare("SELECT id FROM workspace").pluck().get());
+    const policy = { tier: "bounded_automatic" as const, lifetimeTestUsdc: "1", rolling24hTestUsdc: "1", maxPurchaseTestUsdc: "1", taskLimitTestUsdc: "1", usageAllowanceUnits: "0", taskCreditUnits: "0", allowedSkus: [], allowedPaymentPaths: [] };
+    const scout = immediate(db, () => insertAgent(ledger, wsId, { name: "Scout", role: "custom", instructions: "Find a specialist.", policy }, "owner"));
+    const gone = immediate(db, () => insertAgent(ledger, wsId, { name: "Gone", role: "custom", instructions: "Unused.", policy }, "owner"));
+    revokeAgent(ledger, wsId, gone.id, "owner");
+    const credit = immediate(db, () => insertAgent(ledger, wsId, { name: "Second credit", role: "credit_manager", policy }, "owner"));
+    db.close();
+    const prior = (JSON.parse(before[2]!) as { agents: Array<Record<string, string>> }).agents;
+    const added = seed(dir, owner);
+    expect(added.status, added.stderr).toBe(0);
+    expect(added.stdout).toContain("added worker credentials for Scout");
+    const after = JSON.parse(readFileSync(creds, "utf8")) as { agents: Array<Record<string, string>> };
+    expect(after.agents.slice(0, prior.length)).toEqual(prior);
+    expect(after.agents.slice(prior.length).map((a) => [a.agentId, a.role])).toEqual([[scout.id, "custom"]]);
+    expect(after.agents.some((a) => a.agentId === gone.id || a.agentId === credit.id)).toBe(false);
+    if (process.platform !== "win32") expect(statSync(creds).mode & 0o777).toBe(0o600);
+    expect(readdirSync(join(dir, "secrets", "runner")).filter((f) => f.endsWith(".tmp"))).toEqual([]);
+    const newToken = after.agents.at(-1)!.token!;
+    expect(newToken).toMatch(/^vwk_/);
+    expect(added.stdout + added.stderr).not.toContain(newToken);
+    const afterAdd = fingerprint(creds);
+    const again = seed(dir, owner);
+    expect(again.status, again.stderr).toBe(0);
+    expect(fingerprint(creds)).toBe(afterAdd);
 
     // Losing the control token never creates a second account.
     rmSync(tokenPath);
