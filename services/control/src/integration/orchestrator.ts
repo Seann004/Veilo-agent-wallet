@@ -88,6 +88,11 @@ export interface OrchestratorDeps {
    * retries later; "refuse" cancels the unreleased operation.
    */
   beforeRelease?: ((purchaseId: string) => Promise<{ outcome: "ok" | "wait" | "refuse"; reason?: string }>) | undefined;
+  /**
+   * Gate checked after funding finalized and before any merchant authority or quote. "stop"
+   * means the hook has already made the funded purchase recoverable; nothing is signed.
+   */
+  beforeMerchant?: ((purchaseId: string) => { outcome: "ok" } | { outcome: "stop"; code: string; reason: string }) | undefined;
   /** How long a purchase request keeps reconciling a pending chain outcome before replying. */
   settleWaitMs?: number;
   settlePollMs?: number;
@@ -527,6 +532,11 @@ export class PurchaseOrchestrator {
     if (p.recovery_state !== "none") return false;
     if (p.merchant_state === "finalized" && TERMINAL_FULFILMENT.has(p.fulfilment_state)) return false;
     if (["expired_unsettled", "abandoned"].includes(p.funding_state)) return false;
+
+    if (p.funding_state === "finalized" && p.merchant_state === "not_started" && this.deps.beforeMerchant) {
+      const gate = this.deps.beforeMerchant(p.id);
+      if (gate.outcome === "stop") throw new Blocked(gate.code, gate.reason);
+    }
 
     const quote = this.#latestQuote(p.id);
     if (!quote) {

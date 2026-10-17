@@ -12,7 +12,7 @@ import {
 import { ControlError } from "../errors";
 import { assertTaskLive, chargeToolCall, ownTask } from "../agents/work";
 import type { Integration } from "../integration";
-import type { HireState, MarketplaceBridge } from "../marketplace/bridge";
+import type { MarketplaceBridge } from "../marketplace/bridge";
 import { requireAgent } from "../ledger/workspace";
 import { actorOf, requireActor, type AuthDeps } from "./actor";
 
@@ -36,8 +36,6 @@ const opParam = (req: Request): string => {
   if (!r.success) throw new ControlError("NOT_FOUND", "marketplace hire not found");
   return r.data;
 };
-
-const PENDING: readonly HireState[] = ["received", "awaiting_approval"];
 
 /**
  * Owner marketplace controls (session, CSRF and Origin protected) and the two custom-agent
@@ -88,7 +86,8 @@ export function marketplaceRouter(deps: AuthDeps & { integration?: Integration |
     const o = ownerOf(res);
     const b = bridge();
     const all = req.query.state === "all";
-    res.json({ items: b.list(o.workspaceId, all ? null : PENDING).map((h) => b.hireView(h)) });
+    const rows = all ? b.list(o.workspaceId, null) : b.list(o.workspaceId, null).filter((h) => b.needsOwner(h));
+    res.json({ items: rows.map((h) => b.hireView(h)) });
   });
 
   r.post("/marketplace/hires/:operationId/approve", owner, async (req, res) => {

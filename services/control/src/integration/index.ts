@@ -23,6 +23,8 @@ export interface MarketplaceIntegrationOptions {
   sellers: SellerClients;
   chain: ChainIdentity;
   maxPaymentUnits: bigint;
+  /** Seconds a marketplace quote must still have before the private proof is released. */
+  minQuoteRemainingSeconds?: number;
   pollMs?: number;
 }
 
@@ -48,6 +50,7 @@ export function createIntegration(
     funding: o.funding,
     ...(o.marketplace ? { sellers: o.marketplace.sellers, onPayerKnown: (purchaseId: string, payer: string) => bridgeRef.current?.payerKnown(purchaseId, payer),
           beforeRelease: (purchaseId: string) => bridgeRef.current?.beforeRelease(purchaseId) ?? Promise.resolve({ outcome: "ok" as const }),
+          beforeMerchant: (purchaseId: string) => bridgeRef.current?.beforeMerchant(purchaseId) ?? { outcome: "ok" as const },
         } : {}),
     ...(o.settleWaitMs !== undefined ? { settleWaitMs: o.settleWaitMs } : {}),
   });
@@ -60,6 +63,7 @@ export function createIntegration(
         policy: o.marketplace.sellers.policy,
         chain: o.marketplace.chain,
         maxPaymentUnits: o.marketplace.maxPaymentUnits,
+        ...(o.marketplace.minQuoteRemainingSeconds !== undefined ? { minQuoteRemainingMs: o.marketplace.minQuoteRemainingSeconds * 1000 } : {}),
         ...(o.log ? { log: o.log } : {}),
       })
     : undefined;

@@ -8,6 +8,7 @@ import {
   loadDotEnv,
   startChainGuard,
 } from "@veilo/contracts";
+import { MARKETPLACE_LIMITS } from "@veilo/contracts/marketplace";
 import { openControlDatabase } from "@veilo/db";
 import { createApp } from "./app";
 import { ServiceCredentials } from "./auth/credentials";
@@ -100,6 +101,12 @@ async function main(): Promise<void> {
   if (marketplaceUrl) {
     const problem = marketplaceUrlProblem(marketplaceUrl);
     if (problem) throw new VeiloConfigError("INVALID_CONFIG", problem);
+    const secondsEnv = (name: string, fallback: number) => {
+      const raw = process.env[name]?.trim();
+      if (!raw) return fallback;
+      if (!/^[0-9]{1,5}$/.test(raw)) throw new VeiloConfigError("INVALID_CONFIG", `${name} must be a whole number of seconds`);
+      return Number(raw);
+    };
     const maxRaw = process.env.MARKETPLACE_MAX_PAYMENT_UNITS?.trim() || "1000000";
     if (!/^[1-9][0-9]{0,18}$/.test(maxRaw)) throw new VeiloConfigError("INVALID_CONFIG", "MARKETPLACE_MAX_PAYMENT_UNITS must be a positive integer of base units");
     const identity = ControllerIdentity.loadOrCreate(paths.controllerKey);
@@ -110,6 +117,7 @@ async function main(): Promise<void> {
       sellers: new SellerClients({ policy, tokenDir: paths.sellerAccountsDir }),
       chain: { network: config.network.caip2, genesisHash: config.network.genesisHash, mint: config.network.mint, decimals: config.network.mintDecimals },
       maxPaymentUnits: BigInt(maxRaw),
+      minQuoteRemainingSeconds: secondsEnv("MARKETPLACE_MIN_QUOTE_REMAINING_SECONDS", MARKETPLACE_LIMITS.minQuoteRemainingSeconds),
       pollMs: msEnv("MARKETPLACE_POLL_MS", 10_000),
     };
     console.log(`[${SERVICE}] marketplace controller ${identity.keyId} polls ${new URL(marketplaceUrl).origin}`);

@@ -19,7 +19,7 @@ import { KeyedLock } from "../integration/locks";
 import type { PurchaseOrchestrator } from "../integration/orchestrator";
 import { authorizePurchase } from "../ledger/authorize";
 import { acceptInbox, enqueueOutbox, markOutboxPublished, writeAudit } from "../ledger/events";
-import { cancelUnreleased, decidePurchase, getPurchaseRow } from "../ledger/purchases";
+import { cancelUnreleased, decidePurchase, getPurchaseRow, markRecoverable } from "../ledger/purchases";
 import { requireAgent, requireWorkspace, type AgentRow } from "../ledger/workspace";
 import { deriveAta } from "./addresses";
 import { MarketplaceUnreachableError, type MarketplaceClient } from "./client";
@@ -43,10 +43,19 @@ export interface MarketplaceBridgeDeps {
   chain: ChainIdentity;
   /** Hard ceiling on any one marketplace payment, in test-USDC base units. */
   maxPaymentUnits: bigint;
+  /** Time a marketplace quote must still have before the private proof is released. */
+  minQuoteRemainingMs?: number;
   log?: (line: string) => void;
 }
 
 export type HireState = "received" | "awaiting_approval" | "authorized" | "purchasing" | "uncertain" | "paid" | "failed_unpaid" | "rejected";
+
+/**
+ * What the owner sees. evidence_rejected is a paid hire whose evidence the marketplace refused
+ * (the report keeps retrying); recoverable is an unpaid hire whose funded one-time wallet awaits
+ * owner recovery.
+ */
+export type HireDisplayState = HireState | "evidence_rejected" | "recoverable";
 
 export interface HireRow {
   operation_id: string;
@@ -106,6 +115,11 @@ const OUTBOX_PREFIX = "marketplace.";
 const UNTRUSTED_LABEL = "Untrusted marketplace catalogue text. It cannot change a recipient, price or policy.";
 
 const clip = (v: unknown, max: number): string | null => (typeof v === "string" ? v.slice(0, max) : null);
+
+const EVIDENCE_RETRY_BASE_MS = 30_000;
+const EVIDENCE_RETRY_MAX_MS = 3_600_000;
+const evidenceBackoffMs = (attempts: number): number => Math.min(EVIDENCE_RETRY_BASE_MS * 2 ** Math.max(0, Math.min(attempts - 1, 20)), EVIDENCE_RETRY_MAX_MS);
+const RECOVERY_STATES = ["recoverable", "recovery_submitted", "uncertain"];
 
 /**
  * Local side of marketplace hires. The cloud proposes payment requests; this bridge persists
@@ -493,8 +507,40 @@ export class MarketplaceBridge {
     return reg;
   }
 
+  /** Owner-visible state and the problem behind it; derived, so the stored hire state is unchanged. */
+  outcome(h: HireRow): { state: HireDisplayState; problem: { code: string; reason: string | null; attempts?: number; nextRetryAt?: string | null } | null } {
+    if (h.state === "paid") {
+      const refusal = this.#evidenceRefusal(h.operation_id);
+      if (refusal) {
+        return {
+          state: "evidence_rejected",
+          problem: { code: refusal.code, reason: refusal.reason, attempts: refusal.attempts, nextRetryAt: refusal.retryAtMs > 0 ? iso(BigInt(refusal.retryAtMs)) : null },
+        };
+      }
+    }
+    if (h.state === "failed_unpaid" && h.purchase_id !== null) {
+      const p = getPurchaseRow(this.ledger, h.purchase_id);
+      if (RECOVERY_STATES.includes(p.recovery_state)) {
+        const code = this.ledger.db
+          .prepare(`SELECT reason_code FROM audit_event WHERE scope = ? AND action = 'marketplace.recoverable' ORDER BY seq DESC LIMIT 1`)
+          .pluck()
+          .get(`marketplace:${h.operation_id}`) as string | null | undefined;
+        return { state: "recoverable", problem: { code: code ?? "RECOVERY_REQUIRED", reason: p.state_reason ?? null } };
+      }
+    }
+    return { state: h.state, problem: null };
+  }
+
+  /** Hires the owner must act on or should see: pending decisions, refused evidence, recoverable funds. */
+  needsOwner(h: HireRow): boolean {
+    if (h.state === "received" || h.state === "awaiting_approval") return true;
+    const state = this.outcome(h).state;
+    return state === "evidence_rejected" || state === "recoverable";
+  }
+
   hireView(h: HireRow): Record<string, unknown> {
     const q = this.quote(h);
+    const outcome = this.outcome(h);
     const listing = JSON.parse(h.listing_json) as Record<string, unknown>;
     const approval = this.ledger.db.prepare(`SELECT agent_id, owner_pubkey, created_at_ms FROM marketplace_hire_approval WHERE operation_id = ?`).get(h.operation_id) as
       | { agent_id: string; owner_pubkey: string; created_at_ms: bigint }
@@ -502,7 +548,9 @@ export class MarketplaceBridge {
     return {
       operationId: h.operation_id,
       jobId: h.job_id,
-      state: h.state,
+      state: outcome.state,
+      recordState: h.state,
+      problem: outcome.problem,
       listing: { ...listing, untrusted: true },
       requestedBy: { kind: h.requested_by, claimedAgentId: h.claimed_agent_id },
       quote: {
@@ -633,6 +681,12 @@ export class MarketplaceBridge {
     }
     const q = this.quote(h);
     const input: SpecialistJobInput = { jobId: h.job_id, listingVersionId: q.listingVersionId, quoteDigest: h.quote_digest, brief: h.brief };
+    // A granted hire spends from the task that proposed it, so that task's budget, deadline and
+    // purchase count bound it.
+    const taskId =
+      h.basis === "listing_grant"
+        ? ((this.ledger.db.prepare(`SELECT task_id FROM marketplace_proposal WHERE operation_id = ?`).pluck().get(h.operation_id) as string | null | undefined) ?? undefined)
+        : undefined;
     let purchase;
     let serviceId: string;
     try {
@@ -645,6 +699,8 @@ export class MarketplaceBridge {
         sku: SPECIALIST_SKU,
         paymentPath: "private_x402",
         requestDigest: computeRequestDigest(SPECIALIST_SKU, input),
+        taskId,
+        proposedByTask: taskId !== undefined,
         rationale: `Marketplace hire ${h.operation_id} (${h.basis === "owner_approval" ? "local owner approval" : "owner listing grant"})`,
       }).purchase;
     } catch (error) {
@@ -685,12 +741,16 @@ export class MarketplaceBridge {
     return num(n) > 0;
   }
 
-  #refusePayer(operationId: string, message: string): { outcome: "refuse"; reason: string } {
+  #refusePayer(operationId: string, message: string, code: ApiErrorCode = "POLICY_DENIED"): { outcome: "refuse"; reason: string } {
     immediate(this.ledger.db, () => {
       const cur = this.hire(operationId) as HireRow;
-      if (cur.state === "purchasing" || cur.state === "uncertain") this.#reject(cur, { code: "POLICY_DENIED", message });
+      if (cur.state === "purchasing" || cur.state === "uncertain") this.#reject(cur, { code, message });
     });
     return { outcome: "refuse", reason: message };
+  }
+
+  get #minQuoteRemainingMs(): number {
+    return this.deps.minQuoteRemainingMs ?? MARKETPLACE_LIMITS.minQuoteRemainingSeconds * 1000;
   }
 
   /**
@@ -704,6 +764,16 @@ export class MarketplaceBridge {
     const read = () => this.ledger.db.prepare(`SELECT * FROM marketplace_hire WHERE purchase_id = ?`).get(purchaseId) as Row | undefined;
     let h = read();
     if (!h) return { outcome: "ok" };
+    // The seller host refuses an expired quote, so a withdrawal that finishes after expiry would
+    // leave the funds in the one-time wallet. Release only with enough time left to pay.
+    const remainingMs = Date.parse(this.quote(h).expiresAt) - this.ledger.now();
+    if (remainingMs < this.#minQuoteRemainingMs) {
+      return this.#refusePayer(
+        h.operation_id,
+        `the marketplace quote has ${Math.max(0, Math.floor(remainingMs / 1000))} s left, under the ${Math.ceil(this.#minQuoteRemainingMs / 1000)} s needed to release the private proof`,
+        "QUOTE_EXPIRED",
+      );
+    }
     if (h.payer_state === "none") {
       if (!this.#payingQueued(h.operation_id)) {
         const ex = this.deps.orchestrator.execution(purchaseId);
@@ -728,6 +798,35 @@ export class MarketplaceBridge {
     if (h.payer_state === "bound") return { outcome: "ok" };
     if (h.payer_state === "refused") return this.#refusePayer(h.operation_id, "the marketplace refused to bind this operation's payer");
     return { outcome: "wait", reason: "waiting for the marketplace to acknowledge the payer" };
+  }
+
+  /**
+   * Orchestrator gate after funding finalized and before any merchant authority. If the
+   * marketplace quote has expired the seller cannot be paid under it, so nothing is signed: the
+   * funded purchase becomes recoverable by the owner and the hire closes unpaid.
+   */
+  beforeMerchant(purchaseId: string): { outcome: "ok" } | { outcome: "stop"; code: string; reason: string } {
+    const h = this.ledger.db.prepare(`SELECT * FROM marketplace_hire WHERE purchase_id = ?`).get(purchaseId) as HireRow | undefined;
+    if (!h || Date.parse(this.quote(h).expiresAt) > this.ledger.now()) return { outcome: "ok" };
+    const reason = "The marketplace quote expired after private funding, so the seller was not paid. The one-time wallet holds the funds for owner recovery.";
+    immediate(this.ledger.db, () => {
+      markRecoverable(this.ledger, purchaseId, reason);
+      const cur = this.hire(h.operation_id) as HireRow;
+      if (cur.state !== "purchasing" && cur.state !== "uncertain") return;
+      this.#setState(cur, "failed_unpaid");
+      this.#report(cur, "status", { status: "failed_unpaid", detail: "marketplace quote expired after funding; nothing was paid" });
+      writeAudit(this.ledger, {
+        workspaceId: cur.workspace_id,
+        scope: `marketplace:${cur.operation_id}`,
+        actorType: "system",
+        actorId: null,
+        action: "marketplace.recoverable",
+        policyResult: "denied",
+        reasonCode: "QUOTE_EXPIRED",
+        details: { purchaseId, reason },
+      });
+    });
+    return { outcome: "stop", code: "QUOTE_EXPIRED", reason };
   }
 
   /** Maps the purchase legs onto the hire and queues the matching report once per transition. */
@@ -796,14 +895,21 @@ export class MarketplaceBridge {
   async flush(aggregateId?: string): Promise<{ delivered: number; pending: number }> {
     const rows = this.ledger.db
       .prepare(
-        `SELECT seq, event_id, topic, aggregate_id, payload_json FROM outbox
+        `SELECT seq, event_id, topic, aggregate_id, payload_json, attempts FROM outbox
          WHERE published_at_ms IS NULL AND topic LIKE 'marketplace.%' AND (? IS NULL OR aggregate_id = ?) ORDER BY seq`,
       )
-      .all(aggregateId ?? null, aggregateId ?? null) as Array<{ seq: bigint; event_id: string; topic: string; aggregate_id: string; payload_json: string }>;
+      .all(aggregateId ?? null, aggregateId ?? null) as Array<{ seq: bigint; event_id: string; topic: string; aggregate_id: string; payload_json: string; attempts: bigint }>;
     const stalled = new Set<string>();
     let delivered = 0;
     for (const row of rows) {
       if (stalled.has(row.aggregate_id)) continue;
+      if (row.topic === "marketplace.evidence" && num(row.attempts) > 0) {
+        const retryAt = this.#evidenceRefusal(row.aggregate_id)?.retryAtMs ?? 0;
+        if (this.ledger.now() < retryAt) {
+          stalled.add(row.aggregate_id);
+          continue;
+        }
+      }
       const payload = JSON.parse(row.payload_json) as Record<string, unknown>;
       let body: Record<string, unknown>;
       if (row.topic === "marketplace.proposal") {
@@ -836,15 +942,25 @@ export class MarketplaceBridge {
       throw error;
     }
     if (r.status >= 500 || r.status === 408 || r.status === 429) return false;
-    // 202 on evidence means the marketplace has not bound the payer yet; keep it queued.
-    if (row.topic === "marketplace.evidence" && r.status === 202) return false;
+    // A 401 on an operation report is a signing-window problem (clock skew, nonce), not a refusal
+    // of the operation; the retry is signed again with a fresh nonce and timestamp.
+    if (r.status === 401 && row.topic !== "marketplace.proposal") return false;
+    if (row.topic === "marketplace.evidence") return this.#evidenceReply(row, r);
+    const ok = r.status >= 200 && r.status < 300;
+    const payerReport = row.topic === "marketplace.status" && body.status === "paying" && typeof body.payer === "string";
+    // Only a definite payer conflict or invalid proof (403, 409 including INVALID_TRANSITION)
+    // refuses the payer; anything else keeps the proof unreleased and re-sends the same report.
+    if (payerReport && !ok && r.status !== 403 && r.status !== 409) {
+      this.#log(`payer report for ${row.aggregate_id} not acknowledged (HTTP ${r.status}); retrying`);
+      return false;
+    }
     immediate(this.ledger.db, () => {
       const fresh = acceptInbox(this.ledger, "marketplace", `mkt:${row.event_id}`, row.topic, { aggregateId: row.aggregate_id, topic: row.topic });
       if (fresh && row.topic === "marketplace.proposal") this.#applyProposalReply(row.aggregate_id, r.status, r.body);
-      if (row.topic === "marketplace.status" && body.status === "paying" && typeof body.payer === "string") {
+      if (payerReport) {
         this.ledger.db
           .prepare(`UPDATE marketplace_hire SET payer_state = ?, updated_at_ms = ? WHERE operation_id = ? AND payer = ? AND payer_state = 'none'`)
-          .run(r.status >= 200 && r.status < 300 ? "bound" : "refused", this.ledger.now(), row.aggregate_id, body.payer);
+          .run(ok ? "bound" : "refused", this.ledger.now(), row.aggregate_id, body.payer);
       }
       if (fresh && r.status >= 400) {
         writeAudit(this.ledger, {
@@ -861,6 +977,64 @@ export class MarketplaceBridge {
       markOutboxPublished(this.ledger, row.event_id);
     });
     return true;
+  }
+
+  /**
+   * Evidence is reported only after the merchant transfer finalized, so a refusal never closes
+   * the report: it stays queued, is retried with backoff and shows as evidence_rejected.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  #evidenceReply(row: { event_id: string; topic: string; aggregate_id: string }, r: { status: number; body: any }): boolean {
+    // 202: the marketplace has not bound the payer or seen the transfer finalize yet.
+    if (r.status === 202) return false;
+    const recorded = (r.status >= 200 && r.status < 300) || (r.status === 409 && typeof r.body?.receiptId === "string");
+    if (recorded) {
+      immediate(this.ledger.db, () => {
+        acceptInbox(this.ledger, "marketplace", `mkt:${row.event_id}`, row.topic, { aggregateId: row.aggregate_id, topic: row.topic });
+        markOutboxPublished(this.ledger, row.event_id);
+      });
+      return true;
+    }
+    const code = clip(r.body?.error?.code, 60) ?? `HTTP_${r.status}`;
+    const message = clip(r.body?.error?.message, 300) ?? `marketplace refused the payment evidence (HTTP ${r.status})`;
+    immediate(this.ledger.db, () => {
+      const changed = this.ledger.db.prepare(`UPDATE outbox SET attempts = attempts + 1 WHERE event_id = ? AND published_at_ms IS NULL`).run(row.event_id).changes;
+      if (changed !== 1) return;
+      const attempts = num(this.ledger.db.prepare(`SELECT attempts FROM outbox WHERE event_id = ?`).pluck().get(row.event_id));
+      writeAudit(this.ledger, {
+        workspaceId: requireWorkspace(this.ledger).id,
+        scope: `marketplace:${row.aggregate_id}`,
+        actorType: "service",
+        actorId: "marketplace",
+        action: "marketplace.evidence.refused",
+        policyResult: "not_applicable",
+        reasonCode: code,
+        details: { status: r.status, code, message, attempt: attempts, retryAfterMs: evidenceBackoffMs(attempts) },
+      });
+    });
+    this.#log(`evidence for ${row.aggregate_id} refused (HTTP ${r.status} ${code}); retrying with backoff`);
+    return false;
+  }
+
+  /** Latest refusal of a still-unpublished evidence report, with when it may be re-sent. */
+  #evidenceRefusal(operationId: string): { code: string; reason: string; attempts: number; retryAtMs: number } | null {
+    const pending = this.ledger.db
+      .prepare(`SELECT attempts FROM outbox WHERE topic = 'marketplace.evidence' AND aggregate_id = ? AND published_at_ms IS NULL ORDER BY seq DESC LIMIT 1`)
+      .pluck()
+      .get(operationId) as bigint | undefined;
+    if (pending === undefined || num(pending) === 0) return null;
+    const audit = this.ledger.db
+      .prepare(`SELECT reason_code, details_json, created_at_ms FROM audit_event WHERE scope = ? AND action = 'marketplace.evidence.refused' ORDER BY seq DESC LIMIT 1`)
+      .get(`marketplace:${operationId}`) as { reason_code: string | null; details_json: string; created_at_ms: bigint } | undefined;
+    const attempts = num(pending);
+    if (!audit) return { code: "EVIDENCE_REJECTED", reason: "the marketplace refused the payment evidence", attempts, retryAtMs: 0 };
+    const details = JSON.parse(audit.details_json) as { message?: unknown };
+    return {
+      code: audit.reason_code ?? "EVIDENCE_REJECTED",
+      reason: typeof details.message === "string" ? details.message : "the marketplace refused the payment evidence",
+      attempts,
+      retryAtMs: num(audit.created_at_ms) + evidenceBackoffMs(attempts),
+    };
   }
 
   // ---- agent tools ------------------------------------------------------------------------------
