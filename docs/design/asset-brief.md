@@ -1,6 +1,6 @@
 # Veilo asset brief
 
-Handoff for an image-generation agent or designer. Everything listed here is currently a placeholder in `apps/dashboard`. Deliver the files at the paths given, and the dashboard picks them up with no code changes, unless a step says otherwise.
+Handoff for an image-generation agent or designer. For the full theme and component rules, see [`apps/dashboard/DESIGN.md`](../../apps/dashboard/DESIGN.md). Everything listed here is currently a placeholder in `apps/dashboard`. Deliver the files at the paths given, and the dashboard picks them up with no code changes, unless a step says otherwise.
 
 ## Brand at a glance
 
