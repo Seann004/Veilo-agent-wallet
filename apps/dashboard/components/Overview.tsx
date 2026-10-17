@@ -116,7 +116,11 @@ export function Overview() {
       {!activeWs && !draftWs ? <p className="notice notice-warn">No workspace spending limits are set, so no agent can spend.</p> : null}
 
       <div className="stats">
-        <Stat label="Spendable in pool" value={b?.tokens.buckets ? usdc(b.tokens.buckets.approved_unreserved ?? "0") : "—"} sub="Approved, unreserved notes" />
+        <Stat
+          label="Spendable in pool"
+          value={b?.tokens.buckets ? usdc((BigInt(b.tokens.buckets.approved_unreserved ?? "0") + BigInt(b.tokens.buckets.confirmed_change ?? "0")).toString()) : "—"}
+          sub="Approved deposits and change, not reserved"
+        />
         <Stat label="Left today" value={wsBudget ? usdc(wsBudget.rolling24h.available) : "—"} sub={wsBudget ? `of ${usdc(wsBudget.rolling24h.limit)} per 24 h` : "No active workspace policy"} />
         <Stat label="Cash spent" value={b?.cash ? usdc(b.cash.spent) : "—"} sub={b?.cash ? `${usdc(b.cash.reserved)} reserved` : undefined} />
         <Stat label="AI credits" value={gc ? (gc.available ? credits(gc.usable) : "Not ready") : "—"} sub="Bought from the pool" />

@@ -116,7 +116,13 @@ function ChipToggle({ label, on, onToggle }: { label: string; on: boolean; onTog
 }
 
 const usdcText = (base: string) => trimFraction(formatBaseUnits(base, 6).replace(/,/g, ""));
-const skuLabel = (sku: string) => sku.charAt(0).toUpperCase() + sku.slice(1).replace(/-/g, " ");
+const SKU_NAMES: Record<string, string> = {
+  "swap-usdc-to-sol": "Swap USDC to SOL",
+  "inference-credit-pack": "AI credit pack",
+  "specialist-job": "Hire a specialist",
+  "external-x402-batch": "External paid API",
+};
+const skuLabel = (sku: string) => SKU_NAMES[sku] ?? sku.charAt(0).toUpperCase() + sku.slice(1).replace(/-/g, " ");
 
 export const TIER_OPTIONS: Array<SelectOption<AgentPolicyInput["tier"]>> = [
   { value: "bounded_automatic", label: "Automatically, within limits", hint: "Buys what a task needs, up to your limits" },

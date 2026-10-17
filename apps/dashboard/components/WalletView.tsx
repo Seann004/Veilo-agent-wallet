@@ -72,6 +72,8 @@ const STAGE_LABEL: Record<(typeof DEPOSIT_STAGES)[number], string> = {
 
 export function DepositStages({ note }: { note: WalletNote }) {
   const stages = note.depositStages ?? {};
+  // A prepared deposit the wallet never sent (for example, the approval was dismissed) moved no funds.
+  if (!DEPOSIT_STAGES.some((s) => stages[s])) return <span className="muted">Not sent; no funds moved</span>;
   return (
     <ol className="stages" aria-label="Deposit progress">
       {DEPOSIT_STAGES.map((s) => (
@@ -161,7 +163,7 @@ function OwnerWalletView() {
           <span className="stat-value">
             <Amount value={t ? usdc(t.pending.amount) : "—"} />
           </span>
-          <span className="stat-sub">Deposits not ready yet</span>
+          {t && t.pending.amount !== "0" ? <span className="stat-sub">Deposits not ready yet</span> : null}
         </div>
       </div>
       <ErrorNotice error={notes.error} what="wallet service" onRetry={notes.reload} />

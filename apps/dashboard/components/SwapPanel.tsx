@@ -27,7 +27,7 @@ export function SwapPanel() {
     <Section title="Agent swaps">
       <p className="hint flush">
         Let an agent swap USDC for SOL on Orca (Solana devnet). Each swap is funded privately from your pool by a fresh wallet, and the SOL is sent to your
-        address. Agents can only use it once you add “Swap usdc to sol” to their spending limits.
+        address. Agents can only use it once you add “Swap USDC to SOL” to what they can buy.
       </p>
       {current ? (
         <p className="small">
