@@ -292,7 +292,7 @@ describe("paid execution", () => {
   it("health reports database, facilitator and provider readiness without spending", async () => {
     h = await makeHarness();
     const report = h.gateway.health();
-    expect(report).toMatchObject({ status: "ok", database: { ok: true, schemaVersion: 1 }, x402: { accepting: true }, provider: { mode: "fixture", ready: true } });
+    expect(report).toMatchObject({ status: "ok", database: { ok: true, schemaVersion: 2 }, x402: { accepting: true }, provider: { mode: "fixture", ready: true } });
     expect(h.provider!.calls).toHaveLength(0);
   });
 });

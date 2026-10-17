@@ -1,4 +1,5 @@
 // Test-only harness: fake chain, facilitator and FIXTURE provider. Not used by the service.
+import { createHash } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +10,7 @@ import {
   appendTransactionMessageInstructions,
   createTransactionMessage,
   generateKeyPairSigner,
+  getBase58Decoder,
   getBase64EncodedWireTransaction,
   partiallySignTransactionMessageWithSigners,
   pipe,
@@ -25,6 +27,8 @@ import { DEMO_TOKEN_MINT, DEVNET_CAIP2, createServiceHealth, loadConfig, DEVNET_
 import { computeRequestDigest, generateUsagePermitKeyPair, loadUsagePermitPrivateKey, loadUsagePermitPublicKey, signUsagePermit, type UsagePermitPayload } from "@veilo/contracts/gateway";
 import { decodeWireTransaction, deriveAta, messageHashOf } from "@veilo/x402-client";
 import { createApp } from "../src/app";
+import type { AccountRateLimit } from "../src/seller-host/accounts";
+import { MarketplaceClient } from "../src/seller-host/marketplace-client";
 import { createAccount, hashToken } from "../src/auth";
 import type { GatewayChain, ObservedTransaction } from "../src/chain";
 import type { GatewayFacilitator, GatewayHooks } from "../src/context";
@@ -107,7 +111,8 @@ export class FakeFacilitator implements GatewayFacilitator {
     const tx = decodeWireTransaction(payload.payload.transaction as string);
     const hash = messageHashOf(new Uint8Array(tx.messageBytes));
     const payer = Object.keys(tx.signatures).find((k) => k !== this.feePayer.address) as string;
-    const sig = `sig${hash.replace(/[^A-Za-z0-9]/g, "").slice(0, 40)}`;
+    // Deterministic, well-formed base58 signature derived from the message hash.
+    const sig = getBase58Decoder().decode(createHash("sha512").update(hash).digest());
     if (this.settleMode === "fail") return { success: false, errorReason: "transaction_failed", transaction: "", network: requirements.network };
     if (this.settleMode !== "not_landed") this.chain.land(sig, hash, payer);
     if (this.settleMode === "lost_response") throw new Error("socket hang up");
@@ -168,6 +173,9 @@ export interface HarnessOptions {
   hooks?: GatewayHooks;
   prices?: Parameters<typeof pricingFetch>[0];
   provider?: FixtureProvider | null;
+  /** Runs the gateway in the seller-host role against a (fake) marketplace. */
+  sellerHost?: { marketplaceUrl: string; token: string; allowedRecipients?: string[] };
+  accountRateLimit?: AccountRateLimit;
   shared?: { chain: FakeChain; facilitator: FakeFacilitator; merchant: KeyPairSigner; clock: FakeClock; permitPem: { privateKeyPem: string; publicKeyPem: string } };
 }
 
@@ -189,12 +197,15 @@ export async function makeHarness(options: HarnessOptions = {}) {
   const gateway = new Gateway({
     db,
     settings: {
-      identity: "veilo-gateway-devnet",
-      origin: "http://127.0.0.1:4104",
+      role: options.sellerHost ? "seller-host" : "operator",
+      identity: options.sellerHost ? "veilo-seller-host-devnet" : "veilo-gateway-devnet",
+      origin: options.sellerHost ? "http://127.0.0.1:4106" : "http://127.0.0.1:4104",
       network: DEVNET_CAIP2,
+      genesisHash: DEVNET_GENESIS_HASH,
       mint: MINT,
+      mintDecimals: 6,
       facilitatorUrl: "https://facilitator.test.invalid",
-      merchantAddress: merchant.address,
+      merchantAddress: options.sellerHost ? undefined : merchant.address,
       merchantAta: undefined,
       feePayer: facilitator.feePayer.address,
       quoteTtlSeconds: 600,
@@ -202,6 +213,9 @@ export async function makeHarness(options: HarnessOptions = {}) {
       settlementPollMs: 0,
       maxTimeoutSeconds: 300,
       operatorCeilingMicro: options.ceilingMicro ?? 1_000_000n,
+      sellerHost: options.sellerHost
+        ? { allowedRecipients: options.sellerHost.allowedRecipients ?? [], heartbeatMs: 5, claimRetryDelaysMs: [10, 20, 40] }
+        : undefined,
     },
     chain,
     facilitator,
@@ -217,9 +231,10 @@ export async function makeHarness(options: HarnessOptions = {}) {
     now: clock.now,
     sleep: async () => undefined,
     ...(options.hooks ? { hooks: options.hooks } : {}),
+    ...(options.sellerHost ? { marketplace: new MarketplaceClient({ baseUrl: options.sellerHost.marketplaceUrl, token: options.sellerHost.token }) } : {}),
   });
   await gateway.refreshExternal();
-  const server: Server = createApp(gateway).listen(0, "127.0.0.1");
+  const server: Server = createApp(gateway, options.accountRateLimit ? { accountRateLimit: options.accountRateLimit } : {}).listen(0, "127.0.0.1");
   await new Promise<void>((r) => server.once("listening", () => r()));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const privateKey = loadUsagePermitPrivateKey(permitPem.privateKeyPem);

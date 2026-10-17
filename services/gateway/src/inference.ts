@@ -296,3 +296,19 @@ export class InferenceService {
     });
   }
 }
+
+/** Provenance attached to every delivered model output; fixture output is labeled as such. */
+export function provenanceOf(outcome: Extract<InferenceOutcome, { status: "succeeded" }>) {
+  return {
+    model: outcome.model,
+    reportedModel: outcome.reportedModel,
+    mode: outcome.mode,
+    label:
+      outcome.mode === "live"
+        ? "Real model output via the operator-funded OpenRouter account"
+        : "FIXTURE: mock provider used by automated tests; not real inference",
+    usage: { promptTokens: outcome.promptTokens, completionTokens: outcome.completionTokens },
+    providerCostMicroUsd: outcome.costMicro,
+    finishReason: outcome.finishReason,
+  };
+}
