@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { api } from "../lib/api";
 import { usdc, when } from "../lib/format";
 import { hasLiveAuthority, legStateLabel } from "../lib/labels";
@@ -12,6 +12,17 @@ import { EmergencyStop } from "./StopControls";
 import { ConnectWalletPrompt, useOwnerWallet } from "./WalletView";
 import { useAction, useResource } from "./hooks";
 import { ErrorNotice, Loading, Section, TxLink } from "./ui";
+
+/** The owner must tick this before any public, linkable on-chain action is confirmed. */
+function PrivacyAck({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: string }) {
+  const id = useId();
+  return (
+    <div className="field inline">
+      <input id={id} type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <label htmlFor={id}>{children}</label>
+    </div>
+  );
+}
 
 export type RecoveryClass = "safe" | "pending" | "in_recovery" | "recovered" | "none";
 
@@ -47,6 +58,7 @@ interface RecoveryView {
 
 function RecoveryRow({ p, agentName, agentStopped, onChanged }: { p: Purchase; agentName: string; agentStopped: boolean; onChanged: () => void | Promise<void> }) {
   const [view, setView] = useState<RecoveryView | null>(null);
+  const [ack, setAck] = useState(false);
   const action = useAction();
   const cls = classifyRecovery(p, agentStopped);
   return (
@@ -67,10 +79,12 @@ function RecoveryRow({ p, agentName, agentStopped, onChanged }: { p: Purchase; a
           </p>
           <p className="small">State: {view.state}</p>
           {view.state === "prepared" ? (
+            <>
+            <PrivacyAck checked={ack} onChange={setAck}>I understand this recovery is public and links the fresh wallet to my recovery account.</PrivacyAck>
             <button
               type="button"
               className="btn btn-primary"
-              disabled={action.busy}
+              disabled={action.busy || !ack}
               onClick={() =>
                 void action.run(async () => {
                   setView(await api<RecoveryView>("wallet", `/recovery/${view.recoveryId}/confirm`, { method: "POST", body: {} }));
@@ -80,6 +94,7 @@ function RecoveryRow({ p, agentName, agentStopped, onChanged }: { p: Purchase; a
             >
               Confirm public recovery
             </button>
+            </>
           ) : (
             <TxLink signature={view.signature} />
           )}
@@ -94,6 +109,7 @@ function PublicExit({ notes, onChanged }: { notes: NoteStatus; onChanged: () => 
   const { connected } = useOwnerWallet();
   const [prepared, setPrepared] = useState<{ exitId: string; transaction: string; value: { amount: string }; privacyWarning: string } | null>(null);
   const [done, setDone] = useState<{ signature: string; state: string } | null>(null);
+  const [ack, setAck] = useState(false);
   const action = useAction();
   const exitable = notes.notes.filter((n) => ["indexed", "approved", "spendable"].includes(n.state) && n.value.amount !== "0");
   return (
@@ -103,7 +119,7 @@ function PublicExit({ notes, onChanged }: { notes: NoteStatus; onChanged: () => 
         by subtraction. It needs no operator approval and works during an emergency stop.
       </p>
       <ConnectWalletPrompt purpose="sign a public exit as the note's refund authority" />
-      {exitable.length === 0 ? <p className="muted">No exitable notes.</p> : null}
+      {exitable.length === 0 ? <p className="muted">No exitable notes. A deposit becomes exitable once it is indexed on chain.</p> : null}
       <ul className="plain">
         {exitable.map((n) => (
           <li key={n.id}>
@@ -119,10 +135,11 @@ function PublicExit({ notes, onChanged }: { notes: NoteStatus; onChanged: () => 
           <p>
             Exit of {usdc(prepared.value.amount)} prepared. {prepared.privacyWarning}
           </p>
+          <PrivacyAck checked={ack} onChange={setAck}>I understand this public exit reveals the note&apos;s deposit, value and my refund address.</PrivacyAck>
           <button
             type="button"
             className="btn btn-primary"
-            disabled={!connected || action.busy || done !== null}
+            disabled={!connected || !ack || action.busy || done !== null}
             onClick={() =>
               void action.run(async () => {
                 if (!connected) return;
@@ -190,13 +207,13 @@ export function RecoveryCenter() {
         <p className="small">{live.length} payment(s) currently hold released authority and remain visible until resolved.</p>
       </Section>
       {activity.loading && !activity.data ? <Loading label="purchases" /> : null}
-      <ErrorNotice error={activity.error} what="activity" />
+      <ErrorNotice error={activity.error} what="activity" onRetry={activity.reload} />
       <Section title="Safe to recover">{list(groups.safe, "No funded fresh wallet is safe to recover.")}</Section>
       <Section title="Pending — not yet safe to recover">{list(groups.pending, "No payment outcome is pending.")}</Section>
       <Section title="Recovery in progress / recovered">{list([...groups.in_recovery, ...groups.recovered], "No recoveries yet.")}</Section>
       <Section title="Owner public exit">
         {notes.data ? <PublicExit notes={notes.data} onChanged={reloadAll} /> : notes.loading ? <Loading label="notes" /> : null}
-        <ErrorNotice error={notes.error} what="wallet service" />
+        <ErrorNotice error={notes.error} what="wallet service" onRetry={notes.reload} />
       </Section>
     </>
   );

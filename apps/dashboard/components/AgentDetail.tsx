@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useId, useState } from "react";
 import { api } from "../lib/api";
 import { credits, parseUsdcInput, usdc, when } from "../lib/format";
-import { ROLE_LABEL, agentStateLabel } from "../lib/labels";
+import { ROLE_LABEL, agentStateLabel, runBlockedReason } from "../lib/labels";
 import type { Activity, Agent, Balances, ContentItem, Handoff, Job, Task } from "../lib/types";
 import { ActivityList } from "./Activity";
 import { summarizeResult } from "./AgentCard";
@@ -274,6 +274,11 @@ export function AgentDetail({ agentId }: { agentId: string }) {
         <span className="pill">{agentStateLabel(agent.status, stopped)}</span> policy v{agent.policyVersion} · revocation epoch {agent.revocationEpoch}
       </p>
       <AgentControls agent={agent} onChanged={reloadAll} />
+      {runBlockedReason(agent.status, stopped) ? (
+        <p className="notice notice-warn" role="status">
+          {runBlockedReason(agent.status, stopped)}
+        </p>
+      ) : null}
 
       {agent.role === "credit_manager" ? (
         <Section title="Credit check" id="run">
@@ -329,7 +334,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
         ) : (
           <p className="muted">No queued or running job.</p>
         )}
-        <ErrorNotice error={tasks.error} what="tasks" />
+        <ErrorNotice error={tasks.error} what="tasks" onRetry={tasks.reload} />
       </Section>
 
       <Section title="Spending">

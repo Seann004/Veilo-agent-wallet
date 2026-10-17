@@ -85,7 +85,7 @@ export function Overview() {
           })}
         </div>
         {archived.length > 0 ? <p className="small muted">Archived (records kept): {archived.map((a) => a.name).join(", ")}</p> : null}
-        <ErrorNotice error={tasks.error} what="tasks" />
+        <ErrorNotice error={tasks.error} what="tasks" onRetry={tasks.reload} />
       </Section>
 
       <Section title="Emergency stop">
@@ -93,7 +93,7 @@ export function Overview() {
       </Section>
 
       {balances.data ? <TreasurySummary balances={balances.data} agents={workspace.agents} /> : balances.error ? null : <Loading label="balances" />}
-      <ErrorNotice error={balances.error} what="balances" />
+      <ErrorNotice error={balances.error} what="balances" onRetry={balances.reload} />
 
       <Section
         title="Recent payments"
@@ -104,7 +104,7 @@ export function Overview() {
         }
       >
         {activity.data ? <ActivityList activity={activity.data} workspace={workspace} onChanged={reloadAll} limit={6} /> : <Loading label="activity" />}
-        <ErrorNotice error={activity.error} what="activity" />
+        <ErrorNotice error={activity.error} what="activity" onRetry={activity.reload} />
       </Section>
     </>
   );

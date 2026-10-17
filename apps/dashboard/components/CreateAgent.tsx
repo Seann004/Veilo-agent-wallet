@@ -5,6 +5,7 @@ import { useId, useState } from "react";
 import { api } from "../lib/api";
 import { ROLE_LABEL } from "../lib/labels";
 import type { Agent, AgentRole } from "../lib/types";
+import { draftPolicyFromText, type PolicyDraftResult } from "../lib/policy-draft";
 import { PolicyForm, PolicyReview, ROLE_TEMPLATES, type AgentPolicyInput } from "./Policy";
 import { useOwner } from "./Shell";
 import { useAction } from "./hooks";
@@ -22,6 +23,11 @@ export function CreateAgent() {
   const [modelProfile, setModelProfile] = useState("default");
   const [pollSeconds, setPollSeconds] = useState("60");
   const [policy, setPolicy] = useState<AgentPolicyInput | null>(ROLE_TEMPLATES.research.policy);
+  const [base, setBase] = useState<AgentPolicyInput>(ROLE_TEMPLATES.research.policy);
+  const [seed, setSeed] = useState(0);
+  const [words, setWords] = useState("");
+  const [drafted, setDrafted] = useState<PolicyDraftResult | null>(null);
+  const wordsId = useId();
   const [created, setCreated] = useState<Agent | null>(null);
   const [step, setStep] = useState<"edit" | "review">("edit");
   const action = useAction();
@@ -92,6 +98,8 @@ export function CreateAgent() {
                   setRole(r);
                   setJob(ROLE_TEMPLATES[r].description);
                   setPolicy(ROLE_TEMPLATES[r].policy);
+                  setBase(ROLE_TEMPLATES[r].policy);
+                  setDrafted(null);
                 }}
               >
                 {(Object.keys(ROLE_LABEL) as AgentRole[]).map((r) => (
@@ -122,7 +130,36 @@ export function CreateAgent() {
               <p className="small">Trigger: starts when the owner submits a task{role === "content" ? " or approves a research handoff" : ""}.</p>
             )}
           </div>
-          <PolicyForm key={role} initial={ROLE_TEMPLATES[role].policy} workspace={workspace} onChange={setPolicy} />
+          <div className="field">
+            <label htmlFor={wordsId}>Describe the limits in words (optional)</label>
+            <textarea id={wordsId} rows={2} value={words} onChange={(e) => setWords(e.target.value)} aria-describedby={`${wordsId}-h`} placeholder="Up to 2 USDC in total, 0.5 per purchase, 1 per task" />
+            <span id={`${wordsId}-h`} className="hint">
+              A rule-based reader, not a model. It only fills the fields below as a draft; nothing is saved or activated until you review it and create the agent.
+            </span>
+            <div className="actions">
+              <button
+                type="button"
+                className="btn"
+                disabled={words.trim() === ""}
+                onClick={() => {
+                  const r = draftPolicyFromText(words, ROLE_TEMPLATES[role].policy);
+                  setDrafted(r);
+                  setBase(r.policy);
+                  setPolicy(r.policy);
+                  setSeed((n) => n + 1);
+                }}
+              >
+                Draft limits from description
+              </button>
+            </div>
+            {drafted ? (
+              <p role="status" className="notice small">
+                {drafted.understood.length > 0 ? `Filled: ${drafted.understood.join("; ")}.` : "Nothing in the description matched a limit."}
+                {drafted.ignored.length > 0 ? ` Not understood, left unchanged: ${drafted.ignored.join("; ")}.` : ""} Check every field below before continuing.
+              </p>
+            ) : null}
+          </div>
+          <PolicyForm key={`${role}-${seed}`} initial={base} workspace={workspace} onChange={setPolicy} />
         </fieldset>
         {step === "review" && policy ? (
           <Section title="Review effective policy">

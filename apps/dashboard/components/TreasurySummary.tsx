@@ -44,6 +44,28 @@ export function TreasurySummary({ balances, agents }: { balances: Balances; agen
   const gc = balances.gatewayCredits;
   return (
     <Section title="Shared treasury">
+      <p className="small">
+        Three separate meters. They are never added together: cash is devnet test-USDC with no real value, credits are a prepaid balance bought with that cash, and sponsored planning is paid by the operator.
+      </p>
+      <div className="grid-3 meters">
+        <div className="meter">
+          <h3>Cash spent (test-USDC)</h3>
+          <p className="meter-value">{balances.cash ? usdc(balances.cash.spent) : "—"}</p>
+          <p className="small muted">{balances.cash ? `${usdc(balances.cash.reserved)} reserved by live purchases` : "Cash accounting unavailable."}</p>
+        </div>
+        <div className="meter">
+          <h3>Prepaid credits</h3>
+          <p className="meter-value">{gc.available ? credits(gc.usable) : "Not ready"}</p>
+          <p className="small muted">
+            {gc.available ? `${credits(gc.consumed)} consumed so far. Using credits is not a second payment.` : "The gateway balance could not be read; no balance is shown."}
+          </p>
+        </div>
+        <div className="meter">
+          <h3>Sponsored planning</h3>
+          <p className="meter-value">{balances.sponsoredPlanning ? `${balances.sponsoredPlanning.total} call(s)` : "—"}</p>
+          <p className="small muted">Operator-funded; costs you no cash or credits.</p>
+        </div>
+      </div>
       <div className="grid-2">
         <div>
           <h3>Global limits (workspace policy)</h3>
