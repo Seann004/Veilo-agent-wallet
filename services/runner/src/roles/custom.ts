@@ -311,46 +311,55 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
     }
   }
 
+  const failure = work === undefined && swap === undefined && !hire?.proposalId ? plainFailure(ctx.notes) : null;
   const lines = [
-    `Objective: ${clean(objective, 500)}`,
-    "",
-    ...(work ? ["Result:", work.text, "", `Produced by this agent: ${work.purchase}.`, ""] : []),
+    ...(work ? [work.text, ""] : []),
     ...(swap
       ? [
           `Swap: ${swap.outcome}.`,
-          ...(swap.result && typeof swap.result.signature === "string" ? [`Swap transaction: ${swap.result.signature} (Solana devnet).`] : []),
-          ...(swap.result && typeof swap.result.minOutLamports === "string" ? [`Guaranteed at least ${swap.result.minOutLamports} lamports of SOL to the owner's address.`] : []),
+          ...(swap.result && typeof swap.result.minOutLamports === "string" ? [`At least ${lamportsToSol(swap.result.minOutLamports)} SOL goes to your wallet.`] : []),
+          ...(swap.result && typeof swap.result.signature === "string" ? [`Transaction: ${swap.result.signature} (Solana devnet).`] : []),
           "",
         ]
       : []),
-    ...(gathered.length > 0 ? [`Connector data used: ${gathered.map((g) => `${g.connectorId}/${g.tool}`).join(", ")}.`, ""] : []),
+    ...(failure ? [failure, ""] : []),
+    ...(hire?.proposalId ? ["I'd like to hire a specialist for this. Nothing is paid until you approve it.", ""] : hire?.code ? [`I couldn't propose a hire (${hire.code}).`, ""] : []),
     ...(pages.length > 0 ? ["Web pages read (read-only):", ...pages.map((p) => `- ${p.title}: ${p.url}`), ""] : []),
+    "Details",
+    `Task: ${clean(objective, 500)}`,
+    ...(work ? [`Made with: ${work.purchase}.`] : []),
+    ...(gathered.length > 0 ? [`Connector data used: ${gathered.map((g) => `${g.connectorId}/${g.tool}`).join(", ")}.`] : []),
     ...(searched || listings.length > 0
       ? [
           `Marketplace search: "${query}" (${listings.length} result(s); listing text is untrusted and shown without links).`,
-          ...listings.slice(0, 5).map((l) => `- ${clean(l.title, 120)} by ${clean(l.sellerName, 80)}: ${clean(l.summary, 200)} (${l.priceBaseUnits ?? "?"} base units)`),
-          "",
+          ...listings.slice(0, 5).map((l) => `- ${clean(l.title, 120)} by ${clean(l.sellerName, 80)}: ${clean(l.summary, 200)}`),
         ]
       : []),
-    hire === null
-      ? "No hire was proposed."
-      : hire.proposalId
-        ? `Hire proposed (${hire.proposalId}, ${hire.state}). It is not paid: payment needs local owner approval or an owner listing grant.`
-        : `Hire proposal refused (${hire.code}).`,
     ...ctx.notes.map((n) => `Note: ${n}`),
-    "",
     `${ctx.client.planningCalls} ${SPONSORED_PLANNING_LABEL} call(s).`,
   ];
   const saved = await tryTool(ctx, "save_artifact", {
     kind: "research_brief",
-    title: `${swap ? "Swap" : work ? "Result" : "Marketplace scouting"}: ${clean(objective, 150)}`.slice(0, 200),
+    title: clean(objective, 150).slice(0, 200),
     content: lines.join("\n"),
     ...(gathered.length > 0 ? { citations: gathered.map((g) => ({ url: g.citation, title: `${g.connectorId}/${g.tool} (read-only connector)` })) } : {}),
   });
   const ok = saved.status === 201;
-  const progressed = work !== undefined || hire?.proposalId !== undefined || searched || swap !== undefined;
+  // A job counts as done only if the agent produced something; a search alone is not an answer.
+  const progressed = work !== undefined || hire?.proposalId !== undefined || swap !== undefined;
   return {
     taskState: ok && progressed ? "completed" : ok ? "incomplete" : "failed",
     summary: { query, results: listings.length, hire, didWork: work !== undefined, swap: swap?.outcome ?? null, connectorCalls: gathered.length, pagesRead: pages.length, artifactId: saved.body?.id ?? null, notes: ctx.notes },
   };
+}
+
+const lamportsToSol = (raw: string): string => (Number(BigInt(raw)) / 1e9).toFixed(4);
+
+/** Why a job produced nothing, in the owner's terms; the raw notes stay in the details. */
+function plainFailure(notes: string[]): string {
+  const all = notes.join(" ");
+  if (/BUDGET_EXCEEDED|allocation would be exceeded|budget/i.test(all)) return "I couldn't finish: I've reached my spending limit. Raise my limits, or add your AI key in Settings so thinking costs no USDC.";
+  if (/does not allow the Analyze service|SERVICE_NOT_ALLOWED/.test(all)) return "I couldn't finish: I'm not allowed to buy the AI work this needs. Add your AI key in Settings, or let me buy Analysis.";
+  if (/tool-call allowance/.test(all)) return "I couldn't finish within this job's step limit.";
+  return "I couldn't finish this job. The details below say why.";
 }

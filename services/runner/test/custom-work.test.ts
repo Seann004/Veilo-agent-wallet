@@ -104,7 +104,8 @@ describe("custom agent doing the work itself", () => {
     expect(purchase).toEqual({ sku: "analyze", payment_path: "prepaid_credits" });
     const content = st.env.db.prepare("SELECT r.content FROM artifact a JOIN artifact_revision r ON r.artifact_id = a.id WHERE a.task_id = ?").pluck().get(run.body.taskId) as string;
     expect(content).toContain("FIXTURE analysis");
-    expect(content).toContain("No hire was proposed.");
+    // The answer leads; how it was made follows under Details.
+    expect(content.indexOf("FIXTURE analysis")).toBeLessThan(content.indexOf("Details"));
     const callId = st.env.db.prepare(`SELECT id FROM agent_connector_call WHERE task_id = ? AND outcome = 'ok'`).pluck().get(run.body.taskId) as string;
     const citations = st.env.db
       .prepare("SELECT r.citations_json FROM artifact a JOIN artifact_revision r ON r.artifact_id = a.id AND r.revision = a.current_revision WHERE a.task_id = ?")
