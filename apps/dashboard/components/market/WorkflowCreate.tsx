@@ -20,6 +20,7 @@ import { useAction, useResource } from "../hooks";
 import { ErrorNotice, Loading, Section } from "../ui";
 import { useMarket } from "./MarketContext";
 import { Address, Money, PlainText, RequireMarketSession, TestTokenNote } from "./parts";
+import { Select } from "../Select";
 
 interface DraftStep {
   tool: ToolEntry;
@@ -131,13 +132,13 @@ function Wizard() {
           ))}
           <div className="field">
             <label htmlFor={`${id}-cat`}>Category</label>
-            <select id={`${id}-cat`} value={basics.category} onChange={(e) => setBasics({ ...basics, category: e.target.value as WorkflowCategory })}>
-              {CATEGORIES.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
+            <Select<WorkflowCategory>
+              id={`${id}-cat`}
+              label="Category"
+              value={basics.category}
+              options={CATEGORIES.map((c) => ({ value: c.id, label: c.label }))}
+              onChange={(v) => setBasics({ ...basics, category: v })}
+            />
           </div>
           <div className="field">
             <label htmlFor={`${id}-desc`}>Description</label>
@@ -192,11 +193,19 @@ function Wizard() {
                         {want.name} ({want.kind}
                         {want.required ? "" : ", optional"})
                       </label>
-                      <select
+                      <Select
                         id={fieldId}
+                        label={want.name}
                         value={value}
-                        onChange={(e) => {
-                          const v = e.target.value;
+                        options={[
+                          { value: "", label: "Not mapped" },
+                          { value: "fixed", label: "Fixed text" },
+                          ...basics.runInputs.filter((r) => r.name !== "").map((r) => ({ value: `run:${r.name}`, label: `Buyer input: ${r.label}` })),
+                          ...steps
+                            .slice(0, i)
+                            .flatMap((prev, k) => (compatible(prev.tool.io.output.kind, want.kind) ? [{ value: `step:${k}`, label: `Output of step ${k + 1} (${prev.tool.io.output.kind})` }] : [])),
+                        ]}
+                        onChange={(v) => {
                           const next: StepInput | undefined =
                             v === "" ? undefined : v === "fixed" ? { from: "fixed", value: "" } : v.startsWith("run:") ? { from: "run_input", name: v.slice(4) } : { from: "step", step: Number(v.slice(5)) };
                           const inputs = { ...s.inputs };
@@ -204,24 +213,7 @@ function Wizard() {
                           else delete inputs[want.name];
                           setSteps(steps.map((x, j) => (j === i ? { ...x, inputs } : x)));
                         }}
-                      >
-                        <option value="">Not mapped</option>
-                        <option value="fixed">Fixed text</option>
-                        {basics.runInputs
-                          .filter((r) => r.name !== "")
-                          .map((r) => (
-                            <option key={r.name} value={`run:${r.name}`}>
-                              Buyer input: {r.label}
-                            </option>
-                          ))}
-                        {steps.slice(0, i).map((prev, k) =>
-                          compatible(prev.tool.io.output.kind, want.kind) ? (
-                            <option key={k} value={`step:${k}`}>
-                              Output of step {k + 1} ({prev.tool.io.output.kind})
-                            </option>
-                          ) : null,
-                        )}
-                      </select>
+                      />
                       {src?.from === "fixed" ? (
                         <input
                           aria-label={`${want.name} fixed text`}
@@ -242,21 +234,16 @@ function Wizard() {
           {steps.length < 8 ? (
             <div className="field">
               <label htmlFor={`${id}-add`}>Add a step from the tool library</label>
-              <select
+              <Select
                 id={`${id}-add`}
+                label="Add a step from the tool library"
                 value=""
-                onChange={(e) => {
-                  const t = usable.find((x) => `${x.toolKind}:${x.toolId}` === e.target.value);
+                options={[{ value: "", label: "Choose a tool" }, ...usable.map((t) => ({ value: `${t.toolKind}:${t.toolId}`, label: `${t.title} — ${BADGE_LABEL[t.badge]}` }))]}
+                onChange={(v) => {
+                  const t = usable.find((x) => `${x.toolKind}:${x.toolId}` === v);
                   if (t) setSteps([...steps, { tool: t, inputs: {} }]);
                 }}
-              >
-                <option value="">Choose a tool</option>
-                {usable.map((t) => (
-                  <option key={`${t.toolKind}:${t.toolId}`} value={`${t.toolKind}:${t.toolId}`}>
-                    {t.title} — {BADGE_LABEL[t.badge]}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
           ) : null}
           <p className="small">
@@ -272,14 +259,13 @@ function Wizard() {
           </p>
           <div className="field">
             <label htmlFor={`${id}-payout`}>Your verified payout wallet</label>
-            <select id={`${id}-payout`} value={payoutVersionId} onChange={(e) => setPayout(e.target.value)}>
-              <option value="">Choose a verified wallet</option>
-              {verified.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.address}
-                </option>
-              ))}
-            </select>
+            <Select
+              id={`${id}-payout`}
+              label="Your verified payout wallet"
+              value={payoutVersionId}
+              options={[{ value: "", label: "Choose a verified wallet" }, ...verified.map((p) => ({ value: p.id, label: p.address }))]}
+              onChange={setPayout}
+            />
             {verified.length === 0 ? (
               <p className="hint">
                 Prove a payout wallet in the <Link href="/marketplace/seller">Seller console</Link> first.
@@ -410,14 +396,14 @@ function TestRun({ created, onCreate, busy }: { created: { versionId: string; de
         >
           <div className="field">
             <label htmlFor={`${id}-a`}>Agent whose budget pays</label>
-            <select id={`${id}-a`} required value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-              <option value="">Choose an agent</option>
-              {(ws.data?.agents ?? []).map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+            <Select
+              id={`${id}-a`}
+              label="Agent whose budget pays"
+              required
+              value={agentId}
+              options={[{ value: "", label: "Choose an agent" }, ...(ws.data?.agents ?? []).map((a) => ({ value: a.id, label: a.name }))]}
+              onChange={setAgentId}
+            />
           </div>
           <div className="field">
             <label htmlFor={`${id}-i`}>Buyer inputs (JSON)</label>

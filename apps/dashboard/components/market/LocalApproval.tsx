@@ -13,6 +13,7 @@ import { useAction, useResource } from "../hooks";
 import { ConfirmButton, EmptyState, ErrorNotice, KV, Loading, Section, TxLink } from "../ui";
 import { useMarket } from "./MarketContext";
 import { Countdown, FullValue, Money, PlainText, TestTokenNote } from "./parts";
+import { Select } from "../Select";
 
 /** A hire as the local control service stores it; listing text and the brief are untrusted. */
 export interface LocalHire {
@@ -224,13 +225,7 @@ function HireCard({ hire: h, workspace, onChanged }: { hire: LocalHire; workspac
             {agents.length === 0 ? (
               <p className="small notice notice-warn">No active local agent. Activate an agent in your workspace first.</p>
             ) : (
-              <select id={ids.agent} value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} ({a.role})
-                  </option>
-                ))}
-              </select>
+              <Select id={ids.agent} label="Agent" value={agentId} options={agents.map((a) => ({ value: a.id, label: `${a.name} (${a.role})` }))} onChange={setAgentId} />
             )}
             <span className="hint">The controller still enforces this agent&apos;s limits and the workspace limits; an over-budget approval is refused.</span>
           </div>
@@ -343,14 +338,19 @@ export function AgentGrants({ agentId, name }: { agentId: string; name: string }
         <div className="grid-2">
           <div className="field">
             <label htmlFor={ids.listing}>Listing</label>
-            <select id={ids.listing} value={listingId} onChange={(e) => setListingId(e.target.value)}>
-              <option value="">Choose a published listing</option>
-              {catalogue.data?.listings.map((l) => (
-                <option key={l.listing_id} value={l.listing_id}>
-                  {l.title} — {l.seller_name} ({m.decimalsFor(l.mint, l.network) === null ? `${String(l.price_base_units)} base units` : `${formatUnits(l.price_base_units, m.decimalsFor(l.mint, l.network)!)} USDC`})
-                </option>
-              ))}
-            </select>
+            <Select
+              id={ids.listing}
+              label="Listing"
+              value={listingId}
+              options={[
+                { value: "", label: "Choose a published listing" },
+                ...(catalogue.data?.listings ?? []).map((l) => {
+                  const d = m.decimalsFor(l.mint, l.network);
+                  return { value: l.listing_id, label: `${l.title} — ${l.seller_name} (${d === null ? `${String(l.price_base_units)} base units` : `${formatUnits(l.price_base_units, d)} USDC`})` };
+                }),
+              ]}
+              onChange={setListingId}
+            />
           </div>
           <div className="field">
             <label htmlFor={ids.max}>Maximum total per hire</label>

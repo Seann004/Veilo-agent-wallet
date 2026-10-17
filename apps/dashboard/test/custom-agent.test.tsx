@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -107,11 +107,16 @@ function backend(allowlist: () => { status?: number; body: unknown } = () => ({ 
 /** Role picker buttons are named by the role label followed by its tagline. */
 const roleButton = (role: keyof typeof ROLE_LABEL) => screen.getByRole("button", { name: new RegExp(`^${ROLE_LABEL[role]}`) });
 
+async function pick(user: ReturnType<typeof userEvent.setup>, label: string, option: string) {
+  await user.click(screen.getByLabelText(label));
+  await user.click(await screen.findByRole("option", { name: option }));
+}
+
 async function fillCustom(user: ReturnType<typeof userEvent.setup>) {
   await user.click(roleButton("custom"));
   await user.type(screen.getByLabelText("Name"), "Scout");
   await user.type(screen.getByLabelText("Instructions *"), "Find one specialist.");
-  await user.selectOptions(screen.getByLabelText("Starting template"), "analyst");
+  await pick(user, "Starting template", "Analyst");
 }
 
 async function submitTwice(user: ReturnType<typeof userEvent.setup>) {
@@ -168,7 +173,9 @@ describe("create a custom agent", () => {
     await user.click(roleButton("custom"));
     expect(roleButton("custom").getAttribute("aria-pressed")).toBe("true");
     expect((screen.getByLabelText("Instructions *") as HTMLTextAreaElement).maxLength).toBe(CUSTOM_INSTRUCTIONS_MAX);
-    expect(within(screen.getByLabelText("Starting template")).getAllByRole("option").map((o) => (o as HTMLOptionElement).value)).toEqual([...CONTRACT_TEMPLATES]);
+    await user.click(screen.getByLabelText("Starting template"));
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(CONTRACT_TEMPLATES.map((t) => TEMPLATE_LABEL[t]));
+    await user.keyboard("{Escape}");
     const hiring = screen.getByLabelText("Allow this agent to hire specialists from the marketplace") as HTMLInputElement;
     expect(hiring.checked).toBe(false);
     expect(screen.queryByText("Pre-approved listings (optional)")).toBeNull();
@@ -222,8 +229,7 @@ describe("create a custom agent", () => {
     renderCreate();
     await fillCustom(user);
     await user.click(screen.getByLabelText("Allow this agent to hire specialists from the marketplace"));
-    await screen.findByRole("option", { name: "Research desk — Desk" });
-    await user.selectOptions(screen.getByLabelText("Listing"), LISTING);
+    await pick(user, "Listing", "Research desk — Desk");
     await user.type(screen.getByLabelText("Maximum total per hire"), "0.3");
     await user.click(screen.getByRole("button", { name: "Pre-approve listing" }));
     await submitTwice(user);
@@ -255,8 +261,7 @@ describe("create a custom agent", () => {
     renderCreate();
     await fillCustom(user);
     await user.click(screen.getByLabelText("Allow this agent to hire specialists from the marketplace"));
-    await screen.findByRole("option", { name: "Research desk — Desk" });
-    await user.selectOptions(screen.getByLabelText("Listing"), LISTING);
+    await pick(user, "Listing", "Research desk — Desk");
     await user.type(screen.getByLabelText("Maximum total per hire"), "0.3");
     await user.click(screen.getByRole("button", { name: "Pre-approve listing" }));
     await submitTwice(user);

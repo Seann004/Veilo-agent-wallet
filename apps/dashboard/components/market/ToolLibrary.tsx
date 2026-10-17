@@ -9,6 +9,7 @@ import { useAction, useResource } from "../hooks";
 import { EmptyState, ErrorNotice, Loading, Section } from "../ui";
 import { useMarket } from "./MarketContext";
 import { Address, Money, PlainText, RequireMarketSession, TestTokenNote } from "./parts";
+import { Select } from "../Select";
 
 interface Connector {
   id: string;
@@ -153,25 +154,25 @@ function McpToolForm() {
         <>
           <div className="field">
             <label htmlFor={`${id}-v`}>Pending remote listing version</label>
-            <select id={`${id}-v`} required value={versionId} onChange={(e) => setVersionId(e.target.value)}>
-              <option value="">Choose a version</option>
-              {pending.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.title} (v{v.version_no})
-                </option>
-              ))}
-            </select>
+            <Select
+              id={`${id}-v`}
+              label="Pending remote listing version"
+              required
+              value={versionId}
+              options={[{ value: "", label: "Choose a version" }, ...pending.map((v) => ({ value: v.id, label: `${v.title} (v${v.version_no})` }))]}
+              onChange={setVersionId}
+            />
           </div>
           <div className="field">
             <label htmlFor={`${id}-t`}>Connector tool</label>
-            <select id={`${id}-t`} required value={choice} onChange={(e) => setChoice(e.target.value)}>
-              <option value="">Choose a tool</option>
-              {options.map((o) => (
-                <option key={o.key} value={o.key}>
-                  {o.connectorId}: {o.toolName}
-                </option>
-              ))}
-            </select>
+            <Select
+              id={`${id}-t`}
+              label="Connector tool"
+              required
+              value={choice}
+              options={[{ value: "", label: "Choose a tool" }, ...options.map((o) => ({ value: o.key, label: `${o.connectorId}: ${o.toolName}` }))]}
+              onChange={setChoice}
+            />
           </div>
           <div className="field">
             <label htmlFor={`${id}-a`}>Arguments (JSON; use "{"{{input}}"}" for the step input)</label>
@@ -280,25 +281,28 @@ function ProviderToolForm({ providers }: { providers: ToolsResponse["providers"]
         <>
           <div className="field">
             <label htmlFor={`${id}-v`}>Pending remote listing version</label>
-            <select id={`${id}-v`} required value={versionId} onChange={(e) => setVersionId(e.target.value)}>
-              <option value="">Choose a version</option>
-              {pending.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.title} (v{v.version_no})
-                </option>
-              ))}
-            </select>
+            <Select
+              id={`${id}-v`}
+              label="Pending remote listing version"
+              required
+              value={versionId}
+              options={[{ value: "", label: "Choose a version" }, ...pending.map((v) => ({ value: v.id, label: `${v.title} (v${v.version_no})` }))]}
+              onChange={setVersionId}
+            />
           </div>
           <div className="field">
             <label htmlFor={`${id}-t`}>Provider tool</label>
-            <select id={`${id}-t`} required value={choice} onChange={(e) => setChoice(e.target.value)}>
-              <option value="">Choose a tool</option>
-              {options.map((o) => (
-                <option key={o.key} value={o.key}>
-                  {o.provider}: {o.tool.name} ({o.tool.effect === "draft_external" ? "drafts only" : "read-only"})
-                </option>
-              ))}
-            </select>
+            <Select
+              id={`${id}-t`}
+              label="Provider tool"
+              required
+              value={choice}
+              options={[
+                { value: "", label: "Choose a tool" },
+                ...options.map((o) => ({ value: o.key, label: `${o.provider}: ${o.tool.name} (${o.tool.effect === "draft_external" ? "drafts only" : "read-only"})` })),
+              ]}
+              onChange={setChoice}
+            />
           </div>
           <button type="submit" className="btn" disabled={act.busy || versionId === "" || choice === ""}>
             Pin provider tool

@@ -14,6 +14,7 @@ import { ErrorNotice, KV, Loading, Section } from "../ui";
 import { RefundItem } from "./JobDetail";
 import { useMarket } from "./MarketContext";
 import { Address, FullValue, JobStates, Money, PausedNotice, PlainText, RequireMarketSession, TestTokenNote } from "./parts";
+import { Select } from "../Select";
 
 export function SellerConsole() {
   return (
@@ -369,13 +370,7 @@ function VersionForm({ listingId, d, onCreated }: { listingId: string; d: Seller
           ? field(
               "template",
               "Template",
-              <select id={`${id}-template`} value={f.template} onChange={set("template")}>
-                {MANAGED_TEMPLATES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>,
+              <Select id={`${id}-template`} label="Template" value={f.template} options={MANAGED_TEMPLATES.map((t) => ({ value: t, label: t }))} onChange={(v) => setF({ ...f, template: v })} />,
             )
           : field(
               "remoteOrigin",
@@ -399,10 +394,7 @@ function VersionForm({ listingId, d, onCreated }: { listingId: string; d: Seller
         {field(
           "format",
           "Output format",
-          <select id={`${id}-format`} value={f.format} onChange={set("format")}>
-            <option value="markdown">markdown</option>
-            <option value="json">json</option>
-          </select>,
+          <Select id={`${id}-format`} label="Output format" value={f.format} options={[{ value: "markdown", label: "markdown" }, { value: "json", label: "json" }]} onChange={(v) => setF({ ...f, format: v })} />,
         )}
         {field("sections", "Output sections (one per line)", <textarea id={`${id}-sections`} rows={3} value={f.sections} onChange={set("sections")} />)}
         <div className="field">
@@ -422,13 +414,7 @@ function VersionForm({ listingId, d, onCreated }: { listingId: string; d: Seller
               Verify a payout wallet first.
             </p>
           ) : (
-            <select id={`${id}-payoutVersionId`} value={f.payoutVersionId} onChange={set("payoutVersionId")}>
-              {d.payouts.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.address}
-                </option>
-              ))}
-            </select>
+            <Select id={`${id}-payoutVersionId`} label="Payout wallet" value={f.payoutVersionId} options={d.payouts.map((p) => ({ value: p.id, label: p.address }))} onChange={(v) => setF({ ...f, payoutVersionId: v })} />
           ),
         )}
         {field("turnaroundMinutes", "Turnaround (minutes) *", <input id={`${id}-turnaroundMinutes`} required inputMode="numeric" value={f.turnaroundMinutes} onChange={set("turnaroundMinutes")} />)}

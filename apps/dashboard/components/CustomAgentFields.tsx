@@ -16,6 +16,7 @@ import { AgentGrants } from "./market/LocalApproval";
 import { EnsureMarket, useMarket } from "./market/MarketContext";
 import { PlainText } from "./market/parts";
 import { DeniedHint, ErrorNotice, KV, Loading, Section } from "./ui";
+import { Select } from "./Select";
 
 /** Server limits from the control contracts (createAgentRequestSchema, runAgentRequestSchema, customTaskInputSchema). */
 export const CUSTOM_INSTRUCTIONS_MAX = 8_000;
@@ -57,6 +58,7 @@ export function withHiring(p: AgentPolicyInput, on: boolean): AgentPolicyInput {
 
 export const grantBody = (g: Pick<GrantDraft, "listingId" | "recipient" | "maxTotalUnits">) => ({ listingId: g.listingId, recipient: g.recipient, maxTotalUnits: g.maxTotalUnits });
 
+const TEMPLATE_OPTIONS = AGENT_TEMPLATES.map((t) => ({ value: t, label: TEMPLATE_LABEL[t] }));
 const TEMPLATE_HINT = "Stored with the agent. The runner currently follows your instructions only; the template does not change its tools or limits.";
 
 /** Shown wherever a task for a dashboard-created agent could otherwise look stuck. */
@@ -88,13 +90,7 @@ export function CustomAgentFields({ value, onChange }: { value: CustomDraft; onC
       <legend>Custom agent</legend>
       <div className="field">
         <label htmlFor={ids.template}>Starting template</label>
-        <select id={ids.template} value={value.template} onChange={(e) => onChange({ ...value, template: e.target.value as AgentTemplate })} aria-describedby={`${ids.template}-h`}>
-          {AGENT_TEMPLATES.map((t) => (
-            <option key={t} value={t}>
-              {TEMPLATE_LABEL[t]}
-            </option>
-          ))}
-        </select>
+        <Select id={ids.template} label="Starting template" value={value.template} options={TEMPLATE_OPTIONS} onChange={(t) => onChange({ ...value, template: t })} />
         <span id={`${ids.template}-h`} className="hint">
           {TEMPLATE_HINT}
         </span>
@@ -164,14 +160,13 @@ function GrantDraftPicker({ grants, onChange }: { grants: GrantDraft[]; onChange
       <div className="grid-2">
         <div className="field">
           <label htmlFor={ids.listing}>Listing</label>
-          <select id={ids.listing} value={listingId} onChange={(e) => setListingId(e.target.value)}>
-            <option value="">Choose a published listing</option>
-            {catalogue.data?.listings.map((l) => (
-              <option key={l.listing_id} value={l.listing_id}>
-                {l.title} — {l.seller_name}
-              </option>
-            ))}
-          </select>
+          <Select
+            id={ids.listing}
+            label="Listing"
+            value={listingId}
+            options={[{ value: "", label: "Choose a published listing" }, ...(catalogue.data?.listings ?? []).map((l) => ({ value: l.listing_id, label: `${l.title} — ${l.seller_name}` }))]}
+            onChange={setListingId}
+          />
         </div>
         <div className="field">
           <label htmlFor={ids.max}>Maximum total per hire</label>
@@ -274,13 +269,7 @@ function InstructionsEditor({ agent, onSaved }: { agent: Agent; onSaved: () => P
       <h3>Edit instructions</h3>
       <div className="field">
         <label htmlFor={ids.template}>Template</label>
-        <select id={ids.template} value={template} onChange={(e) => setTemplate(e.target.value as AgentTemplate)}>
-          {AGENT_TEMPLATES.map((t) => (
-            <option key={t} value={t}>
-              {TEMPLATE_LABEL[t]}
-            </option>
-          ))}
-        </select>
+        <Select id={ids.template} label="Template" value={template} options={TEMPLATE_OPTIONS} onChange={setTemplate} />
       </div>
       <div className="field">
         <label htmlFor={ids.instructions}>Instructions</label>

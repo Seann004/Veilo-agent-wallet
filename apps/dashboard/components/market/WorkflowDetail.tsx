@@ -12,6 +12,7 @@ import { useAction, useResource } from "../hooks";
 import { ConfirmButton, ErrorNotice, KV, Loading, Section } from "../ui";
 import { useMarket } from "./MarketContext";
 import { Address, FullValue, Money, PlainText, TestTokenNote } from "./parts";
+import { Select } from "../Select";
 
 const KIND_LABEL: Record<string, string> = {
   managed_template: "Managed template (Veilo-hosted inference)",
@@ -153,6 +154,7 @@ function RunOnce({ w }: { w: WorkflowEntry }) {
   const [prepared, setPrepared] = useState<LocalRun | null>(null);
   const formId = useId();
   const agents = (ws.data?.agents ?? []).filter((a) => a.status === "active");
+  const agentOptions = [{ value: "", label: "Choose an agent" }, ...agents.map((a) => ({ value: a.id, label: a.name }))];
   return (
     <Section title="Run once">
       <p className="small">This prepares the run in your local control service. Nothing is paid until you approve the exact steps, recipients and total below.</p>
@@ -169,14 +171,7 @@ function RunOnce({ w }: { w: WorkflowEntry }) {
         >
           <div className="field">
             <label htmlFor={`${formId}-agent`}>Agent whose budget pays</label>
-            <select id={`${formId}-agent`} required value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-              <option value="">Choose an agent</option>
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+            <Select id={`${formId}-agent`} label="Agent whose budget pays" required value={agentId} options={agentOptions} onChange={setAgentId} />
           </div>
           {(w.run_inputs ?? []).map((ri) => (
             <div className="field" key={ri.name}>
@@ -236,6 +231,7 @@ function AddToAgent({ w }: { w: WorkflowEntry }) {
   const formId = useId();
   const decimals = m.decimalsFor(w.mint, w.network);
   const agents = (ws.data?.agents ?? []).filter((a) => a.status === "active");
+  const agentOptions = [{ value: "", label: "Choose an agent" }, ...agents.map((a) => ({ value: a.id, label: a.name }))];
   return (
     <Section title="Add to agent">
       <p className="small">
@@ -267,14 +263,7 @@ function AddToAgent({ w }: { w: WorkflowEntry }) {
         >
           <div className="field">
             <label htmlFor={`${formId}-agent`}>Agent</label>
-            <select id={`${formId}-agent`} required value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-              <option value="">Choose an agent</option>
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+            <Select id={`${formId}-agent`} label="Agent" required value={agentId} options={agentOptions} onChange={setAgentId} />
           </div>
           <div className="field">
             <label htmlFor={`${formId}-budget`}>Budget {decimals === null ? "(base units)" : "(USDC)"}</label>
