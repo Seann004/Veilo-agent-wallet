@@ -44,6 +44,8 @@ export class FakeMarketplace {
   /** Revokes the active lease (and requeues the job) just before the next completion is accepted. */
   revokeLeaseBeforeComplete = 0;
   unauthorized = 0;
+  /** Canned replies for the next payment-evidence calls; the evidence is not recorded. */
+  evidenceReplies: Array<{ status: number; body: unknown }> = [];
   recipient!: KeyPairSigner;
   #server: Server | undefined;
 
@@ -79,6 +81,11 @@ export class FakeMarketplace {
       const j = job(req, res);
       if (!j) return;
       const b = paymentEvidenceRequestSchema.parse(req.body);
+      const forced = this.evidenceReplies.shift();
+      if (forced) {
+        res.status(forced.status).json(forced.body);
+        return;
+      }
       if (j.evidence.some((e) => e.signature === b.signature)) {
         res.status(409).json({ error: "already recorded" });
         return;

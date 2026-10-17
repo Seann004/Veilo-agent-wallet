@@ -359,6 +359,42 @@ describe("seller-host fulfilment", () => {
     expect(mk!.job(job.jobId).completes[0]!.envelope).toMatchObject({ status: "incomplete" });
   });
 
+  it.each([
+    [403, { error: { code: "SERVICE_NOT_ALLOWED", message: "receipt was not authorized by this operation's payer" } }, "SERVICE_NOT_ALLOWED"],
+    [403, { error: "forbidden" }, "SERVICE_NOT_ALLOWED"],
+    [400, { error: { code: "INVALID_REQUEST", message: "bad evidence" } }, "INVALID_REQUEST"],
+  ])("a refused payment evidence (HTTP %i) closes the purchase as paid without a result, without claiming or running inference", async (status, body, code) => {
+    await sellerHost();
+    const { token } = h!.account();
+    const job = await mk!.addJob();
+    mk!.evidenceReplies = [{ status, body }];
+    const { q, header } = await payJob(token, job.input);
+    const r = await h!.pay(token, q.ref, header);
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ state: "paid_no_result", payment: { txSignature: expect.any(String) }, result: { status: "evidence_refused", code } });
+    expect(h!.db.prepare("SELECT error_code FROM purchases").pluck().get()).toBe(code);
+    const again = await h!.call("GET", `/v1/purchases/${q.ref.quoteId}/result`, token);
+    expect(again.body.state).toBe("paid_no_result");
+    const fake = mk!.job(job.jobId);
+    expect(fake.evidence).toHaveLength(0);
+    expect(fake.claims).toBe(0);
+    expect(h!.provider!.calls).toHaveLength(0);
+    expect(h!.facilitator.settleCalls).toBe(1);
+  });
+
+  it.each([202, 401, 429, 503])("an HTTP %i evidence reply keeps the purchase paid and retries on the next pass", async (status) => {
+    await sellerHost();
+    const { token } = h!.account();
+    const job = await mk!.addJob();
+    mk!.evidenceReplies = [{ status, body: { error: { code: "NOT_READY", message: "later" } } }];
+    const { q, header } = await payJob(token, job.input);
+    const r = await h!.pay(token, q.ref, header);
+    expect(r.status).toBe(202);
+    expect(r.body).toMatchObject({ error: { code: "NOT_READY" } });
+    expect((await h!.call("GET", `/v1/purchases/${q.ref.quoteId}/result`, token)).body.state).toBe("delivered");
+    expect(mk!.job(job.jobId).evidence).toHaveLength(1);
+  });
+
   it("keeps the payment while the marketplace is unreachable after settlement and reports evidence once it returns", async () => {
     await sellerHost({ hooks: { afterClaim: () => { mk!.down = true; } } });
     const { token } = h!.account();
