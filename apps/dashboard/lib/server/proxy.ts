@@ -68,6 +68,8 @@ export const ROUTES: Record<UpstreamService, Route[]> = {
     r("GET", "/external-bindings"),
     r("POST", "/external-bindings"),
     r("POST", `/external-bindings/${ID}/disable`),
+    r("GET", "/swap-service"),
+    r("POST", "/swap-service"),
     r("GET", `/purchases/${ID}/external-calls`),
   ],
   wallet: [

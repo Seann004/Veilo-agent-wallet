@@ -7,6 +7,7 @@ import type { NoteStatus, WalletNote } from "../lib/types";
 import { connect, listWallets, onWalletsChanged, signAndSend, type OwnerWallet } from "../lib/wallet";
 import { useCapability, useOwner, type ConnectedWallet } from "./Shell";
 import { useAction, useResource } from "./hooks";
+import { SwapPanel } from "./SwapPanel";
 import { ErrorNotice, Loading, Section, Spinner, TxLink } from "./ui";
 
 export const DEPOSIT_STAGES = ["submitted", "finalized", "indexed", "approved", "spendable"] as const;
@@ -217,6 +218,7 @@ function OwnerWalletView() {
         <ErrorNotice error={action.error} />
       </Section>
 
+      <SwapPanel />
       <Section
         title="Deposits"
         actions={
