@@ -15,7 +15,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        {/* Applies a saved light/dark choice before hydration; without one the system setting applies. Served as a file so no source renders raw HTML. */}
+        {/* Served as a file so no dashboard source renders raw HTML. */}
         <Script src="/theme-init.js" strategy="beforeInteractive" />
         {children}
       </body>
