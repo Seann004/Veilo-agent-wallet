@@ -21,15 +21,15 @@ Independent review and execution evidence are needed to evaluate implementation 
 
 Organizer acceptance of devnet/reuse remains unresolved. Veilo’s own license is an owner decision; GPL prover/hash components and the verifier’s MIT-metadata/Apache-license-file discrepancy require review. See [attribution](../references/attribution.md) and [handoff](../handoff.md).
 
-## Marketplace risks — accepted scope, controls unverified
+## Marketplace risks — controls in code, devnet acceptance incomplete
 
 | Boundary | Required response / current gap |
 |---|---|
-| Cloud identity and private jobs | Separate marketplace and local sign-in; tenant grants/RLS and private Storage are missing here. Unsigned wallets and other buyers/sellers must have no private access. |
-| Cloud-to-local connection | No cloud spending authority; authenticated/digest-bound/expiring outbound connection, acknowledged policies and offline pause still need implementation. |
-| Seller recipient and earnings | Current managed gateway has one merchant. Block paid managed listings until per-listing binding, verified finality and one-receipt/one-job/one-earnings uniqueness pass. |
+| Cloud identity and private jobs | Separate marketplace and local sign-in. Tenant RLS and private Storage pass the live RLS e2e script (84/84); wallet-switching ownership is not specifically tested. |
+| Cloud-to-local connection | No cloud spending authority; control connects outbound and signs every request (replay refused). Offline pause follows from local approval but no offline drill is recorded. |
+| Seller recipient and earnings | Seller-host profile pays each listing's payout address; one-receipt/one-job is enforced in the database. Verified on devnet only with a publicly funded payer. |
 | Delivery and refunds | Direct prepayment provides no escrow or automatic refund guarantee. Paid failures stay visible; seller-funded finalized refunds need destination and cumulative-amount checks. |
 | Hosted jobs and connectors | No hosted sandbox/credential broker is established by local process separation. Limit attempts/egress/grants; reject stale leases and forged callbacks; prevent result files executing scripts. |
-| Privacy and retention | Operator/sellers/providers see plaintext processed jobs and buyer–seller links. Required 30-day cleanup and signed downloads are unverified; RLS is not metadata anonymity. |
+| Privacy and retention | Operator/sellers/providers see plaintext processed jobs and buyer–seller links. Signed downloads are checked; required 30-day cleanup is not implemented; RLS is not metadata anonymity. |
 
 See [marketplace triage](../guide/marketplace-triage.md) for exact closure evidence. Marketplace inclusion and Supabase adoption have already been approved; remaining engineering gates are not reasons to describe them as out of scope.
