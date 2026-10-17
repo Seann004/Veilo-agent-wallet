@@ -25,6 +25,7 @@ import { GatewayClient, type FetchLike } from "../../src/integration/gateway-cli
 import { PermitSigner } from "../../src/integration/permits";
 import { activateDefaults, addNotes, createEnv, type TestEnv } from "../helpers";
 import { TestFundingProvider } from "./test-funding-provider";
+import type { AiService } from "../../src/ai/service";
 
 const config = loadConfig({
   DEVNET_RPC_URL: "https://rpc.test.invalid",
@@ -100,6 +101,8 @@ export interface StackOptions {
   settlePollMs?: number;
   /** Agent connectors for the app; absent means the routes answer NOT_READY. */
   connectors?: (ledger: Ledger) => AgentConnectors;
+  /** The owner's model provider (BYOK); absent means agents fall back to sponsored planning and paid AI. */
+  ai?: (ledger: Ledger) => AiService;
 }
 
 export async function makeStack(options: StackOptions = {}): Promise<Stack> {
@@ -140,7 +143,7 @@ export async function makeStack(options: StackOptions = {}): Promise<Stack> {
 
   const build = () => createIntegration(env.ledger, { gateway: gatewayClient, permits, funding, ...(options.leaseMs !== undefined ? { leaseMs: options.leaseMs } : {}), ...(options.purchaseSweepMs !== undefined ? { purchaseSweepMs: options.purchaseSweepMs } : {}), ...(options.settleWaitMs !== undefined ? { settleWaitMs: options.settleWaitMs } : {}), ...(options.settlePollMs !== undefined ? { settlePollMs: options.settlePollMs } : {}) });
   const listen = async (integration: Integration) => {
-    const app = createApp(createServiceHealth("control", config, false), { ledger: env.ledger, session, services: new ServiceCredentials([]), log: () => undefined, integration, connectors: options.connectors?.(env.ledger) });
+    const app = createApp(createServiceHealth("control", config, false), { ledger: env.ledger, session, services: new ServiceCredentials([]), log: () => undefined, integration, connectors: options.connectors?.(env.ledger), ai: options.ai?.(env.ledger) });
     const server = app.listen(0, "127.0.0.1");
     await new Promise<void>((r) => server.once("listening", () => r()));
     return server;

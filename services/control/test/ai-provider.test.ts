@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { AiService, MAX_AI_CALLS_PER_TASK } from "../src/ai/service";
 import { ProviderKeyVault } from "../src/ai/vault";
 import { ControlError } from "../src/errors";
+import { getAgent } from "../src/ledger/workspace";
 import { activateDefaults, createEnv, intentTask, type TestEnv } from "./helpers";
 
 let env: TestEnv;
@@ -55,7 +56,7 @@ describe("bring your own model key", () => {
     const p = fakeProvider((_u, body) => openaiReply((body.max_tokens as number) === 2_000 ? "Analysis on your key." : "{\"plan\":true}"));
     const ai = new AiService(env.ledger, ProviderKeyVault.ephemeral(), p.fetchImpl);
     ai.set(env.ws.id, "owner", { provider: "openai", apiKey: KEY, model: "gpt-4.1-mini" });
-    const agent = env.agents.Prince;
+    const agent = getAgent(env.ledger, env.agents.Prince.id)!;
     const taskId = runningTask(env, agent.id, "byok");
 
     const plan = await ai.plan(agent, { taskId, purpose: "plan", messages: [{ role: "user", content: "Plan it." }] });
@@ -70,6 +71,11 @@ describe("bring your own model key", () => {
     for (let i = 1; i < MAX_AI_CALLS_PER_TASK; i += 1) await ai.run(agent, { taskId, sku: "summarize", input: { text: "x" } });
     await expect(ai.run(agent, { taskId, sku: "summarize", input: { text: "x" } })).rejects.toMatchObject({ code: "BUDGET_EXCEEDED" });
     await expect(ai.run(agent, { taskId, sku: "analyze", input: { wrong: 1 } })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+
+    // Model work stops with the agent, like purchases.
+    const paused = runningTask(env, agent.id, "paused");
+    env.db.prepare("UPDATE agent SET status = 'paused' WHERE id = ?").run(agent.id);
+    await expect(ai.run({ ...agent, status: "paused" }, { taskId: paused, sku: "summarize", input: { text: "x" } })).rejects.toBeInstanceOf(ControlError);
   });
 
   it("speaks the Anthropic Messages API with the key in its own header", async () => {
@@ -79,7 +85,7 @@ describe("bring your own model key", () => {
     const ai = new AiService(env.ledger, ProviderKeyVault.ephemeral(), p.fetchImpl);
     ai.set(env.ws.id, "owner", { provider: "anthropic", apiKey: KEY, model: "claude-sonnet-5-5" });
     const taskId = runningTask(env, env.agents.Prince.id, "claude");
-    const r = await ai.run(env.agents.Prince, { taskId, sku: "summarize", input: { text: "Long text." } });
+    const r = await ai.run(getAgent(env.ledger, env.agents.Prince.id)!, { taskId, sku: "summarize", input: { text: "Long text." } });
     expect(r).toMatchObject({ result: { text: "Hello from Claude." } });
     const call = p.calls[0]!;
     expect(call.url).toBe("https://api.anthropic.com/v1/messages");
@@ -100,5 +106,10 @@ describe("bring your own model key", () => {
     await expect(ai.test(env.ws.id)).rejects.toMatchObject({ code: "INVALID_REQUEST" });
     ai.clear(env.ws.id, "owner");
     expect(ai.configured(env.ws.id)).toBe(false);
+
+    // With the real transport, a private-network provider is refused before any request is sent.
+    const live = new AiService(env.ledger, ProviderKeyVault.ephemeral());
+    live.set(env.ws.id, "owner", { provider: "openai_compatible", apiKey: KEY, model: "m", baseUrl: "https://10.0.0.5/v1" });
+    await expect(live.test(env.ws.id)).rejects.toMatchObject({ code: "PROVIDER_UNAVAILABLE" });
   });
 });

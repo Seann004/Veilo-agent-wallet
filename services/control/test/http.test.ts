@@ -250,7 +250,7 @@ describe("AUTH-02 worker tools cannot sign, edit policy or publish", () => {
       }
     }
     expect(AGENT_TOOLS.map((t) => t.name).sort()).toEqual(
-      ["budget_summary", "catalog_lookup", "consume_inference_sku", "purchase_status", "request_handoff", "request_purchase", "save_artifact"].sort(),
+      ["budget_summary", "catalog_lookup", "consume_inference_sku", "purchase_status", "request_handoff", "request_purchase", "run_ai", "save_artifact"].sort(),
     );
   });
 

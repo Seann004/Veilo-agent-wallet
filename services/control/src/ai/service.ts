@@ -3,7 +3,8 @@ import { immediate } from "@veilo/db";
 import { num, type Ledger } from "../context";
 import { ControlError } from "../errors";
 import { writeAudit } from "../ledger/events";
-import type { AgentRow } from "../ledger/workspace";
+import { activeAgentPolicy, type AgentRow } from "../ledger/workspace";
+import { publicFetch } from "@veilo/mcp-client";
 import { assertTaskLive, ownTask } from "../agents/work";
 import { completeWithProvider, DEFAULT_BASE_URL, ModelCallError, type AiProviderKind, type ModelEndpoint } from "./model-client";
 import type { ProviderKeyVault } from "./vault";
@@ -26,6 +27,8 @@ interface ProviderRow {
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
+const isLoopback = (u: URL) => ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname);
+
 /** https only, except a loopback address for a local model server. */
 function baseUrlProblem(raw: string): string | null {
   let u: URL;
@@ -35,8 +38,7 @@ function baseUrlProblem(raw: string): string | null {
     return "base URL is not a URL";
   }
   if (u.username || u.password || u.search || u.hash) return "base URL must not carry credentials, a query or a fragment";
-  const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname);
-  if (u.protocol !== "https:" && !(u.protocol === "http:" && loopback)) return "base URL must use https (http only for a local model server)";
+  if (u.protocol !== "https:" && !(u.protocol === "http:" && isLoopback(u))) return "base URL must use https (http only for a local model server)";
   return null;
 }
 
@@ -100,8 +102,12 @@ export class AiService {
   }
 
   async #complete(workspaceId: string, messages: readonly PromptMessage[], maxOutputTokens: number, json: boolean) {
+    const endpoint = this.#endpoint(workspaceId);
+    // Remote providers go through a fetch that refuses non-public addresses at connect time;
+    // only an explicit loopback URL (a local model server) uses a plain fetch.
+    const fetchImpl = this.fetchImpl ?? (isLoopback(new URL(endpoint.baseUrl)) ? undefined : publicFetch);
     try {
-      return await completeWithProvider(this.#endpoint(workspaceId), messages, { maxOutputTokens, json, ...(this.fetchImpl ? { fetch: this.fetchImpl } : {}) });
+      return await completeWithProvider(endpoint, messages, { maxOutputTokens, json, ...(fetchImpl ? { fetch: fetchImpl } : {}) });
     } catch (error) {
       // A rejection (bad key, unknown model, rate limit) is the owner's to fix; anything else may be transient.
       if (error instanceof ModelCallError) throw new ControlError(error.kind === "rejected" ? "INVALID_REQUEST" : "PROVIDER_UNAVAILABLE", error.message);
@@ -147,6 +153,9 @@ export class AiService {
     return immediate(this.ledger.db, () => {
       const t = ownTask(this.ledger, agent.id, taskId);
       assertTaskLive(this.ledger, t);
+      // Model work stops with the agent's spending authority, like any purchase.
+      const policy = activeAgentPolicy(this.ledger, agent.id);
+      if (agent.status !== "active" || !policy || policy.tier === "stopped") throw new ControlError("ACCOUNT_STOPPED", "this agent is not active");
       const used = kind === "planning" ? num(t.planning_calls) : num((t as unknown as { ai_calls: bigint }).ai_calls);
       const max = kind === "planning" ? num(t.max_planning_calls) : MAX_AI_CALLS_PER_TASK;
       if (used >= max) throw new ControlError("BUDGET_EXCEEDED", `task ${kind === "planning" ? "planning" : "model"}-call limit reached`);
