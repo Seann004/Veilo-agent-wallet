@@ -20,6 +20,7 @@ import { ExternalBatchRunner } from "../src/external/batch";
 import { approveExternalBinding, disableExternalBinding, EXTERNAL_BATCH_SKU, type ExternalBindingRow } from "../src/external/bindings";
 import { PurchaseOrchestrator } from "../src/integration/orchestrator";
 import { authorizePurchase } from "../src/ledger/authorize";
+import { pauseAgent } from "../src/ledger/authority";
 import { getPurchaseRow } from "../src/ledger/purchases";
 import { activatePolicyVersion, insertAgentPolicyDraft } from "../src/ledger/workspace";
 import { immediate } from "@veilo/db";
@@ -40,6 +41,7 @@ class FakeSeller {
   /** Every payment header received, settled or not. */
   readonly received: string[] = [];
   unpaidRequests = 0;
+  onPaid: (() => void) | undefined;
   server!: Server;
   origin = "";
   constructor(
@@ -76,6 +78,7 @@ class FakeSeller {
           return;
         }
         this.paid.push(header);
+        this.onPaid?.();
         if (this.mode === "drop_reply") {
           req.socket.destroy();
           return;
@@ -276,11 +279,25 @@ describe("external x402 batch through private funding", () => {
     expect(funding.signed.size).toBe(1);
   });
 
+  it("an emergency pause after a paid call stops the batch before the next call is signed", async () => {
+    const id = buy("paused", [rpc("getSlot"), rpc("getSlot"), rpc("getSlot")]);
+    seller.onPaid = () => {
+      seller.onPaid = undefined;
+      pauseAgent(env.ledger, env.ws.id, env.agents.Prince.id, "owner");
+    };
+    const r = await orchestrator.drive(id);
+    expect(seller.paid).toHaveLength(1);
+    expect(funding.signed.size).toBe(1);
+    expect(runner.calls(id).map((c) => [c.state, c.stop_code])).toEqual([["paid", null], ["refused", "ACCOUNT_STOPPED"]]);
+    expect(r.purchase).toMatchObject({ merchant_state: "finalized", fulfilment_state: "delivered", recovery_state: "recoverable" });
+  });
+
   it("refuses input outside the binding before it is stored", async () => {
     const tooMany = { bindingId: binding.id, calls: [rpc("getSlot"), rpc("getSlot"), rpc("getSlot"), rpc("getSlot")] };
     const badMethod = { bindingId: binding.id, calls: [rpc("sendTransaction")] };
     const badPath = { bindingId: binding.id, calls: [{ method: "POST" as const, path: "/base-mainnet", body: { method: "getSlot" } }] };
-    for (const [i, input] of [tooMany, badMethod, badPath].entries()) {
+    const encoded = { bindingId: binding.id, calls: [{ method: "POST" as const, path: "/solana-mainnet%2F..", body: { method: "getSlot" } }] };
+    for (const [i, input] of [tooMany, badMethod, badPath, encoded].entries()) {
       const { purchase } = authorizePurchase(env.ledger, {
         workspaceId: env.ws.id,
         agentId: env.agents.Prince.id,

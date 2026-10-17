@@ -126,5 +126,9 @@ describe("external x402 binding", () => {
     expect(resourcePathMatches("/v1/*", "/v1/../admin")).toBe(false);
     expect(resourcePathMatches("v1", "v1")).toBe(false);
     expect(resourcePathMatches("/a?b", "/a")).toBe(false);
+    expect(resourcePathMatches("/v1/*", "/v1/%2e%2e/admin")).toBe(false);
+    expect(resourcePathMatches("/v1/*", "/v1/./x")).toBe(false);
+    expect(resourcePathMatches("/v1/*", "/v1/a\\..\\b")).toBe(false);
+    expect(resourcePathMatches("/v1/*", "/v1/x?y=1")).toBe(false);
   });
 });

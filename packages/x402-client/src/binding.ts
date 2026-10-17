@@ -135,12 +135,18 @@ export async function verifyPaymentRequired(
   return { requirements, amount, feePayer, recentBlockhash };
 }
 
-/** Matches an approved resource path: exact, or a `/*` prefix that requires a deeper segment. */
+const SAFE_PATH = /^\/[A-Za-z0-9._~/-]*$/;
+
+/**
+ * Matches an approved resource path: exact, or a `/*` prefix that requires a deeper segment.
+ * Both sides must use a plain path alphabet with no `.` or `..` segments, so percent-encoding,
+ * backslashes, queries and dot segments cannot make the requested URL differ from the match.
+ */
 export function resourcePathMatches(pattern: string, pathname: string): boolean {
-  if (!pattern.startsWith("/") || pattern.includes("?") || pattern.includes("#")) return false;
-  if (pattern.endsWith("/*")) {
-    const prefix = pattern.slice(0, -1);
-    return pathname.startsWith(prefix) && pathname.length > prefix.length && !pathname.includes("/../");
-  }
-  return pathname === pattern;
+  const prefix = pattern.endsWith("/*") ? pattern.slice(0, -1) : null;
+  const base = prefix ?? pattern;
+  if (!SAFE_PATH.test(base) || !SAFE_PATH.test(pathname)) return false;
+  if ([base, pathname].some((p) => p.split("/").some((seg) => seg === "." || seg === ".."))) return false;
+  if (prefix === null) return pathname === pattern;
+  return pathname.startsWith(prefix) && pathname.length > prefix.length;
 }

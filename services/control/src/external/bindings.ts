@@ -199,6 +199,8 @@ export function externalInputProblem(b: ExternalBindingRow, input: unknown): str
     if (typeof c !== "object" || c === null || Object.keys(c).some((k) => !["method", "path", "body"].includes(k))) return `call ${i} is malformed`;
     if (c.method !== "GET" && c.method !== "POST") return `call ${i} method must be GET or POST`;
     if (typeof c.path !== "string" || !resourcePathMatches(b.resource_path, c.path)) return `call ${i} path is outside the approved resource`;
+    const url = new URL(c.path, b.origin);
+    if (url.origin !== b.origin || url.pathname !== c.path || url.search !== "" || url.hash !== "") return `call ${i} path does not resolve to itself`;
     if (c.method === "GET" && c.body !== undefined) return `call ${i} GET cannot carry a body`;
     if (c.body !== undefined && Buffer.byteLength(JSON.stringify(c.body)) > MAX_BODY_BYTES) return `call ${i} body exceeds ${MAX_BODY_BYTES} bytes`;
     if (methods !== null) {

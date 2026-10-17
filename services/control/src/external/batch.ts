@@ -7,7 +7,7 @@ import { verifyPaymentRequired, X402ClientError, type ApprovedServiceBinding } f
 import { big, num, type Ledger } from "../context";
 import { ControlError } from "../errors";
 import { writeAudit } from "../ledger/events";
-import { advanceAuthority, markRecoverable, recordMerchantFinalized, transition, type PurchaseRow } from "../ledger/purchases";
+import { advanceAuthority, assertAuthorityCurrent, getPurchaseRow, markRecoverable, recordMerchantFinalized, transition, type PurchaseRow } from "../ledger/purchases";
 import type { FetchLike } from "../integration/gateway-client";
 import { externalFundingBinding, type ExternalBatchInput, type ExternalBindingRow, type OriginCheck } from "./bindings";
 
@@ -177,7 +177,19 @@ export class ExternalBatchRunner {
 
     const sign = this.deps.funding.signExternalCall;
     if (!sign) throw new ControlError("NOT_READY", "the funding provider cannot sign external calls");
-    immediate(this.ledger.db, () => this.#insert(p, index, b, "signing"));
+    // Each call is a new spend: an emergency stop, revocation or policy expiry since the batch
+    // started stops it here, in the same transaction that records the call.
+    const stopped = immediate(this.ledger.db, () => {
+      try {
+        assertAuthorityCurrent(this.ledger, getPurchaseRow(this.ledger, p.id));
+      } catch (error) {
+        if (error instanceof ControlError) return error.message;
+        throw error;
+      }
+      this.#insert(p, index, b, "signing");
+      return null;
+    });
+    if (stopped !== null) return this.#refuse(p, index, b, "ACCOUNT_STOPPED", `spending authority stopped: ${stopped}`);
     const signed = await sign.call(this.deps.funding, {
       purchaseId: p.id,
       fundingRef: p.id,
@@ -199,6 +211,7 @@ export class ExternalBatchRunner {
 
   async #send(p: PurchaseRow, input: ExternalBatchInput, b: ExternalBindingRow, index: number, header: string): Promise<boolean> {
     const req = this.#request(input, index, b, header);
+    if (new URL(req.url).pathname !== input.calls[index]?.path) throw new ControlError("RECOVERY_REQUIRED", "external call URL does not match its stored path");
     let reply: { status: number; bytes: Buffer; settled: string | null } | null = null;
     try {
       const res = await this.deps.origins.fetchFor(b.origin)(req.url, req.init);
