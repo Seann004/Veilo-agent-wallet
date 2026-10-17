@@ -48,7 +48,7 @@ export function ListingDetail({ slug }: { slug: string }) {
         <Section title="Terms">
           <KV
             rows={[
-              ["Price", <Money key="p" amount={l.price_base_units} decimals={l.decimals} />],
+              ["Price", <Money key="p" amount={l.price_base_units} decimals={m.decimalsFor(l.mint, l.network)} />],
               ["Platform fee", l.fee_bps === 0 ? "Zero platform fee" : `unexpected fee (${l.fee_bps} bps)`],
               ["Turnaround", turnaround(l.turnaround_minutes)],
               ["Recipient (seller payout wallet)", <FullValue key="r" value={l.recipient} />],
@@ -105,14 +105,15 @@ function HireFlow({ listing }: { listing: CatalogEntry }) {
 
   if (hire) {
     const q = hire.quote;
-    const problems = quoteProblems(q, listing);
+    const verified = m.decimalsFor(q.mint, q.network);
+    const problems = [...quoteProblems(q, listing), ...(verified !== null && verified !== q.decimals ? ["quote decimals differ from the mint your local controller verified"] : [])];
     return (
       <div className="quote">
         <h3>Immutable quote</h3>
         {hire.existing ? <p className="small notice">This is the job created by your earlier submission of the same brief.</p> : null}
         <KV
           rows={[
-            ["Total", <Money key="t" amount={q.totalUnits} decimals={q.decimals} />],
+            ["Total", <Money key="t" amount={q.totalUnits} decimals={m.decimalsFor(q.mint, q.network)} />],
             ["Platform fee", <span key="f">{q.feeUnits === "0" && q.feeBps === 0 ? "0 (zero platform fee)" : `${q.feeUnits} base units (${q.feeBps} bps)`}</span>],
             ["Recipient", <FullValue key="r" value={q.recipient} />],
             ["Recipient token account", <FullValue key="a" value={q.recipientAta} />],

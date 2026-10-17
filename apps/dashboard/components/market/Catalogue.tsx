@@ -79,7 +79,7 @@ export function Catalogue() {
                 <div className="kv-row">
                   <dt>Price</dt>
                   <dd>
-                    <Money amount={l.price_base_units} decimals={l.decimals} />
+                    <Money amount={l.price_base_units} decimals={m.decimalsFor(l.mint, l.network)} />
                   </dd>
                 </div>
                 <div className="kv-row">

@@ -6,7 +6,7 @@ import { shortKey, when } from "../../lib/format";
 import { parseUnits } from "../../lib/market/amounts";
 import { supabase } from "../../lib/market/client";
 import { presentJob } from "../../lib/market/job-state";
-import { NO_BALANCE_NOTE, payoutProofMessage } from "../../lib/market/messages";
+import { DECIMALS_UNVERIFIED, NO_BALANCE_NOTE, payoutProofMessage } from "../../lib/market/messages";
 import { MANAGED_TEMPLATES, type RefundRow, type SellerDashboard } from "../../lib/market/types";
 import { listWallets, onWalletsChanged, signChallenge, type OwnerWallet } from "../../lib/wallet";
 import { useAction, useResource } from "../hooks";
@@ -305,7 +305,7 @@ function VersionForm({ listingId, d, onCreated }: { listingId: string; d: Seller
   const id = useId();
   const decimals = m.token?.decimals ?? null;
   const price = decimals === null ? null : parseUnits(f.price, decimals);
-  const priceError = f.price === "" ? null : price === null ? "token decimals unknown" : price.ok ? null : price.error;
+  const priceError = f.price === "" ? null : price === null ? DECIMALS_UNVERIFIED : price.ok ? null : price.error;
   const field = (k: keyof typeof f, label: string, input: ReactNode, hint?: string) => (
     <div className="field">
       <label htmlFor={`${id}-${k}`}>{label}</label>
@@ -410,7 +410,7 @@ function VersionForm({ listingId, d, onCreated }: { listingId: string; d: Seller
           <input id={`${id}-price`} required inputMode="decimal" value={f.price} onChange={set("price")} aria-invalid={priceError ? true : undefined} aria-describedby={`${id}-price-h`} disabled={decimals === null} />
           <span id={`${id}-price-h`} className={priceError ? "hint field-error" : "hint"} role={priceError ? "alert" : undefined}>
             {decimals === null
-              ? "The marketplace mint's decimals could not be confirmed, so prices cannot be entered yet."
+              ? `Amount entry disabled: ${DECIMALS_UNVERIFIED}.`
               : (priceError ?? `Decimal amount in test tokens, at most ${decimals} decimal places. Platform fee is zero.`)}
           </span>
         </div>
@@ -446,7 +446,7 @@ function VersionForm({ listingId, d, onCreated }: { listingId: string; d: Seller
 
 function Earnings({ d }: { d: SellerDashboard }) {
   const m = useMarket();
-  const decimalsFor = (mint: string, network: string) => (m.token && m.token.mint === mint && m.token.network === network ? m.token.decimals : null);
+  const decimalsFor = m.decimalsFor;
   return (
     <Section title="Earnings">
       <p className="notice small" role="note">

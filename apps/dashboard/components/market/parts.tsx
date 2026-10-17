@@ -4,17 +4,38 @@ import { useEffect, useState, type ReactNode } from "react";
 import { shortKey } from "../../lib/format";
 import { formatUnits } from "../../lib/market/amounts";
 import type { JobPresentation } from "../../lib/market/job-state";
-import { TEST_TOKEN_LABEL } from "../../lib/market/messages";
+import { DECIMALS_UNVERIFIED, TEST_TOKEN_LABEL } from "../../lib/market/messages";
+import { toBaseUnits } from "../../lib/market/amounts";
 import { useMarket } from "./MarketContext";
 
 const GLYPH = { ok: "✓", wait: "…", problem: "!", idle: "·" } as const;
 
-/** A token amount as an exact decimal string, always carrying the test-token label. */
+/**
+ * A token amount: the exact integer base units always, plus a decimal rendering only when the
+ * local controller has verified the mint's decimals. Always carries the test-token label.
+ */
 export function Money({ amount, decimals, unit = "test tokens" }: { amount: unknown; decimals: number | null | undefined; unit?: string }) {
+  const raw = toBaseUnits(amount);
   const text = decimals === null || decimals === undefined ? null : formatUnits(amount, decimals);
+  if (raw === null) {
+    return (
+      <span className="money">
+        <span className="muted">amount unavailable</span>
+        <span className="token-label"> ({TEST_TOKEN_LABEL})</span>
+      </span>
+    );
+  }
   return (
     <span className="money">
-      {text === null ? <span className="muted">amount unavailable</span> : `${text} ${unit}`}
+      {text === null ? (
+        <>
+          {raw} base units <span className="muted small">({DECIMALS_UNVERIFIED})</span>
+        </>
+      ) : (
+        <>
+          {text} {unit} <span className="mono small">= {raw} base units</span>
+        </>
+      )}
       <span className="token-label"> ({TEST_TOKEN_LABEL})</span>
     </span>
   );

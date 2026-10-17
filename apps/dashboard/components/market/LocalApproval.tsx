@@ -6,6 +6,7 @@ import { api } from "../../lib/api";
 import { when } from "../../lib/format";
 import { formatUnits, parseUnits } from "../../lib/market/amounts";
 import { marketApi } from "../../lib/market/client";
+import { DECIMALS_UNVERIFIED } from "../../lib/market/messages";
 import type { CatalogEntry } from "../../lib/market/types";
 import type { Workspace } from "../../lib/types";
 import { useAction, useResource } from "../hooks";
@@ -127,7 +128,7 @@ function HireCard({ hire: h, workspace, onChanged }: { hire: LocalHire; workspac
   const [reason, setReason] = useState("");
   const ids = { agent: useId(), reason: useId() };
   const q = h.quote;
-  const decimals = m.token && m.token.mint === q.mint && m.token.network === q.network ? m.token.decimals : null;
+  const decimals = m.decimalsFor(q.mint, q.network);
   const pending = h.state === "awaiting_approval";
   const requester = h.requestedBy.kind === "agent" ? `agent ${workspace.agents.find((a) => a.id === h.requestedBy.claimedAgentId)?.name ?? h.requestedBy.claimedAgentId ?? "unknown"}` : "you (owner)";
   return (
@@ -150,7 +151,7 @@ function HireCard({ hire: h, workspace, onChanged }: { hire: LocalHire; workspac
       <KV
         rows={[
           ["totalUnits", <span key="t">
-            <FullValue value={q.totalUnits} /> base units = <Money amount={q.totalUnits} decimals={decimals} />
+            <Money amount={q.totalUnits} decimals={decimals} />
           </span>],
           ["baseUnits", <FullValue key="b" value={q.baseUnits} />],
           ["feeUnits", <FullValue key="f" value={q.feeUnits} />],
@@ -288,7 +289,7 @@ function AgentGrants({ agentId, name }: { agentId: string; name: string }) {
       <ul className="plain">
         {current.map((g) => (
           <li key={g.id} className="version">
-            {titleOf(g.listingId)} · up to {decimals === null ? `${g.maxTotalUnits} base units` : <Money amount={g.maxTotalUnits} decimals={decimals} />} · recipient{" "}
+            {titleOf(g.listingId)} · up to <Money amount={g.maxTotalUnits} decimals={decimals} /> · recipient{" "}
             <FullValue value={g.recipient} />{" "}
             <button type="button" className="btn btn-small" disabled={action.busy} onClick={() => void save(current.filter((x) => x.id !== g.id).map(asBody))}>
               Remove grant
@@ -313,7 +314,7 @@ function AgentGrants({ agentId, name }: { agentId: string; name: string }) {
               <option value="">Choose a published listing</option>
               {catalogue.data?.listings.map((l) => (
                 <option key={l.listing_id} value={l.listing_id}>
-                  {l.title} — {l.seller_name} ({formatUnits(l.price_base_units, l.decimals) ?? "?"} test tokens)
+                  {l.title} — {l.seller_name} ({m.decimalsFor(l.mint, l.network) === null ? `${String(l.price_base_units)} base units` : `${formatUnits(l.price_base_units, m.decimalsFor(l.mint, l.network)!)} test tokens`})
                 </option>
               ))}
             </select>
@@ -322,7 +323,7 @@ function AgentGrants({ agentId, name }: { agentId: string; name: string }) {
             <label htmlFor={ids.max}>Maximum total per hire</label>
             <input id={ids.max} inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} disabled={decimals === null} aria-describedby={`${ids.max}-h`} />
             <span id={`${ids.max}-h`} className={max && parsed && !parsed.ok ? "hint field-error" : "hint"}>
-              {decimals === null ? "Token decimals could not be confirmed." : max && parsed && !parsed.ok ? parsed.error : "Test tokens; the recipient is pinned to the listing's payout wallet."}
+              {decimals === null ? `Amount entry disabled: ${DECIMALS_UNVERIFIED}.` : max && parsed && !parsed.ok ? parsed.error : "Test tokens; the recipient is pinned to the listing's payout wallet."}
             </span>
           </div>
         </div>

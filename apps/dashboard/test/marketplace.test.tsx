@@ -9,7 +9,7 @@ import { FINANCIAL_STATES, JOB_STATES, TEST_TOKEN_LABEL as SERVER_TEST_TOKEN_LAB
 import { payoutProofMessage as serverPayoutProofMessage } from "../../../services/marketplace/src/service";
 import { JobDetail } from "../components/market/JobDetail";
 import { ListingDetail } from "../components/market/ListingDetail";
-import { MarketContextProvider, type MarketContextValue } from "../components/market/MarketContext";
+import { MarketContextProvider, MarketProvider, useMarket, type MarketContextValue } from "../components/market/MarketContext";
 import { JobStates } from "../components/market/parts";
 import { ApiError } from "../lib/api";
 import { formatUnits, parseUnits, toBaseUnits } from "../lib/market/amounts";
@@ -65,6 +65,7 @@ function marketValue(call: MarketContextValue["call"], extra: Partial<MarketCont
     mismatch: null,
     canAct: true,
     token: { network: NETWORK, mint: MINT, decimals: 6 },
+    decimalsFor: (mint: string, network: string) => (mint === MINT && network === NETWORK ? 6 : null),
     tokenError: undefined,
     signIn: async () => undefined,
     signOut: async () => undefined,
@@ -455,5 +456,55 @@ describe("local marketplace controls", () => {
     expect(approve.body).toEqual({ quoteDigest: "d".repeat(64), recipient: RECIPIENT, totalUnits: "1500000", agentId });
     expect(approve.csrf).toBe("csrf-market");
     expect(container.querySelectorAll("script, img, b")).toHaveLength(0);
+  });
+});
+
+describe("amount scaling trusts only the local controller", () => {
+  it("never takes decimals from the marketplace when the local controller cannot verify them", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = String(input);
+      seen.push(url);
+      if (url.endsWith("/health") && url.startsWith("http")) return Response.json({ service: "marketplace", network: NETWORK, mint: MINT, managedSellerHost: true, label: SERVER_TEST_TOKEN_LABEL });
+      if (url === "/api/control/health") return Response.json({ error: { code: "NOT_READY", message: "down" } }, { status: 503 });
+      if (url.includes("/marketplace/listings")) return Response.json({ listings: [listing({ decimals: 2 })] });
+      return Response.json({ error: { code: "UNAUTHENTICATED", message: "no" } }, { status: 401 });
+    });
+    let token: MarketContextValue["token"] = null;
+    let scale: number | null = -1;
+    function Probe() {
+      const m = useMarket();
+      token = m.token;
+      scale = m.decimalsFor(MINT, NETWORK);
+      return null;
+    }
+    render(
+      <MarketProvider>
+        <Probe />
+      </MarketProvider>,
+    );
+    await vi.waitFor(() => expect(token).not.toBeNull());
+    expect(token).toEqual({ network: NETWORK, mint: MINT, decimals: null });
+    expect(scale).toBeNull();
+    expect(seen.some((u) => u.includes("/marketplace/listings"))).toBe(false);
+  });
+
+  it("shows exact base units instead of scaling with listing-supplied decimals", async () => {
+    vi.stubGlobal("fetch", async () => Response.json({ listing: listing({ decimals: 2, description: "plain" }), samples: [] }));
+    const unverified = marketValue(vi.fn() as unknown as MarketContextValue["call"], { token: { network: NETWORK, mint: MINT, decimals: null }, decimalsFor: () => null });
+    render(withMarket(unverified, <ListingDetail slug="research-desk" />));
+    await screen.findByText("Research desk");
+    expect(screen.getByText(/1500000 base units/)).toBeTruthy();
+    expect(screen.getAllByText(/token decimals not verified by your local controller/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/15,000/)).toBeNull();
+    expect(screen.queryByText(/1\.5 test tokens/)).toBeNull();
+  });
+
+  it("scales with the locally verified decimals and still shows the raw integer", async () => {
+    vi.stubGlobal("fetch", async () => Response.json({ listing: listing({ decimals: 2, description: "plain" }), samples: [] }));
+    render(withMarket(marketValue(vi.fn() as unknown as MarketContextValue["call"]), <ListingDetail slug="research-desk" />));
+    await screen.findByText("Research desk");
+    expect(screen.getByText(/1\.5 test tokens/).textContent).toContain("= 1500000 base units");
+    expect(screen.queryByText(/15,000/)).toBeNull();
   });
 });

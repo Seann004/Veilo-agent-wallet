@@ -5,6 +5,7 @@ import { useEffect, useId, useState } from "react";
 import { when } from "../../lib/format";
 import { formatUnits, parseUnits, sumUnits, toBaseUnits } from "../../lib/market/amounts";
 import { trustedDownloadUrl } from "../../lib/market/client";
+import { DECIMALS_UNVERIFIED } from "../../lib/market/messages";
 import { presentJob } from "../../lib/market/job-state";
 import type { ArtifactRow, JobDetail as JobDetailData, RefundRow } from "../../lib/market/types";
 import { useAction, useResource } from "../hooks";
@@ -46,7 +47,7 @@ function JobView({ jobId }: { jobId: string }) {
   const p = presentJob(d.job, { hasReceipt: d.receipt !== null });
   const isBuyer = d.job.buyer_workspace_id !== undefined && d.job.buyer_workspace_id === m.me?.workspace?.id;
   const isSeller = d.job.seller_id !== undefined && d.job.seller_id === m.me?.seller?.id;
-  const decimals = d.quote?.fields.decimals ?? null;
+  const decimals = d.quote ? m.decimalsFor(d.quote.mint, d.quote.network) : null;
   const brief = d.inputs.find((i) => i.kind === "brief");
 
   return (
@@ -121,14 +122,14 @@ function QuotePanel({ d, isBuyer, onChanged }: { d: JobDetailData; isBuyer: bool
       </Section>
     );
   }
-  const f = q.fields;
+  const dec = m.decimalsFor(q.mint, q.network);
   const pending = d.job.state === "awaiting_approval" || d.job.state === "awaiting_payment";
   return (
     <Section title="Quote">
       <KV
         rows={[
-          ["Total", <Money key="t" amount={q.total_units} decimals={f.decimals} />],
-          ["Platform fee", toBaseUnits(q.fee_units) === "0" ? "0 (zero platform fee)" : <Money key="f" amount={q.fee_units} decimals={f.decimals} />],
+          ["Total", <Money key="t" amount={q.total_units} decimals={dec} />],
+          ["Platform fee", toBaseUnits(q.fee_units) === "0" ? "0 (zero platform fee)" : <Money key="f" amount={q.fee_units} decimals={dec} />],
           ["Recipient", <FullValue key="r" value={q.recipient} />],
           ["Network / mint", <FullValue key="n" value={`${q.network} · ${q.mint}`} />],
           ["Expires", pending ? <Countdown key="e" until={q.expires_at} /> : when(q.expires_at)],
@@ -422,7 +423,7 @@ function RefundRequest({ jobId, decimals, remaining, onChanged }: { jobId: strin
   const parsed = decimals === null ? null : parseUnits(amount, decimals);
   const tooMuch = parsed?.ok === true && remaining !== null && BigInt(parsed.value) > remaining;
   const zero = parsed?.ok === true && BigInt(parsed.value) === 0n;
-  const amountError = amount === "" ? null : parsed === null ? "token decimals unknown" : !parsed.ok ? parsed.error : zero ? "must be more than zero" : tooMuch ? "more than the remaining refundable amount" : null;
+  const amountError = amount === "" ? null : parsed === null ? DECIMALS_UNVERIFIED : !parsed.ok ? parsed.error : zero ? "must be more than zero" : tooMuch ? "more than the remaining refundable amount" : null;
   return (
     <form
       className="refund-form"
@@ -444,7 +445,8 @@ function RefundRequest({ jobId, decimals, remaining, onChanged }: { jobId: strin
       <h3>Request a refund</h3>
       {remaining !== null && decimals !== null ? (
         <p className="small">
-          Refundable at most: {formatUnits(remaining.toString(), decimals)} test tokens (paid amount minus refunds already requested).
+          Refundable at most: {formatUnits(remaining.toString(), decimals)} test tokens = {remaining.toString()} base units (paid amount minus refunds already
+          requested).
         </p>
       ) : null}
       <div className="grid-2">

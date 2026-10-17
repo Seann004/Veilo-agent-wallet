@@ -13,7 +13,7 @@ import { connect, onAccountChange, web3SignInAdapter, type OwnerWallet } from ".
 export interface TokenInfo {
   network: string;
   mint: string;
-  /** Known only when the local control service has verified the same mint on chain. */
+  /** Set only from the local control service's on-chain mint check, never from the marketplace. */
   decimals: number | null;
 }
 
@@ -30,6 +30,11 @@ export interface MarketContextValue {
   /** Signed in, identity loaded and no wallet mismatch: identity-sensitive actions may run. */
   canAct: boolean;
   token: TokenInfo | null;
+  /**
+   * Decimals for scaling amounts of this mint, taken only from the local control service's
+   * on-chain mint check. Marketplace-reported decimals are never used; null means unverified.
+   */
+  decimalsFor: (mint: string, network: string) => number | null;
   tokenError: ApiError | undefined;
   signIn: (w: OwnerWallet) => Promise<void>;
   signOut: () => Promise<void>;
@@ -132,12 +137,6 @@ export function MarketProvider({ children }: { children: ReactNode }) {
         } catch {
           decimals = null;
         }
-        if (decimals === null) {
-          // Published listings carry the decimals the marketplace itself was configured with.
-          const { listings } = await marketApi<{ listings: Array<{ mint: string; network: string; decimals: number }> }>("/marketplace/listings?limit=1").catch(() => ({ listings: [] }));
-          const same = listings.find((l) => l.mint === market.mint && l.network === market.network);
-          if (same && Number.isInteger(same.decimals)) decimals = same.decimals;
-        }
         if (live) {
           setToken({ network: market.network, mint: market.mint, decimals });
           setTokenError(undefined);
@@ -209,6 +208,7 @@ export function MarketProvider({ children }: { children: ReactNode }) {
       mismatch,
       canAct: me !== null && mismatch === null,
       token,
+      decimalsFor: (mint: string, network: string) => (token && token.mint === mint && token.network === network ? token.decimals : null),
       tokenError,
       signIn,
       signOut,

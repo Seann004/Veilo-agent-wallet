@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import { when } from "../../lib/format";
 import { parseUnits } from "../../lib/market/amounts";
 import { marketApi, supabase } from "../../lib/market/client";
+import { DECIMALS_UNVERIFIED } from "../../lib/market/messages";
 import { AGENT_TOOLS, type CatalogEntry, type MarketAgent, type PolicyProposal } from "../../lib/market/types";
 import { useAction, useResource } from "../hooks";
 import { ConfirmButton, EmptyState, ErrorNotice, Loading, Section } from "../ui";
@@ -227,7 +228,7 @@ function PolicyProposalForm({ agent, onDone }: { agent: MarketAgent; onDone: () 
   const id = useId();
   const parse = (v: string) => (decimals === null ? null : parseUnits(v, decimals));
   const parsed = { perTask: parse(f.perTask), perAgent: parse(f.perAgent), maxPayment: parse(f.maxPayment) };
-  const errorOf = (k: keyof typeof parsed) => (f[k] === "" ? null : parsed[k] === null ? "token decimals unknown" : parsed[k]!.ok ? null : (parsed[k] as { error: string }).error);
+  const errorOf = (k: keyof typeof parsed) => (f[k] === "" ? null : parsed[k] === null ? DECIMALS_UNVERIFIED : parsed[k]!.ok ? null : (parsed[k] as { error: string }).error);
   const allOk = parsed.perTask?.ok && parsed.perAgent?.ok && parsed.maxPayment?.ok;
   let nestError: string | null = null;
   if (allOk) {
@@ -270,7 +271,7 @@ function PolicyProposalForm({ agent, onDone }: { agent: MarketAgent; onDone: () 
       }}
     >
       <h4>Propose a policy for {agent.name}</h4>
-      {decimals === null ? <p className="notice notice-warn small">The marketplace mint&apos;s decimals could not be confirmed, so limits cannot be entered yet.</p> : null}
+      {decimals === null ? <p className="notice notice-warn small">Amount entry disabled: {DECIMALS_UNVERIFIED}. Sign in to your local owner workspace with the control service running.</p> : null}
       <div className="grid-3">
         {amountField("maxPayment", "Max single payment")}
         {amountField("perTask", "Per-task cap")}
