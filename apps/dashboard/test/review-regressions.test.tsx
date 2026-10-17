@@ -13,7 +13,7 @@ import { agent, MIRA, PRINCE, recordingFetch, workspace } from "./fixtures";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/agents/new", useParams: () => ({}) }));
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.localStorage.clear(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); window.localStorage.clear(); });
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -34,6 +34,8 @@ describe("adversarial dashboard regression checks", () => {
     expect(screen.getByText(/checks every 60 s/)).toBeTruthy();
   });
   it("preserves reviewed limits and approval requirements after Back and later edits", async () => {
+    // Without a marketplace origin the connector step makes no catalog requests, so the create POST is the only call.
+    vi.stubEnv("NEXT_PUBLIC_MARKETPLACE_URL", "");
     const user = userEvent.setup();
     const rec = recordingFetch(() => ({ agent: agent(PRINCE, "Review companion", "research", "draft") }));
     vi.stubGlobal("fetch", rec.impl);
