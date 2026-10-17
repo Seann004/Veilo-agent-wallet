@@ -473,17 +473,50 @@ The directory is scanned for every known secret value: the provider key, every r
 
 On 2026-10-17 between 01:15:41 and 01:18:07 UTC, a full demo:run-shaped execution was signed from the Windows machine against program `3B6D…rUrq`. Its state file, evidence and note stores stayed on that machine. That pool is retired; see `artifacts/deployment/prior-3B6D/README.md`.
 
-### Run on 27Dg…AjFd from macOS (2026-10-17, run `2026-10-17-e60755f3`): stopped at step d
+### Runs on 27Dg…AjFd from macOS (2026-10-17)
 
-`pnpm demo:run` reported `readiness: all checks passed`. `--execute --confirm` then finalized these steps on devnet:
+Three runs were executed. The first two stopped at step d. The third passed every acceptance check.
 
-- **a-deposits:** three 1.0 test-USDC deposits by the funding wallet (`3eoEDQb2…kUHm`, `5pYgMF9y…zU73N`, `3BRRHBKr…3MRPr`) and `update_approved_root` `37DWQqSK…sebK`. The first two attempts stopped before signing with relayer `NOT_READY` (a timeout, then an indexer root mismatch while the crank inserted). Each rerun resumed.
-- **b-shawn-topup:** pool withdrawal `upe58KYT…YM3` and x402 payment to the gateway merchant `gjE8z7yh…Rv9i`. The 1,000,000-credit pack was delivered.
-- **c-prince-research:** Prince bought `research-expanded`: withdrawal `5S2tz7rk…zkhg`, x402 `5ipsYM7J…kA1i`. Both legs finalized and the dataset was delivered. The task still ended `incomplete`, without `analyze` and without a handoff request.
+**Run `2026-10-17-e60755f3`: stopped at step d (merchant signing).** Steps a and b finalized: deposits `3eoEDQb2…kUHm`, `5pYgMF9y…zU73N` and `3BRRHBKr…3MRPr`, approval `37DWQqSK…sebK`, and the credit pack (withdrawal `upe58KYT…YM3`, x402 `gjE8z7yh…Rv9i`). In step c, Prince bought `research-expanded` (withdrawal `5S2tz7rk…zkhg`, x402 `5ipsYM7J…kA1i`), but the task ended `incomplete`.
 
-Cause: in each of the three purchases, the wallet's first `POST /fundings/:id/merchant-payment` failed with `unhandled SolanaError` (HTTP 500). The failure is inside the x402 client's `createPaymentPayload`, which reads only the mint and the latest blockhash from `DEVNET_RPC_URL`. The wallet logs only the error class, so the exact RPC error code was not recorded. Control parses the 500 body as `recovery_required` ("wallet service returned an unrecognized signing state"). Shawn's scheduler retried and succeeded. Prince's runner reported the purchase as `RECOVERY_REQUIRED` and stopped using it, although control's reconciliation later found both legs finalized.
+- In all three purchases, the wallet's first `POST /fundings/:id/merchant-payment` failed with `unhandled SolanaError` (HTTP 500).
+- The failing read is the x402 SDK's own mint read on a plain, non-retrying RPC; the gateway challenge carries the blockhash.
+- The wallet logged only the error class, so the exact code was not recorded. A probe of `api.devnet.solana.com` afterwards rejected 111 of 150 burst mint reads with HTTP 429, which is the likely cause.
+- Control read the 500 as `recovery_required`. Prince's runner stopped using the purchase, although the sweep later completed it.
 
-Because step c is recorded as done, a rerun waits at step d for a handoff that never comes. Fixing this needs a change to how the wallet and control classify a failed merchant-signing call; nothing is signed when it fails. Until then, the run cannot finish. Its notes (an untouched 1.0 note and a 0.8 change note) stay in the pool and can be exited by the owner from this Mac, under `work/demo/devnet/2026-10-17-e60755f3/`. Operator-funded inference was one planning call, 88 micro-USD (provider-reported).
+Fixed in the wallet, x402-client, control and runner (build-status T12). Now:
+
+- An RPC, rate-limit, timeout or network failure before the fresh wallet signs is `not_ready`, and it is logged with its Solana error code.
+- Control re-drives the same purchase with backoff on the same funding.
+- Any failure after signing stays `recovery_required` and is never re-signed.
+- The mint read goes through `createDevnetRpc`.
+- The runner waits with `purchase_status` instead of giving up.
+
+**Run `2026-10-17-96c82bb7`: stopped at step d (empty inference).** Steps a and b finalized:
+
+- deposits `3ZQ7ybDp…RybfNS`, `5G6586Di…eJmk8Q2` and `62SQJL2Z…kxGtPiQ`
+- approval `61hcBjCa…p4F`
+- credit pack: withdrawal `2kEVdePA…uD2R`, x402 `r7iNURv2…sb6f`
+
+Prince's dataset purchase (withdrawal `5HXKy9Pa…ebGQ`, x402 `4Vn1Srwk…k58j`) signed on the first call. The prepaid `analyze` call then got HTTP 200 from OpenRouter with `finish_reason: "length"` and `content: null`: DeepSeek V4 Flash spent its 2,000-token bound on reasoning (2,317 reasoning tokens in a replay). The gateway correctly refused the empty completion, and the task ended `incomplete`.
+
+The pinned model now declares `reasoning: "disabled"`, so the request carries `reasoning: { enabled: false }`. A replay then returned 3,758 characters, and a live `content-package` replay validated.
+
+**Run `2026-10-17-1eba868c`: complete, all 11 acceptance checks pass.**
+
+- a: deposits `2pKB6Vyw…mKN9`, `2bxAGTar…Y5w9` and `7z6eqkCt…pcAi`, then `update_approved_root` `4jUWFQRo…kPf8` and `9Nf5Qs2m…RX1H`. The first attempt stopped before signing with relayer `NOT_READY`, and the rerun resumed.
+- b: credit pack withdrawal `3oEFBWny…Z75Fb`, x402 `3Tb73hwk…hRAnJ`.
+- c: research-expanded withdrawal `AVjERYY4…ptoa`, x402 `3o2JtHux…Jz1`. Real DeepSeek `analyze` used prepaid credits. Prince's task completed and requested the handoff.
+- d: content-package withdrawal `oefXfDPG…Sj4E`, x402 `pg6uMdTg…ALQH`. Mira's task completed with three drafts and a seven-day calendar.
+- e: duplicate checks created no new purchase.
+- f: both concurrent over-budget requests were refused with `BUDGET_EXCEEDED`. After Prince was revoked, his tool call got HTTP 401.
+- g: the owner exited 0.5 test USDC (`2JSGW9Xg…T7Y`).
+
+Every merchant signing call in runs `96c82bb7` and `1eba868c` succeeded on the first attempt (five of five). Evidence: `artifacts/evidence/demo-2026-10-17-1eba868c/` (its secret scan was clean over 39 known secret values) and `artifacts/evidence-export/2026-10-17T08-28-08-894Z/`.
+
+Operator-funded inference, provider-reported: 88 micro-USD (run e607), 73 micro-USD (run 96c8) and 205 micro-USD (run 1eba). Two diagnostic replays cost about 430 more.
+
+The stopped runs' notes stay in the pool: 1.8 test USDC each for `e60755f3` and `96c82bb7`. Their state files are `work/demo/devnet-state.2026-10-17-<runId>.json`, and their note stores are under `work/demo/devnet/<runId>/`. The owner can exit them from this Mac.
 
 ### Running on macOS (operator checklist)
 
@@ -510,14 +543,15 @@ pnpm evidence:export
 
 If `--execute` stops, rerun the same command. Then commit `artifacts/evidence/demo-<runId>/` and the export, after checking that both secret scans were clean.
 
-Balances after the stopped run (finalized, 2026-10-17):
+Balances after run `1eba868c` (finalized, 2026-10-17):
 
 | Account | Has | Needs per run |
 |---|---|---|
-| funding/demo owner 3FCi…kMFd | 1.4653 SOL, 13.98 test USDC | readiness: 0.05 SOL and 3.0 test USDC; spends ≈ 0.0091 SOL |
-| sponsor D7iW…uamd | 0.2888 SOL | readiness: 0.03 SOL; spends ≈ 0.0112 SOL |
-| approval authority 7gpa…hdDRE | 0.00999 SOL | readiness: 0.0001 SOL; spends 0.000005–0.000015 SOL |
-| merchant 3hbV…HueFT | 0 SOL; ATA holds the 1.2 test USDC paid by this run | 0 (the facilitator pays fees) |
+| funding/demo owner 3FCi…kMFd | 1.4479 SOL, 8.48 test USDC | readiness: 0.05 SOL and 3.0 test USDC; spends ≈ 0.0091 SOL |
+| sponsor D7iW…uamd | 0.2702 SOL | readiness: 0.03 SOL; spends ≈ 0.0112 SOL (measured ≈ 0.0062–0.0124 per run) |
+| approval authority 7gpa…hdDRE | 0.009975 SOL | readiness: 0.0001 SOL; spends 0.000005–0.000015 SOL |
+| merchant 3hbV…HueFT | 0 SOL; ATA holds 3.9 test USDC paid by the three runs | 0 (the facilitator pays fees) |
+| pool vault 5Mwx…BrGu | 4.6 test USDC, all owner notes from the three runs | — |
 | deployer FcAo…AAhy | 1.9435 SOL (deploy buffer refund) | not used by demo:run |
 
 ### Local rehearsal
