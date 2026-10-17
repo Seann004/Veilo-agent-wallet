@@ -115,10 +115,14 @@ class Blocked extends Error {
   constructor(
     readonly code: string,
     message: string,
+    /** Nothing was released or signed and the same operation can simply be driven again. */
+    readonly retry = false,
   ) {
     super(message);
   }
 }
+
+const RETRY_MAX_DELAY_MS = 15_000;
 
 /**
  * Drives one authorized purchase across control, the wallet funding leg and the gateway.
@@ -182,32 +186,42 @@ export class PurchaseOrchestrator {
   }
 
   /** Advances the purchase as far as current evidence allows; safe to call repeatedly. */
-  async drive(purchaseId: string): Promise<{ purchase: PurchaseRow; execution: ExecutionView }> {
+  async drive(purchaseId: string): Promise<{ purchase: PurchaseRow; execution: ExecutionView; retryable: boolean }> {
     return this.#lock.run(purchaseId, async () => {
+      let retryable = false;
       try {
         await this.#drive(purchaseId);
         this.#setError(purchaseId, null, null);
       } catch (error) {
-        if (error instanceof Blocked) this.#setError(purchaseId, error.code, error.message);
+        if (error instanceof Blocked) {
+          this.#setError(purchaseId, error.code, error.message);
+          retryable = error.retry;
+        }
         else if (error instanceof GatewayUnreachableError) this.#setError(purchaseId, "NOT_READY", error.message);
         else if (error instanceof ControlError) this.#setError(purchaseId, error.code, error.message);
         else throw error;
       }
-      return { purchase: getPurchaseRow(this.ledger, purchaseId), execution: this.view(purchaseId) };
+      return { purchase: getPurchaseRow(this.ledger, purchaseId), execution: this.view(purchaseId), retryable };
     });
   }
 
   /**
-   * Drives a purchase and, while its only blocker is a pending chain outcome, keeps reconciling
-   * the same operation for up to `settleWaitMs` (wall clock). Nothing new is authorized, proved or
-   * signed by waiting; each pass is an ordinary idempotent drive.
+   * Drives a purchase and, while its only blocker is a pending chain outcome or a retryable
+   * pre-sign failure, keeps driving the same operation for up to `settleWaitMs` (wall clock).
+   * Retryable failures back off exponentially. Nothing new is authorized, proved or withdrawn
+   * by waiting; each pass is an ordinary idempotent drive.
    */
-  async driveUntilSettled(purchaseId: string): Promise<{ purchase: PurchaseRow; execution: ExecutionView }> {
+  async driveUntilSettled(purchaseId: string): Promise<{ purchase: PurchaseRow; execution: ExecutionView; retryable: boolean }> {
     const deadline = Date.now() + (this.deps.settleWaitMs ?? 0);
+    const poll = this.deps.settlePollMs ?? 2_000;
+    let backoff = poll;
     for (;;) {
       const r = await this.drive(purchaseId);
-      if (r.execution.blocked?.code !== "SETTLEMENT_UNCERTAIN" || Date.now() >= deadline) return r;
-      await new Promise((resolve) => setTimeout(resolve, this.deps.settlePollMs ?? 2_000));
+      const pending = r.execution.blocked?.code === "SETTLEMENT_UNCERTAIN";
+      if ((!pending && !r.retryable) || Date.now() >= deadline) return r;
+      const delay = r.retryable ? backoff : poll;
+      if (r.retryable) backoff = Math.min(backoff * 2, RETRY_MAX_DELAY_MS);
+      await new Promise((resolve) => setTimeout(resolve, Math.max(0, Math.min(delay, deadline - Date.now()))));
     }
   }
 
@@ -723,9 +737,11 @@ export class PurchaseOrchestrator {
       binding: this.#binding(p, quote),
       exactAmountUsdc: big(p.price_usdc),
     });
-    if (signed.status !== "signed") {
-      throw new Blocked(signed.status === "not_ready" ? "NOT_READY" : "RECOVERY_REQUIRED", `merchant payment not signed: ${signed.reason}`);
+    if (signed.status === "not_ready") {
+      // Nothing was signed: the merchant leg stays authorized on the same funding and is retried.
+      throw new Blocked("NOT_READY", `merchant payment not signed: ${signed.reason}`, true);
     }
+    if (signed.status !== "signed") throw new Blocked("RECOVERY_REQUIRED", `merchant payment not signed: ${signed.reason}`);
     this.#ack(ev);
     immediate(this.ledger.db, () => {
       if (ex.merchant_message_hash === null) this.#update(p.id, { merchant_message_hash: signed.messageHash, merchant_payer: signed.payer });
