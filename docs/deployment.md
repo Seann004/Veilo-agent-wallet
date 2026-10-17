@@ -351,7 +351,12 @@ Amounts follow the seeded SKU catalog. Each private purchase spends one note.
 Totals:
 
 - **Test USDC:** merchant spend at most 1.5. Of the 3.0 deposited, the exit returns 0.5–0.9 (the largest change note); the rest stays in the pool as notes.
-- **SOL:** about 0.04. The owner pays about 0.013. The sponsor pays about 0.02 for three fresh-payer ATAs, spend rent, inserts and fees. The approval authority pays about 0.00002. The facilitator pays the merchant fees.
+- **SOL, measured on devnet (2026-10-17 run):** about 0.0203 in total.
+  - The owner pays 0.0091386: three deposits at 0.00274312 each and the exit at 0.00090924.
+  - The sponsor pays 0.0111700: three fresh-payer ATAs at 0.00149344, three spends at 0.00221988 and six inserts at 0.000005.
+  - The approval authority pays 0.000005 per `update_approved_root` (two in that run).
+  - The facilitator pays the merchant-leg fees, so the merchant and the fresh payers need no SOL.
+- **Worst case test USDC:** if prepaid `analyze` is refused, the per-call fallback adds 0.2, for a merchant spend of 1.7. The three 1.0 notes cover that.
 
 **OpenRouter budget guard.** The worst case is maximum input plus maximum output tokens per call, at the pinned `mistralai/mistral-nemo` tariff:
 
@@ -390,19 +395,89 @@ Before executing, `demo:run` adds the exposure already recorded by live calls in
    - `[f-over-budget-and-revoke]`
    - `[g-owner-exit]`: `PRIVACY WARNING …`, then `exit … finalized`
    - `evidence: artifacts/evidence/demo-<runId>`
+   - `acceptance:`, then one `ok` line per check (see below)
    - `Demo run <runId> complete`
 3. If it stops, rerun the same command; it resumes from the recorded state. To start a new run instead, move `work/demo/devnet-state.json` aside.
 4. `pnpm evidence:export` bundles the result (see below).
 
+After the steps, the run evaluates acceptance checks and records them in `summary.json` under `acceptance`:
+
+- Prince's and Mira's tasks ended `completed`.
+- The credit pack, one research dataset and the content package were each delivered exactly once via private x402, with a funding (pool withdrawal) signature.
+- Each of those merchant-leg transactions is finalized and credited the gateway merchant ATA (derived from the manifest's `gateway.merchantAddress` and the pinned mint) with at least the price.
+- `analyze` and `content-package` inference each succeeded at least once in the expected provider mode: `live` on devnet, `fixture` in the local rehearsal.
+- A devnet run made no fixture provider call.
+
+If any check fails, the evidence is still written, but the command exits 1 with `acceptance checks failed` instead of `complete`. A rerun resumes the finished run and only re-evaluates the checks.
+
 The evidence directory, `artifacts/evidence/demo-<runId>/`, contains:
 
-- `summary.json`: steps, deposit, approval and exit signatures with explorer links, and labels that separate operator-funded inference, demo fixture data and test-chain payments
+- `summary.json`: acceptance checks, steps, deposit, approval and exit signatures with explorer links, and labels that separate operator-funded inference, demo fixture data and test-chain payments
 - `ledger.json`: the redacted owner ledger (purchases with both legs' signatures, balances, tasks)
-- `inference-receipts.json`: model, mode, tokens and worst-case and actual cost per provider call; no prompts or inputs
+- `inference-receipts.json`: source, SKU, model, mode, tokens and worst-case and actual cost per provider call; no prompts or inputs
 - `artifacts/`: the brief, the three drafts and the calendar
 - `run-state.json`
 
 The directory is scanned for every known secret value: the provider key, every role and funding keypair, and the run's credentials. It is also scanned for secret-shaped patterns. Any hit fails the run.
+
+### Earlier devnet execution (2026-10-17)
+
+Public devnet history shows one full demo:run-shaped execution on 2026-10-17 between 01:15:41 and 01:18:07 UTC, signed from the Windows machine:
+
+- three deposits by the funding wallet
+- two approvals
+- three private withdrawals
+- three x402 payments to the gateway merchant ATA, of 1,000,000, 200,000 and 300,000
+- an 800,000 exit
+
+Its state file, evidence directory and gateway ledger are not in the repository. Before running again, copy `work/demo/` and `artifacts/evidence/demo-*/` from that machine. If the copied run passes `pnpm demo:run -- --execute --confirm`, which only re-checks a finished run, a second run is not needed. The dry run reports such earlier owner deposits when no state file is present.
+
+### Running on macOS (operator checklist)
+
+Prerequisites on the Mac:
+
+1. Node 22: `export PATH=/opt/homebrew/opt/node@22/bin:$PATH`. The default Node 25 is outside `engines`.
+2. From the Windows checkout, copy these files to the same relative paths. Do not create new keys for these roles.
+   - `work/keys/veilo-devnet-funding.json`: the demo owner 3FCio7smQJX7fm5x4Rz2UPPesfHA46FkexC3S3SqkMFd
+   - `work/keys/devnet/sponsor-relayer.json`: 8djH…tcD
+   - `work/keys/devnet/approval-authority.json`: AiZq…Mgvd
+   - optional, so the evidence scan covers every role key: the rest of `work/keys/devnet/`
+   - `circuits/build/`: proving files, hash-checked against `artifacts/circuits/manifest.json`
+   - optional: `work/demo/` and `artifacts/evidence/demo-*/` from the earlier run, and `artifacts/deployment/approved-labels.json` (the committed copy predates that run; the approval step rebuilds it from chain history if it is stale)
+
+   Then restrict the files: `chmod 700 work work/keys work/keys/devnet && chmod 600 work/keys/*.json work/keys/devnet/*.json`.
+3. In `.env`, set:
+   - `POOL_PROGRAM_ID=3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq`
+   - `POOL_ID=c012ae927dfd556e75e9d2f1893a1ffcb1834eee6f1df4f4c5ff7fc3d9b2d589`
+   - `SPONSOR_KEY_PATH=work/keys/devnet/sponsor-relayer.json`
+   - `FUNDING_KEY_PATH=work/keys/veilo-devnet-funding.json`
+   - `GATEWAY_MERCHANT_ADDRESS=49TED53TmAC4EsScoN3zn6iTHZXAcz6J5w9trmnyAVWX`
+   - `GATEWAY_MERCHANT_ATA=9YVRYnbzEojUGCNVuW1eGjjzPywAYYWRV92omacRjMuC`
+   - `OPENROUTER_API_KEY`: a key with its own provider-side spend limit
+   - `OPERATOR_MAX_REAL_USD_MICRO`: at least 1466, for example `5000`. The budget guard counts only gateway ledgers on this machine.
+4. Ports 4700–4705 must be free during the run.
+
+Commands, in order:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm check:devnet
+pnpm demo:run                          # read-only; must end with "readiness: all checks passed"
+pnpm demo:run -- --execute --confirm   # signs; about 3–20 minutes
+pnpm evidence:export
+```
+
+If `--execute` stops, rerun the same command. Then commit `artifacts/evidence/demo-<runId>/` and the export, after checking that both secret scans were clean.
+
+Funding is sufficient for another run as of 2026-10-17:
+
+| Account | Has | Needs per run | Missing |
+|---|---|---|---|
+| funding/demo owner 3FCi…kMFd | 5.73 SOL, 17.4 test USDC | readiness: 0.05 SOL and 3.0 test USDC; spends 0.0091 SOL and 3.0 test USDC (0.8 returns by exit) | none |
+| sponsor 8djH…tcD | 0.2851 SOL | readiness: 0.03 SOL; spends 0.0112 SOL | none |
+| approval authority AiZq…Mgvd | 0.009985 SOL | readiness: 0.0001 SOL; spends 0.000005–0.000015 SOL | none |
+| merchant 49TE…AVWX | 0 SOL, ATA exists | 0 (the facilitator pays fees) | none |
+| deployer, config authority, testOwnerA/B | n/a | not used by demo:run | none |
 
 ### Local rehearsal
 
