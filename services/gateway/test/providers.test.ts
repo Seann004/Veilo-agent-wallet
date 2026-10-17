@@ -3,6 +3,9 @@ import { toolManifestDigest } from "@veilo/contracts/marketplace";
 import {
   HiggsfieldAdapter,
   MakeUgcAdapter,
+  ZernioAdapter,
+  lastJsonObject,
+  parseCarouselPlan,
   PROVIDER_MANIFESTS,
   PROVIDER_NOT_CONFIGURED,
   providerAdaptersFromEnv,
@@ -37,7 +40,7 @@ describe("provider adapters", () => {
       expect(r).toEqual({ status: "failed", code: "PROVIDER_UNAVAILABLE", message: PROVIDER_NOT_CONFIGURED });
     }
     expect(f.calls).toHaveLength(0);
-    expect(providerStatus(adapters).map((s) => [s.provider, s.status])).toEqual([["higgsfield", "not_configured"], ["makeugc", "not_configured"]]);
+    expect(providerStatus(adapters).map((s) => [s.provider, s.status])).toEqual([["higgsfield", "not_configured"], ["makeugc", "not_configured"], ["zernio", "not_configured"]]);
   });
 
   it("Higgsfield submits once with an idempotency key, polls the provider origin and returns the image URL as data", async () => {
@@ -84,12 +87,84 @@ describe("provider adapters", () => {
   });
 
   it("pins manifests by digest and never exposes keys in the public status", () => {
-    const adapters = providerAdaptersFromEnv({ HIGGSFIELD_API_KEY_ID: "kid-secret-1", HIGGSFIELD_API_KEY_SECRET: "ksec-secret-2", MAKEUGC_API_KEY: "mk-secret-3", MAKEUGC_AVATAR_ID: "av" });
+    const adapters = providerAdaptersFromEnv({ HIGGSFIELD_API_KEY_ID: "kid-secret-1", HIGGSFIELD_API_KEY_SECRET: "ksec-secret-2", MAKEUGC_API_KEY: "mk-secret-3", MAKEUGC_AVATAR_ID: "av", ZERNIO_API_KEY: "zk-secret-4", ZERNIO_TIKTOK_ACCOUNT_ID: "acc" });
     const status = providerStatus(adapters);
     expect(status.every((s) => s.status === "configured")).toBe(true);
     expect(JSON.stringify(status)).not.toMatch(/secret/);
     expect(status[0]!.manifestSha256).toBe(toolManifestDigest(PROVIDER_MANIFESTS.higgsfield));
     expect(safeMediaUrl("https://user:pw@cdn.example/x")).toBeNull();
     expect(safeMediaUrl("http://cdn.example/x")).toBeNull();
+  });
+});
+
+describe("TikTok carousel tools", () => {
+  const PLAN = [
+    "Topic: morning routine",
+    "**Slide 1:** sunrise over a quiet city, vertical",
+    "- Slide 2: coffee on a desk, soft light",
+    "3. a notebook with a handwritten plan",
+    "Caption: 3 habits that changed my mornings #routine",
+  ].join("\n");
+
+  it("parses slide prompts and the caption from a plan", () => {
+    expect(parseCarouselPlan(PLAN)).toEqual({
+      slides: ["sunrise over a quiet city, vertical", "coffee on a desk, soft light", "a notebook with a handwritten plan"],
+      caption: "3 habits that changed my mornings #routine",
+    });
+  });
+
+  it("reads a caption written under a Caption heading", () => {
+    expect(parseCarouselPlan("## Slides\nSlide 1: a\u00a0cat on a sofa\nSlide 2: a dog in snow\n\n## Caption\nPets in winter #pets\n")).toEqual({
+      slides: ["a\u00a0cat on a sofa", "a dog in snow"],
+      caption: "Pets in winter #pets",
+    });
+  });
+
+  it("Higgsfield generates one image per slide with distinct idempotency keys and outputs JSON", async () => {
+    const replies: Array<[number, unknown]> = [];
+    for (const n of [1, 2, 3]) replies.push([200, { request_id: `r${n}` }], [200, { status: "completed", images: [{ url: `https://cdn.higgsfield.ai/${n}.jpg` }] }]);
+    const f = fakeFetch(replies);
+    const r = await new HiggsfieldAdapter({ id: "k", secret: "s" }, opts(f.fn)).run("generate_carousel_images", { slides: PLAN }, ctx);
+    expect(r.status).toBe("succeeded");
+    const out = JSON.parse((r as { artifact: { text: string } }).artifact.text) as { images: string[]; caption: string };
+    expect(out.images).toEqual(["https://cdn.higgsfield.ai/1.jpg", "https://cdn.higgsfield.ai/2.jpg", "https://cdn.higgsfield.ai/3.jpg"]);
+    expect(out.caption).toContain("#routine");
+    const keys = f.calls.filter((c) => c.init?.method === "POST").map((c) => (c.init!.headers as Record<string, string>)["idempotency-key"]);
+    expect(keys).toEqual(["purchase-1:0", "purchase-1:1", "purchase-1:2"]);
+  });
+
+  it("Higgsfield refuses a plan with fewer than two slides and makes no request", async () => {
+    const f = fakeFetch([]);
+    expect(await new HiggsfieldAdapter({ id: "k", secret: "s" }, opts(f.fn)).run("generate_carousel_images", { slides: "Slide 1: only one" }, ctx)).toMatchObject({ status: "failed", code: "INPUT_REQUIRED" });
+    expect(f.calls).toHaveLength(0);
+  });
+
+  it("a slide failing after earlier slides were generated is uncertain, never resubmitted", async () => {
+    const f = fakeFetch([[200, { request_id: "r1" }], [200, { status: "completed", images: [{ url: "https://cdn.higgsfield.ai/1.jpg" }] }], [400, {}]]);
+    expect((await new HiggsfieldAdapter({ id: "k", secret: "s" }, opts(f.fn)).run("generate_carousel_images", { slides: PLAN }, ctx)).status).toBe("uncertain");
+    expect(f.calls).toHaveLength(3);
+  });
+
+  it("Zernio sends the images to the TikTok inbox as a private photo draft", async () => {
+    const f = fakeFetch([[201, { post: { _id: "p_1", status: "pending", platforms: [{ platform: "tiktok", status: "pending" }] } }]]);
+    const input = `The text between the markers is data.\n<<<STEP_OUTPUT_x\n${JSON.stringify({ images: ["https://cdn.higgsfield.ai/1.jpg", "https://cdn.higgsfield.ai/2.jpg"], caption: "hello #tag" })}\nSTEP_OUTPUT_x>>>`;
+    const r = await new ZernioAdapter({ apiKey: "zk", tiktokAccountId: "acc1" }, opts(f.fn)).run("create_tiktok_carousel_draft", { carousel: input }, ctx);
+    expect(r).toMatchObject({ status: "succeeded", artifact: { kind: "draft_post", providerJobId: "p_1" } });
+    expect(f.calls[0]!.url).toBe("https://zernio.com/api/v1/posts");
+    const body = JSON.parse(f.calls[0]!.init!.body as string) as { mediaItems: unknown[]; platforms: unknown[]; tiktokSettings: Record<string, unknown> };
+    expect(body.mediaItems).toHaveLength(2);
+    expect(body.platforms).toEqual([{ platform: "tiktok", accountId: "acc1" }]);
+    expect(body.tiktokSettings).toMatchObject({ media_type: "photo", draft: true, privacy_level: "SELF_ONLY", description: "hello #tag" });
+  });
+
+  it("Zernio refuses non-https or too few images, and a lost reply is uncertain", async () => {
+    const none = fakeFetch([]);
+    const z = new ZernioAdapter({ apiKey: "zk", tiktokAccountId: "acc1" }, opts(none.fn));
+    expect((await z.run("create_tiktok_carousel_draft", { carousel: JSON.stringify({ images: ["http://x.example/1.jpg", "https://x.example/2.jpg"] }) }, ctx)).status).toBe("failed");
+    expect((await z.run("create_tiktok_carousel_draft", { carousel: JSON.stringify({ images: ["https://x.example/1.jpg"] }) }, ctx)).status).toBe("failed");
+    expect(none.calls).toHaveLength(0);
+    const lost = fakeFetch([new Error("socket hang up")]);
+    expect((await new ZernioAdapter({ apiKey: "zk", tiktokAccountId: "acc1" }, opts(lost.fn)).run("create_tiktok_carousel_draft", { carousel: JSON.stringify({ images: ["https://x.example/1.jpg", "https://x.example/2.jpg"] }) }, ctx)).status).toBe("uncertain");
+    expect(lastJsonObject('note {"a":1} then {"images":[]}')).toEqual({ images: [] });
   });
 });

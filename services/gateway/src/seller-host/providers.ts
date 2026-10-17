@@ -5,7 +5,7 @@ export { PROVIDER_MANIFESTS };
 export const PROVIDER_NOT_CONFIGURED = "Provider not configured";
 
 export type ProviderResult =
-  | { status: "succeeded"; artifact: { kind: ArtifactKind; url: string; providerJobId: string } }
+  | { status: "succeeded"; artifact: { kind: ArtifactKind; url?: string; text?: string; providerJobId: string } }
   | { status: "failed"; code: string; message: string }
   /** The provider may have accepted the job; it is never submitted again. */
   | { status: "uncertain"; message: string };
@@ -106,7 +106,34 @@ abstract class BaseAdapter implements ProviderAdapter {
   }
 }
 
-/** Higgsfield text-to-image: submit, then poll the request status. Server-side key only. */
+const MAX_SLIDES = 4;
+
+/** Slide prompts ("Slide 1: …" or "1. …") and an optional "Caption: …" line from a plan. */
+export function parseCarouselPlan(text: string): { slides: string[]; caption: string } {
+  const slides: string[] = [];
+  let caption = "";
+  let inCaption = false;
+  for (const raw of text.split(/\r?\n/)) {
+    const heading = /^\s*#{1,6}\s*(.*)$/.exec(raw);
+    if (heading) {
+      inCaption = /^caption\b/i.test(heading[1]!.trim());
+      continue;
+    }
+    const line = raw.replace(/^[\s*>-]+/, "").replace(/\*\*/g, "").trim();
+    if (line === "") continue;
+    const c = /^caption\s*[:\-–]\s*(.+)$/i.exec(line);
+    if (c) {
+      caption ||= c[1]!.trim().slice(0, 2200);
+      continue;
+    }
+    const m = /^(?:slide\s*\d+|\d+[.)])\s*[:\-–.)]?\s*(.+)$/i.exec(line);
+    if (m && m[1]!.trim().length >= 3) slides.push(m[1]!.trim().slice(0, 1000));
+    else if (inCaption && caption === "") caption = line.slice(0, 2200);
+  }
+  return { slides, caption };
+}
+
+/** Higgsfield Soul text-to-image: submit, then poll the request status. Server-side key only. */
 export class HiggsfieldAdapter extends BaseAdapter {
   readonly provider = "higgsfield" as const;
   constructor(
@@ -124,10 +151,29 @@ export class HiggsfieldAdapter extends BaseAdapter {
     if (!this.key) return { status: "failed", code: "PROVIDER_UNAVAILABLE", message: PROVIDER_NOT_CONFIGURED };
     const bad = this.checkInputs(tool, inputs);
     if (bad) return bad;
-    const headers = { authorization: `Key ${this.key.id}:${this.key.secret}`, "content-type": "application/json", "idempotency-key": ctx.idempotencyKey };
+    if (tool === "generate_image") return this.generate(inputs.prompt!, ctx.idempotencyKey);
+    const plan = parseCarouselPlan(inputs.slides!);
+    if (plan.slides.length < 2) return { status: "failed", code: "INPUT_REQUIRED", message: "the plan needs at least two \"Slide N:\" lines" };
+    const images: string[] = [];
+    const ids: string[] = [];
+    for (const [i, prompt] of plan.slides.slice(0, MAX_SLIDES).entries()) {
+      const r = await this.generate(prompt, `${ctx.idempotencyKey}:${i}`);
+      if (r.status !== "succeeded") {
+        // Earlier slides were already generated (and billed); none is submitted again.
+        if (i === 0) return r;
+        return r.status === "uncertain" ? r : { status: "uncertain", message: `slide ${i + 1} failed after ${i} were generated; not resubmitted` };
+      }
+      images.push(r.artifact.url!);
+      ids.push(r.artifact.providerJobId);
+    }
+    return { status: "succeeded", artifact: { kind: "json", text: JSON.stringify({ images, caption: plan.caption }), providerJobId: ids.join(",") } };
+  }
+
+  private async generate(prompt: string, idempotencyKey: string): Promise<ProviderResult> {
+    const headers = { authorization: `Key ${this.key!.id}:${this.key!.secret}`, "content-type": "application/json", "idempotency-key": idempotencyKey };
     let submit;
     try {
-      submit = await this.call("/higgsfield-ai/soul/v2/standard", { method: "POST", headers, body: JSON.stringify({ prompt: inputs.prompt }) });
+      submit = await this.call("/higgsfield-ai/soul/v2/standard", { method: "POST", headers, body: JSON.stringify({ prompt, aspect_ratio: "9:16" }) });
     } catch (error) {
       return { status: "uncertain", message: `submission outcome unknown: ${(error as Error).name}` };
     }
@@ -153,6 +199,90 @@ export class HiggsfieldAdapter extends BaseAdapter {
       if (status === "failed" || status === "nsfw" || status === "canceled") return { status: "failed", code: "PROVIDER_FAILED", message: `provider job ${status}` };
     }
     return { status: "uncertain", message: "provider job did not finish in time; it is not resubmitted" };
+  }
+}
+
+/** The last JSON object in a step input; earlier text (data notes, fences) is ignored. */
+export function lastJsonObject(text: string): Record<string, unknown> | null {
+  for (let end = text.lastIndexOf("}"); end >= 0; end = text.lastIndexOf("}", end - 1)) {
+    for (let start = text.lastIndexOf("{", end); start >= 0; start = text.lastIndexOf("{", start - 1)) {
+      try {
+        const v = JSON.parse(text.slice(start, end + 1)) as unknown;
+        if (typeof v === "object" && v !== null && !Array.isArray(v)) return v as Record<string, unknown>;
+      } catch {
+        // keep widening
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Zernio TikTok photo carousel, sent to the seller's own TikTok inbox as a draft
+ * (tiktokSettings.draft). The creator publishes it in the TikTok app; this adapter never does.
+ */
+export class ZernioAdapter extends BaseAdapter {
+  readonly provider = "zernio" as const;
+  constructor(
+    private readonly key: { apiKey: string; tiktokAccountId: string } | null,
+    o: AdapterOptions = {},
+  ) {
+    super(o);
+  }
+
+  get configured(): boolean {
+    return this.key !== null;
+  }
+
+  async run(tool: string, inputs: Record<string, string>, ctx: ProviderRunContext): Promise<ProviderResult> {
+    if (!this.key) return { status: "failed", code: "PROVIDER_UNAVAILABLE", message: PROVIDER_NOT_CONFIGURED };
+    const bad = this.checkInputs(tool, inputs);
+    if (bad) return bad;
+    const c = lastJsonObject(inputs.carousel!);
+    const images = Array.isArray(c?.images) ? (c.images as unknown[]).map(safeMediaUrl) : [];
+    if (images.length < 2 || images.length > 35 || images.some((u) => u === null)) {
+      return { status: "failed", code: "INPUT_REQUIRED", message: "the carousel needs 2 to 35 https image URLs" };
+    }
+    const caption = typeof c?.caption === "string" ? c.caption.slice(0, 2200) : "";
+    const body = {
+      content: caption.slice(0, 90),
+      mediaItems: images.map((url) => ({ type: "image", url })),
+      platforms: [{ platform: "tiktok", accountId: this.key.tiktokAccountId }],
+      tiktokSettings: {
+        media_type: "photo",
+        photo_cover_index: 0,
+        description: caption,
+        privacy_level: "SELF_ONLY",
+        allow_comment: true,
+        auto_add_music: true,
+        content_preview_confirmed: true,
+        express_consent_given: true,
+        draft: true,
+      },
+      publishNow: true,
+    };
+    let res;
+    try {
+      res = await this.call("/posts", {
+        method: "POST",
+        headers: { authorization: `Bearer ${this.key.apiKey}`, "content-type": "application/json", "idempotency-key": ctx.idempotencyKey },
+        body: JSON.stringify(body),
+      });
+    } catch (error) {
+      return { status: "uncertain", message: `draft outcome unknown: ${(error as Error).name}` };
+    }
+    if (res.status >= 500) return { status: "uncertain", message: `draft outcome unknown (HTTP ${res.status})` };
+    const post = res.body?.post as { _id?: unknown; status?: unknown } | undefined;
+    const id = typeof post?._id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(post._id) ? post._id : null;
+    if (res.status >= 400 || !id || post?.status === "failed") return { status: "failed", code: "PROVIDER_REFUSED", message: `draft refused (HTTP ${res.status})` };
+    return {
+      status: "succeeded",
+      artifact: {
+        kind: "draft_post",
+        text: JSON.stringify({ platform: "tiktok", zernioPostId: id, slides: images.length, state: "draft in the creator's TikTok inbox; publish it in the TikTok app" }),
+        providerJobId: id,
+      },
+    };
   }
 }
 
@@ -211,9 +341,11 @@ export function providerAdaptersFromEnv(env: NodeJS.ProcessEnv, o: AdapterOption
   const v = (name: string) => env[name]?.trim() || undefined;
   const hf = v("HIGGSFIELD_API_KEY_ID") && v("HIGGSFIELD_API_KEY_SECRET") ? { id: v("HIGGSFIELD_API_KEY_ID")!, secret: v("HIGGSFIELD_API_KEY_SECRET")! } : null;
   const ugc = v("MAKEUGC_API_KEY") && v("MAKEUGC_AVATAR_ID") ? { apiKey: v("MAKEUGC_API_KEY")!, avatarId: v("MAKEUGC_AVATAR_ID")! } : null;
+  const zernio = v("ZERNIO_API_KEY") && v("ZERNIO_TIKTOK_ACCOUNT_ID") ? { apiKey: v("ZERNIO_API_KEY")!, tiktokAccountId: v("ZERNIO_TIKTOK_ACCOUNT_ID")! } : null;
   return new Map<ToolProvider, ProviderAdapter>([
     ["higgsfield", new HiggsfieldAdapter(hf, o)],
     ["makeugc", new MakeUgcAdapter(ugc, o)],
+    ["zernio", new ZernioAdapter(zernio, o)],
   ]);
 }
 

@@ -113,12 +113,27 @@ interface ManagedTool {
   template: "research-summary" | "structured-analysis" | "content-package";
   price: string;
   sections: string[];
+  sellerInstructions?: string;
 }
 const MANAGED: ManagedTool[] = [
   { creator: "ledger-lab", slug: "demo-onchain-brief-writer", title: "On-chain brief writer (demo)", summary: "Writes a cited brief from purchased on-chain data with DeepSeek V4 Flash.", template: "research-summary", price: "20000", sections: ["Summary", "Key points", "Sources"] },
   { creator: "ledger-lab", slug: "demo-wallet-analyst", title: "Wallet activity analyst (demo)", summary: "Turns wallet balance and recent signatures into a structured analysis.", template: "structured-analysis", price: "20000", sections: ["Findings", "Risks"] },
   { creator: "studio-north", slug: "demo-content-package", title: "Content package writer (demo)", summary: "Three channel drafts and a seven-day plan from a topic or brief.", template: "content-package", price: "30000", sections: ["Drafts", "Calendar"] },
   { creator: "studio-north", slug: "demo-research-summary", title: "Topic research summary (demo)", summary: "A short research summary of a topic to brief a content writer.", template: "research-summary", price: "20000", sections: ["Summary", "Key points"] },
+  {
+    creator: "studio-north",
+    slug: "tiktok-carousel-planner",
+    title: "TikTok carousel planner",
+    summary: "Turns a topic into four image prompts and a caption for a TikTok photo carousel.",
+    template: "content-package",
+    price: "20000",
+    sections: ["Slides", "Caption"],
+    sellerInstructions: [
+      "Under Slides write exactly four lines, each in the form \"Slide N: <prompt>\".",
+      "Each prompt describes one vertical 9:16 photo for an image model: subject, setting, light and style. No text, logos or real people's names in the image.",
+      "Under Caption write one TikTok caption under 300 characters with at most five hashtags.",
+    ].join(" "),
+  },
 ];
 
 interface ProviderTool {
@@ -128,11 +143,37 @@ interface ProviderTool {
   summary: string;
   provider: ToolProvider;
   price: string;
+  /** Manifest tool to sell; the first one when omitted. */
+  toolName?: string;
+  /** The seller host that runs it; the placeholder host when it is not configured. */
+  origin?: string;
 }
+// The carousel tools run on the content creator's own seller host, which holds its Higgsfield and Zernio keys.
+const CAROUSEL_HOST = process.env.CAROUSEL_SELLER_ORIGIN?.trim() || PLACEHOLDER_PROVIDER_HOST;
 const PROVIDERS: ProviderTool[] = [
   { creator: "clipworks", slug: "demo-higgsfield-image", title: "Higgsfield image (demo, provider not connected)", summary: "Generates an image from a prompt on the seller's own Higgsfield key. Workflow step only.", provider: "higgsfield", price: "50000" },
   { creator: "clipworks", slug: "demo-makeugc-video", title: "MakeUGC video (demo, provider not connected)", summary: "Produces a talking-actor UGC video from a script on the seller's own MakeUGC key.", provider: "makeugc", price: "100000" },
   { creator: "clipworks", slug: "demo-zernio-draft", title: "Zernio post draft (demo, provider not connected)", summary: "Creates a post draft only; nothing is published or scheduled without the owner.", provider: "zernio", price: "5000" },
+  {
+    creator: "studio-north",
+    slug: "higgsfield-carousel-images",
+    title: "Higgsfield carousel images",
+    summary: "Generates two to four vertical images from \"Slide N:\" prompts with Higgsfield Soul. Workflow step only.",
+    provider: "higgsfield",
+    toolName: "generate_carousel_images",
+    price: "200000",
+    origin: CAROUSEL_HOST,
+  },
+  {
+    creator: "studio-north",
+    slug: "zernio-tiktok-carousel-draft",
+    title: "TikTok carousel draft (Zernio)",
+    summary: "Sends images and a caption to the creator's TikTok inbox as a private photo draft. It never publishes.",
+    provider: "zernio",
+    toolName: "create_tiktok_carousel_draft",
+    price: "10000",
+    origin: CAROUSEL_HOST,
+  },
 ];
 
 async function main(): Promise<void> {
@@ -158,7 +199,7 @@ async function main(): Promise<void> {
         managedTools: MANAGED.length,
         providerTools: PROVIDERS.length,
         externalTools: 2,
-        workflows: 5,
+        workflows: 6,
       },
       null,
       2,
@@ -268,7 +309,7 @@ async function main(): Promise<void> {
         runtimeKind: "managed_template",
         template: t.template,
         remoteOrigin: null,
-        sellerInstructions: "",
+        sellerInstructions: t.sellerInstructions ?? "",
         inputSchema: { briefHint: "Topic or purchased data to work from", maxBriefChars: MARKETPLACE_LIMITS.maxBriefChars },
         outputSchema: { format: "markdown", sections: t.sections },
         priceBaseUnits: t.price,
@@ -276,7 +317,8 @@ async function main(): Promise<void> {
       tool.set(t.slug, { toolKind: "listing", toolId: id, price: t.price });
     }
     for (const t of PROVIDERS) {
-      const m = PROVIDER_MANIFESTS[t.provider].tools[0]!;
+      const m = PROVIDER_MANIFESTS[t.provider].tools.find((x) => x.name === (t.toolName ?? PROVIDER_MANIFESTS[t.provider].tools[0]!.name))!;
+      const host = t.origin ?? PLACEHOLDER_PROVIDER_HOST;
       const id = await listing(
         t.slug,
         t.creator,
@@ -284,10 +326,13 @@ async function main(): Promise<void> {
           ...common,
           title: t.title,
           summary: t.summary,
-          description: `${t.summary} Demo listing: the seller host is a placeholder and no provider key is connected, so this tool cannot be quoted or paid.`,
+          description:
+            host === PLACEHOLDER_PROVIDER_HOST
+              ? `${t.summary} Demo listing: the seller host is a placeholder and no provider key is connected, so this tool cannot be quoted or paid.`
+              : `${t.summary} Runs on the seller's own host with the seller's own provider key.`,
           runtimeKind: "remote_endpoint",
           template: null,
-          remoteOrigin: PLACEHOLDER_PROVIDER_HOST,
+          remoteOrigin: host,
           sellerInstructions: "",
           inputSchema: { briefHint: m.io.inputs[0]!.name, maxBriefChars: Math.min(MARKETPLACE_LIMITS.maxBriefChars, m.io.inputs[0]!.maxChars) },
           outputSchema: { format: "markdown", sections: [] },
@@ -400,6 +445,21 @@ async function main(): Promise<void> {
       safetyPromise: "Drafts only; nothing posts without your approval.",
       runInputs: [{ name: "topic", label: "Topic", maxChars: 500 }],
       steps: [step_("demo-research-summary", { brief: { from: "run_input", name: "topic" } }), step_("demo-content-package", { brief: { from: "step", step: 0 } })],
+      sampleOutput: null,
+    });
+    await workflow("studio-north", "tiktok-carousel-from-topic", {
+      category: "social",
+      title: "TikTok carousel from a topic",
+      summary: "DeepSeek plans four slides and a caption, Higgsfield makes the images, Zernio puts a photo draft in your TikTok inbox.",
+      description:
+        "Step 1 writes four image prompts and a caption with DeepSeek V4 Flash. Step 2 generates the vertical images with Higgsfield Soul on the seller's key. Step 3 sends them to the seller's TikTok inbox as a private draft through Zernio; a person publishes it in the TikTok app.",
+      safetyPromise: "Draft only: the carousel lands in a TikTok inbox as a private draft and is never published by this workflow.",
+      runInputs: [{ name: "topic", label: "Topic", maxChars: 500 }],
+      steps: [
+        step_("tiktok-carousel-planner", { brief: { from: "run_input", name: "topic" } }),
+        step_("higgsfield-carousel-images", { slides: { from: "step", step: 0 } }),
+        step_("zernio-tiktok-carousel-draft", { carousel: { from: "step", step: 1 } }),
+      ],
       sampleOutput: null,
     });
     await workflow("clipworks", "ugc-video-campaign", {

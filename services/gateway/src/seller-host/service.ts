@@ -550,8 +550,8 @@ export class SellerHostService {
       clearInterval(timer);
     }
     if (result.status === "succeeded") {
-      // The deliverable is the provider's media URL as text; Veilo never fetches or renders it.
-      const text = result.artifact.url;
+      // The deliverable is the provider's media URL or JSON as text; Veilo never fetches or renders it.
+      const text = result.artifact.text ?? result.artifact.url ?? "";
       const artifact = { artifactId: randomUUID(), sha256: sha256(text), mimeType: "text/markdown" as const, bytes: Buffer.byteLength(text, "utf8") };
       const summary = `${tool.provider} ${result.artifact.kind} (URL is untrusted data; not fetched)`;
       this.update(purchaseId, {
