@@ -21,6 +21,8 @@ export interface RoleContext {
   bounds: RunBounds;
   now: () => number;
   notes: string[];
+  /** Waits between purchase status checks; tests replace it. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export interface RoleOutcome {
@@ -50,7 +52,7 @@ export async function buy(
   rationale: string,
 ): Promise<ControlReply> {
   const name = item.paymentPath === "prepaid_credits" ? "consume_inference_sku" : "request_purchase";
-  return tryTool(ctx, name, {
+  const r = await tryTool(ctx, name, {
     idempotencyKey: `task:${ctx.taskId}:${key}`,
     serviceId: item.serviceId,
     sku: item.sku,
@@ -58,6 +60,40 @@ export async function buy(
     input,
     rationale,
   });
+  return awaitPurchase(ctx, r);
+}
+
+/** Delays between status checks while control is still driving a purchase. */
+export const PURCHASE_STATUS_DELAYS_MS = [15_000, 30_000] as const;
+const STILL_DRIVEN = new Set(["NOT_READY", "SETTLEMENT_UNCERTAIN"]);
+const FINAL_FULFILMENT = new Set(["delivered", "paid_without_result", "abandoned"]);
+
+/**
+ * True while control keeps driving the purchase by itself: no recovery is needed and the only
+ * blocker is a retryable or pending outcome. Waiting never requests or pays anything new.
+ */
+export function stillInProgress(r: ControlReply): boolean {
+  const p = r.body?.purchase;
+  const code = r.body?.execution?.blocked?.code;
+  return p !== undefined && p.states?.recovery === "none" && !FINAL_FULFILMENT.has(p.states?.fulfilment) && STILL_DRIVEN.has(code);
+}
+
+/**
+ * Re-reads a purchase that control is still settling, within the task's tool-call and duration
+ * bounds, instead of treating an in-flight purchase as failed. Uses the unpaid status tool.
+ */
+export async function awaitPurchase(ctx: RoleContext, first: ControlReply): Promise<ControlReply> {
+  const sleep = ctx.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  let r = first;
+  for (const delay of PURCHASE_STATUS_DELAYS_MS) {
+    if (!stillInProgress(r) || ctx.now() + delay > ctx.bounds.deadlineMs) break;
+    await sleep(delay);
+    const next = await tryTool(ctx, "purchase_status", { id: r.body.purchase.id });
+    if (next.status !== 200 || next.body?.purchase === undefined) break;
+    r = next;
+  }
+  if (stillInProgress(r)) ctx.notes.push(`Purchase ${r.body.purchase.id} was still settling when the task stopped waiting; control keeps reconciling it.`);
+  return r;
 }
 
 export function delivered(r: ControlReply): boolean {

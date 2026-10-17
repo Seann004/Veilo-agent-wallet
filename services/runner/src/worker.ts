@@ -19,6 +19,8 @@ export interface WorkerOptions {
   fetchPolicy: SafeFetchPolicy;
   fetch?: FetchLike;
   now?: () => number;
+  /** Waits between purchase status checks (default: real timers). */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -62,7 +64,7 @@ export async function runOnce(cred: AgentCredential, o: WorkerOptions): Promise<
   try {
     if (!task) outcome = { taskState: "failed", summary: { error: "job has no task" } };
     else {
-      const ctx = { client, taskId: task.id as string, agentId: cred.agentId, task, bounds, now, notes: [] as string[] };
+      const ctx = { client, taskId: task.id as string, agentId: cred.agentId, task, bounds, now, notes: [] as string[], ...(o.sleep ? { sleep: o.sleep } : {}) };
       outcome = cred.role === "research" ? await runPrince(ctx, o.fetchPolicy) : cred.role === "custom" ? await runCustom(ctx) : await runMira(ctx);
     }
   } catch (error) {
