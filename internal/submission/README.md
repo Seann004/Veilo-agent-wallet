@@ -5,3 +5,7 @@ Canonical public sources: [assessment](../../docs/security/assessment.md), [risk
 `evidence-record.json` is an unfilled record template, not an executed test. Copy it to a new reviewed record and attach exact source commit/environment, observed results and actual artifacts. The stale all-not-run CSV has been removed; it duplicated the public acceptance matrix and did not reflect the recorded local tests or M2.
 
 The other Markdown files are compatibility pointers. Do not create a second pass/fail or risk register here. Internal filenames do not prevent publication in a public repository. See [handoff owner decisions](../../docs/handoff.md#owner-decisions) before including deliberations, private inputs, outputs or screenshots. Credentials, notes/witnesses, key files and encrypted backups stay owner-local.
+
+## Current state (after PR #3, `59696dd`)
+
+See [current status](../../docs/guide/status.md) for what is recorded and what is outstanding. In short: one pre-merge devnet demo run (`2026-10-17-1eba868c`) passed its 11 acceptance checks; a fresh post-merge run, browser-wallet signing with funded screenshots and a private-pool-funded marketplace hire are not yet run. `evidence-record.json` is still an unfilled template.
