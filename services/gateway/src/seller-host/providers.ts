@@ -124,13 +124,13 @@ abstract class BaseAdapter implements ProviderAdapter {
     if (url.origin !== base.origin) throw new Error("adapter request leaves the provider origin");
     const res = await this.#fetch(url.toString(), { ...init, redirect: "error", signal: init.signal ?? AbortSignal.timeout(30_000) });
     const text = await res.text();
-    let body: Record<string, unknown> | null = null;
+    let parsed: unknown;
     try {
-      const parsed = JSON.parse(text) as unknown;
-      body = typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+      parsed = JSON.parse(text);
     } catch {
-      body = null;
+      parsed = null;
     }
+    const body = typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
     return { status: res.status, body };
   }
 
