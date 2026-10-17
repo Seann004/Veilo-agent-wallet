@@ -548,6 +548,19 @@ async function main() {
       body: wfBody({ category: "media", runInputs: [{ name: "topic", label: "Prompt", maxChars: 200 }], steps: [{ toolKind: "listing", toolId: hfVersion.body.versionId, maxBaseUnits: "10000", inputs: { prompt: { from: "run_input", name: "topic" } } }] }),
     });
     record("a workflow (even a draft for a test run) cannot consist of a workflow-only provider alone", hfOnlyVersion.status === 400, `status ${hfOnlyVersion.status}`);
+    const filler = await call("POST", `/creator/workflows/${hfOnly.body.workflowId}/versions`, {
+      token: S.token,
+      body: wfBody({
+        category: "media",
+        runInputs: [{ name: "topic", label: "Prompt", maxChars: 200 }],
+        steps: [
+          { toolKind: "listing", toolId: version.body.versionId, maxBaseUnits: "10000", inputs: { brief: { from: "run_input", name: "topic" } } },
+          { toolKind: "listing", toolId: hfVersion.body.versionId, maxBaseUnits: "10000", inputs: { prompt: { from: "run_input", name: "topic" } } },
+        ],
+        totalMaxBaseUnits: "20000",
+      }),
+    });
+    record("a filler step cannot wrap a workflow-only provider fed straight from the buyer", filler.status === 400, `status ${filler.status}`);
     const forgedKey = await call("POST", "/jobs", { token: A.token, body: { listingId: hfListing.body.listingId, brief: "a red bicycle", idempotencyKey: `wf:${randomUUID()}:0` } });
     record("a Higgsfield tool cannot be hired on its own, only as a workflow step", hfProfile.status === 200 && directHire.status === 403 && forgedKey.status === 403, `profile ${hfProfile.status} hire ${directHire.status} forged ${forgedKey.status}`);
     await call("POST", `/operator/listings/${hfListing.body.listingId}/status`, { token: operatorToken, body: { status: "archived" } });
