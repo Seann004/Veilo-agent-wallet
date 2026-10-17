@@ -1,0 +1,24 @@
+{
+  "name": "veilo-docs",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev .",
+    "build": "vitepress build .",
+    "preview": "vitepress preview .",
+    "context:generate": "node scripts/generate-llms.mjs",
+    "prebuild": "npm run context:generate",
+    "predev": "npm run context:generate"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "mermaid": "12.2.0",
+    "vitepress": "1.6.4"
+  },
+  "overrides": {
+    "vite": "6.4.4"
+  }
+}

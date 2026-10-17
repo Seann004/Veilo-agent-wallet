@@ -1,0 +1,11 @@
+flowchart TB
+  owner["Owner dashboard<br/>Create agents and set rules"]
+  runner["Agent runner<br/>Propose a resource purchase"]
+  control["Control service<br/>Check policy and reserve budget"]
+  wallet["Wallet service<br/>Private notes, proofs and signing"]
+  ledger[(Durable allowance ledger)]
+  owner -->|job| runner
+  owner -->|policy and approval| control
+  runner -->|purchase request| control
+  control -->|record reservation| ledger
+  control -->|approved operation| wallet

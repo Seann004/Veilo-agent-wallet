@@ -1,0 +1,58 @@
+# Verification requirements
+
+Use these acceptance scenarios to evaluate the security and reliability of an implementation. Each result should identify the application version, environment, reproducible scenario, observed behavior and relevant artifacts. The list defines requirements; it does not report passing test results.
+
+| Case | Scenario | Expected evidence / result |
+|---|---|---|
+| NET-01 | Mainnet/wrong mint config | Startup and payment reject |
+| X402-01 | Exact ordinary payment | Devnet settlement plus real bounded inference |
+| X402-02 | Wrong amount/ATA/authority/fee payer/instruction | Complete verifier rejects |
+| X402-03 | Same signature on another quote/account | No second fulfilment or credit issuance |
+| X402-04 | Same operation with changed request | 409 conflict, no charge |
+| PRIV-01 | Valid spend and change | On-chain real proof accepted; change note spendable |
+| PRIV-02 | Bad proof/context/public input | No release of value |
+| PRIV-03 | Same nullifier twice | Second spend/exit rejected |
+| PRIV-04 | Underflow/wrapped values/wrong root | Rejected; no invented balance |
+| PRIV-05 | Forged insertion/genesis/duplicate precommitment | Rejected or authenticated queue invariant preserved |
+| PRIV-06 | Unapproved original and change owner exit | Private pay rejected when required; valid public exit works |
+| PRIV-07 | Multiple labeled test deposits | No explicit spent-deposit identifier in withdrawal; metadata caveats documented |
+| CAP-01 | Per-purchase/task/agent/global cap | No proof/signature released beyond any cap |
+| CAP-02 | Two agents race for final allowance | Atomic authorization admits only permitted exposure |
+| CAP-03 | Uncertain payment crosses rolling window | Reservation still counts |
+| CAP-04 | Lower limit below pending exposure | New spend blocked, exposure visible |
+| REV-01 | Pause before signing / proof released | New authority blocked; released material handled honestly |
+| AUTH-01 | Agent passes another agent ID | Scope mismatch rejected |
+| AUTH-02 | Role tries arbitrary sign/policy edit/publish | Tool unavailable or independently denied |
+| IDEM-01 | Same logical purchase repeatedly | One financial operation; same state/result |
+| REC-01 | Restart at every multi-leg boundary | Notes/keys/credits/reservations restored and reconciled |
+| REC-02 | Lost settlement response | Reconcile existing signature; no blind new debit |
+| REC-03 | Fresh-wallet recovery conflicting with signed tx | Wait for proven safe outcome; only owner destination |
+| CRE-01 | Restart after settle before issue | Issue pack once |
+| CRE-02 | Two usage requests over available credits | One bounded outcome; no negative credits |
+| CRE-03 | Shawn sees low credits repeatedly | One unresolved top-up; cooldown/caps hold |
+| CRE-04 | Usage permit replay/modified digest | No second debit/inference |
+| CRE-05 | Top-up then consumption dashboard | No double-counted USDC expenditure |
+| LLM-01 | Upstream timeout/price change/exhausted account | Fail closed or visible uncertain outcome; no uncontrolled retry |
+| AGT-01 | Prince service choice | Useful brief and attributable purchased evidence |
+| CNT-01 | Mira from approved handoff | Direct private devnet x402 signature, real inference, three editable posts and seven-day calendar |
+| CNT-02 | Edit/approve/calendar change | No hidden charge or external publish |
+| SEC-01 | Malicious service asks for funds/policy change | Independent rejection; no reliance on model refusal |
+| SEC-02 | Prompt/log inspection | No secret notes, keys or sensitive auth material |
+| BAK-01 | Restore backup with pending spend | No address reuse, duplicate purchase or lost change |
+| LED-01 | Pending change and external recovery | Change unavailable before insertion; external recovered principal creates no pool note |
+| EXIT-01 | Attacker signer with valid note proof | Derived label mismatch rejects; correct owner original/change exit succeeds |
+| EXP-01 | Old proof in fresh-blockhash tx after bound | Clock/context check rejects; no premature reservation release |
+| QUO-01 | Accepted tx settles after quote expires | Honor original price once; paid retries return cached result |
+| QUO-02 | Re-quote funded operation | Existing funding reused/recovered; no second automatic withdrawal |
+| USG-01 | Failure between scoped/account reservation | Reconcile same operation; no double debit or excess consumption |
+| TIER-01 | Observe tier requests purchase | No spending proof/signature released |
+| TIER-02 | Approval missing, changed or replayed | Reject; valid approval still cannot override hard caps |
+| SESS-01 | Wallet challenge replay, wrong domain, expired session, CSRF | Reject unauthenticated mutations and session replay |
+| AUTH-03 | Different workspace retrieves cached paid result | Reject cross-account access even with transaction signature |
+| ISO-01 | Runner reads note/provider secrets or arbitrary signing endpoint | Process/credential isolation denies access |
+| ART-01 | Proving/verifying artifact or manifest mismatch | Stop proof/payment generation |
+| ADMIN-01 | Inspect deployed upgrade and approved-set authority | Separate public authority mapping matches manifest; powers disclosed |
+
+## Evidence quality
+
+Use real proof artifacts and the deployed verifier for privacy checks. Include positive and negative cases, concurrency tests and deterministic restart/fault injection. A transaction signature proves a public transaction; it does not independently prove policy enforcement or correct service delivery. Keep failures and skipped checks visible in the implementation's test report.

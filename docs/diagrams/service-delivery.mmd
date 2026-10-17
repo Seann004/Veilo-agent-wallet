@@ -1,0 +1,12 @@
+flowchart TB
+  control["Owner control service<br/>Bound quote and operation"]
+  gateway["Veilo service gateway<br/>Payment checks and result cache"]
+  facilitator["x402 facilitator<br/>Verify and settle merchant payment"]
+  credits[(Shared gateway credit ledger)]
+  provider["OpenRouter or data adapter<br/>Bounded service delivery"]
+  control -->|authenticated request| gateway
+  gateway -->|payment payload| facilitator
+  facilitator -->|settlement result| gateway
+  gateway -->|credit pack or prepaid usage| credits
+  gateway -->|operator-funded inference or data| provider
+  gateway -->|result and status| control

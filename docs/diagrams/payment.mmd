@@ -1,0 +1,36 @@
+sequenceDiagram
+  autonumber
+  actor Owner
+  participant Agent
+  participant Control
+  participant Wallet
+  participant Pool as Relayer / Pool
+  participant Gateway
+  participant Facilitator
+  participant Provider
+  Owner->>Control: Activate bounded policy
+  Agent->>Control: Request approved purchase
+  Control->>Gateway: Stable operation and request digest
+  Gateway-->>Control: Immutable bound quote
+  Control->>Control: Atomically check caps and reserve
+  Control->>Wallet: Authorized operation and policy epoch
+  Wallet->>Wallet: Persist fresh signer, recheck policy, prove locally
+  Wallet->>Pool: Release bound withdrawal proof
+  Pool->>Pool: Verify, consume nullifier, fund fresh wallet, queue change
+  Pool-->>Wallet: Finalized withdrawal
+  Wallet->>Wallet: Recheck epoch and all merchant instructions
+  Wallet->>Gateway: Submit bound x402 payment
+  Gateway->>Gateway: Validate and claim operation / signature
+  Gateway->>Facilitator: Settle exact merchant payment
+  Facilitator-->>Gateway: Finalized settlement evidence
+  Gateway->>Gateway: Persist one payment event
+  alt Credit pack
+    Gateway->>Gateway: Issue shared credits once
+  else Direct inference purchase
+    Gateway->>Provider: One bounded operator-funded attempt
+    Provider-->>Gateway: Real output or uncertain outcome
+    Gateway->>Gateway: Persist result or paid-without-result
+  end
+  Gateway-->>Control: Existing purchase status / result
+  Control-->>Agent: Save output and attributed cost
+  Note over Control,Gateway: Retry same operation: reconcile or return cache, never blindly pay again

@@ -1,0 +1,10 @@
+flowchart TB
+  wallet["Local wallet service<br/>Generate a bound proof"]
+  relay["Relayer and indexer<br/>Submit and track public state"]
+  pool["Solana pool program<br/>Verify proof and spend note"]
+  fresh["Fresh payment wallet<br/>Receive authorized test tokens"]
+  merchant["Merchant token account<br/>Receive ordinary x402 payment"]
+  wallet -->|withdrawal proof| relay
+  relay --> pool
+  pool -->|PDA vault payout| fresh
+  fresh -->|facilitator-settled transfer| merchant

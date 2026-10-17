@@ -1,0 +1,628 @@
+# Veilo
+
+> Veilo is an owner-controlled AI agent workspace with delegated spending controls and a shared private funding pool on Solana devnet.
+
+Owners create and configure agents with their own names, jobs, triggers, budgets and approved services. Shawn, Prince and Mira are workflow examples, not a fixed list of agents. The model proposes resources; independent control and wallet services authorize purchases.
+
+The private flow aims to remove the explicit link from a particular deposited note to a payout. Fresh-wallet payments, merchants, amounts and timing remain public. Owners retain local agent attribution; the gateway can link authenticated usage. Do not infer universal anonymity, production readiness, deployed behavior or successful security tests from these documentation pages.
+
+## Product documentation
+
+- [Overview](./): Product purpose, owner-created agents, user flow and benefits.
+- [Agent workflows](./guide/agents.html): Custom agents and example research, credit and content workflows.
+- [Architecture](./guide/architecture.html): Planning, policy, wallet, pool, settlement and service boundaries.
+- [Payment lifecycle](./guide/payments.html): Private funding, exact x402 payments, credits and reconciliation.
+- [Policy and accounting](./guide/policy.html): Permission tiers, atomic reservations, caps and revocation.
+- [Privacy and trust](./guide/privacy.html): Deposit linkage privacy, public metadata and off-chain visibility.
+- [Deployment and configuration](./guide/running.html): Service configuration, network guards and artifact manifests.
+- [Security model](./security/assessment.html): Authority separation, authentication and secret isolation.
+- [Trust and risk boundaries](./security/risks.html): Residual risks, assumptions and design responses.
+- [Verification requirements](./security/evidence.html): Acceptance scenarios; not a report of passed tests.
+
+## Complete context
+
+- [Full text](./llms-full.txt): Product documentation and editable diagram definitions in one text file.
+
+---
+
+# Veilo documentation
+
+An owner-controlled workspace for AI agents that buy approved resources within delegated budgets, using a shared private funding pool on Solana devnet.
+
+## What Veilo does
+
+Create agents that can buy approved digital resources and complete jobs within your rules. Give each agent a name, objective, trigger, budget and service permissions. The workspace combines useful agent work, independent spending controls and a private funding path.
+
+### User flow
+
+1. Connect your owner wallet and deposit test funds into the shared pool.
+2. Create an agent and configure its job, allowed services, budget and approval mode.
+3. Start a task or enable its trigger. The agent proposes the resources it needs.
+4. The control and wallet services check policy, reserve funds and authorize a permitted purchase.
+5. A proof-authorized pool withdrawal funds a fresh payment wallet, which pays the service through x402.
+6. Receive the result and inspect spending, outputs and pending operations. Pause or revoke an agent when needed.
+
+### Why combine these pieces?
+
+- **Delegation:** agents can purchase the resources their jobs need without repeated manual payments when policy permits.
+- **Control:** separate agent limits and shared workspace caps constrain financial exposure.
+- **Funding privacy:** the payment path aims to remove the explicit link from a particular deposited note to its payout.
+- **Owner visibility:** keep local attribution of which agent requested a purchase and what it produced.
+- **Recovery:** track uncertain payments and delivery separately so retries do not blindly create another charge.
+
+Veilo's contribution is the integration of owner-created agents, delegated policy, private funding and useful paid workflows. Privacy pools and x402 are existing foundations; the design does not claim to invent them.
+
+### Does a private payment hide which agent or wallet paid?
+
+The merchant payment wallet and transfer are public. The intended privacy property is hiding the explicit link back to the original deposited note and its funding wallet. Public transactions do not carry a stable agent name or workspace ID, but this does not make the agent unidentifiable to everyone: the owner retains local attribution, the gateway can link authenticated usage, and timing or amounts can support correlation. See [privacy and trust](./guide/privacy.md).
+
+## Follow the system
+
+1. [Architecture](./guide/architecture.md): components, trust boundaries and enforcement ownership.
+2. [Payment lifecycle](./guide/payments.md): private funding, ordinary x402 and durable recovery.
+3. [Privacy and trust](./guide/privacy.md): intended protection, public metadata and operator visibility.
+4. [Security model](./security/assessment.md): permission tiers, authentication and enforcement boundaries.
+5. [Verification requirements](./security/evidence.md): acceptance cases the implementation must demonstrate.
+
+## Create your own agents
+
+Owners can create named agents, assign jobs and triggers, configure allowed services, and set individual budgets and permissions. Shawn, Prince and Mira are demo examples, not a fixed list of available agents. All agents remain subject to workspace-wide limits.
+
+### Demo examples
+
+| Agent | Job | Intended purchased outcome |
+|---|---|---|
+| Shawn | Monitor the shared gateway credit balance | Buy one bounded inference-credit pack when the threshold is crossed |
+| Prince | Research an owner-supplied question | Buy approved data/inference and save an attributable research brief |
+| Mira | Create content from a brief or approved research handoff | Directly buy a content package and save three editable posts plus a seven-day calendar |
+
+The model proposes work. An independent wallet/control service authorizes money. Agents share the workspace treasury and gateway credit account, with separate agent limits.
+
+## Network and service boundaries
+
+- Settlement uses test assets on Solana devnet. SOL pays chain costs separately.
+- Real inference is paid for by the gateway operator's OpenRouter account. Test USDC does not replenish commercial provider funds.
+- Gateway credits are application service entitlements, not OpenRouter account credits or redeemable money.
+- Research fixtures must be labeled demo data; fixture output does not prove live search.
+- Content scheduling means planning dates and local editable posts. External social publishing is outside the current scope.
+
+---
+
+# Agent workflows
+
+## Owner-created agents
+
+Owners create and configure agents with their own names, jobs, triggers, budgets and service permissions. The examples below demonstrate three useful workflows; they do not limit the agents an owner can create. Each agent operates within its configured tools and services and the workspace's shared financial limits.
+
+One runner uses different role instructions, tools and independently enforced policies. Names are editable display fields, not authority identities. Owner-created agents cannot autonomously create spending subagents or expand their own permissions.
+
+## Shawn — shared-credit replenishment
+
+The threshold decision is deterministic and requires no paid model call. Default check interval: 60 seconds. Demo policy: threshold 200,000 gateway units, pack 1,000,000 units, at most 1.00 test-USDC per pack, 3.00 test-USDC rolling 24-hour cap, 10-minute minimum interval between successful top-ups, one unresolved top-up per shared account.
+
+Read a fresh balance/version. If low and allowed, create one stable purchase operation. Repeated checks reuse it. Wait for settlement and credited-once issuance before evaluating another purchase. Stale balances or unresolved outcomes pause the check. A manual “Check now” must execute the same logic as the scheduler.
+
+## Prince — paid research
+
+The owner supplies the question, optional sources and deadline. Prince proposes a plan, chooses at least one relevant approved fixed-price data service and purchases permitted inference through credits or a separate direct payment. Save a brief with evidence links and purchase references. Label licensed fixture data explicitly and mark unsupported claims; do not fabricate citations.
+
+## Mira — content creation
+
+The owner supplies topic, audience, channels, voice and deliverables, or explicitly approves a Prince handoff. Mira chooses an approved content SKU and, in this example workflow, pays directly through the private devnet x402 path. Real operator-funded inference produces three editable channel-specific posts and a seven-day calendar.
+
+Track editable, needs review, approved for export and archived. Editing, approving or changing a planning date does not buy inference. Regeneration is a new budgeted operation. The current scope has no social credentials or publishing tool.
+
+## Bounded execution
+
+Default limits per task: eight tool calls, three paid purchases and ten minutes. Sponsored planning permits at most two bounded calls with a fixed allowlisted model; report this cost separately. Execution must remain within the configured owner policy.
+
+A model refusal is not a financial control. Malicious retrieved text remains untrusted, and the independent policy/signing boundary must reject unauthorized requests even if the model follows that text.
+
+---
+
+# Architecture
+
+Veilo separates agent planning, financial authority, public-chain enforcement and paid-service delivery. The deployment model is single-owner and local, with distinct processes, credentials and secret access. Owners can create and configure agents; demo agents are examples of roles running within the same authority boundaries.
+
+## The architecture in plain language
+
+The owner defines the job and spending rules. The **agent runner** decides what resources would help. The **control service** checks limits and reserves the budget. The **wallet service** holds private notes, generates proofs and signs only allowed payments. The **pool program** verifies the withdrawal on chain. A fresh wallet then makes a normal **x402** payment, and the **gateway** delivers the purchased service.
+
+This separates decision-making from financial authority: a model proposing a purchase cannot grant itself permission to spend. The owner sees agent-level activity locally, while the public payment path avoids publishing those agent identifiers.
+
+## 1. Agent authorization
+
+[Diagram definition included below.]
+
+## 2. Private funding and public settlement
+
+[Diagram definition included below.]
+
+## 3. Paid service delivery
+
+[Diagram definition included below.]
+
+## Components and authority
+
+| Component | Responsibility | Boundary |
+|---|---|---|
+| Owner dashboard | Wallet session, agent configuration, approvals, monitoring | Authenticated UI; never asks for the owner's seed phrase |
+| Control service | Policies, scheduler, atomic reservations, audit events, revocation epochs | Single authority for workspace/agent/task spending allowances |
+| Agent runner | Bounded planning, catalog selection, requesting purchases, saving outputs | No note database, provider key, arbitrary signer or policy mutation |
+| Wallet service | Encrypted notes, local proofs, constrained fresh-wallet signing, recovery | Checks current policy before releasing financial authority |
+| Relayer / indexer | Sponsor permitted chain costs, submit withdrawals, rebuild public tree state | Does not receive note secrets; indexer cannot invent accepted roots |
+| Privacy pool program | Verify proofs, conserve value, consume nullifiers, enforce bound destinations and owner exits | On-chain enforcement; PDA controls the SPL vault |
+| Service gateway | Immutable quotes, settlement reconciliation, durable credits, delivery/result cache | Merchant is the gateway operator; credits stay linked to an authenticated workspace |
+| x402 facilitator | Verify and settle standard exact SVM payment | Merchant leg only; distinct from the private-withdrawal relayer |
+| OpenRouter / data adapter | Bounded real inference or explicitly labeled research data | Provider availability and commercial funding are operator dependencies |
+
+## Proposed stack and source layout
+
+TypeScript, Next.js dashboard, Express gateway, durable workers, SQLite WAL, Rust/Anchor pool program and Circom/snarkjs BN254 Groth16 proofs. Exact SDK versions and proof artifacts must be frozen by the implementation team.
+
+| Intended path | Contents |
+|---|---|
+| `apps/dashboard/` | Owner UI and authenticated control API |
+| `services/control/`, `services/runner/` | Policy, reservations, scheduler and restricted workers |
+| `services/wallet/`, `services/relayer/` | Private state, signing, proofs and public chain adapters |
+| `services/gateway/` | x402 routes, credit ledger and provider adapters |
+| `packages/contracts/`, `packages/db/` | Shared schemas, migrations and durable state |
+| `packages/privacy-sdk/`, `packages/x402-client/` | Witness/encoding logic and constrained payment adapter |
+| `programs/privacy-pool/`, `circuits/` | On-chain program and spend/insert/exit circuits |
+| `tests/`, `scripts/`, `artifacts/` | Acceptance tests, operator commands and public artifact manifests |
+
+These are proposed paths, not files observed in this repository. Documentation has its own dependency manifest under `docs/` to avoid constraining the developer's application setup.
+
+## Enforcement placement
+
+The chain/proofs enforce ownership, approved-set membership for private spends, value conservation, nullifier uniqueness, withdrawal intent and owner exit. The wallet/control service enforces budgets, merchant selection, revocation and signing policy. The gateway enforces paid delivery, credit issuance/debit, request binding and provider cost limits. The model is not a security authority.
+
+Off-chain spending caps are not proof-enforced caps. Compromise of the owner wallet service can bypass its local policy and expose its notes.
+
+## Durable state
+
+Control owns scoped allowance reservations; the gateway owns issued/reserved/consumed credits. Link operations across these databases with stable operation IDs and durable outbox/inbox events. Do not maintain two independently authoritative copies of the gateway balance.
+
+Keep encrypted notes and signer/provider secrets separate from runner-readable activity. A restart must reconcile released proofs, signed transactions and provider attempts before creating new financial authority. See [payments](./payments.md) and [policy](./policy.md).
+
+---
+
+# Payment lifecycle
+
+The private withdrawal and x402 merchant payment are separate transactions. A fresh payment wallet uses ordinary x402; x402 alone does not hide the source of funds.
+
+[Diagram definition included below.]
+
+## Before a purchase
+
+1. Verify devnet genesis, mint owner/decimals, token program, deployment manifest and compatible proof artifacts. Reject mainnet in demo mode.
+2. The owner signs a deposit. Track submitted, finalized, indexed, approved and spendable separately. Pending or unapproved notes are unavailable.
+3. Control authenticates the requester, creates a stable operation and request digest, and obtains an immutable gateway quote.
+4. In one atomic control transaction, check every allowance scope and reserve input note/exposure. A second agent cannot spend that same note or last available allowance.
+
+## Private funding
+
+The wallet service persists a fresh signer before funding it. A local real proof demonstrates note and approved-label membership, valid nullifier, range-checked value/change and an intent bound to pool/program, devnet, mint, payout account, amount, fees, relayer where applicable and expiry.
+
+The on-chain program verifies this proof, consumes the input nullifier, transfers only the bound amount and queues private change atomically. Change becomes spendable only after authenticated insertion finalizes and the witness is rebuilt. The indexer cannot authorize arbitrary tree roots.
+
+The relayer/sponsor funds permitted account creation and fees under separate limits. Sponsorship must not quietly fall back to the identifiable owner's withdrawal fee payment.
+
+## Merchant payment and delivery
+
+The wallet validates the full x402 V2 exact transaction: network, mint, amount, recipient ATA, transfer authority, fee payer, expiry, compute budgets and allowed instruction layout. Reject unrelated transfers, approvals and delegate changes.
+
+The gateway validates the immutable quote/account/request binding and atomically claims the operation and signature before settlement. After finalized settlement, it records one financial event and either issues a credit pack once or authorizes one bounded service attempt. Paid retries return the existing status/result even after quote expiry.
+
+| Payment option | Financial effect |
+|---|---|
+| Direct per-call x402 | One test-USDC payment; no prepaid debit |
+| Credit-pack purchase | One test-USDC payment attributed to Shawn; one gateway issuance |
+| Prepaid inference | Consume shared gateway credits and requesting agent usage allowance; no second USDC charge |
+
+Mira's accepted demo uses a **direct private x402 content-package purchase**. Shawn demonstrates shared-credit replenishment; Prince may use the prepaid path.
+
+## Recovery and failure handling
+
+| Boundary | Required handling |
+|---|---|
+| Proof released, withdrawal outcome unknown | Keep exposure reserved; reconcile nullifier/chain state and proof expiry |
+| Withdrawal finalized, merchant not signed | Track the funded wallet separately from pool notes; resume only within current policy |
+| Merchant signed/submitted, response lost | Query the existing signature; do not automatically create another payment |
+| Settlement finalized, issuance interrupted | Reconcile and issue the same pack once |
+| Provider request outcome unknown | Record uncertain or paid-without-result; no blind retry without upstream idempotency |
+| Agent stopped with a funded wallet | Recover only to the configured owner destination after conflicting authority is resolved |
+
+Quote expiry, transaction last-valid block height and proof `valid_until_slot` are different bounds. Expiring a transaction does not necessarily invalidate a released proof that can be placed in another transaction. Release its reservation only after finalized chain evidence proves the authorization is no longer usable and no spend settled.
+
+A public exit requires note ownership proof and the original refund authority. It must remain possible without approved-set membership; it reveals information and does not restore privacy. Test both original and change notes.
+
+---
+
+# Policy and accounting
+
+## Permission tiers
+
+| Tier | Permitted behavior | Still prohibited |
+|---|---|---|
+| Observe | Plan and explain proposals | Releasing spending proofs/signatures |
+| Bounded automatic | Purchase without another approval when every applicable rule passes | Exceeding any cap or allowed service binding |
+| Approval required | Request explicit owner approval for designated valid purchases | Using approval to bypass hard limits |
+| Stopped | Reconcile existing operations | Releasing new spending authority |
+
+Recovery and owner exit remain available through their separate authenticated paths. Editing policy is a distinct owner action. Natural-language policy edits produce editable posts until owner activation.
+
+## Authorization algorithm
+
+1. Authenticate the worker's bound workspace/agent/task scope; do not trust an agent ID supplied in JSON.
+2. Resolve the stable operation and immutable request/quote. Changed payload for the same operation conflicts before any payment.
+3. Validate service origin, gateway identity, SKU, network, mint, recipient and quote bounds.
+4. In a single `BEGIN IMMEDIATE` transaction, recheck limits, status, policy version and note availability; create the unique operation/reservation.
+5. Recheck policy and revocation epoch before proof release, withdrawal submission and merchant signing.
+6. Reconcile finalized outcomes into durable financial events. Keep unknown outcomes reserved.
+
+All writers use the same control authority/database. Multiple worker databases each checking their own caps cannot enforce a workspace cap.
+
+## Independent limits
+
+Every purchase must pass per-purchase, per-task lifetime, per-agent lifetime and rolling 24-hour, workspace lifetime and rolling 24-hour limits. Sponsor SOL fees and recoverable rent have separate bounds. Gateway usage has both scoped usage allowances and shared available credits.
+
+Use integer amounts and decimal strings across APIs. Never compare financial amounts using floating point.
+
+For each cash scope:
+
+```text
+available = limit - applicable settled cost - all active reservations
+```
+
+For rolling scopes, count settled costs within the preceding 24 hours **plus every live reservation**, even if it is older. A reservation crossing midnight or a rolling boundary does not release exposure.
+
+For gateway credits:
+
+```text
+usable credits = issued - consumed - reserved
+```
+
+Cash spent, pool tokens, funded fresh-wallet principal, pending change, sponsor lamports, prepaid credits and provider dollars are different units/states. Never sum them into a single balance.
+
+## Revocation and restoration
+
+Pause/revoke must serialize against financial authority release. Already released proof/transaction material may settle until its bound expires; display that live exposure. Do not promise cancellation after release.
+
+Recovering proven unpaid principal may restore eligible allowance. It does not refund a completed service or paid fees, and an external recovered balance does not create a private pool note. Re-entering the pool requires a new deposit.
+
+Persist original settlement timestamps. A restart must not move old spending into a different window. Link refunds to their original expense; an expired expense cannot offset unrelated new rolling-window spending.
+
+---
+
+# Privacy and trust
+
+## Intended protection
+
+A shared note-based pool aims to remove the **explicit mapping from a particular deposited note to a withdrawal**. A local proof authorizes the withdrawal without naming the spent deposit. A fresh wallet then pays the merchant through standard x402, and private change remains in the pool.
+
+This requires real on-chain proof verification and authenticated tree updates. Cosmetic address rotation, a trusted database withdrawal authorizer or an ordinary direct x402 payment does not establish this property.
+
+## Which agent or wallet can someone identify?
+
+| Question | Intended behavior |
+|---|---|
+| Can a public observer see the wallet that pays the merchant? | Yes. The fresh payment address, merchant, amount and timing remain public. |
+| Does the withdrawal explicitly identify its original deposited note? | No, in a correctly implemented proof-based flow. Removing this explicit link is the privacy target. |
+| Is an agent name or stable workspace ID published with each payment? | It must not be included in chain memos, proof public fields or withdrawal accounts. |
+| Can the owner tell which agent spent money? | Yes. The local workspace keeps purchase attribution and outcomes. |
+| Can the gateway link purchases or usage? | Yes. Its authenticated workspace account and request data provide off-chain linkage. |
+| Is correlation impossible? | No. Small pools, distinctive amounts, funding trails, timing and network metadata can weaken privacy. |
+
+Funding privacy and owner monitoring serve different audiences: the owner retains accountability while the chain omits an explicit deposit-to-withdrawal mapping. This is not a promise that every payment is anonymous to every observer.
+
+## Visibility matrix
+
+| Observer | Information visible in the intended design |
+|---|---|
+| Public-chain observer | Deposits, source addresses, payout wallets, amounts, mint, merchant payments, fees, timing, public exits and proof public inputs |
+| Owner / local wallet service | Note secrets, local agent/task attribution, spending history, recovery metadata and signer material |
+| Gateway operator | Authenticated workspace credit account, purchases, requests/prompts, usage, cached results and connection metadata |
+| OpenRouter | Operator account, forwarded prompts and model/request metadata; internal workspace IDs are not forwarded by default |
+| Relayer / RPC | Submitted public transactions and relevant connection/timing metadata; relayer should not receive note secrets |
+| Approved-set / upgrade administrators | Disclosed powers to update approved membership or deployed program code, according to configuration |
+
+Persistent gateway accounts deliberately link service usage off chain. The protocol does not hide prompts from the provider or establish network-level anonymity.
+
+## Correlation and anonymity limits
+
+A small pool, one active participant, distinctive amounts, closely timed deposit/withdrawal/payment and common operator funding can make linkage plausible. Synthetic demo participants are not independent users. Approved-set size is membership information, not a measured anonymity score.
+
+A separate fee sponsor reduces one obvious source link, but shared RPC endpoints and sponsor funding trails still permit correlation. Public exits and recovery transactions may reveal aggregate spending through subtraction.
+
+Funding privacy does not guarantee anonymity against every observer. Security depends on correct circuits, proof verification, key handling and operational controls.
+
+## Cryptography and setup trust
+
+The Solana proof design uses BN254 Groth16, matching Poseidon parameters and canonical encodings across TypeScript, Circom and Rust.
+
+The deployment manifest must pin circuit/compiler source, curve, hash parameters, public-input order, encoding/vector version, tree depths, proving/verifying-key hashes and setup provenance. Artifact mismatch stops proof generation. A malicious setup, buggy circuit/verifier or excessive upgrade authority can compromise funds/privacy.
+
+Spend and public exit share one pool-scoped nullifier namespace. Bind withdrawal intent to the deployed program/pool, network, mint, exact destination, value/fees and on-chain expiry. The on-chain program reconstructs the intent; an off-chain annotation is insufficient.
+
+## Operational privacy
+
+- Keep note secrets and decryption/signer keys in the local wallet service, inaccessible to the runner.
+- Do not put agent names, workspace IDs or gateway account identifiers in chain memos, withdrawal accounts or proof public fields.
+- Minimize operator logs; redact secrets, authorization headers and private prompt content before evidence export.
+- Retain enough authenticated purchase/result state to reconcile ambiguous outcomes; disclose retention and clean up only after outstanding operations resolve.
+- Back up notes, change secrets, paths/rebuild data, fresh-wallet counters and pending operations with a consistent encrypted database snapshot.
+
+The owner machine remains trusted. Local proof generation does not protect secrets from a compromised host.
+
+## Evidence needed before a privacy claim
+
+Demonstrate a real deployed verifier, valid spend/change and owner exit, rejection of invalid proof/context/replay, public-input inspection for stable identifiers, and multiple clearly labeled test deposits. Include the metadata caveats above alongside that evidence. See [security matrix](../security/evidence.md) and [known risks](../security/risks.md).
+
+---
+
+# Deployment and configuration
+
+## Run the documentation now
+
+From the repository root, use Node.js 22 or later:
+
+```sh
+cd docs
+npm ci
+npm run dev
+```
+
+Build and preview the static site:
+
+```sh
+npm run build
+npm run preview
+```
+
+The default production base is `/Veilo-agent-wallet/`. Open the base URL printed by the preview server. For a site at a custom domain root, build with `DOCS_BASE=/ npm run build`.
+
+## Deployment requirements
+
+The application uses separately authenticated dashboard/control, runner, wallet, relayer and gateway services. Configure the toolchain and compatible SDK versions, initialize the durable database, load local credentials and verify the selected network before enabling financial operations.
+
+Application startup commands and deployment addresses must come from the implementation's release instructions. This page does not provide an executable application installer.
+
+| Area | Configuration requirement |
+|---|---|
+| Network | Exact devnet genesis, mint, decimals and token program; reject mainnet in demo mode |
+| Credentials | Separate owner, worker, wallet, gateway admin and provider credentials |
+| Database | Migrations, WAL mode, single control writer and consistent backup/restore |
+| Proofs | Compatible source/vector versions and pinned proving/verifying artifacts |
+| Services | Authenticated health checks and bounded provider/facilitator settings |
+| Operations | Recovery destinations, sponsor budgets and reconciliation before new work |
+
+## Public deployment manifest
+
+Record commit, dependency lock hashes, full genesis hash/CAIP network, program/pool/vault addresses, mint/decimals/token program, circuit and key hashes, setup provenance, canonical encoding/public-input order, tree depths, root-history rules, fees, expiry bounds and administrator public keys.
+
+Program/vault addresses are unknown until deployment. Do not substitute the setup wallet for a PDA-controlled pool or invent addresses to complete this page.
+
+## Operator checks
+
+Verify facilitator `/supported` for the exact selected devnet/mint path before enabling payments. Recheck the operator-funded inference balance/model/cost bounds. Record outages visibly and stop affected work rather than auto-charging a real card or switching to mainnet.
+
+Separate deployer, sponsor, merchant and owner roles, while disclosing common operator bootstrap funding. Public dashboard access requires authentication; signer and administration remain private. Budget test-SOL rent and repeated deployment attempts from measured binary/account sizes.
+
+Public operational records may include program addresses and transaction signatures. Never publish keys, private notes, witnesses, authentication headers or sensitive prompt content.
+
+## Documentation dependency maintenance
+
+The docs use VitePress 1.6.4 with a pinned Vite 6.4.4 override, because the default Vite 5 dependency has published development-server advisories. Mermaid is pinned to 12.2.0. The override is intentionally outside VitePress's default Vite range: keep it only while production builds and browser checks pass, and revisit it when upgrading VitePress. Use the committed lockfile and check advisories when changing dependencies.
+
+---
+
+# Security model
+
+Veilo separates agent planning, owner authority, wallet signing, on-chain verification and paid-service delivery. An agent request alone is never sufficient authority to release funds.
+
+## Permission tiers
+
+| Mode | Behavior | Boundary |
+|---|---|---|
+| Observe | Propose a plan and resource purchases | No spending proof or signature is released |
+| Bounded automatic | Execute purchases that satisfy every applicable rule | All task, agent and workspace limits still apply |
+| Approval required | Obtain explicit owner approval for a permitted purchase | Approval cannot override hard limits |
+| Stopped | Reconcile existing operations | No new spending authority; recovery uses a separate owner-authorized path |
+
+## Enforcement boundaries
+
+| Layer | Security responsibility |
+|---|---|
+| Owner control | Authenticate actions, bind worker scope, check policy versions and reserve budgets atomically |
+| Wallet service | Protect note secrets, generate proofs locally and validate the complete merchant transaction before signing |
+| Pool program | Verify proof/context, enforce value conservation, reject reused nullifiers and bind owner exits |
+| Gateway | Bind quote/account/request, reconcile settlement, issue credits once and bound provider execution |
+| Runner | Use restricted tools; treat retrieved content and service responses as untrusted input |
+
+Budgets and revocation are enforced by owner-controlled services. They are not cryptographic spending caps. The model cannot expand its policy, access secrets, sign arbitrary transfers or authorize external publishing.
+
+## Authentication and secret isolation
+
+Owner sessions require a domain-bound wallet challenge with nonce, expiry and replay protection. Browser mutations require CSRF defenses. Worker credentials bind workspace, agent and task scope independently of IDs supplied in request bodies.
+
+Keep note databases, decryption keys, signer material and provider credentials inaccessible to the agent runner. Restrict internal endpoints by credential and process boundary. Do not log private witnesses, authorization headers or secret values.
+
+## Concurrency and recovery
+
+Reserve all applicable allowances and the input note in one control transaction. Keep released proofs and unsettled signatures counted as live exposure. Reconcile an existing operation before issuing replacement authority. Persist payment and service-delivery outcomes separately.
+
+## Verification
+
+A security design describes required behavior; it does not establish that an implementation has passed a security review. Evaluate the [verification requirements](./evidence.md) against the exact application version and deployed artifacts. See [trust and risk boundaries](./risks.md) for residual limitations.
+
+---
+
+# Trust and risk boundaries
+
+| Boundary | Risk | Design response |
+|---|---|---|
+| Owner host and wallet | Compromise exposes notes or bypasses local spending policy | Isolated credentials/processes, constrained signer, encrypted consistent backups |
+| Circuits and verifier | Incorrect constraints, encodings or setup can compromise the pool | Matching vectors, artifact hashes, setup provenance and real positive/negative proof tests |
+| Pool metadata | Small pools and distinctive amounts/timing enable correlation | Explain public information and avoid treating membership size as an anonymity score |
+| Program administration | Upgrade authority can change enforcement; approved-root authority can restrict private spending | Disclose powers separately and preserve owner exit without approved membership |
+| Released authority | Proofs or signed transactions may settle after a stop | Track live exposure until settlement or proven expiry; recheck before release |
+| Gateway and provider | Accounts, requests and prompts permit off-chain linkage | Minimize metadata and retention; authenticate result access; disclose visibility |
+| External execution | A settled payment may have an uncertain or missing service result | Persist execution state and cache results; avoid blind provider/payment retries |
+| Backup and restore | Lost change or reused wallet material can lose funds or duplicate authority | Preserve note/change secrets, counters and pending operations; reconcile after restore |
+| Dependencies | Devnet, RPC, facilitator or provider outages interrupt work | Health checks, bounded retries/cost and explicit pause states |
+| Public exit/recovery | Reveals value or linkage | Use bound owner destinations and explain the public nature of the operation |
+
+Independent review and execution evidence are needed to evaluate implementation safety. Privacy depends on correct cryptography and operational behavior; it does not hide every transaction detail from every observer.
+
+---
+
+# Verification requirements
+
+Use these acceptance scenarios to evaluate the security and reliability of an implementation. Each result should identify the application version, environment, reproducible scenario, observed behavior and relevant artifacts. The list defines requirements; it does not report passing test results.
+
+| Case | Scenario | Expected evidence / result |
+|---|---|---|
+| NET-01 | Mainnet/wrong mint config | Startup and payment reject |
+| X402-01 | Exact ordinary payment | Devnet settlement plus real bounded inference |
+| X402-02 | Wrong amount/ATA/authority/fee payer/instruction | Complete verifier rejects |
+| X402-03 | Same signature on another quote/account | No second fulfilment or credit issuance |
+| X402-04 | Same operation with changed request | 409 conflict, no charge |
+| PRIV-01 | Valid spend and change | On-chain real proof accepted; change note spendable |
+| PRIV-02 | Bad proof/context/public input | No release of value |
+| PRIV-03 | Same nullifier twice | Second spend/exit rejected |
+| PRIV-04 | Underflow/wrapped values/wrong root | Rejected; no invented balance |
+| PRIV-05 | Forged insertion/genesis/duplicate precommitment | Rejected or authenticated queue invariant preserved |
+| PRIV-06 | Unapproved original and change owner exit | Private pay rejected when required; valid public exit works |
+| PRIV-07 | Multiple labeled test deposits | No explicit spent-deposit identifier in withdrawal; metadata caveats documented |
+| CAP-01 | Per-purchase/task/agent/global cap | No proof/signature released beyond any cap |
+| CAP-02 | Two agents race for final allowance | Atomic authorization admits only permitted exposure |
+| CAP-03 | Uncertain payment crosses rolling window | Reservation still counts |
+| CAP-04 | Lower limit below pending exposure | New spend blocked, exposure visible |
+| REV-01 | Pause before signing / proof released | New authority blocked; released material handled honestly |
+| AUTH-01 | Agent passes another agent ID | Scope mismatch rejected |
+| AUTH-02 | Role tries arbitrary sign/policy edit/publish | Tool unavailable or independently denied |
+| IDEM-01 | Same logical purchase repeatedly | One financial operation; same state/result |
+| REC-01 | Restart at every multi-leg boundary | Notes/keys/credits/reservations restored and reconciled |
+| REC-02 | Lost settlement response | Reconcile existing signature; no blind new debit |
+| REC-03 | Fresh-wallet recovery conflicting with signed tx | Wait for proven safe outcome; only owner destination |
+| CRE-01 | Restart after settle before issue | Issue pack once |
+| CRE-02 | Two usage requests over available credits | One bounded outcome; no negative credits |
+| CRE-03 | Shawn sees low credits repeatedly | One unresolved top-up; cooldown/caps hold |
+| CRE-04 | Usage permit replay/modified digest | No second debit/inference |
+| CRE-05 | Top-up then consumption dashboard | No double-counted USDC expenditure |
+| LLM-01 | Upstream timeout/price change/exhausted account | Fail closed or visible uncertain outcome; no uncontrolled retry |
+| AGT-01 | Prince service choice | Useful brief and attributable purchased evidence |
+| CNT-01 | Mira from approved handoff | Direct private devnet x402 signature, real inference, three editable posts and seven-day calendar |
+| CNT-02 | Edit/approve/calendar change | No hidden charge or external publish |
+| SEC-01 | Malicious service asks for funds/policy change | Independent rejection; no reliance on model refusal |
+| SEC-02 | Prompt/log inspection | No secret notes, keys or sensitive auth material |
+| BAK-01 | Restore backup with pending spend | No address reuse, duplicate purchase or lost change |
+| LED-01 | Pending change and external recovery | Change unavailable before insertion; external recovered principal creates no pool note |
+| EXIT-01 | Attacker signer with valid note proof | Derived label mismatch rejects; correct owner original/change exit succeeds |
+| EXP-01 | Old proof in fresh-blockhash tx after bound | Clock/context check rejects; no premature reservation release |
+| QUO-01 | Accepted tx settles after quote expires | Honor original price once; paid retries return cached result |
+| QUO-02 | Re-quote funded operation | Existing funding reused/recovered; no second automatic withdrawal |
+| USG-01 | Failure between scoped/account reservation | Reconcile same operation; no double debit or excess consumption |
+| TIER-01 | Observe tier requests purchase | No spending proof/signature released |
+| TIER-02 | Approval missing, changed or replayed | Reject; valid approval still cannot override hard caps |
+| SESS-01 | Wallet challenge replay, wrong domain, expired session, CSRF | Reject unauthenticated mutations and session replay |
+| AUTH-03 | Different workspace retrieves cached paid result | Reject cross-account access even with transaction signature |
+| ISO-01 | Runner reads note/provider secrets or arbitrary signing endpoint | Process/credential isolation denies access |
+| ART-01 | Proving/verifying artifact or manifest mismatch | Stop proof/payment generation |
+| ADMIN-01 | Inspect deployed upgrade and approved-set authority | Separate public authority mapping matches manifest; powers disclosed |
+
+## Evidence quality
+
+Use real proof artifacts and the deployed verifier for privacy checks. Include positive and negative cases, concurrency tests and deterministic restart/fault injection. A transaction signature proves a public transaction; it does not independently prove policy enforcement or correct service delivery. Keep failures and skipped checks visible in the implementation's test report.
+
+---
+
+## Diagram: architecture
+
+```mermaid
+flowchart TB
+  owner["Owner dashboard<br/>Create agents and set rules"]
+  runner["Agent runner<br/>Propose a resource purchase"]
+  control["Control service<br/>Check policy and reserve budget"]
+  wallet["Wallet service<br/>Private notes, proofs and signing"]
+  ledger[(Durable allowance ledger)]
+  owner -->|job| runner
+  owner -->|policy and approval| control
+  runner -->|purchase request| control
+  control -->|record reservation| ledger
+  control -->|approved operation| wallet
+```
+
+## Diagram: private-funding
+
+```mermaid
+flowchart TB
+  wallet["Local wallet service<br/>Generate a bound proof"]
+  relay["Relayer and indexer<br/>Submit and track public state"]
+  pool["Solana pool program<br/>Verify proof and spend note"]
+  fresh["Fresh payment wallet<br/>Receive authorized test tokens"]
+  merchant["Merchant token account<br/>Receive ordinary x402 payment"]
+  wallet -->|withdrawal proof| relay
+  relay --> pool
+  pool -->|PDA vault payout| fresh
+  fresh -->|facilitator-settled transfer| merchant
+```
+
+## Diagram: service-delivery
+
+```mermaid
+flowchart TB
+  control["Owner control service<br/>Bound quote and operation"]
+  gateway["Veilo service gateway<br/>Payment checks and result cache"]
+  facilitator["x402 facilitator<br/>Verify and settle merchant payment"]
+  credits[(Shared gateway credit ledger)]
+  provider["OpenRouter or data adapter<br/>Bounded service delivery"]
+  control -->|authenticated request| gateway
+  gateway -->|payment payload| facilitator
+  facilitator -->|settlement result| gateway
+  gateway -->|credit pack or prepaid usage| credits
+  gateway -->|operator-funded inference or data| provider
+  gateway -->|result and status| control
+```
+
+## Diagram: payment
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Owner
+  participant Agent
+  participant Control
+  participant Wallet
+  participant Pool as Relayer / Pool
+  participant Gateway
+  participant Facilitator
+  participant Provider
+  Owner->>Control: Activate bounded policy
+  Agent->>Control: Request approved purchase
+  Control->>Gateway: Stable operation and request digest
+  Gateway-->>Control: Immutable bound quote
+  Control->>Control: Atomically check caps and reserve
+  Control->>Wallet: Authorized operation and policy epoch
+  Wallet->>Wallet: Persist fresh signer, recheck policy, prove locally
+  Wallet->>Pool: Release bound withdrawal proof
+  Pool->>Pool: Verify, consume nullifier, fund fresh wallet, queue change
+  Pool-->>Wallet: Finalized withdrawal
+  Wallet->>Wallet: Recheck epoch and all merchant instructions
+  Wallet->>Gateway: Submit bound x402 payment
+  Gateway->>Gateway: Validate and claim operation / signature
+  Gateway->>Facilitator: Settle exact merchant payment
+  Facilitator-->>Gateway: Finalized settlement evidence
+  Gateway->>Gateway: Persist one payment event
+  alt Credit pack
+    Gateway->>Gateway: Issue shared credits once
+  else Direct inference purchase
+    Gateway->>Provider: One bounded operator-funded attempt
+    Provider-->>Gateway: Real output or uncertain outcome
+    Gateway->>Gateway: Persist result or paid-without-result
+  end
+  Gateway-->>Control: Existing purchase status / result
+  Control-->>Agent: Save output and attributed cost
+  Note over Control,Gateway: Retry same operation: reconcile or return cache, never blindly pay again
+```

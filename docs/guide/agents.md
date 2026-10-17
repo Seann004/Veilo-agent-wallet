@@ -1,0 +1,29 @@
+# Agent workflows
+
+## Owner-created agents
+
+Owners create and configure agents with their own names, jobs, triggers, budgets and service permissions. The examples below demonstrate three useful workflows; they do not limit the agents an owner can create. Each agent operates within its configured tools and services and the workspace's shared financial limits.
+
+One runner uses different role instructions, tools and independently enforced policies. Names are editable display fields, not authority identities. Owner-created agents cannot autonomously create spending subagents or expand their own permissions.
+
+## Shawn — shared-credit replenishment
+
+The threshold decision is deterministic and requires no paid model call. Default check interval: 60 seconds. Demo policy: threshold 200,000 gateway units, pack 1,000,000 units, at most 1.00 test-USDC per pack, 3.00 test-USDC rolling 24-hour cap, 10-minute minimum interval between successful top-ups, one unresolved top-up per shared account.
+
+Read a fresh balance/version. If low and allowed, create one stable purchase operation. Repeated checks reuse it. Wait for settlement and credited-once issuance before evaluating another purchase. Stale balances or unresolved outcomes pause the check. A manual “Check now” must execute the same logic as the scheduler.
+
+## Prince — paid research
+
+The owner supplies the question, optional sources and deadline. Prince proposes a plan, chooses at least one relevant approved fixed-price data service and purchases permitted inference through credits or a separate direct payment. Save a brief with evidence links and purchase references. Label licensed fixture data explicitly and mark unsupported claims; do not fabricate citations.
+
+## Mira — content creation
+
+The owner supplies topic, audience, channels, voice and deliverables, or explicitly approves a Prince handoff. Mira chooses an approved content SKU and, in this example workflow, pays directly through the private devnet x402 path. Real operator-funded inference produces three editable channel-specific posts and a seven-day calendar.
+
+Track editable, needs review, approved for export and archived. Editing, approving or changing a planning date does not buy inference. Regeneration is a new budgeted operation. The current scope has no social credentials or publishing tool.
+
+## Bounded execution
+
+Default limits per task: eight tool calls, three paid purchases and ten minutes. Sponsored planning permits at most two bounded calls with a fixed allowlisted model; report this cost separately. Execution must remain within the configured owner policy.
+
+A model refusal is not a financial control. Malicious retrieved text remains untrusted, and the independent policy/signing boundary must reject unauthorized requests even if the model follows that text.

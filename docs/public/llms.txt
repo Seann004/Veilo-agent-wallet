@@ -1,0 +1,24 @@
+# Veilo
+
+> Veilo is an owner-controlled AI agent workspace with delegated spending controls and a shared private funding pool on Solana devnet.
+
+Owners create and configure agents with their own names, jobs, triggers, budgets and approved services. Shawn, Prince and Mira are workflow examples, not a fixed list of agents. The model proposes resources; independent control and wallet services authorize purchases.
+
+The private flow aims to remove the explicit link from a particular deposited note to a payout. Fresh-wallet payments, merchants, amounts and timing remain public. Owners retain local agent attribution; the gateway can link authenticated usage. Do not infer universal anonymity, production readiness, deployed behavior or successful security tests from these documentation pages.
+
+## Product documentation
+
+- [Overview](./): Product purpose, owner-created agents, user flow and benefits.
+- [Agent workflows](./guide/agents.html): Custom agents and example research, credit and content workflows.
+- [Architecture](./guide/architecture.html): Planning, policy, wallet, pool, settlement and service boundaries.
+- [Payment lifecycle](./guide/payments.html): Private funding, exact x402 payments, credits and reconciliation.
+- [Policy and accounting](./guide/policy.html): Permission tiers, atomic reservations, caps and revocation.
+- [Privacy and trust](./guide/privacy.html): Deposit linkage privacy, public metadata and off-chain visibility.
+- [Deployment and configuration](./guide/running.html): Service configuration, network guards and artifact manifests.
+- [Security model](./security/assessment.html): Authority separation, authentication and secret isolation.
+- [Trust and risk boundaries](./security/risks.html): Residual risks, assumptions and design responses.
+- [Verification requirements](./security/evidence.html): Acceptance scenarios; not a report of passed tests.
+
+## Complete context
+
+- [Full text](./llms-full.txt): Product documentation and editable diagram definitions in one text file.
