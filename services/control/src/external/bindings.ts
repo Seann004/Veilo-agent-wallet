@@ -1,5 +1,5 @@
 import { isAddress } from "@solana/kit";
-import { DEMO_TOKEN_MINT, DEVNET_CAIP2, isMainnetIdentifier, type FundingBinding } from "@veilo/contracts";
+import { DEMO_TOKEN_MINT, DEVNET_CAIP2, SPONSOR_LAMPORTS_PER_PRIVATE_PURCHASE, isMainnetIdentifier, type FundingBinding } from "@veilo/contracts";
 import { immediate } from "@veilo/db";
 import { deriveAta, resourcePathMatches } from "@veilo/x402-client";
 import { big, num, type Ledger } from "../context";
@@ -8,8 +8,6 @@ import { writeAudit } from "../ledger/events";
 
 export const EXTERNAL_SERVICE_PREFIX = "x402:";
 export const EXTERNAL_BATCH_SKU = "external-x402-batch";
-/** Sponsor budget for the payer's token account and the funding withdrawal, as for listing purchases. */
-const EXTERNAL_SPONSOR_LAMPORTS = 2_100_000n;
 const MAX_BODY_BYTES = 4096;
 const RESOURCE_PATH = /^\/[A-Za-z0-9._~/-]{0,200}(\/\*)?$/;
 
@@ -121,7 +119,7 @@ export async function approveExternalBinding(
         `INSERT INTO service_sku (id, service_id, sku, payment_path, price_usdc, max_fee_usdc, usage_units, sponsor_lamports)
          VALUES (?, ?, ?, 'private_x402', ?, 0, 0, ?)`,
       )
-      .run(ledger.newId(), serviceId, EXTERNAL_BATCH_SKU, batch, EXTERNAL_SPONSOR_LAMPORTS);
+      .run(ledger.newId(), serviceId, EXTERNAL_BATCH_SKU, batch, SPONSOR_LAMPORTS_PER_PRIVATE_PURCHASE);
     ledger.db
       .prepare(
         `INSERT INTO external_binding (id, workspace_id, service_id, label, origin, resource_path, network, mint, pay_to, pay_to_ata,

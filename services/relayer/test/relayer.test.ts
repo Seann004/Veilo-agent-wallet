@@ -159,7 +159,7 @@ async function realSpend(): Promise<SpendCase> {
     );
     const w = spendWitness(p, { note, statePath: tree.path(1), approvedPath: approved.path(0), context: ctx.context, withdrawnValue: 100_000n, change: { nullifierSecret: changeSecret++, noteSecret: 666n } });
     const proved = await prove(w, { wasmPath: join(BUILD, "spend", "spend_js", "spend.wasm"), wasmSha256: pins.spend.wasmSha256, zkeyPath: join(BUILD, "zkey", "spend_final.zkey"), zkeySha256: pins.spend.zkeySha256 });
-    return { req: { withdrawalId, proof: proved.proof as never, publicSignals: proved.publicSignals, intent, sponsorLamportCap: "3000000" }, destAta };
+    return { req: { withdrawalId, proof: proved.proof as never, publicSignals: proved.publicSignals, intent, sponsorLamportCap: "5200000" }, destAta };
   };
   const first = await build("6f1c1b7e-0000-4000-8000-000000000001", chain.slot + 750n, randomAddress());
   const db = openRelayerDb(":memory:");
@@ -177,6 +177,8 @@ describe.skipIf(!HAVE_CIRCUITS)("POST /withdrawals with a real spend proof (requ
     const badProof = { ...(s.req.proof as { pi_a: string[] }), pi_a: [(s.req.proof as { pi_c: string[] }).pi_c[0]!, (s.req.proof as { pi_c: string[] }).pi_c[1]!, "1"] };
     await expect(s.svc.submit({ ...s.req, withdrawalId: "6f1c1b7e-0000-4000-8000-000000000003", proof: badProof as never })).rejects.toThrow(/does not verify/);
     await expect(s.svc.submit({ ...s.req, withdrawalId: "6f1c1b7e-0000-4000-8000-000000000004", sponsorLamportCap: "1000" })).rejects.toMatchObject({ code: "BUDGET_EXCEEDED" });
+    // ATA rent 2,039,280 + nullifier and change account rent 3,034,560 + two fees: the old estimate covered only the ATA.
+    await expect(s.svc.submit({ ...s.req, withdrawalId: "6f1c1b7e-0000-4000-8000-000000000006", sponsorLamportCap: "5083839" })).rejects.toMatchObject({ code: "BUDGET_EXCEEDED" });
     await expect(s.svc.submit({ ...s.req, withdrawalId: "6f1c1b7e-0000-4000-8000-000000000005", intent: { ...s.req.intent, relayer: randomAddress() } })).rejects.toMatchObject({ code: "POLICY_DENIED" });
     expect(s.chain.sent).toHaveLength(0);
   }, 30_000);
@@ -189,7 +191,7 @@ describe.skipIf(!HAVE_CIRCUITS)("POST /withdrawals with a real spend proof (requ
     expect(s.chain.sent[0]!.persistedSignatures).toContain(v1.ataSignature);
     // Idempotent by withdrawal id; different material under the same id conflicts.
     expect((await s.svc.submit(s.req)).withdrawalId).toBe(s.req.withdrawalId);
-    await expect(s.svc.submit({ ...s.req, sponsorLamportCap: "2999999" })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+    await expect(s.svc.submit({ ...s.req, sponsorLamportCap: "5199999" })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
 
     s.chain.accounts.set(s.destAta, { data: new Uint8Array(165), lamports: 2_039_280n, owner: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", executable: false });
     s.chain.txs.set(v1.ataSignature!, { slot: 1n, err: null, logs: [], fee: 5000n });
@@ -206,8 +208,8 @@ describe.skipIf(!HAVE_CIRCUITS)("POST /withdrawals with a real spend proof (requ
     s.chain.txs.set(v2.signature!, { slot: 9n, err: null, logs: [], fee: 5000n });
     await s.svc.advance(s.req.withdrawalId);
     const v3 = s.svc.view(s.req.withdrawalId)!;
-    expect(v3).toMatchObject({ state: "finalized", sponsorFeeLamports: "10000", sponsorRentLamports: "2039280" });
-    expect(sponsorTotals(s.chain.db!).rentOutstanding).toBe(2_039_280n);
+    expect(v3).toMatchObject({ state: "finalized", sponsorFeeLamports: "10000", sponsorRentLamports: "5073840" });
+    expect(sponsorTotals(s.chain.db!).rentOutstanding).toBe(5_073_840n);
   }, 30_000);
 
   it("resubmits after a proven-expired attempt only while the intent bound allows", async () => {

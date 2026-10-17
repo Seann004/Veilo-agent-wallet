@@ -101,8 +101,9 @@ export class FakeRelayerChain implements RelayerChain {
   async signatureStatus(sig: string) {
     return this.statuses.get(sig) ?? null;
   }
-  async rentExemptMinimum() {
-    return 2_039_280n;
+  /** Devnet rent: 6,960 lamports per byte including the 128-byte account header. */
+  async rentExemptMinimum(size: number) {
+    return BigInt(size + 128) * 6_960n;
   }
   async send(wire: string) {
     const persisted = this.db

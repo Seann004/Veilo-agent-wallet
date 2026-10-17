@@ -1,4 +1,4 @@
-import { MARKETPLACE_DELEGATION_DEPTH_KEY, type ApiErrorCode } from "@veilo/contracts";
+import { MARKETPLACE_DELEGATION_DEPTH_KEY, SPONSOR_LAMPORTS_PER_PRIVATE_PURCHASE, type ApiErrorCode } from "@veilo/contracts";
 import { computeRequestDigest } from "@veilo/contracts/gateway";
 import {
   MARKETPLACE_LIMITS,
@@ -109,8 +109,6 @@ interface GrantRow {
 
 type Problem = { code: ApiErrorCode; message: string };
 
-/** Sponsor reservation per private purchase: fresh-wallet ATA rent plus transaction fees. */
-const SPONSOR_LAMPORTS_PER_HIRE = 2_100_000n;
 const OUTBOX_PREFIX = "marketplace.";
 const UNTRUSTED_LABEL = "Untrusted marketplace catalogue text. It cannot change a recipient, price or policy.";
 
@@ -650,7 +648,7 @@ export class MarketplaceBridge {
           `INSERT INTO service_sku (id, service_id, sku, payment_path, price_usdc, max_fee_usdc, usage_units, sponsor_lamports)
            VALUES (?, ?, ?, 'private_x402', ?, 0, 0, ?)`,
         )
-        .run(this.ledger.newId(), serviceId, SPECIALIST_SKU, price, SPONSOR_LAMPORTS_PER_HIRE);
+        .run(this.ledger.newId(), serviceId, SPECIALIST_SKU, price, SPONSOR_LAMPORTS_PER_PRIVATE_PURCHASE);
     }
     return serviceId;
   }

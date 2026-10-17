@@ -46,6 +46,9 @@ export class RelayerError extends Error {
 /** Base fee per signature; the relayer sets no priority fee. */
 export const LAMPORTS_PER_SIGNATURE = 5_000n;
 export const TOKEN_ACCOUNT_SIZE = 165;
+/** spend_private creates both accounts with the sponsor as payer and never closes them. */
+export const SPENT_NULLIFIER_SIZE = 50;
+export const PENDING_CHANGE_SIZE = 130;
 
 export interface RelayerContext {
   db: RelayerDb;
@@ -251,8 +254,9 @@ export class WithdrawalService {
     const nfPda = await spentNullifierPda(program, poolState, toBe32(nullifierHash));
     if (await this.c.chain.account(nfPda.address)) return reject("IDEMPOTENCY_CONFLICT", "nullifier is already spent");
     const ataExists = (await this.c.chain.account(address(r.destination_ata))) !== null;
-    const rent = ataExists ? 0n : await this.c.chain.rentExemptMinimum(TOKEN_ACCOUNT_SIZE);
-    const estimate = rent + LAMPORTS_PER_SIGNATURE * (ataExists ? 1n : 2n);
+    const ataRent = ataExists ? 0n : await this.c.chain.rentExemptMinimum(TOKEN_ACCOUNT_SIZE);
+    const spendRent = (await this.c.chain.rentExemptMinimum(SPENT_NULLIFIER_SIZE)) + (await this.c.chain.rentExemptMinimum(PENDING_CHANGE_SIZE));
+    const estimate = ataRent + spendRent + LAMPORTS_PER_SIGNATURE * (ataExists ? 1n : 2n);
     if (estimate > r.sponsor_cap) return reject("BUDGET_EXCEEDED", "sponsor cost exceeds this withdrawal's sponsor cap");
     const totals = sponsorTotals(this.c.db);
     if (totals.feesSpent + totals.rentOutstanding + estimate > this.c.sponsorCapLamports) return reject("BUDGET_EXCEEDED", "sponsor lamport allowance exhausted");
@@ -315,7 +319,10 @@ export class WithdrawalService {
       if (st?.confirmationStatus === "finalized") {
         const tx = await chain.transaction(r.signature);
         if (tx) recordSponsorEvent(this.c.db, "fee_spent", `withdrawal:${id}`, r.signature, tx.fee);
-        if (st.err === null) this.set(id, { state: "finalized", finalized_slot: tx?.slot ?? null });
+        if (st.err === null) {
+          recordSponsorEvent(this.c.db, "rent_outstanding", `withdrawal:${id}`, r.signature, await this.spendAccountRent(manifest, r.nullifier_hash));
+          this.set(id, { state: "finalized", finalized_slot: tx?.slot ?? null });
+        }
         else this.set(id, { state: "failed", error: "spend transaction failed on-chain" });
         return;
       }
@@ -334,6 +341,16 @@ export class WithdrawalService {
       }
       return this.sendSpend(r, req, manifest, sponsor);
     }
+  }
+
+  /** Lamports the sponsor funded for the spend's nullifier and change accounts. */
+  private async spendAccountRent(manifest: DeploymentManifest, nullifierHash: string): Promise<bigint> {
+    const program = address(manifest.program.programId);
+    const poolState = address(manifest.pool.poolState);
+    const nf = hexToBytes(nullifierHash);
+    const held = async (pda: Promise<{ address: Address }>, size: number) =>
+      (await this.c.chain.account((await pda).address))?.lamports ?? (await this.c.chain.rentExemptMinimum(size));
+    return (await held(spentNullifierPda(program, poolState, nf), SPENT_NULLIFIER_SIZE)) + (await held(pendingChangePda(program, poolState, nf), PENDING_CHANGE_SIZE));
   }
 
   private async sendSpend(r: WithdrawalRow, req: WithdrawalRequestWire, manifest: DeploymentManifest, sponsor: SponsorKey): Promise<void> {

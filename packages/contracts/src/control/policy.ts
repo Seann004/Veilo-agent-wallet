@@ -152,8 +152,12 @@ export interface SeedService {
   skus: SeedSku[];
 }
 
-// Sponsor reservation per private purchase covers fresh-wallet ATA rent plus transaction fees.
-const SPONSOR_PER_PRIVATE_PURCHASE = "2100000";
+/**
+ * Sponsor lamports reserved per private purchase: fresh-wallet ATA rent (2,039,280), the spent
+ * nullifier and pending change account rent (3,034,560, never refunded) and both transaction fees.
+ */
+export const SPONSOR_LAMPORTS_PER_PRIVATE_PURCHASE = 5_200_000n;
+const SPONSOR_PER_PRIVATE_PURCHASE = SPONSOR_LAMPORTS_PER_PRIVATE_PURCHASE.toString();
 
 const privateSku = (sku: string, price: string): SeedSku => ({
   sku,
