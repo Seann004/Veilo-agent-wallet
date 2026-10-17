@@ -571,7 +571,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
                 title={configure.reason ?? undefined}
                 onClick={() => activateDraft(drafts.at(-1)!.version)}
               >
-                Activate policy v{drafts.at(-1)!.version}
+                Turn on with these limits
               </button>
             ) : null}
           </div>
@@ -688,7 +688,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
                 disabled={save.busy || terminal || !configure.allowed}
                 onClick={() => activateDraft(d.version)}
               >
-                Activate policy v{d.version}
+                Use these limits
               </button>
             </div>
           ))}

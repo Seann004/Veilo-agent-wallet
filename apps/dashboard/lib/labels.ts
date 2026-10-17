@@ -185,7 +185,7 @@ export function runBlockedReason(status: AgentStatus, workspaceStopped: boolean)
   if (workspaceStopped) return "Everything is stopped. Resume from the Workspace page to start work again.";
   switch (status) {
     case "draft":
-      return "This agent is off. Activate it to start work.";
+      return "This agent is off. Turn it on to approve its spending limits and let it start work.";
     case "paused":
       return "This agent is paused. Resume it to start work.";
     case "revoked":
