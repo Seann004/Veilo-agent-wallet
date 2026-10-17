@@ -226,6 +226,36 @@ Inference runs at most once per purchase. A crash or a lost lease resumes from t
 
 **Buyer accounts.** `POST /v1/accounts` (seller host only, rate-limited per client address) returns `{accountId, token}`. The token is shown once; only its SHA-256 is stored. An account sees only its own quotes and results, and every execution still needs a valid x402 payment. A remote seller can run this profile on their own infrastructure with their own marketplace seller-host credential, origin and `SELLER_HOST_RECIPIENTS`. The marketplace must list exactly that origin and identity in its quotes.
 
+### Marketplace service and dashboard
+
+`services/marketplace` holds marketplace identity and product records in Supabase. It is optional: `pnpm dev` starts it only when `SUPABASE_URL` is set, and the seller host only when `MARKETPLACE_SELLER_HOST_TOKEN_PATH` is also set. It also requires `EXPECTED_DEVNET_GENESIS_HASH`, `DEVNET_RPC_URL` and `DEMO_TOKEN_MINT`. It never holds wallet keys or local spending authority.
+
+| Variable | Default | Description |
+|---|---|---|
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | required | Supabase project URL and publishable key. |
+| `SUPABASE_SECRET_KEY` | required | Server-side key; it reaches only the marketplace process. Never give it to the dashboard or agents. |
+| `MARKETPLACE_PORT` | `4106` | Listen port. The seller host's own default is also 4106, so set `SELLER_HOST_PORT` (`.env.example` uses 4107) when both run. |
+| `MARKETPLACE_BROWSER_ORIGINS` | `http://localhost:3000` | Comma-separated browser origins the API accepts. |
+| `MARKETPLACE_QUOTE_TTL_SECONDS` | `300` | Quote lifetime. The database caps it at 15 minutes; `.env.example` uses 840 so a private withdrawal fits inside the quote. |
+| `MARKETPLACE_SELLER_HOST_TOKEN_PATH`, `MARKETPLACE_OPERATOR_TOKEN_PATH` | empty | Owner-only bearer token files for the seller host and the operator CLI (`pnpm marketplace:operator`); created by `pnpm setup:local`. Only their SHA-256 is kept in memory. A `*_SHA256` variable may be given instead of the path. |
+| `MARKETPLACE_MANAGED_SELLER_ORIGIN`, `MARKETPLACE_MANAGED_SELLER_IDENTITY` | empty, `veilo-seller-host-devnet` | Seller host that runs managed listings. The identity must equal the seller host's `SELLER_HOST_IDENTITY`. |
+| `MARKETPLACE_DEV_SELLER_ORIGINS` | empty | Exact loopback/private origins admitted for local remote-seller tests only. |
+| `MARKETPLACE_MAX_NETWORK_FEE_LAMPORTS` | `10000000` | Ceiling on the network fee a quote may carry. |
+| `MARKETPLACE_TERMS_VERSION`, `MARKETPLACE_MANAGED_RUNTIME_REVISION` | `2026-10-17`, `v2` | Terms version stamped on quotes; runtime revision for new managed listings. |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_MARKETPLACE_URL` | empty, empty, `http://127.0.0.1:4106` in `.env.example` | Dashboard values, baked in at build time. Only the publishable key belongs here. |
+
+### Dashboard access roles
+
+The dashboard at `http://localhost:3000` serves a public landing page at `/` and the workspace at `/workspace`. Access follows the control service's roles (`VEILO_GUEST_PUBKEYS`, `VEILO_GUEST_RUNS_PER_HOUR`, `VEILO_PUBLIC_VIEW` above):
+
+| Role | Can | Cannot |
+|---|---|---|
+| Owner | Everything: configure and create agents, policies, funding, exit, recovery, approvals, content review, connectors | — |
+| Guest | Sign in with a listed wallet, read the workspace and run agents within their existing policies, rate-limited per hour | Configure, create, stop, fund, recover, decide handoffs, review content or manage connectors |
+| Public viewer | Read the redacted workspace without signing in, only when `VEILO_PUBLIC_VIEW=1` | Any action |
+
+The dashboard only enables or disables controls; control and wallet enforce the same split on every request. The light/dark theme follows the system setting until the viewer picks one, which is kept in browser storage.
+
 ### Runner service
 
 | Variable | Default | Description |
