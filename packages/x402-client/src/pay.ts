@@ -1,6 +1,8 @@
 import { isDeepStrictEqual } from "node:util";
 import { x402Client, x402HTTPClient } from "@x402/core/client";
 import type { PaymentPayload, PaymentRequired, SettleResponse } from "@x402/core/types";
+import { address, type GetAccountInfoApi, type Rpc } from "@solana/kit";
+import { fetchMint } from "@solana-program/token";
 import { ExactSvmScheme } from "@x402/svm/exact/client";
 import { DEVNET_CAIP2 } from "@veilo/contracts";
 import { deriveAta } from "./ata";
@@ -16,6 +18,24 @@ export interface PreparePaymentOptions {
   purchaseRef: string;
   /** Devnet RPC used by the SDK for mint metadata and (if not supplied in the challenge) a blockhash. */
   rpcUrl: string;
+  /**
+   * Optional client for the mint read, e.g. the 429-aware createDevnetRpc. When given, the mint
+   * is read through it and handed to the SDK, which then makes no mint request of its own.
+   */
+  rpc?: Rpc<GetAccountInfoApi>;
+}
+
+type MintMetadata = { decimals: number; programAddress: string };
+
+/**
+ * Pre-fills the SDK scheme's per-instance mint cache (keyed `${network}:${asset}` in
+ * @x402/svm 2.28.0). If that internal field is absent the SDK reads the mint itself as before.
+ */
+async function prefetchMint(scheme: ExactSvmScheme, rpc: Rpc<GetAccountInfoApi>, network: string, asset: string): Promise<void> {
+  const cache = (scheme as unknown as { mintCache?: unknown }).mintCache;
+  if (!(cache instanceof Map)) return;
+  const mint = await fetchMint(rpc, address(asset));
+  (cache as Map<string, Promise<MintMetadata>>).set(`${network}:${asset}`, Promise.resolve({ decimals: mint.data.decimals, programAddress: mint.programAddress }));
 }
 
 export interface PreparedPayment {
@@ -48,7 +68,9 @@ export async function preparePayment(options: PreparePaymentOptions): Promise<Pr
     if (reqs.length !== 1) throw new X402ClientError("SERVICE_NOT_ALLOWED", "selector_expected_single_requirement");
     return reqs[0] as (typeof reqs)[number];
   });
-  client.register(DEVNET_CAIP2, new ExactSvmScheme(signer, { rpcUrl: options.rpcUrl }));
+  const scheme = new ExactSvmScheme(signer, { rpcUrl: options.rpcUrl });
+  if (options.rpc) await prefetchMint(scheme, options.rpc, verified.requirements.network, verified.requirements.asset);
+  client.register(DEVNET_CAIP2, scheme);
   client.setSpendControls({
     maxAmountPerPayment: false,
     allowedAssets: [{ network: DEVNET_CAIP2, asset: binding.mint, maxAmountPerPayment: binding.maxAmount.toString() }],

@@ -1,0 +1,81 @@
+{
+  "kind": "M2 devnet private smoke: change-insert",
+  "profile": "devnet",
+  "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+  "recordedAt": "2026-10-17T07:42:14.012Z",
+  "changeNoteState": "spendable",
+  "crankAttempts": [
+    {
+      "queueSeq": "0",
+      "kind": "insert",
+      "state": "finalized",
+      "signature": "2nanatYKRrLezeCYB8MtL3YpyJrgqQBnj6TsWanjYVU1qvkLZtXRXQwGhRgCYfpfCid9mdKWq7jQAuXkDgRvBJJm",
+      "explorer": "https://explorer.solana.com/tx/2nanatYKRrLezeCYB8MtL3YpyJrgqQBnj6TsWanjYVU1qvkLZtXRXQwGhRgCYfpfCid9mdKWq7jQAuXkDgRvBJJm?cluster=devnet",
+      "slot": "512001218",
+      "err": null,
+      "feeLamports": "5000",
+      "computeUnitsConsumed": "108601",
+      "lamportChanges": [
+        {
+          "account": "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+          "delta": "-5000"
+        }
+      ],
+      "accountKeys": [
+        "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+        "3pFS3aJ8qtVpkFE2L6nT4A9D8vgJnVd51zdaDapHA21j",
+        "5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe",
+        "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
+        "ComputeBudget111111111111111111111111111111"
+      ]
+    },
+    {
+      "queueSeq": "1",
+      "kind": "insert",
+      "state": "finalized",
+      "signature": "3fMMtbJVyPsdEvqexitZF4AbK9equtTgp5pVxyEuybqi4fvHa921koFv1sHU7tVCmPp1zzxt2RTjg4xYng3NdpXr",
+      "explorer": "https://explorer.solana.com/tx/3fMMtbJVyPsdEvqexitZF4AbK9equtTgp5pVxyEuybqi4fvHa921koFv1sHU7tVCmPp1zzxt2RTjg4xYng3NdpXr?cluster=devnet",
+      "slot": "512001228",
+      "err": null,
+      "feeLamports": "5000",
+      "computeUnitsConsumed": "108604",
+      "lamportChanges": [
+        {
+          "account": "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+          "delta": "-5000"
+        }
+      ],
+      "accountKeys": [
+        "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+        "5j9cXKhCG6KsXoCBsBiHPocA23S17rSptVnehXbucNsE",
+        "5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe",
+        "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
+        "ComputeBudget111111111111111111111111111111"
+      ]
+    },
+    {
+      "queueSeq": "2",
+      "kind": "insert",
+      "state": "finalized",
+      "signature": "3eNQpVCRC16G6q8DiTUMxYQ5nbYfPwKjoD4PCu2mUTmx7oPUYJ6gbWhofziXREF6L7k66a6FZqz9eNXF3TT6dD8K",
+      "explorer": "https://explorer.solana.com/tx/3eNQpVCRC16G6q8DiTUMxYQ5nbYfPwKjoD4PCu2mUTmx7oPUYJ6gbWhofziXREF6L7k66a6FZqz9eNXF3TT6dD8K?cluster=devnet",
+      "slot": "512001343",
+      "err": null,
+      "feeLamports": "5000",
+      "computeUnitsConsumed": "108333",
+      "lamportChanges": [
+        {
+          "account": "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+          "delta": "-5000"
+        }
+      ],
+      "accountKeys": [
+        "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+        "5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe",
+        "AKMrsXdiCCk8PfsN7GTR5gCPESUWbMwH9o16g4nqFth",
+        "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
+        "ComputeBudget111111111111111111111111111111"
+      ]
+    }
+  ]
+}

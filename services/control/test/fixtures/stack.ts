@@ -94,6 +94,8 @@ export interface StackOptions {
   notes?: bigint[];
   leaseMs?: number;
   purchaseSweepMs?: number;
+  settleWaitMs?: number;
+  settlePollMs?: number;
 }
 
 export async function makeStack(options: StackOptions = {}): Promise<Stack> {
@@ -132,7 +134,7 @@ export async function makeStack(options: StackOptions = {}): Promise<Stack> {
   const permits = PermitSigner.fromPem(gw.permitPem.privateKeyPem);
   const session: SessionSettings = { domain: "localhost:3000", origin: ORIGIN, chainId: DEVNET_CAIP2, challengeTtlMs: 300_000, sessionTtlMs: 3_600_000, secureCookies: false };
 
-  const build = () => createIntegration(env.ledger, { gateway: gatewayClient, permits, funding, ...(options.leaseMs !== undefined ? { leaseMs: options.leaseMs } : {}), ...(options.purchaseSweepMs !== undefined ? { purchaseSweepMs: options.purchaseSweepMs } : {}) });
+  const build = () => createIntegration(env.ledger, { gateway: gatewayClient, permits, funding, ...(options.leaseMs !== undefined ? { leaseMs: options.leaseMs } : {}), ...(options.purchaseSweepMs !== undefined ? { purchaseSweepMs: options.purchaseSweepMs } : {}), ...(options.settleWaitMs !== undefined ? { settleWaitMs: options.settleWaitMs } : {}), ...(options.settlePollMs !== undefined ? { settlePollMs: options.settlePollMs } : {}) });
   const listen = async (integration: Integration) => {
     const app = createApp(createServiceHealth("control", config, false), { ledger: env.ledger, session, services: new ServiceCredentials([]), log: () => undefined, integration });
     const server = app.listen(0, "127.0.0.1");

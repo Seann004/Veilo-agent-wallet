@@ -45,6 +45,7 @@ export class OpenRouterProvider implements ChatProvider {
       usage: { include: true },
       provider: { max_price: { prompt: request.maxPrice.prompt, completion: request.maxPrice.completion } },
       ...(request.jsonObject ? { response_format: { type: "json_object" } } : {}),
+      ...(request.disableReasoning ? { reasoning: { enabled: false } } : {}),
     };
     let response: Response;
     try {

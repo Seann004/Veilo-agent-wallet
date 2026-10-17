@@ -2,7 +2,7 @@ import { generateKeyPairSigner, getBase64Decoder, none, some } from "@solana/kit
 import { getMintEncoder, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 import { decodePaymentSignatureHeader } from "@x402/core/http";
 import type { PaymentRequired, SupportedResponse } from "@x402/core/types";
-import { DEVNET_CAIP2 } from "@veilo/contracts";
+import { createDevnetRpc, DEVNET_CAIP2 } from "@veilo/contracts";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { verifyPaymentRequired, type ApprovedServiceBinding } from "../src/binding";
 import { X402ClientError } from "../src/errors";
@@ -123,6 +123,34 @@ describe("x402 client adapter", () => {
     expect(prepared.validated.payer).toBe(p.payer.address);
     expect(prepared.validated.amount).toBe(100_000n);
     expect(prepared.validated.recentBlockhash).toBe(p.blockhash);
+  });
+
+  it("reads the mint only through a supplied retrying RPC, across a 429", async () => {
+    const RETRYING_URL = "https://retrying.devnet.test.invalid/";
+    const served = stubRpc();
+    let rejected = 0;
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string | URL | Request, init?: RequestInit) => {
+      urls.push(String(url));
+      if (rejected === 0) {
+        rejected += 1;
+        return new Response("Too Many Requests", { status: 429, statusText: "Too Many Requests" });
+      }
+      return served(url, init);
+    });
+    const wallet = countingWallet();
+    const prepared = await preparePayment({
+      paymentRequired: challenge,
+      binding,
+      wallet,
+      purchaseRef: "op-retry",
+      rpcUrl: RPC_URL,
+      rpc: createDevnetRpc(RETRYING_URL, { maxRetries: 2, maxDelayMs: 1 }),
+    });
+    expect(wallet.calls).toBe(1);
+    expect(prepared.validated.amount).toBe(100_000n);
+    // The SDK's own client (RPC_URL) made no request: its mint cache was filled.
+    expect(urls).toEqual([RETRYING_URL, RETRYING_URL]);
   });
 
   it("never signs when the challenge violates the binding", async () => {

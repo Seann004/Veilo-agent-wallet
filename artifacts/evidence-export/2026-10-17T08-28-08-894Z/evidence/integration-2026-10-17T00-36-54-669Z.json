@@ -1,0 +1,1349 @@
+{
+  "kind": "Veilo integration and fault-injection suite (pnpm test:integration)",
+  "startedAt": "2026-10-17T00:36:54.669Z",
+  "finishedAt": "2026-10-17T01:05:32.877Z",
+  "environment": {
+    "chain": "solana-test-validator (Agave 4.1.2, toolchain image) on loopback; genesis E7RaVJ7wNLSsuMWeDFeUTDeSrVb91XwebdnLpyH22qXd (not devnet)",
+    "program": "3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq preloaded from target/deploy/privacy_pool.so sha256 01449e43d097ea1a09049f0397d62aad8d4777250ceef780eb62a70c8044e278",
+    "facilitator": "self-hosted @x402/core x402Facilitator + @x402/svm exact scheme, fee payer 7Sb9LhfgCnU4nJT4JV6aTBLt6Jw3KY5kX2rtkhNBEcgN",
+    "provider": "FIXTURE: loopback OpenRouter-compatible mock (not real inference)",
+    "proofs": "real Groth16 proofs (snarkjs) verified on chain by the deployed program",
+    "host": "win32 x64, Node v22.14.0",
+    "services": "control, runner, wallet, relayer, gateway as separate processes (services/*/src/index.ts) behind loopback fault proxies",
+    "label": "LOCAL TEST VALIDATOR evidence: no devnet transaction; inference is FIXTURE (mock provider), not real inference"
+  },
+  "counts": {
+    "total": 30,
+    "passed": 30,
+    "failed": 0,
+    "skipped": 0
+  },
+  "prdCoverage": {
+    "IDEM-01": "passed",
+    "X402-01 (local, FIXTURE inference)": "passed",
+    "X402-04": "passed",
+    "X402-03": "passed",
+    "REC-01": "passed",
+    "REC-02": "passed",
+    "CRE-01": "passed",
+    "CRE-03": "passed",
+    "USG-01": "passed",
+    "LLM-01": "passed",
+    "QUO-01": "passed",
+    "QUO-02": "passed",
+    "LED-01": "passed",
+    "CAP-02": "passed",
+    "BAK-01": "passed",
+    "REC-03": "passed",
+    "LED-01 (external recovery)": "passed",
+    "REV-01": "passed",
+    "SEC-02": "passed"
+  },
+  "tests": [
+    {
+      "test": "baseline private x402 purchase › IDEM-01: one financial operation for the same logical purchase; repeats return the same state and result",
+      "status": "passed",
+      "durationMs": 49471,
+      "prdIds": [
+        "IDEM-01",
+        "X402-01 (local, FIXTURE inference)"
+      ]
+    },
+    {
+      "test": "baseline private x402 purchase › X402-04: the same operation with a changed request conflicts before any payment work",
+      "status": "passed",
+      "durationMs": 29,
+      "prdIds": [
+        "X402-04"
+      ]
+    },
+    {
+      "test": "baseline private x402 purchase › X402-03: a settled payment presented for another quote or another account is not fulfilled again",
+      "status": "passed",
+      "durationMs": 995,
+      "prdIds": [
+        "X402-03"
+      ]
+    },
+    {
+      "test": "REC-01 / REC-02 restart at every multi-leg boundary (private x402) › control→wallet prepare, before delivery",
+      "status": "passed",
+      "durationMs": 61547,
+      "prdIds": [
+        "REC-01"
+      ]
+    },
+    {
+      "test": "REC-01 / REC-02 restart at every multi-leg boundary (private x402) › control→wallet prepare, reply lost",
+      "status": "passed",
+      "durationMs": 61450,
+      "prdIds": [
+        "REC-01"
+      ]
+    },
+    {
+      "test": "REC-01 / REC-02 restart at every multi-leg boundary (private x402) › control→wallet release, before delivery",
+      "status": "passed",
+      "durationMs": 62984,
+      "prdIds": [
+        "REC-01"
+      ]
+    },
+    {
+      "test": "REC-01 / REC-02 restart at every multi-leg boundary (private x402) › wallet→relayer withdrawal, before delivery",
+      "status": "passed",
+      "durationMs": 62304,
+      "prdIds": [
+        "REC-01"
+      ]
+    },
+    {
+      "test": "REC-01 / REC-02 restart at every multi-leg boundary (private x402) › wallet→relayer withdrawal, reply lost",
+      "status": "passed",
+      "durationMs": 53662,
+      "prdIds": [
+        "REC-01"
+      ]
+    },
+    {
+      "test": "REC-01 / REC-02 restart at every multi-leg boundary (private x402) › relayer→rpc sendTransaction, crash after send",
+      "status": "passed",
+      "durationMs": 51251,
+      "prdIds": [
+        "REC-01"
+      ]
+    },
+    {
+      "test": "REC-01 / REC-02 restart at every multi-leg boundary (private x402) › control→wallet release, reply lost",
+      "status": "passed",
+      "durationMs": 128392,
+      "prdIds": [
+        "REC-01"
+      ]
+    },
+    {
+      "test": "REC-01 / REC-02 restart at every multi-leg boundary (private x402) › control→wallet merchant signing, reply lost",
+      "status": "passed",
+      "durationMs": 57273,
+      "prdIds": [
+        "REC-01"
+      ]
+    },
+    {
+      "test": "REC-01 / REC-02 restart at every multi-leg boundary (private x402) › control→gateway signed payment, before delivery",
+      "status": "passed",
+      "durationMs": 57843,
+      "prdIds": [
+        "REC-01"
+      ]
+    },
+    {
+      "test": "REC-01 / REC-02 restart at every multi-leg boundary (private x402) › gateway→facilitator settle, reply lost (REC-02)",
+      "status": "passed",
+      "durationMs": 51289,
+      "prdIds": [
+        "REC-01",
+        "REC-02"
+      ]
+    },
+    {
+      "test": "REC-01 / REC-02 restart at every multi-leg boundary (private x402) › control→gateway signed payment, reply lost",
+      "status": "passed",
+      "durationMs": 57673,
+      "prdIds": [
+        "REC-01"
+      ]
+    },
+    {
+      "test": "credits: CRE-01 restart after settle before issue, CRE-03 repeated checks with restart › issues the pack once after the gateway crashes between finalized payment and issuance",
+      "status": "passed",
+      "durationMs": 55790,
+      "prdIds": [
+        "CRE-01",
+        "CRE-03"
+      ]
+    },
+    {
+      "test": "credits: CRE-01 restart after settle before issue, CRE-03 repeated checks with restart › CRE-03: repeated checks and a full restart keep one unresolved top-up and one issuance; cooldown holds",
+      "status": "passed",
+      "durationMs": 6431,
+      "prdIds": [
+        "CRE-01",
+        "CRE-03"
+      ]
+    },
+    {
+      "test": "USG-01 failure between control's scoped reservation and the gateway account reservation › authorize reply lost",
+      "status": "passed",
+      "durationMs": 9313,
+      "prdIds": [
+        "USG-01"
+      ]
+    },
+    {
+      "test": "USG-01 failure between control's scoped reservation and the gateway account reservation › execute reply lost",
+      "status": "passed",
+      "durationMs": 9304,
+      "prdIds": [
+        "USG-01"
+      ]
+    },
+    {
+      "test": "LLM-01 upstream timeout, price change and exhausted account (FIXTURE provider) › timeout: one attempt, outcome uncertain, units stay reserved, no retry after restart",
+      "status": "passed",
+      "durationMs": 18947,
+      "prdIds": [
+        "LLM-01"
+      ]
+    },
+    {
+      "test": "LLM-01 upstream timeout, price change and exhausted account (FIXTURE provider) › exhausted account (HTTP 402): definite failure, credits released, no retry",
+      "status": "passed",
+      "durationMs": 66,
+      "prdIds": [
+        "LLM-01"
+      ]
+    },
+    {
+      "test": "LLM-01 upstream timeout, price change and exhausted account (FIXTURE provider) › price change above the pinned tariff: dispatch refused before any provider call",
+      "status": "passed",
+      "durationMs": 4201,
+      "prdIds": [
+        "LLM-01"
+      ]
+    },
+    {
+      "test": "quotes with a 60 s lifetime › QUO-01: a payment accepted while the quote was valid that settles after expiry is honored once",
+      "status": "passed",
+      "durationMs": 76433,
+      "prdIds": [
+        "QUO-01"
+      ]
+    },
+    {
+      "test": "quotes with a 60 s lifetime › QUO-02: an expired quote before merchant signing is re-quoted and the existing funding is reused",
+      "status": "passed",
+      "durationMs": 76492,
+      "prdIds": [
+        "QUO-02"
+      ]
+    },
+    {
+      "test": "LED-01 pending change › change is unavailable before authenticated insertion and spendable after",
+      "status": "passed",
+      "durationMs": 63587,
+      "prdIds": [
+        "LED-01"
+      ]
+    },
+    {
+      "test": "CAP-02 two agents race real purchases for the final workspace allowance › atomic authorization admits only the exposure that fits",
+      "status": "passed",
+      "durationMs": 44140,
+      "prdIds": [
+        "CAP-02"
+      ]
+    },
+    {
+      "test": "BAK-01 backup and restore with a pending spend › restores without address reuse, duplicate purchase or lost change",
+      "status": "passed",
+      "durationMs": 106879,
+      "prdIds": [
+        "BAK-01"
+      ]
+    },
+    {
+      "test": "REC-03 recovery conflicting with a signed merchant payment › waits for the signed payment to expire, then recovers only to the owner destination; no pool note is created",
+      "status": "passed",
+      "durationMs": 98468,
+      "prdIds": [
+        "REC-03",
+        "LED-01 (external recovery)"
+      ]
+    },
+    {
+      "test": "REV-01 revoke after a real proof was released › blocks new authority, lets the released withdrawal settle honestly and leaves it to owner recovery",
+      "status": "passed",
+      "durationMs": 46222,
+      "prdIds": [
+        "REV-01"
+      ]
+    },
+    {
+      "test": "SEC-02 log and ledger inspection across all services › no keys, credentials, note secrets or provider key in any service log or service ledger",
+      "status": "passed",
+      "durationMs": 151,
+      "prdIds": [
+        "SEC-02"
+      ]
+    },
+    {
+      "test": "run summary sanity › no unexpected service exits",
+      "status": "passed",
+      "durationMs": 2,
+      "prdIds": []
+    }
+  ],
+  "failedOrSkipped": [],
+  "scenarioEvidence": {
+    "IDEM-01": {
+      "purchaseId": "586c15aa-ca8c-4765-baf1-00adca0f6507",
+      "chainAttempts": [
+        {
+          "leg": "funding",
+          "attempt": 1,
+          "signature": "3fk4jSss52QVhEVAsC8cvDZWEHqG4kZz2FZSPq6G4RHgJy9kuv6Nj5yKbwJSgcLUuZyQYv1W9LJ8ni1Aw98HEz8B",
+          "commitment": "finalized"
+        },
+        {
+          "leg": "merchant",
+          "attempt": 1,
+          "signature": "nN7x8qmQfq4rywFQHPNdXrLVN67gi6PHSx7n49SiPGP9BRidBEKge5iWeXN8bTfeVDsR4wuaKqMFFHAmRab7Nwp",
+          "commitment": "finalized"
+        }
+      ],
+      "invariants": {
+        "walletFundings": 1,
+        "relayerWithdrawals": 1,
+        "relayerSpendFinalized": 1,
+        "merchantPayments": 1,
+        "gatewayPurchases": 1,
+        "gatewayPaymentEvents": 1,
+        "controlExpenseSettled": 2
+      }
+    },
+    "X402-04": {
+      "control": 409,
+      "gatewayChangedDigest": 409
+    },
+    "X402-03": {
+      "sameAccountOtherQuote": {
+        "status": 400,
+        "error": {
+          "code": "POLICY_DENIED",
+          "message": "Payment resource does not match this quote"
+        }
+      },
+      "otherAccount": {
+        "status": 400,
+        "error": {
+          "code": "POLICY_DENIED",
+          "message": "Payment resource does not match this quote"
+        }
+      },
+      "facilitatorSettlesDuringReplay": 0
+    },
+    "REC-01": {
+      "control→wallet prepare, before delivery": {
+        "purchaseId": "2dfefe7c-f908-4aca-bd8f-12ee522ea149",
+        "states": {
+          "authorization": "released",
+          "funding": "finalized",
+          "merchant": "finalized",
+          "fulfilment": "delivered",
+          "recovery": "none"
+        },
+        "invariants": {
+          "walletFundings": 1,
+          "relayerWithdrawals": 1,
+          "relayerSpendFinalized": 1,
+          "merchantPayments": 1,
+          "gatewayPurchases": 1,
+          "gatewayPaymentEvents": 1,
+          "controlExpenseSettled": 2
+        }
+      },
+      "control→wallet prepare, reply lost": {
+        "purchaseId": "33521a59-724d-46f0-90ff-82aca9ae19f3",
+        "states": {
+          "authorization": "released",
+          "funding": "finalized",
+          "merchant": "finalized",
+          "fulfilment": "delivered",
+          "recovery": "none"
+        },
+        "invariants": {
+          "walletFundings": 1,
+          "relayerWithdrawals": 1,
+          "relayerSpendFinalized": 1,
+          "merchantPayments": 1,
+          "gatewayPurchases": 1,
+          "gatewayPaymentEvents": 1,
+          "controlExpenseSettled": 2
+        }
+      },
+      "control→wallet release, before delivery": {
+        "purchaseId": "25fd1fc4-2524-4eda-87d8-95689eda7726",
+        "states": {
+          "authorization": "released",
+          "funding": "finalized",
+          "merchant": "finalized",
+          "fulfilment": "delivered",
+          "recovery": "none"
+        },
+        "invariants": {
+          "walletFundings": 1,
+          "relayerWithdrawals": 1,
+          "relayerSpendFinalized": 1,
+          "merchantPayments": 1,
+          "gatewayPurchases": 1,
+          "gatewayPaymentEvents": 1,
+          "controlExpenseSettled": 2
+        }
+      },
+      "wallet→relayer withdrawal, before delivery": {
+        "purchaseId": "4eafa967-f4aa-4a69-b137-f056780b1b1e",
+        "states": {
+          "authorization": "released",
+          "funding": "finalized",
+          "merchant": "finalized",
+          "fulfilment": "delivered",
+          "recovery": "none"
+        },
+        "invariants": {
+          "walletFundings": 1,
+          "relayerWithdrawals": 1,
+          "relayerSpendFinalized": 1,
+          "merchantPayments": 1,
+          "gatewayPurchases": 1,
+          "gatewayPaymentEvents": 1,
+          "controlExpenseSettled": 2
+        }
+      },
+      "wallet→relayer withdrawal, reply lost": {
+        "purchaseId": "acdf3b20-322e-4030-96f6-59b96308d347",
+        "states": {
+          "authorization": "released",
+          "funding": "finalized",
+          "merchant": "finalized",
+          "fulfilment": "delivered",
+          "recovery": "none"
+        },
+        "invariants": {
+          "walletFundings": 1,
+          "relayerWithdrawals": 1,
+          "relayerSpendFinalized": 1,
+          "merchantPayments": 1,
+          "gatewayPurchases": 1,
+          "gatewayPaymentEvents": 1,
+          "controlExpenseSettled": 2
+        }
+      },
+      "relayer→rpc sendTransaction, crash after send": {
+        "purchaseId": "9593a429-b2c4-4118-a5de-cdcd4cc138fb",
+        "states": {
+          "authorization": "released",
+          "funding": "finalized",
+          "merchant": "finalized",
+          "fulfilment": "delivered",
+          "recovery": "none"
+        },
+        "invariants": {
+          "walletFundings": 1,
+          "relayerWithdrawals": 1,
+          "relayerSpendFinalized": 1,
+          "merchantPayments": 1,
+          "gatewayPurchases": 1,
+          "gatewayPaymentEvents": 1,
+          "controlExpenseSettled": 2
+        }
+      },
+      "control→wallet release, reply lost": {
+        "purchaseId": "94ddea68-18a7-407f-bf81-86f73d7ac25a",
+        "states": {
+          "authorization": "released",
+          "funding": "finalized",
+          "merchant": "finalized",
+          "fulfilment": "delivered",
+          "recovery": "none"
+        },
+        "invariants": {
+          "walletFundings": 1,
+          "relayerWithdrawals": 1,
+          "relayerSpendFinalized": 1,
+          "merchantPayments": 1,
+          "gatewayPurchases": 1,
+          "gatewayPaymentEvents": 1,
+          "controlExpenseSettled": 2
+        }
+      },
+      "control→wallet merchant signing, reply lost": {
+        "purchaseId": "949aff2f-540d-4f90-835c-5f4928575c09",
+        "states": {
+          "authorization": "released",
+          "funding": "finalized",
+          "merchant": "finalized",
+          "fulfilment": "delivered",
+          "recovery": "none"
+        },
+        "invariants": {
+          "walletFundings": 1,
+          "relayerWithdrawals": 1,
+          "relayerSpendFinalized": 1,
+          "merchantPayments": 1,
+          "gatewayPurchases": 1,
+          "gatewayPaymentEvents": 1,
+          "controlExpenseSettled": 2
+        }
+      },
+      "control→gateway signed payment, before delivery": {
+        "purchaseId": "bc0fbf0c-3626-44f8-8bf5-f6e502b1d123",
+        "states": {
+          "authorization": "released",
+          "funding": "finalized",
+          "merchant": "finalized",
+          "fulfilment": "delivered",
+          "recovery": "none"
+        },
+        "invariants": {
+          "walletFundings": 1,
+          "relayerWithdrawals": 1,
+          "relayerSpendFinalized": 1,
+          "merchantPayments": 1,
+          "gatewayPurchases": 1,
+          "gatewayPaymentEvents": 1,
+          "controlExpenseSettled": 2
+        }
+      },
+      "gateway→facilitator settle, reply lost (REC-02)": {
+        "purchaseId": "1fef4fa1-f431-4270-817c-a7c5863d8b15",
+        "states": {
+          "authorization": "released",
+          "funding": "finalized",
+          "merchant": "finalized",
+          "fulfilment": "delivered",
+          "recovery": "none"
+        },
+        "invariants": {
+          "walletFundings": 1,
+          "relayerWithdrawals": 1,
+          "relayerSpendFinalized": 1,
+          "merchantPayments": 1,
+          "gatewayPurchases": 1,
+          "gatewayPaymentEvents": 1,
+          "controlExpenseSettled": 2
+        }
+      },
+      "control→gateway signed payment, reply lost": {
+        "purchaseId": "d9748ebe-3174-4762-900e-7fb8dd91fbdc",
+        "states": {
+          "authorization": "released",
+          "funding": "finalized",
+          "merchant": "finalized",
+          "fulfilment": "delivered",
+          "recovery": "none"
+        },
+        "invariants": {
+          "walletFundings": 1,
+          "relayerWithdrawals": 1,
+          "relayerSpendFinalized": 1,
+          "merchantPayments": 1,
+          "gatewayPurchases": 1,
+          "gatewayPaymentEvents": 1,
+          "controlExpenseSettled": 2
+        }
+      }
+    },
+    "CRE-01": {
+      "purchaseId": "11a0f667-e76a-4350-a1d2-beb7463f6acd",
+      "gatewayExitCode": 86,
+      "issuances": 1,
+      "invariants": {
+        "walletFundings": 1,
+        "relayerWithdrawals": 1,
+        "relayerSpendFinalized": 1,
+        "merchantPayments": 1,
+        "gatewayPurchases": 1,
+        "gatewayPaymentEvents": 1,
+        "controlExpenseSettled": 2
+      }
+    },
+    "CRE-03": {
+      "decisions": [
+        "sufficient",
+        "sufficient",
+        "sufficient",
+        "sufficient",
+        "sufficient"
+      ],
+      "episodes": 1,
+      "issuances": 1
+    },
+    "USG-01": {
+      "authorize reply lost": {
+        "purchaseId": "13e7b41a-469b-4a56-a9d8-64bf91e41dd2",
+        "states": {
+          "authorization": "released",
+          "funding": "not_required",
+          "merchant": "not_required",
+          "fulfilment": "delivered",
+          "recovery": "none"
+        },
+        "providerCalls": 1
+      },
+      "execute reply lost": {
+        "purchaseId": "81fc62d1-898c-4879-93a5-5b827683781e",
+        "states": {
+          "authorization": "released",
+          "funding": "not_required",
+          "merchant": "not_required",
+          "fulfilment": "delivered",
+          "recovery": "none"
+        },
+        "providerCalls": 1
+      }
+    },
+    "LLM-01": {
+      "timeout": {
+        "purchaseId": "aaae0824-8504-4ba3-824d-c44ad3107758",
+        "states": {
+          "authorization": "released",
+          "funding": "not_required",
+          "merchant": "not_required",
+          "fulfilment": "uncertain",
+          "recovery": "none"
+        },
+        "providerAttempts": 1
+      },
+      "exhausted": {
+        "purchaseId": "57695303-f910-456d-bafa-8ef503d4033a",
+        "states": {
+          "authorization": "released",
+          "funding": "not_required",
+          "merchant": "not_required",
+          "fulfilment": "abandoned",
+          "recovery": "none"
+        },
+        "execution": {
+          "state": "released",
+          "error": {
+            "code": "PROVIDER_UNAVAILABLE"
+          }
+        }
+      },
+      "priceChange": {
+        "purchaseId": "40043856-ea8a-4673-9696-a730a25e9112",
+        "states": {
+          "authorization": "released",
+          "funding": "not_required",
+          "merchant": "not_required",
+          "fulfilment": "abandoned",
+          "recovery": "none"
+        },
+        "blocked": {
+          "code": "PRICE_CHANGED",
+          "message": "gateway refused the usage authorization: Inference unavailable: live provider price exceeds the pinned tariff"
+        },
+        "gatewayInference": {
+          "model": "mistralai/mistral-nemo",
+          "ready": false,
+          "code": "PRICE_CHANGED",
+          "reason": "live provider price exceeds the pinned tariff"
+        }
+      }
+    },
+    "QUO-01": {
+      "purchaseId": "fe1173cc-e4e7-491b-97dc-b1603651f9c5",
+      "honoredPrice": "100000",
+      "invariants": {
+        "walletFundings": 1,
+        "relayerWithdrawals": 1,
+        "relayerSpendFinalized": 1,
+        "merchantPayments": 1,
+        "gatewayPurchases": 1,
+        "gatewayPaymentEvents": 1,
+        "controlExpenseSettled": 2
+      }
+    },
+    "QUO-02": {
+      "purchaseId": "fe47c9a4-71a7-44d3-843d-3649e99f9e08",
+      "quotes": [
+        {
+          "quoteId": "q_4a82b107-9c12-465a-8b9b-a2da782a9234",
+          "seq": 1,
+          "charge": "100000",
+          "expiresAt": "2026-10-17T00:59:12.768Z"
+        },
+        {
+          "quoteId": "q_8b0f0fba-fcc7-4d25-83f0-fa8ee1cd9295",
+          "seq": 2,
+          "charge": "100000",
+          "expiresAt": "2026-10-17T01:00:14.460Z"
+        }
+      ],
+      "invariants": {
+        "walletFundings": 1,
+        "relayerWithdrawals": 1,
+        "relayerSpendFinalized": 1,
+        "merchantPayments": 1,
+        "gatewayPurchases": 1,
+        "gatewayPaymentEvents": 1,
+        "controlExpenseSettled": 2
+      }
+    },
+    "LED-01": {
+      "purchaseId": "3ea7e5f1-039e-4dc7-8420-7559992c1d14",
+      "changeValue": "600000",
+      "beforeInsertion": "pending_change (control), not spendable (wallet)",
+      "afterInsertion": "spendable_change"
+    },
+    "CAP-02": {
+      "allowanceLeft": "350000",
+      "admitted": "research-expanded",
+      "rejected": {
+        "status": 409,
+        "body": {
+          "code": "BUDGET_EXCEEDED",
+          "message": "workspace lifetime allocation would be exceeded"
+        }
+      }
+    },
+    "BAK-01": {
+      "purchaseId": "a0c86556-410f-410f-b086-42ceec7b816c",
+      "restoreOutput": [
+        "restore complete: 26 note(s), 18 fresh wallet key(s); control ledger kept",
+        "  key counters advanced to note 1026, one-time 1018 (no index is reused)",
+        "  1 funding(s) need reconciliation; new proofs and signatures stay blocked until the wallet's startup reconciliation passes",
+        "  previous file kept at C:\\Users\\Seanseann\\Desktop\\Veilo-agent-wallet\\work\\integration\\secrets\\wallet-secrets.sqlite.pre-restore-2026-10-17T01-01-24-868Z"
+      ],
+      "invariants": {
+        "walletFundings": 1,
+        "relayerWithdrawals": 1,
+        "relayerSpendFinalized": 1,
+        "merchantPayments": 1,
+        "gatewayPurchases": 1,
+        "gatewayPaymentEvents": 1,
+        "controlExpenseSettled": 2
+      },
+      "freshWalletsDistinct": 19,
+      "nextPurchase": {
+        "authorization": "released",
+        "funding": "finalized",
+        "merchant": "finalized",
+        "fulfilment": "delivered",
+        "recovery": "none"
+      }
+    },
+    "REC-03": {
+      "purchaseId": "b4fee497-aec3-4b6b-8c08-aad48f5f2255",
+      "earlyRecovery": {
+        "error": {
+          "code": "SETTLEMENT_UNCERTAIN",
+          "message": "the signed merchant payment may still settle; recovery waits until its blockhash expires or it settles"
+        }
+      },
+      "recovery": {
+        "recoveryId": "927b2f56-2e6e-40cd-96b5-4b31dc3d9def",
+        "purchaseId": "b4fee497-aec3-4b6b-8c08-aad48f5f2255",
+        "state": "finalized",
+        "amount": {
+          "amount": "100000",
+          "unit": "usdc_base_units"
+        },
+        "freshWallet": "3gxjo5wv8XvhbySkmGY6DQ3PHUmJxnETKsJRzoLzPbR8",
+        "destinationOwner": "5uDhkwgXYSEyT8HxbDnTy5rzfq8FVxujRT4NNK3NVxyF",
+        "destinationAta": "HmtanHY6DVDGDNow37KbarJxMegEJu8a9zgpqb22Njh4",
+        "rentDestination": "9RFmmduBHJxMtEfG4pJgkipKQHg88Jek3Uzn1sn83XTs",
+        "signature": "495PvW1BGPJAaE6amYRL1qBqfGzh3NMQsJKc84LjTGBze8zWQt1z76GNuZZEwFJyJmhGw4qsDg8rQVBHBygfKf5u",
+        "privacyWarning": "Recovery moves the fresh payment wallet's remaining tokens to your configured recovery account in a public transaction. It links that fresh wallet to your account and does not restore the original privacy."
+      },
+      "recoveredToOwner": "100000",
+      "states": {
+        "authorization": "released",
+        "funding": "finalized",
+        "merchant": "expired_unsettled",
+        "fulfilment": "not_started",
+        "recovery": "recovered"
+      }
+    },
+    "LED-01 external recovery": {
+      "controlNotesBefore": 28,
+      "controlNotesAfter": 28,
+      "note": "recovered principal returned to the owner account; no pool note created"
+    },
+    "REV-01": {
+      "purchaseId": "bfd5b16f-b9c1-4332-aa84-03b39cbc08b6",
+      "states": {
+        "authorization": "released",
+        "funding": "finalized",
+        "merchant": "abandoned",
+        "fulfilment": "not_started",
+        "recovery": "recovered"
+      },
+      "newIntentAfterRevoke": {
+        "status": 401,
+        "error": {
+          "code": "UNAUTHENTICATED",
+          "message": "valid credentials are required"
+        }
+      },
+      "recovery": {
+        "recoveryId": "ed72edce-5f45-4522-845b-4bc78dec83c2",
+        "purchaseId": "bfd5b16f-b9c1-4332-aa84-03b39cbc08b6",
+        "state": "finalized",
+        "amount": {
+          "amount": "300000",
+          "unit": "usdc_base_units"
+        },
+        "freshWallet": "Gtv6N3LxVwGLLQEeq8Prevzx5S6c9v31eeDKafSdpijs",
+        "destinationOwner": "5uDhkwgXYSEyT8HxbDnTy5rzfq8FVxujRT4NNK3NVxyF",
+        "destinationAta": "HmtanHY6DVDGDNow37KbarJxMegEJu8a9zgpqb22Njh4",
+        "rentDestination": "9RFmmduBHJxMtEfG4pJgkipKQHg88Jek3Uzn1sn83XTs",
+        "signature": "2Eb6H3zPe1cgomrqCiDPZwVxypxVRU7kSpXoivmWvUZKjcr2zgNyQzoXxBLFmxWpZjP8z2pruyib8cFMf7DswbpJ",
+        "privacyWarning": "Recovery moves the fresh payment wallet's remaining tokens to your configured recovery account in a public transaction. It links that fresh wallet to your account and does not restore the original privacy."
+      }
+    },
+    "SEC-02": {
+      "secretsChecked": 36,
+      "targetsScanned": [
+        "log control.log",
+        "log control.pid",
+        "log gateway.log",
+        "log gateway.pid",
+        "log relayer.log",
+        "log relayer.pid",
+        "log runner.log",
+        "log runner.pid",
+        "log wallet.log",
+        "log wallet.pid",
+        "control.sqlite",
+        "control.sqlite-wal",
+        "gateway.sqlite",
+        "gateway.sqlite-wal",
+        "relayer.sqlite",
+        "relayer.sqlite-wal"
+      ],
+      "hits": []
+    },
+    "serviceExits": [
+      {
+        "service": "runner",
+        "code": null,
+        "at": 1792197805061,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792197805065,
+        "expected": true
+      },
+      {
+        "service": "control",
+        "code": null,
+        "at": 1792197805067,
+        "expected": true
+      },
+      {
+        "service": "wallet",
+        "code": null,
+        "at": 1792197805094,
+        "expected": true
+      },
+      {
+        "service": "relayer",
+        "code": null,
+        "at": 1792197805118,
+        "expected": true
+      },
+      {
+        "service": "runner",
+        "code": null,
+        "at": 1792197867449,
+        "expected": true
+      },
+      {
+        "service": "control",
+        "code": null,
+        "at": 1792197867453,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792197867456,
+        "expected": true
+      },
+      {
+        "service": "wallet",
+        "code": null,
+        "at": 1792197867511,
+        "expected": true
+      },
+      {
+        "service": "relayer",
+        "code": null,
+        "at": 1792197867526,
+        "expected": true
+      },
+      {
+        "service": "runner",
+        "code": null,
+        "at": 1792197929997,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792197930001,
+        "expected": true
+      },
+      {
+        "service": "control",
+        "code": null,
+        "at": 1792197930005,
+        "expected": true
+      },
+      {
+        "service": "wallet",
+        "code": null,
+        "at": 1792197930084,
+        "expected": true
+      },
+      {
+        "service": "relayer",
+        "code": null,
+        "at": 1792197930089,
+        "expected": true
+      },
+      {
+        "service": "runner",
+        "code": null,
+        "at": 1792197993124,
+        "expected": true
+      },
+      {
+        "service": "control",
+        "code": null,
+        "at": 1792197993126,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792197993129,
+        "expected": true
+      },
+      {
+        "service": "relayer",
+        "code": null,
+        "at": 1792197993219,
+        "expected": true
+      },
+      {
+        "service": "wallet",
+        "code": null,
+        "at": 1792197993223,
+        "expected": true
+      },
+      {
+        "service": "runner",
+        "code": null,
+        "at": 1792198055307,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198055311,
+        "expected": true
+      },
+      {
+        "service": "control",
+        "code": null,
+        "at": 1792198055315,
+        "expected": true
+      },
+      {
+        "service": "wallet",
+        "code": null,
+        "at": 1792198055394,
+        "expected": true
+      },
+      {
+        "service": "relayer",
+        "code": null,
+        "at": 1792198055402,
+        "expected": true
+      },
+      {
+        "service": "runner",
+        "code": null,
+        "at": 1792198108981,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198108986,
+        "expected": true
+      },
+      {
+        "service": "control",
+        "code": null,
+        "at": 1792198109016,
+        "expected": true
+      },
+      {
+        "service": "wallet",
+        "code": null,
+        "at": 1792198109064,
+        "expected": true
+      },
+      {
+        "service": "relayer",
+        "code": null,
+        "at": 1792198109070,
+        "expected": true
+      },
+      {
+        "service": "runner",
+        "code": null,
+        "at": 1792198161311,
+        "expected": true
+      },
+      {
+        "service": "control",
+        "code": null,
+        "at": 1792198161317,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198161320,
+        "expected": true
+      },
+      {
+        "service": "relayer",
+        "code": null,
+        "at": 1792198161359,
+        "expected": true
+      },
+      {
+        "service": "wallet",
+        "code": null,
+        "at": 1792198161400,
+        "expected": true
+      },
+      {
+        "service": "runner",
+        "code": null,
+        "at": 1792198318959,
+        "expected": true
+      },
+      {
+        "service": "control",
+        "code": null,
+        "at": 1792198318962,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198318964,
+        "expected": true
+      },
+      {
+        "service": "wallet",
+        "code": null,
+        "at": 1792198318990,
+        "expected": true
+      },
+      {
+        "service": "relayer",
+        "code": null,
+        "at": 1792198318993,
+        "expected": true
+      },
+      {
+        "service": "control",
+        "code": null,
+        "at": 1792198376355,
+        "expected": true
+      },
+      {
+        "service": "runner",
+        "code": null,
+        "at": 1792198376358,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198376360,
+        "expected": true
+      },
+      {
+        "service": "relayer",
+        "code": null,
+        "at": 1792198376384,
+        "expected": true
+      },
+      {
+        "service": "wallet",
+        "code": null,
+        "at": 1792198376386,
+        "expected": true
+      },
+      {
+        "service": "runner",
+        "code": null,
+        "at": 1792198434876,
+        "expected": true
+      },
+      {
+        "service": "control",
+        "code": null,
+        "at": 1792198434879,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198434882,
+        "expected": true
+      },
+      {
+        "service": "wallet",
+        "code": null,
+        "at": 1792198434921,
+        "expected": true
+      },
+      {
+        "service": "relayer",
+        "code": null,
+        "at": 1792198434924,
+        "expected": true
+      },
+      {
+        "service": "runner",
+        "code": null,
+        "at": 1792198502281,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198502284,
+        "expected": true
+      },
+      {
+        "service": "control",
+        "code": null,
+        "at": 1792198502287,
+        "expected": true
+      },
+      {
+        "service": "wallet",
+        "code": null,
+        "at": 1792198502313,
+        "expected": true
+      },
+      {
+        "service": "relayer",
+        "code": null,
+        "at": 1792198502352,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198510735,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": 86,
+        "at": 1792198561351,
+        "expected": false
+      },
+      {
+        "service": "runner",
+        "code": null,
+        "at": 1792198566537,
+        "expected": true
+      },
+      {
+        "service": "control",
+        "code": null,
+        "at": 1792198566542,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198566547,
+        "expected": true
+      },
+      {
+        "service": "wallet",
+        "code": null,
+        "at": 1792198566582,
+        "expected": true
+      },
+      {
+        "service": "relayer",
+        "code": null,
+        "at": 1792198566610,
+        "expected": true
+      },
+      {
+        "service": "runner",
+        "code": null,
+        "at": 1792198572993,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198572997,
+        "expected": true
+      },
+      {
+        "service": "control",
+        "code": null,
+        "at": 1792198573000,
+        "expected": true
+      },
+      {
+        "service": "relayer",
+        "code": null,
+        "at": 1792198573006,
+        "expected": true
+      },
+      {
+        "service": "wallet",
+        "code": null,
+        "at": 1792198573009,
+        "expected": true
+      },
+      {
+        "service": "runner",
+        "code": null,
+        "at": 1792198582314,
+        "expected": true
+      },
+      {
+        "service": "control",
+        "code": null,
+        "at": 1792198582318,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198582321,
+        "expected": true
+      },
+      {
+        "service": "wallet",
+        "code": null,
+        "at": 1792198582331,
+        "expected": true
+      },
+      {
+        "service": "relayer",
+        "code": null,
+        "at": 1792198582335,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198591564,
+        "expected": true
+      },
+      {
+        "service": "runner",
+        "code": null,
+        "at": 1792198596697,
+        "expected": true
+      },
+      {
+        "service": "control",
+        "code": null,
+        "at": 1792198596705,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198596709,
+        "expected": true
+      },
+      {
+        "service": "wallet",
+        "code": null,
+        "at": 1792198596718,
+        "expected": true
+      },
+      {
+        "service": "relayer",
+        "code": null,
+        "at": 1792198596720,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198610576,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198612704,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198614777,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198769261,
+        "expected": true
+      },
+      {
+        "service": "relayer",
+        "code": null,
+        "at": 1792198800127,
+        "expected": true
+      },
+      {
+        "service": "runner",
+        "code": null,
+        "at": 1792198881426,
+        "expected": true
+      },
+      {
+        "service": "gateway",
+        "code": null,
+        "at": 1792198881430,
+        "expected": true
+      },
+      {
+        "service": "control",
+        "code": null,
+        "at": 1792198881433,
+        "expected": true
+      },
+      {
+        "service": "relayer",
+        "code": null,
+        "at": 1792198881496,
+        "expected": true
+      },
+      {
+        "service": "wallet",
+        "code": null,
+        "at": 1792198881502,
+        "expected": true
+      }
+    ]
+  }
+}

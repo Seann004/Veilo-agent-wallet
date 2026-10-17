@@ -220,6 +220,8 @@ describe("LLM-01 provider bounds", () => {
     expect(row).toMatchObject({ worst_case_micro: 262n, actual_micro: 3n, actual_source: "provider_reported", state: "settled" });
     expect(h.provider!.calls[0]!.maxPrice).toEqual({ prompt: 0.029, completion: 0.03 });
     expect(h.provider!.calls[0]!.maxOutputTokens).toBe(1000);
+    // Only models pinned with reasoning "disabled" ask the provider to skip reasoning.
+    expect(h.provider!.calls[0]!.disableReasoning).toBeUndefined();
   });
 });
 

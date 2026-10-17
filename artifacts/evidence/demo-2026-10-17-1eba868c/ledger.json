@@ -1,0 +1,476 @@
+{
+  "note": "Redacted owner ledger: purchases, states, amounts and public signatures. No credentials, keys or note secrets.",
+  "balances": {
+    "workspace": {
+      "policyVersion": 1,
+      "tier": "bounded_automatic",
+      "stopped": false,
+      "unit": "usdc_base_units",
+      "lifetime": {
+        "limit": "10000000",
+        "settled": "1500000",
+        "reserved": "0",
+        "available": "8500000",
+        "overCommitted": "0"
+      },
+      "rolling24h": {
+        "limit": "5000000",
+        "settled": "1500000",
+        "reserved": "0",
+        "available": "3500000",
+        "overCommitted": "0"
+      },
+      "sponsor": {
+        "unit": "lamports",
+        "limit": "100000000",
+        "settled": "2986880",
+        "reserved": "0",
+        "available": "97013120",
+        "overCommitted": "0"
+      }
+    },
+    "agents": [
+      {
+        "name": "Mira",
+        "role": "content",
+        "agentId": "5a499781-3a25-4978-8471-889e86b9830b",
+        "status": "active",
+        "policyVersion": 2,
+        "tier": "bounded_automatic",
+        "unit": "usdc_base_units",
+        "maxPurchase": "500000",
+        "lifetime": {
+          "limit": "400000",
+          "settled": "300000",
+          "reserved": "0",
+          "available": "100000",
+          "overCommitted": "0"
+        },
+        "rolling24h": {
+          "limit": "2000000",
+          "settled": "300000",
+          "reserved": "0",
+          "available": "1700000",
+          "overCommitted": "0"
+        },
+        "usageAllowance": {
+          "unit": "gateway_microcredits",
+          "limit": "2000000",
+          "settled": "0",
+          "reserved": "0",
+          "available": "2000000",
+          "overCommitted": "0"
+        },
+        "permissions": {
+          "allowedSkus": [
+            "content-package",
+            "summarize",
+            "analyze"
+          ],
+          "allowedPaymentPaths": [
+            "private_x402",
+            "prepaid_credits"
+          ]
+        }
+      },
+      {
+        "name": "Prince",
+        "role": "research",
+        "agentId": "7617e7ec-ce7c-4726-b886-650002e6bd47",
+        "status": "revoked",
+        "policyVersion": 1,
+        "tier": "bounded_automatic",
+        "unit": "usdc_base_units",
+        "maxPurchase": "500000",
+        "lifetime": {
+          "limit": "2000000",
+          "settled": "200000",
+          "reserved": "0",
+          "available": "1800000",
+          "overCommitted": "0"
+        },
+        "rolling24h": {
+          "limit": "2000000",
+          "settled": "200000",
+          "reserved": "0",
+          "available": "1800000",
+          "overCommitted": "0"
+        },
+        "usageAllowance": {
+          "unit": "gateway_microcredits",
+          "limit": "2000000",
+          "settled": "200000",
+          "reserved": "0",
+          "available": "1800000",
+          "overCommitted": "0"
+        },
+        "permissions": {
+          "allowedSkus": [
+            "research-basic",
+            "research-expanded",
+            "summarize",
+            "analyze"
+          ],
+          "allowedPaymentPaths": [
+            "private_x402",
+            "prepaid_credits"
+          ]
+        }
+      },
+      {
+        "name": "Shawn",
+        "role": "credit_manager",
+        "agentId": "219253b8-1c96-4ea6-bb7b-9b5362e927d5",
+        "status": "paused",
+        "policyVersion": 1,
+        "tier": "bounded_automatic",
+        "unit": "usdc_base_units",
+        "maxPurchase": "1000000",
+        "lifetime": {
+          "limit": "3000000",
+          "settled": "1000000",
+          "reserved": "0",
+          "available": "2000000",
+          "overCommitted": "0"
+        },
+        "rolling24h": {
+          "limit": "3000000",
+          "settled": "1000000",
+          "reserved": "0",
+          "available": "2000000",
+          "overCommitted": "0"
+        },
+        "usageAllowance": {
+          "unit": "gateway_microcredits",
+          "limit": "0",
+          "settled": "0",
+          "reserved": "0",
+          "available": "0",
+          "overCommitted": "0"
+        },
+        "permissions": {
+          "allowedSkus": [
+            "inference-credit-pack"
+          ],
+          "allowedPaymentPaths": [
+            "private_x402"
+          ]
+        }
+      }
+    ],
+    "tokens": {
+      "unit": "usdc_base_units",
+      "mint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+      "buckets": {
+        "approved_unreserved": "1000000",
+        "reserved_input": "0",
+        "consumed": "2800000",
+        "pending_change": "0",
+        "confirmed_change": "500000",
+        "payout_balance": "0",
+        "merchant_outflow": "1500000",
+        "fee_outflow": "0",
+        "external_recovered": "0"
+      }
+    },
+    "gatewayCredits": {
+      "available": true,
+      "label": "Demo inference credits — backed by the operator's OpenRouter account",
+      "unit": "gateway_microcredits",
+      "accountId": "acct_cefb2b54-78fd-42e4-84a9-1f075b7f699a",
+      "purchased": "1000000",
+      "consumed": "200000",
+      "reserved": "0",
+      "usable": "800000",
+      "version": "3",
+      "asOf": "2026-10-17T08:27:24.470Z",
+      "stale": false,
+      "note": "Credits purchased; no extra on-chain charge for this call."
+    },
+    "cash": {
+      "unit": "usdc_base_units",
+      "spent": "1500000",
+      "reserved": "0",
+      "byAgent": [
+        {
+          "agentId": "5a499781-3a25-4978-8471-889e86b9830b",
+          "name": "Mira",
+          "spent": "300000",
+          "reserved": "0"
+        },
+        {
+          "agentId": "7617e7ec-ce7c-4726-b886-650002e6bd47",
+          "name": "Prince",
+          "spent": "200000",
+          "reserved": "0"
+        },
+        {
+          "agentId": "219253b8-1c96-4ea6-bb7b-9b5362e927d5",
+          "name": "Shawn",
+          "spent": "1000000",
+          "reserved": "0"
+        }
+      ],
+      "note": "Each USDC purchase is counted once. Credit-pack purchases are attributed to the buying agent; credit consumption is not a second payment."
+    },
+    "usageByAgent": [
+      {
+        "agentId": "5a499781-3a25-4978-8471-889e86b9830b",
+        "name": "Mira",
+        "consumedUnits": "0",
+        "reservedUnits": "0",
+        "packsPurchased": 0,
+        "packUnitsPurchased": "0",
+        "packCashSpent": "0"
+      },
+      {
+        "agentId": "7617e7ec-ce7c-4726-b886-650002e6bd47",
+        "name": "Prince",
+        "consumedUnits": "200000",
+        "reservedUnits": "0",
+        "packsPurchased": 0,
+        "packUnitsPurchased": "0",
+        "packCashSpent": "0"
+      },
+      {
+        "agentId": "219253b8-1c96-4ea6-bb7b-9b5362e927d5",
+        "name": "Shawn",
+        "consumedUnits": "0",
+        "reservedUnits": "0",
+        "packsPurchased": 1,
+        "packUnitsPurchased": "1000000",
+        "packCashSpent": "1000000"
+      }
+    ],
+    "sponsoredPlanning": {
+      "label": "operator-sponsored planning",
+      "unit": "calls",
+      "note": "Operator-funded planning calls; not paid with test USDC or gateway credits.",
+      "total": 3,
+      "byAgent": [
+        {
+          "agentId": "5a499781-3a25-4978-8471-889e86b9830b",
+          "name": "Mira",
+          "calls": 1,
+          "tasks": 1
+        },
+        {
+          "agentId": "7617e7ec-ce7c-4726-b886-650002e6bd47",
+          "name": "Prince",
+          "calls": 2,
+          "tasks": 1
+        }
+      ]
+    }
+  },
+  "purchases": [
+    {
+      "id": "78425795-ea51-4a08-a36c-b16251e97083",
+      "agentId": "5a499781-3a25-4978-8471-889e86b9830b",
+      "sku": "content-package",
+      "paymentPath": "private_x402",
+      "price": {
+        "amount": "300000",
+        "unit": "usdc_base_units"
+      },
+      "usage": {
+        "amount": "0",
+        "unit": "gateway_microcredits"
+      },
+      "states": {
+        "authorization": "released",
+        "funding": "finalized",
+        "merchant": "finalized",
+        "fulfilment": "delivered",
+        "recovery": "none"
+      },
+      "label": "Delivered",
+      "chainAttempts": [
+        {
+          "leg": "funding",
+          "attempt": 1,
+          "signature": "oefXfDPGUVXqvpktCxsB3T1hYxccxU6b1RyDD31rnDng4Ryi8LiAUnaSQy7X6eCsNTiEAqksDRDK2mDYZiwSj4E",
+          "commitment": "finalized",
+          "explorer": "https://explorer.solana.com/tx/oefXfDPGUVXqvpktCxsB3T1hYxccxU6b1RyDD31rnDng4Ryi8LiAUnaSQy7X6eCsNTiEAqksDRDK2mDYZiwSj4E?cluster=devnet"
+        },
+        {
+          "leg": "merchant",
+          "attempt": 1,
+          "signature": "pg6uMdTgQRHT1PESDb7HXp3v16syjXc8FxuRa9vdBqaHRaAjshHnvGkn9dUt35qyKvw7rRFXpQCmUwwwfDCALQH",
+          "commitment": "finalized",
+          "explorer": "https://explorer.solana.com/tx/pg6uMdTgQRHT1PESDb7HXp3v16syjXc8FxuRa9vdBqaHRaAjshHnvGkn9dUt35qyKvw7rRFXpQCmUwwwfDCALQH?cluster=devnet"
+        }
+      ],
+      "settledAt": "2026-10-17T08:27:05.164Z"
+    },
+    {
+      "id": "6e7dadc6-5094-498c-b280-0cccb0d690f8",
+      "agentId": "7617e7ec-ce7c-4726-b886-650002e6bd47",
+      "sku": "analyze",
+      "paymentPath": "prepaid_credits",
+      "price": {
+        "amount": "0",
+        "unit": "usdc_base_units"
+      },
+      "usage": {
+        "amount": "200000",
+        "unit": "gateway_microcredits"
+      },
+      "states": {
+        "authorization": "released",
+        "funding": "not_required",
+        "merchant": "not_required",
+        "fulfilment": "delivered",
+        "recovery": "none"
+      },
+      "label": "Delivered",
+      "chainAttempts": [],
+      "settledAt": "2026-10-17T08:26:51.934Z"
+    },
+    {
+      "id": "751077a8-2661-49ab-8cb9-98cff07ee652",
+      "agentId": "7617e7ec-ce7c-4726-b886-650002e6bd47",
+      "sku": "research-expanded",
+      "paymentPath": "private_x402",
+      "price": {
+        "amount": "200000",
+        "unit": "usdc_base_units"
+      },
+      "usage": {
+        "amount": "0",
+        "unit": "gateway_microcredits"
+      },
+      "states": {
+        "authorization": "released",
+        "funding": "finalized",
+        "merchant": "finalized",
+        "fulfilment": "delivered",
+        "recovery": "none"
+      },
+      "label": "Delivered",
+      "chainAttempts": [
+        {
+          "leg": "funding",
+          "attempt": 1,
+          "signature": "AVjERYY4VPPi1QhkgESjgEnAuBTBNsGHHkedfWw3BKBGFLLaABMUfcyfzaBr22QowCrd7nPrxNqKgRUqY2zptoa",
+          "commitment": "finalized",
+          "explorer": "https://explorer.solana.com/tx/AVjERYY4VPPi1QhkgESjgEnAuBTBNsGHHkedfWw3BKBGFLLaABMUfcyfzaBr22QowCrd7nPrxNqKgRUqY2zptoa?cluster=devnet"
+        },
+        {
+          "leg": "merchant",
+          "attempt": 1,
+          "signature": "3o2JtHuxfffCyhct3cqHcuuprKD6zCYY5mjve9q96PTSQSCTBW3ZRmC6UpYfpDW73zma2S9ZZU8k57KzqrxR5Jz1",
+          "commitment": "finalized",
+          "explorer": "https://explorer.solana.com/tx/3o2JtHuxfffCyhct3cqHcuuprKD6zCYY5mjve9q96PTSQSCTBW3ZRmC6UpYfpDW73zma2S9ZZU8k57KzqrxR5Jz1?cluster=devnet"
+        }
+      ],
+      "settledAt": "2026-10-17T08:26:44.681Z"
+    },
+    {
+      "id": "41cb3f46-aae2-42ec-8e85-0ea297a39b20",
+      "agentId": "219253b8-1c96-4ea6-bb7b-9b5362e927d5",
+      "sku": "inference-credit-pack",
+      "paymentPath": "private_x402",
+      "price": {
+        "amount": "1000000",
+        "unit": "usdc_base_units"
+      },
+      "usage": {
+        "amount": "0",
+        "unit": "gateway_microcredits"
+      },
+      "states": {
+        "authorization": "released",
+        "funding": "finalized",
+        "merchant": "finalized",
+        "fulfilment": "delivered",
+        "recovery": "none"
+      },
+      "label": "Delivered",
+      "chainAttempts": [
+        {
+          "leg": "funding",
+          "attempt": 1,
+          "signature": "3oEFBWnyKnNkm4f8EDZCrK4uaNxNMc4UEnbq4iAn1HVa1bDZyD1xtx8pfc527fkr8uG3bBnwHKG9KXbmFM3Z75Fb",
+          "commitment": "finalized",
+          "explorer": "https://explorer.solana.com/tx/3oEFBWnyKnNkm4f8EDZCrK4uaNxNMc4UEnbq4iAn1HVa1bDZyD1xtx8pfc527fkr8uG3bBnwHKG9KXbmFM3Z75Fb?cluster=devnet"
+        },
+        {
+          "leg": "merchant",
+          "attempt": 1,
+          "signature": "3Tb73hwkzCkt8XnrnNuNfM7jXcMdpNcNxJM3gQmuPuQDnUQbBURSDtaHBhH9jsA6oJsBmsDcuJdmRvrWrP3hRAnJ",
+          "commitment": "finalized",
+          "explorer": "https://explorer.solana.com/tx/3Tb73hwkzCkt8XnrnNuNfM7jXcMdpNcNxJM3gQmuPuQDnUQbBURSDtaHBhH9jsA6oJsBmsDcuJdmRvrWrP3hRAnJ?cluster=devnet"
+        }
+      ],
+      "settledAt": "2026-10-17T08:26:28.461Z"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "8975abd6-d451-48a3-b248-8a9ebb308415",
+      "agentId": "5a499781-3a25-4978-8471-889e86b9830b",
+      "objective": "Campaign: Community repair cafes",
+      "state": "completed",
+      "used": {
+        "toolCalls": 7,
+        "paidPurchases": 1,
+        "planningCalls": 1
+      },
+      "limits": {
+        "taskUsdc": "1000000",
+        "taskUsageUnits": "400000",
+        "maxToolCalls": 8,
+        "maxPaidPurchases": 3,
+        "maxPlanningCalls": 2,
+        "maxDurationMs": 600000
+      }
+    },
+    {
+      "id": "b282f55d-fa94-45fb-a5fb-4914f9def2a9",
+      "agentId": "7617e7ec-ce7c-4726-b886-650002e6bd47",
+      "objective": "What makes community repair cafes succeed, and what do they measurably achieve?",
+      "state": "completed",
+      "used": {
+        "toolCalls": 6,
+        "paidPurchases": 2,
+        "planningCalls": 2
+      },
+      "limits": {
+        "taskUsdc": "1000000",
+        "taskUsageUnits": "400000",
+        "maxToolCalls": 8,
+        "maxPaidPurchases": 3,
+        "maxPlanningCalls": 2,
+        "maxDurationMs": 600000
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "b72421e4-c79e-47d0-a646-0b1c6fd8bed7",
+      "kind": "content_calendar",
+      "title": "Seven-day plan: Community repair cafes"
+    },
+    {
+      "id": "fed24fae-9a45-428f-9def-8a7d8e30ddad",
+      "kind": "content_draft",
+      "title": "Instagram: 61% of items fixed on the spot 🛠️"
+    },
+    {
+      "id": "c8f434c4-8226-423b-a4a3-efcdbf19108a",
+      "kind": "content_draft",
+      "title": "Newsletter: Your broken blender? We can fix that."
+    },
+    {
+      "id": "0f6ba33d-bfa3-4ae7-9892-30ef3501514e",
+      "kind": "content_draft",
+      "title": "LinkedIn: How repair cafes are fixing more than just broken toasters"
+    },
+    {
+      "id": "41145bcb-2eac-4fa6-9009-afb8e4d90e61",
+      "kind": "research_brief",
+      "title": "Research brief: What makes community repair cafes succeed, and what do they measurably achieve?"
+    }
+  ]
+}

@@ -2,80 +2,82 @@
   "kind": "M2 devnet private smoke: deposits",
   "profile": "devnet",
   "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
-  "recordedAt": "2026-10-16T01:27:09.137Z",
+  "recordedAt": "2026-10-17T07:41:38.415Z",
   "participants": "synthetic/test participants (role-separated keys funded by the operator; not independent users)",
   "amountEach": "200000",
   "deposits": [
     {
       "role": "testOwnerA",
-      "owner": "53EfGeKqr3VFvhfr3DFVrK3LaK6KUPoPu6TCAr6qARks",
-      "depositId": "e25a493c-7df3-4b64-be50-5a5f7679ce6b",
-      "signature": "4ftZg9utv7EpAnYUpvWdhZ7AgPuE4jP6bUFufguVy9iYycT3R1uHCcQuzbhgmdsP9NLsBhVuZyeBRaUuJJVky3zj",
-      "explorer": "https://explorer.solana.com/tx/4ftZg9utv7EpAnYUpvWdhZ7AgPuE4jP6bUFufguVy9iYycT3R1uHCcQuzbhgmdsP9NLsBhVuZyeBRaUuJJVky3zj?cluster=devnet",
-      "slot": "511530758",
+      "owner": "7oTzRWg33mod7KxVUiVWBUyMna6wgrQXUv3dC58ZsabE",
+      "depositId": "98c1ae15-98b0-47d7-b02f-3b156db661bb",
+      "amount": "200000",
+      "signature": "3qow7rGWEDcGPSpmCUFm4bq3pQu6NF9Bk2ivt1eB3Fbu9Tn4fADjWj7acSDg2n5yYMnxb5g6gUHcATGmxeusHz5y",
+      "explorer": "https://explorer.solana.com/tx/3qow7rGWEDcGPSpmCUFm4bq3pQu6NF9Bk2ivt1eB3Fbu9Tn4fADjWj7acSDg2n5yYMnxb5g6gUHcATGmxeusHz5y?cluster=devnet",
+      "slot": "512001160",
       "err": null,
       "feeLamports": "5000",
-      "computeUnitsConsumed": "28897",
+      "computeUnitsConsumed": "33389",
       "lamportChanges": [
         {
-          "account": "53EfGeKqr3VFvhfr3DFVrK3LaK6KUPoPu6TCAr6qARks",
+          "account": "7oTzRWg33mod7KxVUiVWBUyMna6wgrQXUv3dC58ZsabE",
           "delta": "-2743120"
         },
         {
-          "account": "3n3t5Kca96Hffk4ttYyP2keGonQcpe54LT2eJAXNZPo1",
+          "account": "3pFS3aJ8qtVpkFE2L6nT4A9D8vgJnVd51zdaDapHA21j",
           "delta": "1838960"
         },
         {
-          "account": "86vpxs8kZpJGT1qrWQSV4uvgmvCEoanToHD3FAFoFXpL",
+          "account": "GVP5AHKMnxjkVQzhNkcoeYSisZJC6e9Qz8YiJNP3VVfk",
           "delta": "899160"
         }
       ],
       "accountKeys": [
-        "53EfGeKqr3VFvhfr3DFVrK3LaK6KUPoPu6TCAr6qARks",
-        "3n3t5Kca96Hffk4ttYyP2keGonQcpe54LT2eJAXNZPo1",
-        "5yjK2K2L45abcZMQvPdmsePSw1eTpsDbYVsZPxgKDQ8c",
-        "65FNWNc1akaXFsPFCoLGMwjnefGbpts3sw4KEVYQ8Tab",
-        "86vpxs8kZpJGT1qrWQSV4uvgmvCEoanToHD3FAFoFXpL",
-        "GQ7u2E8t1mEkUwo4NanbPFy5NhzGJHdhD8FY32ZWorgt",
+        "7oTzRWg33mod7KxVUiVWBUyMna6wgrQXUv3dC58ZsabE",
+        "3pFS3aJ8qtVpkFE2L6nT4A9D8vgJnVd51zdaDapHA21j",
+        "5MwxHt19yYSqcACa3UpABdQNsQhBN3v6jHLNSeKjBrGu",
+        "5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe",
+        "Dda34PDLJGfhXcugc18mxUrPPB3xf7Vo7Pawib3yrKNy",
+        "GVP5AHKMnxjkVQzhNkcoeYSisZJC6e9Qz8YiJNP3VVfk",
         "11111111111111111111111111111111",
-        "3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq",
+        "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
         "ComputeBudget111111111111111111111111111111",
         "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
       ]
     },
     {
       "role": "testOwnerB",
-      "owner": "69ardTTzQcZWhTPcHzKodr6TFThxGUehajd2diFthaXv",
-      "depositId": "f1f23b5e-64b1-4198-a668-27d3fa75fb29",
-      "signature": "3nBzcuTTo9cHBFCgEErvE1hGW69NSQWKs72XgEqMW7Ho82WCwUMP1n3ztA29zWuWL55mEuwSwqHxyyAMe6bugT1D",
-      "explorer": "https://explorer.solana.com/tx/3nBzcuTTo9cHBFCgEErvE1hGW69NSQWKs72XgEqMW7Ho82WCwUMP1n3ztA29zWuWL55mEuwSwqHxyyAMe6bugT1D?cluster=devnet",
-      "slot": "511530780",
+      "owner": "mYG89rxGotGF2VYoT3tffbMbsaKdCaJEoAPbTXzWEZ2",
+      "depositId": "6a0e6197-7082-48f5-83cd-b11e7ef1dcb5",
+      "amount": "200000",
+      "signature": "2o4wg3UiRiWPvqLQd71KuHyr5uppcLJ8rXvc3f4LcV2XHCcgvms32Dfw7udJpn7znuU6rNUsSbU3vDdjGh4qJycw",
+      "explorer": "https://explorer.solana.com/tx/2o4wg3UiRiWPvqLQd71KuHyr5uppcLJ8rXvc3f4LcV2XHCcgvms32Dfw7udJpn7znuU6rNUsSbU3vDdjGh4qJycw?cluster=devnet",
+      "slot": "512001192",
       "err": null,
       "feeLamports": "5000",
-      "computeUnitsConsumed": "27397",
+      "computeUnitsConsumed": "30389",
       "lamportChanges": [
         {
-          "account": "69ardTTzQcZWhTPcHzKodr6TFThxGUehajd2diFthaXv",
+          "account": "mYG89rxGotGF2VYoT3tffbMbsaKdCaJEoAPbTXzWEZ2",
           "delta": "-2743120"
         },
         {
-          "account": "5cdFqq6P771mEYykJkAw7houXJfpWeYjqBcroPHWSbuG",
-          "delta": "899160"
+          "account": "5j9cXKhCG6KsXoCBsBiHPocA23S17rSptVnehXbucNsE",
+          "delta": "1838960"
         },
         {
-          "account": "ADQ566FTM26boPu7ToJKomfH4zQE2rRGXSbLTSRoMB33",
-          "delta": "1838960"
+          "account": "5R6RmjmgEEWWe8xwF64jVVHWQsvsWJnYr6oxnVNYoHz2",
+          "delta": "899160"
         }
       ],
       "accountKeys": [
-        "69ardTTzQcZWhTPcHzKodr6TFThxGUehajd2diFthaXv",
-        "5cdFqq6P771mEYykJkAw7houXJfpWeYjqBcroPHWSbuG",
-        "65FNWNc1akaXFsPFCoLGMwjnefGbpts3sw4KEVYQ8Tab",
-        "8RCt7Zzo75vnnUYM1ypWho6d2ZTdCK73rHm6rgViScZe",
-        "ADQ566FTM26boPu7ToJKomfH4zQE2rRGXSbLTSRoMB33",
-        "GQ7u2E8t1mEkUwo4NanbPFy5NhzGJHdhD8FY32ZWorgt",
+        "mYG89rxGotGF2VYoT3tffbMbsaKdCaJEoAPbTXzWEZ2",
+        "5j9cXKhCG6KsXoCBsBiHPocA23S17rSptVnehXbucNsE",
+        "5MwxHt19yYSqcACa3UpABdQNsQhBN3v6jHLNSeKjBrGu",
+        "5R6RmjmgEEWWe8xwF64jVVHWQsvsWJnYr6oxnVNYoHz2",
+        "5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe",
+        "8YoWsgUmLRN8GXun7NUdifQTFsZpTbjwnWpQTD4dBTSh",
         "11111111111111111111111111111111",
-        "3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq",
+        "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
         "ComputeBudget111111111111111111111111111111",
         "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
       ]

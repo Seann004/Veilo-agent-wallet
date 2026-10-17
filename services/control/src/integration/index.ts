@@ -43,6 +43,7 @@ export function createIntegration(
     log?: (line: string) => void;
     leaseMs?: number;
     settleWaitMs?: number;
+    settlePollMs?: number;
     purchaseSweepMs?: number;
     marketplace?: MarketplaceIntegrationOptions | undefined;
     external?: Pick<ExternalBatchDeps, "origins" | "timeoutMs"> | undefined;
@@ -68,6 +69,7 @@ export function createIntegration(
           beforeMerchant: (purchaseId: string) => bridgeRef.current?.beforeMerchant(purchaseId) ?? { outcome: "ok" as const },
         } : {}),
     ...(o.settleWaitMs !== undefined ? { settleWaitMs: o.settleWaitMs } : {}),
+    ...(o.settlePollMs !== undefined ? { settlePollMs: o.settlePollMs } : {}),
   });
   const marketplace = o.marketplace
     ? new MarketplaceBridge({

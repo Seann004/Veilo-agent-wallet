@@ -1,0 +1,129 @@
+{
+  "kind": "M2 devnet private smoke: spend",
+  "profile": "devnet",
+  "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+  "recordedAt": "2026-10-16T01:27:27.974Z",
+  "authority": "smoke authority: operator --execute --confirm stands in for control's prepare/release stages (no control ledger reservation)",
+  "purchaseId": "670b2b78-41a2-4051-a9af-dd7ebc7ae7d3",
+  "logicalOperationId": "m2-smoke-74c3303d-6114-451a-abc0-581d020a4d7a",
+  "attempts": [
+    {
+      "purchaseId": "74c3303d-6114-451a-abc0-581d020a4d7a",
+      "operationId": "m2-smoke-74c3303d-6114-451a-abc0-581d020a4d7a",
+      "startedAt": "2026-10-16T01:27:11.123Z",
+      "outcome": "expired_unsettled",
+      "walletStep": "expired_unsettled",
+      "freshPayer": "E6fVBkDbb93Jvpm8CCC2ujpBXVkXKSVo39smP84Vqbh3",
+      "validUntilSlot": "511531625",
+      "relayerWithdrawalId": "049b435c-bebf-45af-8aa4-b5c1120d9fb2",
+      "relayerRecord": "none"
+    },
+    {
+      "purchaseId": "670b2b78-41a2-4051-a9af-dd7ebc7ae7d3",
+      "operationId": "m2-smoke-74c3303d-6114-451a-abc0-581d020a4d7a:attempt-2",
+      "startedAt": "2026-10-16T01:27:11.123Z",
+      "outcome": "finalized",
+      "walletStep": "finalized",
+      "freshPayer": "tZqzJVBaeDCzR7YqRYaFnNzD9ckXEz9jtU9VNHEn1yf",
+      "validUntilSlot": "511545374",
+      "relayerWithdrawalId": "3d024044-505b-4448-965f-8ac662da95ea",
+      "relayerRecord": "finalized"
+    }
+  ],
+  "freshPayer": "tZqzJVBaeDCzR7YqRYaFnNzD9ckXEz9jtU9VNHEn1yf",
+  "freshPayerExplorer": "https://explorer.solana.com/address/tZqzJVBaeDCzR7YqRYaFnNzD9ckXEz9jtU9VNHEn1yf?cluster=devnet",
+  "payout": "10000",
+  "validUntilSlot": "511545374",
+  "nullifierHash": "28dfbcf42d9dfa00b093fd50a7d2de7849bb371e6849c89199ccc4c2da4987c1",
+  "ataTransaction": {
+    "signature": "5xWJ9jKWUHA2df7Srb7N6o79AMxp5Dx24dN2Mrz8LfrVQQiVfN68HsSgX8mQM6q7SY1FSsS1y57ee9aEfEDyfc9Q",
+    "explorer": "https://explorer.solana.com/tx/5xWJ9jKWUHA2df7Srb7N6o79AMxp5Dx24dN2Mrz8LfrVQQiVfN68HsSgX8mQM6q7SY1FSsS1y57ee9aEfEDyfc9Q?cluster=devnet",
+    "slot": "511544653",
+    "err": null,
+    "feeLamports": "5000",
+    "computeUnitsConsumed": "16518",
+    "lamportChanges": [
+      {
+        "account": "8djHL1qrsvv6mJJVbfw6i8A1nqeGDw4SQor7YW8tKtcD",
+        "delta": "-1493440"
+      },
+      {
+        "account": "By3SEhe7bjCsDkoCUEWTgrkE6KgfzUqQeXsL3jR6Robv",
+        "delta": "1488440"
+      }
+    ],
+    "accountKeys": [
+      "8djHL1qrsvv6mJJVbfw6i8A1nqeGDw4SQor7YW8tKtcD",
+      "By3SEhe7bjCsDkoCUEWTgrkE6KgfzUqQeXsL3jR6Robv",
+      "11111111111111111111111111111111",
+      "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+      "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+      "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "tZqzJVBaeDCzR7YqRYaFnNzD9ckXEz9jtU9VNHEn1yf"
+    ]
+  },
+  "spendTransaction": {
+    "signature": "3ARoZXHy7cRUYRJAhEALeY27yn8or33MYCb3f6yRztP4fThiqKi5DGGYWUKmsRBqwYvacYM7B79W2XgyikYe9Ya4",
+    "explorer": "https://explorer.solana.com/tx/3ARoZXHy7cRUYRJAhEALeY27yn8or33MYCb3f6yRztP4fThiqKi5DGGYWUKmsRBqwYvacYM7B79W2XgyikYe9Ya4?cluster=devnet",
+    "slot": "511544674",
+    "err": null,
+    "feeLamports": "5000",
+    "computeUnitsConsumed": "138103",
+    "lamportChanges": [
+      {
+        "account": "8djHL1qrsvv6mJJVbfw6i8A1nqeGDw4SQor7YW8tKtcD",
+        "delta": "-2219880"
+      },
+      {
+        "account": "6EQm9d6VGP4mAqXmgJKRuM2x19MhRytdMUkqttJm8kpz",
+        "delta": "904240"
+      },
+      {
+        "account": "7s8BJXJGyXkRL89fDcKTwemVGB4WkBmNuXLxiEXgQRPb",
+        "delta": "1310640"
+      }
+    ],
+    "accountKeys": [
+      "8djHL1qrsvv6mJJVbfw6i8A1nqeGDw4SQor7YW8tKtcD",
+      "65FNWNc1akaXFsPFCoLGMwjnefGbpts3sw4KEVYQ8Tab",
+      "6EQm9d6VGP4mAqXmgJKRuM2x19MhRytdMUkqttJm8kpz",
+      "7s8BJXJGyXkRL89fDcKTwemVGB4WkBmNuXLxiEXgQRPb",
+      "By3SEhe7bjCsDkoCUEWTgrkE6KgfzUqQeXsL3jR6Robv",
+      "GQ7u2E8t1mEkUwo4NanbPFy5NhzGJHdhD8FY32ZWorgt",
+      "11111111111111111111111111111111",
+      "3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq",
+      "9im1P2PRuozYWQpFF6FBViqyDLFSdUBjJ7kr4e7tKTUF",
+      "ComputeBudget111111111111111111111111111111",
+      "J2CxmbQrLhhWhLKFUZMpgXpSGfDBsbpTamYjC7yry1jG",
+      "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+    ]
+  },
+  "sponsorLamports": {
+    "fees": "10000",
+    "rentOutstanding": "1488440",
+    "relayerTotals": {
+      "feesSpent": "20000",
+      "rentOutstanding": "1488440",
+      "rentRecovered": "0"
+    }
+  },
+  "priv07": {
+    "check": "spend transaction account keys and bytes contain no deposit refund authority, its ATA, PendingDeposit/SeenPrecommitment PDA, deposit commitment, label, precommitment or salt",
+    "linkedAccounts": [],
+    "depositFieldBytesFound": [],
+    "passed": true,
+    "caveat": "Amounts, timing, the fresh payer and the sponsor are public; with two synthetic participants the anonymity set is two at most."
+  },
+  "proofTimingsMs": [
+    {
+      "circuit": "spend",
+      "ms": 899,
+      "at": "2026-10-16T00:32:26.885Z"
+    },
+    {
+      "circuit": "spend",
+      "ms": 1515,
+      "at": "2026-10-16T01:27:14.048Z"
+    }
+  ]
+}

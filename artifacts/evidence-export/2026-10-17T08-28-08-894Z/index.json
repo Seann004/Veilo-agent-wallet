@@ -1,0 +1,301 @@
+{
+  "kind": "Veilo sanitized evidence bundle",
+  "exportedAt": "2026-10-17T08:28:08.905Z",
+  "network": "Solana devnet (test USDC, no monetary value); integration-*.json files are local test validator results",
+  "addresses": {
+    "program": "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
+    "programData": "ErofgrMt7PU56rkkk4kiazRvSnw2VjR1g1wecYgFNcr4",
+    "poolState": "5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe",
+    "vault": "5MwxHt19yYSqcACa3UpABdQNsQhBN3v6jHLNSeKjBrGu",
+    "vaultAuthority": "AwEDp4gTWkXZzGhefaQ3rZhYuTAaSrEKBzci4RqZN33y",
+    "approvalState": "93626hbqJEjEY376ZH2goAgP8pWifvDECxSrhF5BqTkw",
+    "mint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+    "gateway": {
+      "merchantAddress": "3hbVsik3DMzaXaCCBrtua2xJt4M152hCsZ17bkLHueFT",
+      "merchantAta": "45oAG4yFR88nFQQVN6iGKtfKPD55vaNtXoxzGhrwaatz",
+      "facilitatorFeePayer": "2wKupLR9q6wXYppw8Gr2NvWxKBUqm4PPJKkQfoxHDBg4"
+    },
+    "roles": {
+      "deployer": "FcAoTX7M7GnQHgQRVN81bAfd7khph1ZpC8gz37c9AAhy",
+      "programId": "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
+      "programBuffer": "4YW7MrdbT3zgi57pL4oAY8YJYsqjFHpfMDK1PKvsxApu",
+      "sponsor": "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+      "merchant": "3hbVsik3DMzaXaCCBrtua2xJt4M152hCsZ17bkLHueFT",
+      "approvalAuthority": "7gpa8LcVEm3MLX4JqPtfbv95heRFKpsFCA4R84EhdDRE",
+      "configAuthority": "5797zmtBdH4rWVAryxjtTreNpiQajkMYX6GqmkTSPmbe",
+      "testOwnerA": "7oTzRWg33mod7KxVUiVWBUyMna6wgrQXUv3dC58ZsabE",
+      "testOwnerB": "mYG89rxGotGF2VYoT3tffbMbsaKdCaJEoAPbTXzWEZ2"
+    }
+  },
+  "artifactHashes": [
+    {
+      "file": "target/deploy/privacy_pool.so",
+      "sha256": "864410cdc896bf5387b595450ce45d9568d3b2978be9729fc5630fcd92b862f9",
+      "bytes": 378080
+    },
+    {
+      "file": "artifacts/program/privacy_pool.json",
+      "sha256": "825a80862a4139d1af8587f24e2985788d100e2febb0be61ce34d2a2a6302f97",
+      "bytes": 47778
+    },
+    {
+      "file": "artifacts/circuits/manifest.json",
+      "sha256": "b5bb05570f47830fe2755120ad0e3b62db40d8a1b0842a6d0d077228ed6a6b11",
+      "bytes": 9971
+    },
+    {
+      "file": "artifacts/circuits/spend.vkey.json",
+      "sha256": "1c79fb920c5e90d407af61d87cee9e87c3d9af435fb28dcccfadb2d4f2fc8e26",
+      "bytes": 4138
+    },
+    {
+      "file": "artifacts/circuits/insert.vkey.json",
+      "sha256": "196006c4805100c49c5e2c0be97c0c8ada2ec14d9f6b8a817526040c821f4447",
+      "bytes": 3748
+    },
+    {
+      "file": "artifacts/circuits/exit.vkey.json",
+      "sha256": "46511e797221dc626446a10f0701bd053cdfdfb0a3c80db4e4fdf0b535ced501",
+      "bytes": 3743
+    },
+    {
+      "file": "artifacts/vectors/v1.json",
+      "sha256": "128f715e745c280d5da0a54877ed3bcdbb0a4e0a519a8278c171ff1354299f68",
+      "bytes": 51065
+    },
+    {
+      "file": "artifacts/deployment/devnet.json",
+      "sha256": "a9105bf6069f68c93a8526b322088d99f35853fc6952d0ed229732a8c8b20eed",
+      "bytes": 9545
+    }
+  ],
+  "signatures": [
+    {
+      "signature": "3fk4jSss52QVhEVAsC8cvDZWEHqG4kZz2FZSPq6G4RHgJy9kuv6Nj5yKbwJSgcLUuZyQYv1W9LJ8ni1Aw98HEz8B",
+      "where": "integration-2026-10-17T00-36-54-669Z.json.scenarioEvidence.IDEM-01.chainAttempts[0].signature",
+      "explorer": "https://explorer.solana.com/tx/3fk4jSss52QVhEVAsC8cvDZWEHqG4kZz2FZSPq6G4RHgJy9kuv6Nj5yKbwJSgcLUuZyQYv1W9LJ8ni1Aw98HEz8B?cluster=devnet"
+    },
+    {
+      "signature": "nN7x8qmQfq4rywFQHPNdXrLVN67gi6PHSx7n49SiPGP9BRidBEKge5iWeXN8bTfeVDsR4wuaKqMFFHAmRab7Nwp",
+      "where": "integration-2026-10-17T00-36-54-669Z.json.scenarioEvidence.IDEM-01.chainAttempts[1].signature",
+      "explorer": "https://explorer.solana.com/tx/nN7x8qmQfq4rywFQHPNdXrLVN67gi6PHSx7n49SiPGP9BRidBEKge5iWeXN8bTfeVDsR4wuaKqMFFHAmRab7Nwp?cluster=devnet"
+    },
+    {
+      "signature": "495PvW1BGPJAaE6amYRL1qBqfGzh3NMQsJKc84LjTGBze8zWQt1z76GNuZZEwFJyJmhGw4qsDg8rQVBHBygfKf5u",
+      "where": "integration-2026-10-17T00-36-54-669Z.json.scenarioEvidence.REC-03.recovery.signature",
+      "explorer": "https://explorer.solana.com/tx/495PvW1BGPJAaE6amYRL1qBqfGzh3NMQsJKc84LjTGBze8zWQt1z76GNuZZEwFJyJmhGw4qsDg8rQVBHBygfKf5u?cluster=devnet"
+    },
+    {
+      "signature": "2Eb6H3zPe1cgomrqCiDPZwVxypxVRU7kSpXoivmWvUZKjcr2zgNyQzoXxBLFmxWpZjP8z2pruyib8cFMf7DswbpJ",
+      "where": "integration-2026-10-17T00-36-54-669Z.json.scenarioEvidence.REV-01.recovery.signature",
+      "explorer": "https://explorer.solana.com/tx/2Eb6H3zPe1cgomrqCiDPZwVxypxVRU7kSpXoivmWvUZKjcr2zgNyQzoXxBLFmxWpZjP8z2pruyib8cFMf7DswbpJ?cluster=devnet"
+    },
+    {
+      "signature": "Qfaif5x7dFg8k8bHxixPpnBpDQx1QRiENbHFdFPhhW6Xzf1cRnRy8oVJgCqDN7xyGPG2AJampVHCeAqjkAG78bW",
+      "where": "m2-approve-root.json.transaction.signature",
+      "explorer": "https://explorer.solana.com/tx/Qfaif5x7dFg8k8bHxixPpnBpDQx1QRiENbHFdFPhhW6Xzf1cRnRy8oVJgCqDN7xyGPG2AJampVHCeAqjkAG78bW?cluster=devnet"
+    },
+    {
+      "signature": "2nanatYKRrLezeCYB8MtL3YpyJrgqQBnj6TsWanjYVU1qvkLZtXRXQwGhRgCYfpfCid9mdKWq7jQAuXkDgRvBJJm",
+      "where": "m2-inserts.json.crankAttempts[0].signature",
+      "explorer": "https://explorer.solana.com/tx/2nanatYKRrLezeCYB8MtL3YpyJrgqQBnj6TsWanjYVU1qvkLZtXRXQwGhRgCYfpfCid9mdKWq7jQAuXkDgRvBJJm?cluster=devnet"
+    },
+    {
+      "signature": "3fMMtbJVyPsdEvqexitZF4AbK9equtTgp5pVxyEuybqi4fvHa921koFv1sHU7tVCmPp1zzxt2RTjg4xYng3NdpXr",
+      "where": "m2-inserts.json.crankAttempts[1].signature",
+      "explorer": "https://explorer.solana.com/tx/3fMMtbJVyPsdEvqexitZF4AbK9equtTgp5pVxyEuybqi4fvHa921koFv1sHU7tVCmPp1zzxt2RTjg4xYng3NdpXr?cluster=devnet"
+    },
+    {
+      "signature": "3eNQpVCRC16G6q8DiTUMxYQ5nbYfPwKjoD4PCu2mUTmx7oPUYJ6gbWhofziXREF6L7k66a6FZqz9eNXF3TT6dD8K",
+      "where": "m2-change-insert.json.crankAttempts[2].signature",
+      "explorer": "https://explorer.solana.com/tx/3eNQpVCRC16G6q8DiTUMxYQ5nbYfPwKjoD4PCu2mUTmx7oPUYJ6gbWhofziXREF6L7k66a6FZqz9eNXF3TT6dD8K?cluster=devnet"
+    },
+    {
+      "signature": "2cvdK45jcFy73zTRzQtrt36NkamkjvN6Zooxg7hAkJteosAfum3wFym5XiMbSAYDe1VSr3KQ9C4gPoobS1nKfcwt",
+      "where": "m2-deploy.json.attempts[0].sent.signature",
+      "explorer": "https://explorer.solana.com/tx/2cvdK45jcFy73zTRzQtrt36NkamkjvN6Zooxg7hAkJteosAfum3wFym5XiMbSAYDe1VSr3KQ9C4gPoobS1nKfcwt?cluster=devnet"
+    },
+    {
+      "signature": "2Y93xbBd4owGckARoskBmpB33SRRgHS67w5EWRGowKMUazEoS9TZd1vv1UYE5vzcj6RMLo13bh9d9jg1sSBrBfaH",
+      "where": "m2-deploy.json.steps.deploy-program.details.deploySignature",
+      "explorer": "https://explorer.solana.com/tx/2Y93xbBd4owGckARoskBmpB33SRRgHS67w5EWRGowKMUazEoS9TZd1vv1UYE5vzcj6RMLo13bh9d9jg1sSBrBfaH?cluster=devnet"
+    },
+    {
+      "signature": "4RVgpXQYKNCXMxiEGASA7CJc5HsXiogrqn4NsDDr17Um9shoqCpTq8XN1CEsqtmFkfeQMFGazRmKqvxNuWjToRne",
+      "where": "m2-deploy.json.attempts[1].sent.signature",
+      "explorer": "https://explorer.solana.com/tx/4RVgpXQYKNCXMxiEGASA7CJc5HsXiogrqn4NsDDr17Um9shoqCpTq8XN1CEsqtmFkfeQMFGazRmKqvxNuWjToRne?cluster=devnet"
+    },
+    {
+      "signature": "5Z4jBuT27MpFuDVGzoMGZu1VKAzUG7EuFXsECBdN2ME4DHdgzpBBnyUaLL1GrddDX2cnu7j8REpttKQ1Usz7vQLp",
+      "where": "m2-deploy.json.attempts[2].sent.signature",
+      "explorer": "https://explorer.solana.com/tx/5Z4jBuT27MpFuDVGzoMGZu1VKAzUG7EuFXsECBdN2ME4DHdgzpBBnyUaLL1GrddDX2cnu7j8REpttKQ1Usz7vQLp?cluster=devnet"
+    },
+    {
+      "signature": "3qow7rGWEDcGPSpmCUFm4bq3pQu6NF9Bk2ivt1eB3Fbu9Tn4fADjWj7acSDg2n5yYMnxb5g6gUHcATGmxeusHz5y",
+      "where": "m2-deposits.json.deposits[0].signature",
+      "explorer": "https://explorer.solana.com/tx/3qow7rGWEDcGPSpmCUFm4bq3pQu6NF9Bk2ivt1eB3Fbu9Tn4fADjWj7acSDg2n5yYMnxb5g6gUHcATGmxeusHz5y?cluster=devnet"
+    },
+    {
+      "signature": "2o4wg3UiRiWPvqLQd71KuHyr5uppcLJ8rXvc3f4LcV2XHCcgvms32Dfw7udJpn7znuU6rNUsSbU3vDdjGh4qJycw",
+      "where": "m2-deposits.json.deposits[1].signature",
+      "explorer": "https://explorer.solana.com/tx/2o4wg3UiRiWPvqLQd71KuHyr5uppcLJ8rXvc3f4LcV2XHCcgvms32Dfw7udJpn7znuU6rNUsSbU3vDdjGh4qJycw?cluster=devnet"
+    },
+    {
+      "signature": "52EVL9oes4qKYArNqEFySbC7g5pNwEVxAo9bMZ7JXNNRqoVC6yeeBoPGarvequ2sDT78Xb2YRarN5t8XLmT8BEZu",
+      "where": "m2-exits.json.exits[0].signature",
+      "explorer": "https://explorer.solana.com/tx/52EVL9oes4qKYArNqEFySbC7g5pNwEVxAo9bMZ7JXNNRqoVC6yeeBoPGarvequ2sDT78Xb2YRarN5t8XLmT8BEZu?cluster=devnet"
+    },
+    {
+      "signature": "yLq6wT3htTyJuMNTeQoUN9VJiMS1NSV7TbWZ7mxZTkmn1Fq9GnTCv228JjrvxeBjE1NEKDkei6vcomwRoXg2DLu",
+      "where": "m2-exits.json.exits[1].signature",
+      "explorer": "https://explorer.solana.com/tx/yLq6wT3htTyJuMNTeQoUN9VJiMS1NSV7TbWZ7mxZTkmn1Fq9GnTCv228JjrvxeBjE1NEKDkei6vcomwRoXg2DLu?cluster=devnet"
+    },
+    {
+      "signature": "3mChKemwTiirm9TvVpFMzbKiMQAkDB8SMX74nWgkmjhzijY2TRszZQpkET6PU6EQD5p6oEQt7jds2JmwSWLJWReA",
+      "where": "m2-merchant.json.settlement.signature",
+      "explorer": "https://explorer.solana.com/tx/3mChKemwTiirm9TvVpFMzbKiMQAkDB8SMX74nWgkmjhzijY2TRszZQpkET6PU6EQD5p6oEQt7jds2JmwSWLJWReA?cluster=devnet"
+    },
+    {
+      "signature": "2djfg75KTtiXuYb3TowkzAeMsyoQWvwFqQvjBpcshmJonocTRX2cM3PNwodMcrV7FoeCwK9azL5RSZzjjMSxEzuk",
+      "where": "m2-spend.json.ataTransaction.signature",
+      "explorer": "https://explorer.solana.com/tx/2djfg75KTtiXuYb3TowkzAeMsyoQWvwFqQvjBpcshmJonocTRX2cM3PNwodMcrV7FoeCwK9azL5RSZzjjMSxEzuk?cluster=devnet"
+    },
+    {
+      "signature": "2fbWQ6ws2y2sHFUgBeELnKVsdVKZwpBnx6ma9kkwhkHtdw9ki2fBq14UN3nqdFMBcGsLQKUVK36aE1w7DBcPJLE3",
+      "where": "m2-spend.json.spendTransaction.signature",
+      "explorer": "https://explorer.solana.com/tx/2fbWQ6ws2y2sHFUgBeELnKVsdVKZwpBnx6ma9kkwhkHtdw9ki2fBq14UN3nqdFMBcGsLQKUVK36aE1w7DBcPJLE3?cluster=devnet"
+    },
+    {
+      "signature": "2BL8TEuTTD6c7z5BbumXTKYJ3PR8Hx2oGh1Vfj4AdYtjXUJ3A3Tvg1SirjhuhszNvygoRHPcfFKeyuAm3En3wC7t",
+      "where": "marketplace-devnet-smoke-2026-10-17T05-47-34-935Z.json.fundingTransactions.sellerAta.signature",
+      "explorer": "https://explorer.solana.com/tx/2BL8TEuTTD6c7z5BbumXTKYJ3PR8Hx2oGh1Vfj4AdYtjXUJ3A3Tvg1SirjhuhszNvygoRHPcfFKeyuAm3En3wC7t?cluster=devnet"
+    },
+    {
+      "signature": "3WN2byBwvSSaCKjitpbDQ5Dnt7WUpFfTKf3sbFoGaS6AWN5u3WUVkQb73hkcbJfmRqs5Lp65Fx5pZEzAJ7WXHGZi",
+      "where": "marketplace-devnet-smoke-2026-10-17T05-47-34-935Z.json.fundingTransactions.fundPayer.signature",
+      "explorer": "https://explorer.solana.com/tx/3WN2byBwvSSaCKjitpbDQ5Dnt7WUpFfTKf3sbFoGaS6AWN5u3WUVkQb73hkcbJfmRqs5Lp65Fx5pZEzAJ7WXHGZi?cluster=devnet"
+    },
+    {
+      "signature": "22cr9J25cReu7KfGmv9XqPULfnnHJ3RVeU8Jq48qtxQXSBABkVTosLZAH7NqXTtU1pv9hjnQfd1BHN3UZksurj6G",
+      "where": "marketplace-devnet-smoke-2026-10-17T05-47-34-935Z.json.receipt.signature",
+      "explorer": "https://explorer.solana.com/tx/22cr9J25cReu7KfGmv9XqPULfnnHJ3RVeU8Jq48qtxQXSBABkVTosLZAH7NqXTtU1pv9hjnQfd1BHN3UZksurj6G?cluster=devnet"
+    },
+    {
+      "signature": "32CjSzHqz9asWUoUMDcGi1HYyvFS43sqDeZJBgKyKEW3FSWyZZzYvUA1Bdv8eDBerpssR8VUpxQzSuufK8WrPDEA",
+      "where": "marketplace-devnet-smoke-2026-10-17T06-55-19-957Z.json.fundingTransactions.sellerAta.signature",
+      "explorer": "https://explorer.solana.com/tx/32CjSzHqz9asWUoUMDcGi1HYyvFS43sqDeZJBgKyKEW3FSWyZZzYvUA1Bdv8eDBerpssR8VUpxQzSuufK8WrPDEA?cluster=devnet"
+    },
+    {
+      "signature": "3r9nzUiWgyuPDYt6kk2hPybPmNW4RPgqyfSwwS5Z4mdCJtkqpXqqwXJFev37nf4dFyWksue7dSbSQXwL5m31XeJ9",
+      "where": "marketplace-devnet-smoke-2026-10-17T06-55-19-957Z.json.fundingTransactions.fundPayer.signature",
+      "explorer": "https://explorer.solana.com/tx/3r9nzUiWgyuPDYt6kk2hPybPmNW4RPgqyfSwwS5Z4mdCJtkqpXqqwXJFev37nf4dFyWksue7dSbSQXwL5m31XeJ9?cluster=devnet"
+    },
+    {
+      "signature": "5ikNXKh7Wcric5hAPE1FSchFBKQunW9CBZZfqVJgM8hPSGKYS2uLYs99ttLGvKjvxNSetpnEHjJG64XvxYiUarsN",
+      "where": "marketplace-devnet-smoke-2026-10-17T06-55-19-957Z.json.receipt.signature",
+      "explorer": "https://explorer.solana.com/tx/5ikNXKh7Wcric5hAPE1FSchFBKQunW9CBZZfqVJgM8hPSGKYS2uLYs99ttLGvKjvxNSetpnEHjJG64XvxYiUarsN?cluster=devnet"
+    },
+    {
+      "signature": "5ZVj3sdWCWaajBMQxfVEURwji3JhXsACa7uVvym2BMHNgsFwiQ2dwS4dTyLWYzixoaVVM451momocbynRmF9vf63",
+      "where": "x402-echo-smoke-2026-10-15T00-40-54-556Z.json.signature",
+      "explorer": "https://explorer.solana.com/tx/5ZVj3sdWCWaajBMQxfVEURwji3JhXsACa7uVvym2BMHNgsFwiQ2dwS4dTyLWYzixoaVVM451momocbynRmF9vf63?cluster=devnet"
+    },
+    {
+      "signature": "oefXfDPGUVXqvpktCxsB3T1hYxccxU6b1RyDD31rnDng4Ryi8LiAUnaSQy7X6eCsNTiEAqksDRDK2mDYZiwSj4E",
+      "where": "demo/ledger.json.purchases[0].chainAttempts[0].signature",
+      "explorer": "https://explorer.solana.com/tx/oefXfDPGUVXqvpktCxsB3T1hYxccxU6b1RyDD31rnDng4Ryi8LiAUnaSQy7X6eCsNTiEAqksDRDK2mDYZiwSj4E?cluster=devnet"
+    },
+    {
+      "signature": "pg6uMdTgQRHT1PESDb7HXp3v16syjXc8FxuRa9vdBqaHRaAjshHnvGkn9dUt35qyKvw7rRFXpQCmUwwwfDCALQH",
+      "where": "demo/ledger.json.purchases[0].chainAttempts[1].signature",
+      "explorer": "https://explorer.solana.com/tx/pg6uMdTgQRHT1PESDb7HXp3v16syjXc8FxuRa9vdBqaHRaAjshHnvGkn9dUt35qyKvw7rRFXpQCmUwwwfDCALQH?cluster=devnet"
+    },
+    {
+      "signature": "AVjERYY4VPPi1QhkgESjgEnAuBTBNsGHHkedfWw3BKBGFLLaABMUfcyfzaBr22QowCrd7nPrxNqKgRUqY2zptoa",
+      "where": "demo/ledger.json.purchases[2].chainAttempts[0].signature",
+      "explorer": "https://explorer.solana.com/tx/AVjERYY4VPPi1QhkgESjgEnAuBTBNsGHHkedfWw3BKBGFLLaABMUfcyfzaBr22QowCrd7nPrxNqKgRUqY2zptoa?cluster=devnet"
+    },
+    {
+      "signature": "3o2JtHuxfffCyhct3cqHcuuprKD6zCYY5mjve9q96PTSQSCTBW3ZRmC6UpYfpDW73zma2S9ZZU8k57KzqrxR5Jz1",
+      "where": "demo/ledger.json.purchases[2].chainAttempts[1].signature",
+      "explorer": "https://explorer.solana.com/tx/3o2JtHuxfffCyhct3cqHcuuprKD6zCYY5mjve9q96PTSQSCTBW3ZRmC6UpYfpDW73zma2S9ZZU8k57KzqrxR5Jz1?cluster=devnet"
+    },
+    {
+      "signature": "3oEFBWnyKnNkm4f8EDZCrK4uaNxNMc4UEnbq4iAn1HVa1bDZyD1xtx8pfc527fkr8uG3bBnwHKG9KXbmFM3Z75Fb",
+      "where": "demo/summary.json.steps.b-shawn-topup.data.purchase.chainAttempts[0].signature",
+      "explorer": "https://explorer.solana.com/tx/3oEFBWnyKnNkm4f8EDZCrK4uaNxNMc4UEnbq4iAn1HVa1bDZyD1xtx8pfc527fkr8uG3bBnwHKG9KXbmFM3Z75Fb?cluster=devnet"
+    },
+    {
+      "signature": "3Tb73hwkzCkt8XnrnNuNfM7jXcMdpNcNxJM3gQmuPuQDnUQbBURSDtaHBhH9jsA6oJsBmsDcuJdmRvrWrP3hRAnJ",
+      "where": "demo/summary.json.steps.b-shawn-topup.data.purchase.chainAttempts[1].signature",
+      "explorer": "https://explorer.solana.com/tx/3Tb73hwkzCkt8XnrnNuNfM7jXcMdpNcNxJM3gQmuPuQDnUQbBURSDtaHBhH9jsA6oJsBmsDcuJdmRvrWrP3hRAnJ?cluster=devnet"
+    },
+    {
+      "signature": "2pKB6VywDYorc9LtEbVviaX36JNgtTvrzn4JCMbXFxxD8gRSvwbaeG1uw1eAogQhbLav3H8vq2iVvvCmeYEQmKN9",
+      "where": "demo/summary.json.deposits[0].signature",
+      "explorer": "https://explorer.solana.com/tx/2pKB6VywDYorc9LtEbVviaX36JNgtTvrzn4JCMbXFxxD8gRSvwbaeG1uw1eAogQhbLav3H8vq2iVvvCmeYEQmKN9?cluster=devnet"
+    },
+    {
+      "signature": "2bxAGTaraVHCJ2UsFdXHpqqTXPEDbtM4FeVAfGh1HC8uejc1TaU42tMXeL76C8mphnYw1ZdCoMGB2QxVjCiHY5w9",
+      "where": "demo/summary.json.deposits[1].signature",
+      "explorer": "https://explorer.solana.com/tx/2bxAGTaraVHCJ2UsFdXHpqqTXPEDbtM4FeVAfGh1HC8uejc1TaU42tMXeL76C8mphnYw1ZdCoMGB2QxVjCiHY5w9?cluster=devnet"
+    },
+    {
+      "signature": "7z6eqkCtBRoxdZvDEnKVegQAHzwcsgvrrjsqFSuD3V2QRaNMYDD8FmNRFgB1oebP1AV8nNLq2RYe73wS3urpcAi",
+      "where": "demo/summary.json.deposits[2].signature",
+      "explorer": "https://explorer.solana.com/tx/7z6eqkCtBRoxdZvDEnKVegQAHzwcsgvrrjsqFSuD3V2QRaNMYDD8FmNRFgB1oebP1AV8nNLq2RYe73wS3urpcAi?cluster=devnet"
+    },
+    {
+      "signature": "4jUWFQRoxXLSJYf4MqNMndBRPXHHDPCdW2qUUqLorcWBh97opncnj5gkLty1bTpvyzPRH22vUNoHV2uHa6ZWkPf8",
+      "where": "demo/summary.json.approvals[0].signature",
+      "explorer": "https://explorer.solana.com/tx/4jUWFQRoxXLSJYf4MqNMndBRPXHHDPCdW2qUUqLorcWBh97opncnj5gkLty1bTpvyzPRH22vUNoHV2uHa6ZWkPf8?cluster=devnet"
+    },
+    {
+      "signature": "9Nf5Qs2mzX2fK1iK15B246ovxwErnPXhLufUtyAh21xhNrupjCRMoVJscgkFi85aPCS6G6JWjZvnzLjQTF5RX1H",
+      "where": "demo/summary.json.approvals[1].signature",
+      "explorer": "https://explorer.solana.com/tx/9Nf5Qs2mzX2fK1iK15B246ovxwErnPXhLufUtyAh21xhNrupjCRMoVJscgkFi85aPCS6G6JWjZvnzLjQTF5RX1H?cluster=devnet"
+    },
+    {
+      "signature": "2JSGW9Xgmji6CfP7wh9ywT6qvDGfhUxWcw27srLkoUHT7Ku5k9CPcyiRrJDFENhBWrRmh6agD6Hi6FbeDD46XT7Y",
+      "where": "demo/summary.json.exit.signature",
+      "explorer": "https://explorer.solana.com/tx/2JSGW9Xgmji6CfP7wh9ywT6qvDGfhUxWcw27srLkoUHT7Ku5k9CPcyiRrJDFENhBWrRmh6agD6Hi6FbeDD46XT7Y?cluster=devnet"
+    }
+  ],
+  "latestDemoRun": "artifacts/evidence/demo-2026-10-17-1eba868c",
+  "testOutcomes": [
+    "integration-2026-10-17T00-36-54-669Z.json"
+  ],
+  "notes": [
+    "Operator-funded commercial inference, demo fixture data and test-chain payments are labeled separately inside each file.",
+    "No keys, credentials, note secrets or provider keys are included; the bundle is scanned before it is accepted."
+  ],
+  "files": [
+    "deployment/devnet.json",
+    "deployment/roles.devnet.json",
+    "deployment/approved-labels.json",
+    "evidence/integration-2026-10-17T00-36-54-669Z.json",
+    "evidence/m2-approve-root.json",
+    "evidence/m2-change-insert.json",
+    "evidence/m2-deploy.json",
+    "evidence/m2-deposits.json",
+    "evidence/m2-exits.json",
+    "evidence/m2-inserts.json",
+    "evidence/m2-merchant.json",
+    "evidence/m2-spend.json",
+    "evidence/m2-summary.json",
+    "evidence/marketplace-devnet-smoke-2026-10-17T05-47-34-935Z.json",
+    "evidence/marketplace-devnet-smoke-2026-10-17T06-55-19-957Z.json",
+    "evidence/openrouter-inference-smoke-2026-10-15T00-21-34-245Z.json",
+    "evidence/x402-echo-smoke-2026-10-15T00-40-54-556Z.json",
+    "demo/artifacts/content_calendar-b72421e4.json",
+    "demo/artifacts/content_draft-0f6ba33d.md",
+    "demo/artifacts/content_draft-c8f434c4.md",
+    "demo/artifacts/content_draft-fed24fae.md",
+    "demo/artifacts/research_brief-41145bcb.md",
+    "demo/inference-receipts.json",
+    "demo/ledger.json",
+    "demo/run-state.json",
+    "demo/summary.json",
+    "index.json"
+  ]
+}

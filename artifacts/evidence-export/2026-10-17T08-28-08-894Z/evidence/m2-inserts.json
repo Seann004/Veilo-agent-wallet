@@ -1,0 +1,83 @@
+{
+  "kind": "M2 devnet private smoke: inserts",
+  "profile": "devnet",
+  "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+  "recordedAt": "2026-10-17T07:41:46.256Z",
+  "leaves": [
+    {
+      "index": 0,
+      "commitment": "7130452397010727975037381986814543706983976283526147511846681338262834348450",
+      "kind": "deposit",
+      "queueSeq": "0"
+    },
+    {
+      "index": 1,
+      "commitment": "18301977581706858446213123480797215453644479247583239023438879002277187754533",
+      "kind": "deposit",
+      "queueSeq": "1"
+    }
+  ],
+  "currentRoot": "7690065099959873493454625954931450316604160469776406452235712988914759527886",
+  "crankAttempts": [
+    {
+      "queueSeq": "0",
+      "kind": "insert",
+      "state": "finalized",
+      "signature": "2nanatYKRrLezeCYB8MtL3YpyJrgqQBnj6TsWanjYVU1qvkLZtXRXQwGhRgCYfpfCid9mdKWq7jQAuXkDgRvBJJm",
+      "explorer": "https://explorer.solana.com/tx/2nanatYKRrLezeCYB8MtL3YpyJrgqQBnj6TsWanjYVU1qvkLZtXRXQwGhRgCYfpfCid9mdKWq7jQAuXkDgRvBJJm?cluster=devnet",
+      "slot": "512001218",
+      "err": null,
+      "feeLamports": "5000",
+      "computeUnitsConsumed": "108601",
+      "lamportChanges": [
+        {
+          "account": "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+          "delta": "-5000"
+        }
+      ],
+      "accountKeys": [
+        "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+        "3pFS3aJ8qtVpkFE2L6nT4A9D8vgJnVd51zdaDapHA21j",
+        "5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe",
+        "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
+        "ComputeBudget111111111111111111111111111111"
+      ]
+    },
+    {
+      "queueSeq": "1",
+      "kind": "insert",
+      "state": "finalized",
+      "signature": "3fMMtbJVyPsdEvqexitZF4AbK9equtTgp5pVxyEuybqi4fvHa921koFv1sHU7tVCmPp1zzxt2RTjg4xYng3NdpXr",
+      "explorer": "https://explorer.solana.com/tx/3fMMtbJVyPsdEvqexitZF4AbK9equtTgp5pVxyEuybqi4fvHa921koFv1sHU7tVCmPp1zzxt2RTjg4xYng3NdpXr?cluster=devnet",
+      "slot": "512001228",
+      "err": null,
+      "feeLamports": "5000",
+      "computeUnitsConsumed": "108604",
+      "lamportChanges": [
+        {
+          "account": "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+          "delta": "-5000"
+        }
+      ],
+      "accountKeys": [
+        "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+        "5j9cXKhCG6KsXoCBsBiHPocA23S17rSptVnehXbucNsE",
+        "5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe",
+        "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
+        "ComputeBudget111111111111111111111111111111"
+      ]
+    }
+  ],
+  "proofTimingsMs": [
+    {
+      "circuit": "insert",
+      "ms": 527,
+      "at": "2026-10-17T07:41:39.891Z"
+    },
+    {
+      "circuit": "insert",
+      "ms": 324,
+      "at": "2026-10-17T07:41:42.305Z"
+    }
+  ]
+}

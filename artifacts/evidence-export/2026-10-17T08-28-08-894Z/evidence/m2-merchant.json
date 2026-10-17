@@ -1,0 +1,44 @@
+{
+  "kind": "M2 devnet private smoke: merchant",
+  "profile": "devnet",
+  "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+  "recordedAt": "2026-10-17T07:42:20.844Z",
+  "authority": "smoke authority: operator --execute --confirm stands in for control's sign_merchant stage",
+  "merchant": {
+    "url": "https://x402.payai.network/api/solana-devnet/paid-content",
+    "payTo": "8sqyMHQwBh8BCXC99pdgt6BpXwLu9xqfL1hDV5SFYf3R",
+    "kind": "PayAI Echo Merchant (devnet smoke merchant; it refunds payments)"
+  },
+  "facilitator": "https://facilitator.payai.network",
+  "freshPayer": "3Hn1f9eoo7QGqQFxdaYZo4xaYNs4VJznyYbWoU2hMGCu",
+  "amount": "10000",
+  "messageHash": "W5emftCKWBOBoZI4dbVVkFCvzFFsfRWHqVop1N1URk8=",
+  "httpStatus": 200,
+  "responseExcerpt": "{\"success\":true,\"transaction\":\"3mChKemwTiirm9TvVpFMzbKiMQAkDB8SMX74nWgkmjhzijY2TRszZQpkET6PU6EQD5p6oEQt7jds2JmwSWLJWReA\",\"transactionId\":\"3mChKemwTiirm9TvVpFMzbKiMQAkDB8SMX74nWgkmjhzijY2TRszZQpkET6PU6EQD5p6oEQt7jds2JmwSWLJWReA\",\"signature\":\"3mChKemwTiirm9TvVpFMzbKiMQAkDB8SMX74nWgkmjhzijY2TRszZQpkET6",
+  "settlement": {
+    "signature": "3mChKemwTiirm9TvVpFMzbKiMQAkDB8SMX74nWgkmjhzijY2TRszZQpkET6PU6EQD5p6oEQt7jds2JmwSWLJWReA",
+    "explorer": "https://explorer.solana.com/tx/3mChKemwTiirm9TvVpFMzbKiMQAkDB8SMX74nWgkmjhzijY2TRszZQpkET6PU6EQD5p6oEQt7jds2JmwSWLJWReA?cluster=devnet",
+    "slot": "512001369",
+    "err": null,
+    "feeLamports": "10001",
+    "computeUnitsConsumed": "13180",
+    "lamportChanges": [
+      {
+        "account": "2wKupLR9q6wXYppw8Gr2NvWxKBUqm4PPJKkQfoxHDBg4",
+        "delta": "-10001"
+      }
+    ],
+    "accountKeys": [
+      "2wKupLR9q6wXYppw8Gr2NvWxKBUqm4PPJKkQfoxHDBg4",
+      "3Hn1f9eoo7QGqQFxdaYZo4xaYNs4VJznyYbWoU2hMGCu",
+      "91XwiMK9s68LFkXig7AswFvFXW6ZJ6QX32m4HFG9TUKY",
+      "9Nqa7t1iVubvT2vrmxAv1UAvxL9FsGvaHLVUh3DFGo2D",
+      "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+      "ComputeBudget111111111111111111111111111111",
+      "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+      "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+    ]
+  },
+  "freshPayerTokenBalanceAfter": "10000",
+  "note": "The fresh payer signed only the transfer; the facilitator paid the transaction fee. Any Echo refund lands in the fresh payer's ATA and is recoverable to the owner recovery address (not part of this gate)."
+}

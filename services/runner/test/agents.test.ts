@@ -85,6 +85,54 @@ describe("AGT-01 Prince research (fixture mode)", () => {
     expect(bal.body.gatewayCredits.consumed).toBe("200000");
   });
 
+  it("T12: waits on a purchase control is still driving instead of ending the task incomplete", async () => {
+    s = await makeStack({ purchaseSweepMs: 0 });
+    await topUp(s);
+    const owner = await s.login();
+    await s.call(`/agents/${s.env.agents.Shawn.id}/pause`, { method: "POST", headers: s.ownerHeaders(owner), body: {} });
+    s.provider.responder = (req) => (req.messages[0]?.content ?? "").startsWith(PLAN_PROMPT) ? '{"dataset":"research-basic","rationale":"Basic is enough."}' : undefined;
+    // The dataset purchase's first signing attempt fails before any signature.
+    s.testFunding.signFaults = ["pre_sign_not_ready"];
+    const signedBefore = s.testFunding.calls.sign;
+    const waits: number[] = [];
+    const st = s;
+    const run = await st.call(`/agents/${st.env.agents.Prince.id}/run`, { method: "POST", headers: st.ownerHeaders(owner), body: { input: { question: "Why do repair cafes work?" } } });
+    const done = (await runOnce(cred(st, "Prince"), {
+      ...workerOpts(st),
+      // Control's background sweep drives the same purchase while the runner waits.
+      sleep: async (ms: number) => {
+        waits.push(ms);
+        await st.integration.scheduler.tick();
+      },
+    }))!;
+    expect(waits).toEqual([15_000]);
+    expect(done.outcome.taskState).toBe("completed");
+    const purchases = st.env.db.prepare(`SELECT sku, merchant_state, fulfilment_state FROM purchase WHERE task_id = ? ORDER BY created_at_ms`).all(run.body.taskId);
+    expect(purchases).toEqual([
+      { sku: "research-basic", merchant_state: "finalized", fulfilment_state: "delivered" },
+      { sku: "analyze", merchant_state: "not_required", fulfilment_state: "delivered" },
+    ]);
+    expect(st.testFunding.calls.sign - signedBefore).toBe(1);
+    expect(brief(st, run.body.taskId).content).toContain("research-basic via private_x402: 100000 test-USDC base units — Delivered");
+  });
+
+  it("T12: gives up waiting within its bounds and leaves a note, without paying again", async () => {
+    s = await makeStack({ purchaseSweepMs: 0 });
+    await topUp(s);
+    const owner = await s.login();
+    await s.call(`/agents/${s.env.agents.Shawn.id}/pause`, { method: "POST", headers: s.ownerHeaders(owner), body: {} });
+    s.testFunding.signFaults = ["pre_sign_not_ready", "pre_sign_not_ready", "pre_sign_not_ready", "pre_sign_not_ready"];
+    const st = s;
+    const run = await st.call(`/agents/${st.env.agents.Prince.id}/run`, { method: "POST", headers: st.ownerHeaders(owner), body: { input: { question: "q" } } });
+    const waits: number[] = [];
+    const done = (await runOnce(cred(st, "Prince"), { ...workerOpts(st), sleep: async (ms: number) => void waits.push(ms) }))!;
+    expect(waits).toEqual([15_000, 30_000]);
+    expect(done.outcome.taskState).toBe("incomplete");
+    expect(brief(st, run.body.taskId).content).toContain("was still settling when the task stopped waiting");
+    const rows = st.env.db.prepare(`SELECT count(*) FROM purchase WHERE task_id = ? AND payment_path = 'private_x402'`).pluck().get(run.body.taskId);
+    expect(rows).toBe(1n);
+  });
+
   it("rejects a brief citing a source that was not purchased", async () => {
     s = await makeStack();
     const owner = await s.login();

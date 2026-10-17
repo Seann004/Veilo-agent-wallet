@@ -26,11 +26,15 @@ import {
   type WithdrawalIntent,
 } from "@veilo/privacy-sdk";
 import { ServiceCallError } from "./adapters";
-import { hex64, hexToField, KeyedMutex, type WalletDeps } from "./deps";
+import { hex64, hexToField, KeyedMutex, type MerchantSigner, type WalletDeps } from "./deps";
+import { describeError, isTransientRpcError } from "./diagnostics";
 import { WalletError } from "./errors";
 import { verifiedPublicState, type PoolContext, type VerifiedPublicState } from "./pool";
 import { PortUnavailableError } from "./ports";
 import type { ExternalCallRow, FundingRow, NoteRecord } from "./store";
+
+/** Wallet event recorded immediately before the fresh wallet signs its one merchant payment. */
+export const MERCHANT_SIGNATURE_PRODUCED = "merchant.signature_produced";
 
 export interface FundingInput {
   purchaseId: string;
@@ -443,6 +447,11 @@ export class FundingService {
       const { store } = this.d;
       const prior = store.merchantPayment(purchaseId);
       if (prior) return { status: "signed", paymentSignatureHeader: prior.payment_header, payer: prior.fresh_wallet, messageHash: prior.message_hash };
+      // A signature was produced earlier but its payment was never stored: it may exist outside
+      // this process, so the fresh wallet never signs a second transfer.
+      if (store.events(purchaseId).some((e) => e.kind === MERCHANT_SIGNATURE_PRODUCED)) {
+        return { status: "recovery_required", reason: "a merchant signature was produced but its payment was not stored; reconcile before any new signature" };
+      }
       const f = store.funding(purchaseId);
       if (!f || body.fundingRef !== purchaseId) return { status: "recovery_required", reason: "no funding for this purchase" };
       if (f.step !== "finalized") return { status: "not_ready", reason: "funding withdrawal is not finalized" };
@@ -465,10 +474,27 @@ export class FundingService {
         async signPaymentMessage({ messageBytes }: { messageBytes: Uint8Array }): Promise<SignatureBytes> {
           if (used || store.merchantPayment(purchaseId)) throw new WalletError("POLICY_DENIED", "fresh payment wallet already signed");
           used = true;
+          // Recorded before signing, so a crash or failure after this point never re-signs.
+          store.event(MERCHANT_SIGNATURE_PRODUCED, purchaseId, {});
           return new Uint8Array(sign(null, Buffer.from(messageBytes), key)) as SignatureBytes;
         },
       };
-      const signed = await this.d.merchant.sign({ paymentRequired: body.paymentRequired, binding: body.binding, exactAmount: f.payout, purchaseRef: purchaseId, wallet });
+      let signed: Awaited<ReturnType<MerchantSigner["sign"]>>;
+      try {
+        signed = await this.d.merchant.sign({ paymentRequired: body.paymentRequired, binding: body.binding, exactAmount: f.payout, purchaseRef: purchaseId, wallet });
+      } catch (error) {
+        const detail = describeError(error);
+        this.d.log?.(`[wallet] merchant signing for ${purchaseId} failed ${used ? "after" : "before"} signing: ${detail}`);
+        if (used) {
+          store.event("merchant.sign_failed_after_signature", purchaseId, { error: detail });
+          return { status: "recovery_required", reason: `merchant signing failed after the fresh wallet signed (${detail}); reconcile before any new signature` };
+        }
+        if (isTransientRpcError(error)) {
+          store.event("merchant.sign_deferred", purchaseId, { error: detail });
+          return { status: "not_ready", reason: `merchant payment not signed yet; nothing was signed (${detail})` };
+        }
+        throw error;
+      }
       store.tx(() => {
         store.insertMerchantPayment({
           purchase_id: purchaseId,

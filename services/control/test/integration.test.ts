@@ -77,6 +77,54 @@ describe("direct x402 purchase through funding provider and gateway", () => {
   });
 });
 
+describe("T12 merchant signing failures", () => {
+  it("a pre-sign wallet failure is retried on the same funding: one withdrawal, one signature, delivered", async () => {
+    s = await makeStack({ settleWaitMs: 10_000, settlePollMs: 1 });
+    s.testFunding.signFaults = ["pre_sign_not_ready", "pre_sign_not_ready"];
+    const r = await intent(s, "Prince", "t12-pre", "research-basic", "private_x402", { query: "repair cafes" });
+    expect(r.body.purchase.states).toMatchObject({ funding: "finalized", merchant: "finalized", fulfilment: "delivered", recovery: "none" });
+    expect(r.body.execution.blocked).toBeNull();
+    expect(s.testFunding.calls).toMatchObject({ prepare: 1, release: 1, sign: 1, signAttempts: 3 });
+    expect(s.gw.facilitator.settleCalls).toBe(1);
+    const legs = r.body.purchase.chainAttempts.map((a: { leg: string }) => a.leg).sort();
+    expect(legs).toEqual(["funding", "merchant"]);
+  });
+
+  it("without a wait budget the pre-sign failure stays NOT_READY and the sweep completes the same purchase", async () => {
+    s = await makeStack({ purchaseSweepMs: 0 });
+    const owner = await s.login();
+    await s.call(`/agents/${s.env.agents.Shawn.id}/pause`, { method: "POST", headers: s.ownerHeaders(owner), body: {} });
+    s.testFunding.signFaults = ["pre_sign_not_ready"];
+    const r = await intent(s, "Prince", "t12-sweep", "research-basic", "private_x402", { query: "sweep" });
+    expect(r.body.purchase.states).toMatchObject({ funding: "finalized", merchant: "signed", recovery: "none" });
+    expect(r.body.execution.blocked.code).toBe("NOT_READY");
+    await s.integration.scheduler.tick();
+    const after = await s.call(`/purchases/${r.body.purchase.id}`, { headers: { authorization: `Bearer ${s.worker("Prince")}` } });
+    expect(after.body.purchase.states).toMatchObject({ funding: "finalized", merchant: "finalized", fulfilment: "delivered" });
+    expect(s.testFunding.calls).toMatchObject({ prepare: 1, release: 1, sign: 1, signAttempts: 2 });
+    expect(s.gw.facilitator.settleCalls).toBe(1);
+  });
+
+  it("a failure after the fresh wallet signed stays with reconciliation and is never re-signed", async () => {
+    s = await makeStack({ settleWaitMs: 10_000, settlePollMs: 1, purchaseSweepMs: 0 });
+    const owner = await s.login();
+    await s.call(`/agents/${s.env.agents.Shawn.id}/pause`, { method: "POST", headers: s.ownerHeaders(owner), body: {} });
+    s.testFunding.signFaults = ["post_sign_lost"];
+    const r = await intent(s, "Prince", "t12-post", "research-basic", "private_x402", { query: "lost" });
+    expect(r.body.purchase.states).toMatchObject({ funding: "finalized", merchant: "signed" });
+    expect(r.body.execution.blocked.code).toBe("RECOVERY_REQUIRED");
+    // Neither the request's wait, an owner reconcile nor the sweep signs a second payment.
+    expect(s.testFunding.calls.signAttempts).toBe(1);
+    await s.call(`/purchases/${r.body.purchase.id}/reconcile`, { method: "POST", headers: s.ownerHeaders(owner), body: {} });
+    await s.integration.scheduler.tick();
+    expect(s.testFunding.calls).toMatchObject({ prepare: 1, release: 1, sign: 1 });
+    expect(s.gw.facilitator.settleCalls).toBe(0);
+    const after = await s.call(`/purchases/${r.body.purchase.id}`, { headers: { authorization: `Bearer ${s.worker("Prince")}` } });
+    expect(after.body.purchase.states.merchant).toBe("signed");
+    expect(after.body.execution.blocked.code).toBe("RECOVERY_REQUIRED");
+  });
+});
+
 describe("background reconciliation of pending purchases", () => {
   it("the scheduler sweep completes a purchase whose withdrawal finalized after the request returned", async () => {
     s = await makeStack({ purchaseSweepMs: 0 });

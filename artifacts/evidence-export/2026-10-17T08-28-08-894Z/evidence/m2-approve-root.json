@@ -1,0 +1,31 @@
+{
+  "kind": "M2 devnet private smoke: approve-root",
+  "profile": "devnet",
+  "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+  "recordedAt": "2026-10-17T07:41:52.756Z",
+  "rule": "labels of finalized, inserted deposits by configured synthetic/test participants (published prototype rule; no screening)",
+  "approvedLabels": 2,
+  "approvedRoot": "3687024425345734378543282600499674303123951477074266755515252814326588480180",
+  "labelsFile": "artifacts/deployment/approved-labels.json",
+  "transaction": {
+    "signature": "Qfaif5x7dFg8k8bHxixPpnBpDQx1QRiENbHFdFPhhW6Xzf1cRnRy8oVJgCqDN7xyGPG2AJampVHCeAqjkAG78bW",
+    "explorer": "https://explorer.solana.com/tx/Qfaif5x7dFg8k8bHxixPpnBpDQx1QRiENbHFdFPhhW6Xzf1cRnRy8oVJgCqDN7xyGPG2AJampVHCeAqjkAG78bW?cluster=devnet",
+    "slot": "512001253",
+    "err": null,
+    "feeLamports": "5000",
+    "computeUnitsConsumed": "7914",
+    "lamportChanges": [
+      {
+        "account": "7gpa8LcVEm3MLX4JqPtfbv95heRFKpsFCA4R84EhdDRE",
+        "delta": "-5000"
+      }
+    ],
+    "accountKeys": [
+      "7gpa8LcVEm3MLX4JqPtfbv95heRFKpsFCA4R84EhdDRE",
+      "93626hbqJEjEY376ZH2goAgP8pWifvDECxSrhF5BqTkw",
+      "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
+      "5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe",
+      "ComputeBudget111111111111111111111111111111"
+    ]
+  }
+}

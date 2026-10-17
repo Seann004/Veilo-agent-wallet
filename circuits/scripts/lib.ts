@@ -4,6 +4,7 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { toolchainWorkspace } from "../../scripts/toolchain-native.mjs";
 
 export const CIRCUITS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const REPO_ROOT = resolve(CIRCUITS_DIR, "..");
@@ -94,7 +95,10 @@ export function sourceTreeHash(files: Record<string, string>): string {
   return sha256Text(Object.entries(files).map(([path, sha]) => `${sha}  ${path}\n`).join(""));
 }
 
-/** Runs a shell command inside the pinned toolchain image (repo at /workspace). */
+/** Repository root inside the toolchain (the bind mount, or the checkout with VEILO_TOOLCHAIN=native). */
+export const TOOLCHAIN_WORKSPACE = toolchainWorkspace();
+
+/** Runs a shell command in the pinned toolchain (repo at TOOLCHAIN_WORKSPACE). */
 export function toolchain(command: string): string {
   const res = spawnSync("node", [resolve(REPO_ROOT, "scripts/toolchain.mjs"), "--", "sh", "-c", command], {
     cwd: REPO_ROOT,

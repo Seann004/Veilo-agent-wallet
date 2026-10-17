@@ -35,6 +35,7 @@ import {
   sourceTreeHash,
   stableJson,
   toolchain,
+  TOOLCHAIN_WORKSPACE,
   toRepoPosix,
   type MainCircuit,
 } from "./lib";
@@ -68,16 +69,17 @@ function compile(): string {
     const want = sourceTreeHash(sourceFiles(sourcePath(name)));
     return !existsSync(p.r1cs) || !existsSync(p.wasm) || !existsSync(stamp) || readFileSync(stamp, "utf8") !== want;
   });
+  const ws = TOOLCHAIN_WORKSPACE;
   const cmds = ["circom --version"];
   for (const name of stale) {
     const src = toRepoPosix(sourcePath(name));
     const out = toRepoPosix(outDir(name));
     cmds.push(
-      `rm -rf /workspace/${out} && mkdir -p /workspace/${out}`,
-      `circom /workspace/${src} ${COMPILER_FLAGS.join(" ")} -l /workspace/${lib} -o /workspace/${out} > /workspace/${out}/compile.log`,
+      `rm -rf '${ws}/${out}' && mkdir -p '${ws}/${out}'`,
+      `circom '${ws}/${src}' ${COMPILER_FLAGS.join(" ")} -l '${ws}/${lib}' -o '${ws}/${out}' > '${ws}/${out}/compile.log'`,
     );
   }
-  if (stale.length > 0) log(`compiling ${stale.join(", ")} in the toolchain image`);
+  if (stale.length > 0) log(`compiling ${stale.join(", ")} in the toolchain`);
   const version = toolchain(cmds.join(" && ")).trim().split("\n")[0]!.trim();
   for (const name of stale) {
     writeFileSync(resolve(outDir(name), "source.sha256"), sourceTreeHash(sourceFiles(sourcePath(name))));

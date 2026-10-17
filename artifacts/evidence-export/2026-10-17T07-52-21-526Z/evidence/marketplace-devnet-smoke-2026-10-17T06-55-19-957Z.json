@@ -1,0 +1,73 @@
+{
+  "kind": "marketplace devnet smoke — PUBLIC FUNDING merchant leg (no pool privacy)",
+  "label": "Devnet test tokens — no monetary value",
+  "recordedAt": "2026-10-17T06:55:19.957Z",
+  "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+  "mint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+  "seller": {
+    "payout": "3VxZ8Wm6ZpZr8iCrMqAZ2KEzfJxXn9t192iqXMbVLpmh",
+    "payoutAta": "FdfVyaPDCRv3sDEAPQLTB2Fu9evfay3tGqmH3mgseGbr"
+  },
+  "payer": "3VuCiW6vJc9V3xjGUcmkgFXHRX83ynywra7vMwrQEYXA",
+  "fundingTransactions": {
+    "sellerAta": {
+      "sent": {
+        "signature": "32CjSzHqz9asWUoUMDcGi1HYyvFS43sqDeZJBgKyKEW3FSWyZZzYvUA1Bdv8eDBerpssR8VUpxQzSuufK8WrPDEA",
+        "lastValidBlockHeight": "499205539",
+        "sentAt": "2026-10-17T06:53:37.992Z"
+      },
+      "signature": "32CjSzHqz9asWUoUMDcGi1HYyvFS43sqDeZJBgKyKEW3FSWyZZzYvUA1Bdv8eDBerpssR8VUpxQzSuufK8WrPDEA",
+      "explorer": "https://explorer.solana.com/tx/32CjSzHqz9asWUoUMDcGi1HYyvFS43sqDeZJBgKyKEW3FSWyZZzYvUA1Bdv8eDBerpssR8VUpxQzSuufK8WrPDEA?cluster=devnet"
+    },
+    "fundPayer": {
+      "sent": {
+        "signature": "3r9nzUiWgyuPDYt6kk2hPybPmNW4RPgqyfSwwS5Z4mdCJtkqpXqqwXJFev37nf4dFyWksue7dSbSQXwL5m31XeJ9",
+        "lastValidBlockHeight": "499205553",
+        "sentAt": "2026-10-17T06:53:41.436Z"
+      },
+      "signature": "3r9nzUiWgyuPDYt6kk2hPybPmNW4RPgqyfSwwS5Z4mdCJtkqpXqqwXJFev37nf4dFyWksue7dSbSQXwL5m31XeJ9",
+      "explorer": "https://explorer.solana.com/tx/3r9nzUiWgyuPDYt6kk2hPybPmNW4RPgqyfSwwS5Z4mdCJtkqpXqqwXJFev37nf4dFyWksue7dSbSQXwL5m31XeJ9?cluster=devnet"
+    }
+  },
+  "settlement": {
+    "signature": "5ikNXKh7Wcric5hAPE1FSchFBKQunW9CBZZfqVJgM8hPSGKYS2uLYs99ttLGvKjvxNSetpnEHjJG64XvxYiUarsN",
+    "explorer": "https://explorer.solana.com/tx/5ikNXKh7Wcric5hAPE1FSchFBKQunW9CBZZfqVJgM8hPSGKYS2uLYs99ttLGvKjvxNSetpnEHjJG64XvxYiUarsN?cluster=devnet"
+  },
+  "job": {
+    "id": "47a67c0d-a350-433b-990c-dc6ee8e5c0d8",
+    "state": "succeeded",
+    "financialState": "settled",
+    "events": [
+      "job.created",
+      "job.owner_approved",
+      "payment.accepted",
+      "payment.paying",
+      "payment.settled",
+      "attempt.claimed",
+      "attempt.completed"
+    ]
+  },
+  "receipt": {
+    "signature": "5ikNXKh7Wcric5hAPE1FSchFBKQunW9CBZZfqVJgM8hPSGKYS2uLYs99ttLGvKjvxNSetpnEHjJG64XvxYiUarsN",
+    "amount": 10000,
+    "mint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+    "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    "finalized_slot": 511989494,
+    "verified_at": "2026-10-17T06:55:09.097037+00:00"
+  },
+  "artifact": {
+    "sha256": "e72fad7db87b0269397a41f2c2e3757bcbb033ee8186df80f94ff0f0a5d4af90",
+    "bytes": 1277,
+    "excerpt": "## x402 Payment Protocol and Solana Devnet Settlement\n\nThe x402 payment protocol is an experimental standard for pay-per-view web content that uses the HTTP 402 \"Payment Required\" status code. It enables a client to pay a micropayment (typically in cryptocurrency) to access a resource, with the payment being verified before the server serves the content. The protocol is designed for low-value, high-frequency payments without pre-established accounts.\n\n**Solana devnet settlement** for x402 involves using the Solana blockchain's test network (devnet) to process these micropayments. On devnet, us"
+  },
+  "sellerEarnings": [
+    {
+      "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+      "mint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+      "gross": "20000",
+      "platformFee": "0",
+      "refunded": "0",
+      "net": "20000"
+    }
+  ]
+}

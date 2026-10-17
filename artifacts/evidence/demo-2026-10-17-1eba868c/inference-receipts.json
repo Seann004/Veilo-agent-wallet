@@ -1,0 +1,70 @@
+{
+  "provider": "OpenRouter (operator-funded real inference, bounded per pinned tariff)",
+  "note": "Prompts and inputs are not recorded here; outputs are saved as artifacts.",
+  "receipts": [
+    {
+      "sourceKind": "planning",
+      "sku": null,
+      "model": "deepseek/deepseek-v4-flash",
+      "mode": "live",
+      "reportedModel": "deepseek/deepseek-v4-flash",
+      "state": "succeeded",
+      "promptTokens": 109,
+      "completionTokens": 75,
+      "outputChars": 428,
+      "purpose": "planning",
+      "worstCaseMicroUsd": 474,
+      "actualMicroUsd": 13,
+      "costSource": "provider_reported",
+      "at": "2026-10-17T08:26:30.025Z"
+    },
+    {
+      "sourceKind": "usage",
+      "sku": "analyze",
+      "model": "deepseek/deepseek-v4-flash",
+      "mode": "live",
+      "reportedModel": "deepseek/deepseek-v4-flash",
+      "state": "succeeded",
+      "promptTokens": 990,
+      "completionTokens": 722,
+      "outputChars": 3682,
+      "purpose": "prepaid",
+      "worstCaseMicroUsd": 1092,
+      "actualMicroUsd": 122,
+      "costSource": "provider_reported",
+      "at": "2026-10-17T08:26:44.694Z"
+    },
+    {
+      "sourceKind": "planning",
+      "sku": null,
+      "model": "deepseek/deepseek-v4-flash",
+      "mode": "live",
+      "reportedModel": "deepseek/deepseek-v4-flash",
+      "state": "succeeded",
+      "promptTokens": 782,
+      "completionTokens": 55,
+      "outputChars": 265,
+      "purpose": "planning",
+      "worstCaseMicroUsd": 474,
+      "actualMicroUsd": 25,
+      "costSource": "provider_reported",
+      "at": "2026-10-17T08:26:51.943Z"
+    },
+    {
+      "sourceKind": "purchase",
+      "sku": "content-package",
+      "model": "deepseek/deepseek-v4-flash",
+      "mode": "live",
+      "reportedModel": "deepseek/deepseek-v4-flash",
+      "state": "succeeded",
+      "promptTokens": 417,
+      "completionTokens": 835,
+      "outputChars": 3236,
+      "purpose": "x402",
+      "worstCaseMicroUsd": 1274,
+      "actualMicroUsd": 45,
+      "costSource": "provider_reported",
+      "at": "2026-10-17T08:27:05.165Z"
+    }
+  ]
+}

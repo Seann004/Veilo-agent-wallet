@@ -7,6 +7,8 @@ export interface ChatRequest {
   jsonObject: boolean;
   /** USD per million tokens; the provider must not route above these rates. */
   maxPrice: { prompt: number; completion: number };
+  /** Ask the provider to answer without reasoning (see PinnedModel.reasoning). */
+  disableReasoning?: boolean;
 }
 
 export interface ChatResult {

@@ -35,7 +35,12 @@ export class UnavailableFundingProvider implements FundingProvider {
 
 const big = (v: bigint) => v.toString();
 
-type CallResult = { ok: true; body: unknown } | { ok: false; reason: string };
+type CallResult = { ok: true; status: number; body: unknown } | { ok: false; reason: string };
+
+function errorOf(body: unknown): { code: string; message: string } | undefined {
+  const e = (body as { error?: { code?: unknown; message?: unknown } } | undefined)?.error;
+  return typeof e?.code === "string" ? { code: e.code, message: typeof e.message === "string" ? e.message : "" } : undefined;
+}
 
 /**
  * Live provider: HTTP client for the wallet service funding API. Any transport failure, an
@@ -65,7 +70,7 @@ export class WalletFundingProvider implements FundingProvider {
       });
       if (res.status === 404 || res.status === 501) return { ok: false, reason: `wallet service funding API not available (HTTP ${res.status})` };
       const text = await res.text();
-      return { ok: true, body: text ? (JSON.parse(text) as unknown) : undefined };
+      return { ok: true, status: res.status, body: text ? (JSON.parse(text) as unknown) : undefined };
     } catch (error) {
       return { ok: false, reason: `wallet service unreachable: ${(error as Error).name}` };
     }
@@ -129,7 +134,15 @@ export class WalletFundingProvider implements FundingProvider {
     });
     if (!r.ok) return { status: "recovery_required", reason: r.reason };
     const parsed = merchantSignResultWire.safeParse(r.body);
-    return parsed.success ? parsed.data : { status: "recovery_required", reason: "wallet service returned an unrecognized signing state" };
+    if (parsed.success) return parsed.data;
+    const error = errorOf(r.body);
+    // The wallet answers 503 NOT_READY only from its pre-sign checks (control and pool reads);
+    // any other error may follow a signature and stays with reconciliation.
+    if (r.status === 503 && error?.code === "NOT_READY") return { status: "not_ready", reason: `wallet not ready to sign: ${error.message}` };
+    return {
+      status: "recovery_required",
+      reason: error ? `wallet service signing error HTTP ${r.status} ${error.code}: ${error.message}` : "wallet service returned an unrecognized signing state",
+    };
   }
 
   async signExternalCall(q: ExternalCallSignRequest): Promise<MerchantSignResult> {
