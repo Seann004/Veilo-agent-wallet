@@ -19,9 +19,13 @@ import type { GatewayHooks } from "./context";
 import { openGatewayDb } from "./db/database";
 import { Gateway } from "./gateway";
 import { OpenRouterProvider } from "./provider/openrouter";
+import { DEFAULT_ACCOUNT_RATE_LIMIT } from "./seller-host/accounts";
+import { CLAIM_RETRY_DELAYS_MS, gatewayRole, HEARTBEAT_MS, loadSellerHostConfig } from "./seller-host/config";
+import { MarketplaceClient } from "./seller-host/marketplace-client";
 
 const SERVICE = "gateway";
 const REFRESH_MS = 5 * 60_000;
+const SELLER_RECOVER_MS = 30_000;
 
 function readSecretFile(path: string | undefined): string | undefined {
   if (!path || !existsSync(path)) return undefined;
@@ -61,6 +65,9 @@ async function main(): Promise<void> {
   loadDotEnv({ allowProviderSecrets: true });
   const config = loadConfig(process.env, { rootDir });
   const gw = loadGatewayConfig(config, process.env, { rootDir });
+  const role = gatewayRole(process.env);
+  const host = role === "seller-host" ? loadSellerHostConfig(config, gw, process.env, { rootDir }) : undefined;
+  const label = host ? `${SERVICE}:seller-host` : SERVICE;
   const health = createServiceHealth(SERVICE, config, true);
   startChainGuard(config, health, {
     onMismatch: (error) => {
@@ -69,9 +76,10 @@ async function main(): Promise<void> {
     },
   });
 
-  const db = openGatewayDb(config.paths.gatewayDatabase);
-  const permitPem = readSecretFile(gw.usagePermitPublicKeyPath);
-  const planningToken = readSecretFile(gw.planningCredentialPath);
+  const db = openGatewayDb(host ? host.databasePath : config.paths.gatewayDatabase);
+  // Prepaid permits and sponsored planning belong to the operator gateway only.
+  const permitPem = host ? undefined : readSecretFile(gw.usagePermitPublicKeyPath);
+  const planningToken = host ? undefined : readSecretFile(gw.planningCredentialPath);
   const apiKey = config.openRouterApiKey;
   const local = localTestOptions(config);
   const provider = local.providerUrl
@@ -86,19 +94,25 @@ async function main(): Promise<void> {
   const gateway = new Gateway({
     db,
     settings: {
-      identity: gw.identity,
-      origin: gw.publicOrigin,
+      role,
+      identity: host ? host.identity : gw.identity,
+      origin: host ? host.publicOrigin : gw.publicOrigin,
       network: config.network.caip2,
+      genesisHash: config.network.genesisHash,
       mint: config.network.mint,
+      mintDecimals: config.network.mintDecimals,
       facilitatorUrl: config.network.facilitatorUrl,
-      merchantAddress: gw.merchantAddress,
-      merchantAta: gw.merchantAta,
+      merchantAddress: host ? undefined : gw.merchantAddress,
+      merchantAta: host ? undefined : gw.merchantAta,
       feePayer: gw.facilitatorFeePayer,
       quoteTtlSeconds: gw.quoteTtlSeconds,
       settlementWaitMs: gw.settlementWaitMs,
       settlementPollMs: 2_000,
       maxTimeoutSeconds: 300,
       operatorCeilingMicro: config.inference.operatorMaxRealUsdMicro,
+      sellerHost: host
+        ? { allowedRecipients: host.allowedRecipients, heartbeatMs: HEARTBEAT_MS, claimRetryDelaysMs: CLAIM_RETRY_DELAYS_MS }
+        : undefined,
     },
     chain: createRpcChain(config.network.rpcUrl),
     facilitator: new HTTPFacilitatorClient({ url: config.network.facilitatorUrl, timeoutMs: 60_000 }),
@@ -113,16 +127,32 @@ async function main(): Promise<void> {
     ...(planningToken ? { planningTokenHash: hashToken(planningToken) } : {}),
     ...(provider ? { providerKeyCheck: () => provider.keyLimitRemainingMicro(AbortSignal.timeout(15_000)) } : {}),
     ...(local.hooks ? { hooks: local.hooks } : {}),
+    ...(host ? { marketplace: new MarketplaceClient({ baseUrl: host.marketplaceUrl, token: host.marketplaceToken }) } : {}),
     serviceHealth: health,
   });
 
   await gateway.recover();
   await gateway.refreshExternal();
   setInterval(() => void gateway.refreshExternal(), REFRESH_MS).unref();
+  if (host) {
+    // Paid jobs keep moving (claim, run, report) even when no buyer is polling for the result.
+    let passing = false;
+    setInterval(() => {
+      if (passing) return;
+      passing = true;
+      gateway.purchases
+        .recover()
+        .catch((error: unknown) => console.error(`[${label}] fulfilment pass failed: ${(error as Error).name}`))
+        .finally(() => {
+          passing = false;
+        });
+    }, SELLER_RECOVER_MS).unref();
+  }
 
-  const port = config.ports.gateway;
-  createApp(gateway).listen(port, config.bindHost, () => {
-    console.log(`[${SERVICE}] listening on http://${config.bindHost}:${port} (${config.network.caip2})`);
+  const port = host ? host.port : config.ports.gateway;
+  const appOptions = host ? { accountRateLimit: { ...DEFAULT_ACCOUNT_RATE_LIMIT, perIp: host.accountsPerIpHour } } : {};
+  createApp(gateway, appOptions).listen(port, config.bindHost, () => {
+    console.log(`[${label}] listening on http://${config.bindHost}:${port} (${config.network.caip2})`);
   });
   if (process.env.VEILO_LOG_CONFIG === "1") console.log(JSON.stringify(describeConfig(config)));
 }

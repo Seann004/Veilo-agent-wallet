@@ -216,4 +216,49 @@ CREATE TABLE pricing_checks (
 );
 `,
   },
+  {
+    version: 2,
+    name: "seller host",
+    sql: `
+-- One buyer operation per marketplace job, so a job can never be quoted to two payers.
+CREATE TABLE seller_jobs (
+  job_id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES accounts(id),
+  operation_id TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE seller_quotes (
+  quote_id TEXT PRIMARY KEY REFERENCES quotes(id),
+  job_id TEXT NOT NULL REFERENCES seller_jobs(job_id),
+  marketplace_quote_json TEXT NOT NULL,
+  runtime_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE seller_fulfilments (
+  purchase_id TEXT PRIMARY KEY REFERENCES purchases(id),
+  job_id TEXT NOT NULL UNIQUE REFERENCES seller_jobs(job_id),
+  evidence_recorded_at TEXT,
+  attempt_id TEXT,
+  lease_generation INTEGER,
+  lease_token TEXT,
+  lease_expires_at TEXT,
+  claims INTEGER NOT NULL DEFAULT 0 CHECK (claims >= 0),
+  outcome TEXT CHECK (outcome IN ('complete', 'incomplete', 'failed', 'uncertain')),
+  summary TEXT,
+  artifact_id TEXT,
+  artifact_text TEXT,
+  artifact_sha256 TEXT,
+  artifact_bytes INTEGER,
+  fail_code TEXT,
+  result_json TEXT,
+  acked_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  CHECK ((attempt_id IS NULL) = (lease_token IS NULL)),
+  CHECK (acked_at IS NULL OR outcome IS NOT NULL)
+);
+`,
+  },
 ];

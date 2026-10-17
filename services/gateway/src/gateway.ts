@@ -13,6 +13,7 @@ import { pinnedModel, type PinnedModel } from "./provider/pinned-models";
 import { PricingGuard } from "./provider/pricing";
 import type { ChatProvider, FetchLike } from "./provider/types";
 import { PurchaseService } from "./purchases";
+import type { MarketplaceClient } from "./seller-host/marketplace-client";
 import { UsageService } from "./usage";
 
 export interface GatewayOptions {
@@ -32,6 +33,8 @@ export interface GatewayOptions {
   /** Optional provider key spend-limit probe (no generation). Returns remaining micro-USD or null if unlimited. */
   providerKeyCheck?: () => Promise<bigint | null>;
   serviceHealth: ServiceHealth;
+  /** Required in the seller-host role; ignored otherwise. */
+  marketplace?: MarketplaceClient;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
   hooks?: GatewayHooks;
@@ -76,6 +79,7 @@ export class Gateway {
       permitPublicKey: options.permitPublicKey,
       planningTokenHash: options.planningTokenHash,
       acceptance: { ready: false, reason: "facilitator support not checked yet", support: undefined, merchantAta: undefined, feePayer: undefined },
+      marketplace: options.settings.role === "seller-host" ? options.marketplace : undefined,
       now,
       sleep: options.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
       hooks,
@@ -92,10 +96,16 @@ export class Gateway {
     const fail = (reason: string, extra: Partial<GatewayContext["acceptance"]> = {}) => {
       this.ctx.acceptance = { ready: false, reason, support: undefined, merchantAta: undefined, feePayer: undefined, ...extra };
     };
-    if (!s.merchantAddress) return fail("merchant address not configured");
+    let derived: string | undefined;
+    if (s.role === "seller-host") {
+      // Recipients come from each verified marketplace quote, never from host configuration.
+      if (!this.ctx.marketplace || !s.sellerHost) return fail("marketplace client not configured");
+    } else {
+      if (!s.merchantAddress) return fail("merchant address not configured");
+      derived = await deriveAta(s.merchantAddress, s.mint);
+      if (s.merchantAta !== undefined && s.merchantAta !== derived) return fail("configured merchant ATA is not the derived ATA");
+    }
     if (!s.feePayer) return fail("facilitator fee payer not configured");
-    const derived = await deriveAta(s.merchantAddress, s.mint);
-    if (s.merchantAta !== undefined && s.merchantAta !== derived) return fail("configured merchant ATA is not the derived ATA");
     let support;
     try {
       support = checkFacilitatorSupport(await this.ctx.facilitator.getSupported(), {
@@ -158,12 +168,16 @@ export class Gateway {
       ...base,
       status: ok ? "ok" : "unavailable",
       database,
+      role: this.ctx.settings.role,
+      identity: this.ctx.settings.identity,
+      origin: this.ctx.settings.origin,
       x402: {
         accepting: a.ready && ok,
         reason: a.reason ?? null,
         facilitatorUrl: this.ctx.settings.facilitatorUrl,
         facilitator: a.support ?? null,
-        merchantAddress: this.ctx.settings.merchantAddress ?? null,
+        merchantAddress: this.ctx.settings.role === "operator" ? (this.ctx.settings.merchantAddress ?? null) : null,
+        recipients: this.ctx.settings.role === "operator" ? "fixed merchant" : "per marketplace quote",
         merchantAta: a.merchantAta ?? null,
         feePayer: a.feePayer ?? null,
       },
@@ -175,7 +189,9 @@ export class Gateway {
         keyCheck: this.#keyCheck ?? null,
         ready: inferenceReady.ready && keyOk && BigInt(budget.remainingMicro) > 0n,
       },
-      catalog: Object.values(GATEWAY_CATALOG).map((d) => ({
+      catalog: Object.values(GATEWAY_CATALOG)
+        .filter((d) => (this.ctx.settings.role === "seller-host") === (d.kind === "specialist"))
+        .map((d) => ({
         sku: d.sku,
         x402Amount: d.x402Amount?.toString() ?? null,
         prepaidUnits: d.prepaidUnits?.toString() ?? null,

@@ -8,6 +8,7 @@
     "dev": "tsx src/index.ts",
     "dev:watch": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
+    "start:seller-host": "GATEWAY_ROLE=seller-host tsx src/index.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "account:create": "tsx src/cli/create-account.ts"

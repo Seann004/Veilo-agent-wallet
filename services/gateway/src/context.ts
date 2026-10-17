@@ -4,6 +4,7 @@ import type { FacilitatorSupport } from "@veilo/x402-client";
 import type { GatewayChain } from "./chain";
 import type { GatewayDb } from "./db/database";
 import type { InferenceService } from "./inference";
+import type { MarketplaceClient } from "./seller-host/marketplace-client";
 
 /** Facilitator operations used by the gateway; HTTPFacilitatorClient satisfies it. */
 export interface GatewayFacilitator {
@@ -12,11 +13,25 @@ export interface GatewayFacilitator {
   settle(payload: PaymentPayload, requirements: PaymentRequirements): Promise<SettleResponse>;
 }
 
+export type GatewayRole = "operator" | "seller-host";
+
+export interface SellerHostSettings {
+  /** When non-empty, only these payout owners may be named as a quote recipient. */
+  allowedRecipients: readonly string[];
+  heartbeatMs: number;
+  /** Delays between claim attempts while the marketplace has not queued the job yet. */
+  claimRetryDelaysMs: readonly number[];
+}
+
 export interface GatewaySettings {
+  /** `operator` sells the fixed catalog to the operator's merchant; `seller-host` sells only marketplace specialist jobs. */
+  role: GatewayRole;
   identity: string;
   origin: string;
   network: string;
+  genesisHash: string;
   mint: string;
+  mintDecimals: number;
   facilitatorUrl: string;
   merchantAddress: string | undefined;
   merchantAta: string | undefined;
@@ -27,6 +42,7 @@ export interface GatewaySettings {
   settlementPollMs: number;
   maxTimeoutSeconds: number;
   operatorCeilingMicro: bigint;
+  sellerHost: SellerHostSettings | undefined;
 }
 
 /** Test-only fault injection points. Production wiring leaves these undefined. */
@@ -53,6 +69,8 @@ export interface GatewayContext {
   permitPublicKey: KeyObject | undefined;
   planningTokenHash: string | undefined;
   acceptance: AcceptanceState;
+  /** Present only in the seller-host role. */
+  marketplace: MarketplaceClient | undefined;
   now: () => Date;
   sleep: (ms: number) => Promise<void>;
   hooks: GatewayHooks;
