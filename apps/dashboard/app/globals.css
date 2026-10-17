@@ -5,7 +5,7 @@
   --sidebar: #f7f7f8;
   --ink: #0f0e0d;
   --ink-2: rgba(15, 14, 13, 0.62);
-  --ink-3: rgba(15, 14, 13, 0.45);
+  --ink-3: rgba(15, 14, 13, 0.58);
   --line: rgba(15, 14, 13, 0.12);
   --line-2: rgba(15, 14, 13, 0.07);
   --hover: rgba(15, 14, 13, 0.05);
@@ -57,7 +57,7 @@
     --sidebar: #131317;
     --ink: #ececf1;
     --ink-2: rgba(236, 236, 241, 0.68);
-    --ink-3: rgba(236, 236, 241, 0.45);
+    --ink-3: rgba(236, 236, 241, 0.58);
     --ink-4: #4a4a52;
     --line: rgba(255, 255, 255, 0.1);
     --line-2: rgba(255, 255, 255, 0.06);
@@ -99,7 +99,7 @@
   --sidebar: #131317;
   --ink: #ececf1;
   --ink-2: rgba(236, 236, 241, 0.68);
-  --ink-3: rgba(236, 236, 241, 0.45);
+  --ink-3: rgba(236, 236, 241, 0.58);
   --ink-4: #4a4a52;
   --line: rgba(255, 255, 255, 0.1);
   --line-2: rgba(255, 255, 255, 0.06);
@@ -196,14 +196,14 @@ img {
 .app {
   display: grid;
   grid-template-columns: 288px minmax(0, 1fr);
-  min-height: 100vh;
+  min-height: 100dvh;
   transition: grid-template-columns 220ms ease;
 }
 
 .sidebar {
   position: sticky;
   top: 0;
-  height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -492,7 +492,7 @@ main:focus {
 }
 
 .signin-page {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .signin-top {
@@ -747,7 +747,7 @@ h3 {
   display: inline-block;
   padding: 0.12rem 0.6rem;
   border-radius: 999px;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 500;
   background: var(--fill);
   white-space: nowrap;
@@ -993,7 +993,7 @@ details > summary {
 .drawer-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(10, 10, 14, 0.35);
+  background: rgba(10, 10, 14, 0.5);
   z-index: 50;
   display: flex;
   justify-content: flex-end;
@@ -1197,7 +1197,7 @@ details > summary {
   display: block;
   font-weight: 500;
   color: var(--ink-2);
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -1414,7 +1414,7 @@ details > summary {
 .bubble-meta {
   display: block;
   margin-top: 0.25rem;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   opacity: 0.65;
 }
 
@@ -1628,7 +1628,7 @@ details > summary {
 /* ---------- Public site (landing, marketplace) ---------- */
 
 .site {
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--canvas);
 }
 
@@ -1704,7 +1704,7 @@ details > summary {
 
 .hero-note {
   margin-top: 0.7rem;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: var(--ink-3);
 }
 
@@ -1792,7 +1792,7 @@ details > summary {
 .contrast-card .eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   color: var(--ink-2);
 }
 
@@ -2083,7 +2083,7 @@ details > summary {
     position: fixed;
     inset: 0;
     z-index: 30;
-    background: rgba(10, 10, 14, 0.3);
+    background: rgba(10, 10, 14, 0.5);
   }
 
   .menu-btn {
@@ -2110,11 +2110,11 @@ details > summary {
 
   .badge {
     border-radius: 12px;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
   }
 
   .inference-label {
-    font-size: 0.78rem;
+    font-size: 0.8rem;
   }
 
   .stats {
@@ -2323,7 +2323,7 @@ main:has(.agent-view) {
 }
 
 .stat-sub {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: var(--ink-3);
 }
 
@@ -2476,7 +2476,7 @@ main:has(.agent-view) {
 }
 
 .limit-sub {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--ink-3);
 }
 
@@ -2839,7 +2839,7 @@ main:has(.agent-view) {
     border-radius: 0;
     background: none;
     color: var(--ink-2);
-    font-size: 0.74rem;
+    font-size: 0.8rem;
   }
 }
 
@@ -3353,10 +3353,67 @@ main > *,
 
 .error-detail {
   margin-top: 0.25rem;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
 }
 
 .tabs + .page-lede,
 .tabs + * .page-lede {
   margin-top: 0;
+}
+
+/* ---------- Accessibility and touch ---------- */
+
+button,
+a,
+summary,
+[role="option"] {
+  touch-action: manipulation;
+}
+
+summary {
+  cursor: pointer;
+}
+
+.stat-value,
+.agent-row-budget,
+.limit-head,
+.kv dd,
+td,
+.sku-list li span:last-child,
+.featured-sub {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  /* Comfortable touch targets and no iOS zoom on focus. */
+  .btn,
+  .select-trigger {
+    min-height: 44px;
+  }
+
+  .btn-small {
+    min-height: 40px;
+  }
+
+  .icon-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .chip {
+    min-height: 40px;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  .side-nav a,
+  .tabs a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
 }

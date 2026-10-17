@@ -27,6 +27,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 function AgentRow({ agent, budget, task, job, stopped }: { agent: Agent; budget: AgentBudget | undefined; task: Task | undefined; job: Job | undefined; stopped: boolean }) {
   const ok = agent.status === "active" && !stopped;
   const tone = ok ? "ok" : agent.status === "paused" || agent.status === "draft" ? "warn" : "danger";
+  const sub = job ? summarizeResult(job, task) : task ? task.objective : "No tasks yet";
   return (
     <li>
       <Link href={`/agents/${agent.id}`} className="agent-row">
@@ -35,7 +36,9 @@ function AgentRow({ agent, budget, task, job, stopped }: { agent: Agent; budget:
           <span className="agent-row-name">
             {agent.name} <span className="muted">· {ROLE_LABEL[agent.role]}</span>
           </span>
-          <span className="agent-row-sub">{job ? summarizeResult(job, task) : task ? task.objective : "No tasks yet"}</span>
+          <span className="agent-row-sub" title={sub}>
+            {sub}
+          </span>
         </span>
         <span className="agent-row-budget">
           {budget?.lifetime ? (
