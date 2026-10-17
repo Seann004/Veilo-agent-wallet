@@ -202,7 +202,8 @@ export function decidePurchase(ledger: Ledger, purchaseId: string, decision: "ap
 
 function expiredPolicy(ledger: Ledger, p: PurchaseRow): "workspace" | "agent" | null {
   const now = ledger.now();
-  const expired = (policy: PolicyRow | undefined) => policy?.expires_at_ms != null && num(policy.expires_at_ms) <= now;
+  const expired = (policy: PolicyRow | undefined) =>
+    policy !== undefined && policy.expires_at_ms !== null && num(policy.expires_at_ms) <= now;
   if (expired(activeWorkspacePolicy(ledger, p.workspace_id))) return "workspace";
   if (expired(activeAgentPolicy(ledger, p.agent_id))) return "agent";
   return null;
