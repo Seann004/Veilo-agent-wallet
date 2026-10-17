@@ -4,7 +4,7 @@ import { getBase58Decoder } from "@solana/kit";
 import { SolanaSignAndSendTransaction, SolanaSignMessage, type SolanaSignAndSendTransactionFeature, type SolanaSignMessageFeature } from "@solana/wallet-standard-features";
 import { getWallets } from "@wallet-standard/app";
 import type { Wallet, WalletAccount } from "@wallet-standard/base";
-import { StandardConnect, type StandardConnectFeature } from "@wallet-standard/features";
+import { StandardConnect, StandardEvents, type StandardConnectFeature, type StandardEventsFeature } from "@wallet-standard/features";
 
 /** Wallet Standard chain identifier for Solana devnet. Mainnet is never requested. */
 export const DEVNET_CHAIN = "solana:devnet" as const;
@@ -47,6 +47,39 @@ export async function signChallenge(w: Wallet, account: WalletAccount, message: 
   const [out] = await feature.signMessage({ account, message: new TextEncoder().encode(message) });
   if (!out) throw new Error("the wallet returned no signature");
   return getBase58Decoder().decode(out.signature);
+}
+
+/** Raw signature bytes over the exact message; the wallet displays the text to the owner. */
+export async function signMessageBytes(w: Wallet, account: WalletAccount, message: Uint8Array): Promise<Uint8Array> {
+  const feature = (w.features as SolanaSignMessageFeature)[SolanaSignMessage];
+  const [out] = await feature.signMessage({ account, message });
+  if (!out) throw new Error("the wallet returned no signature");
+  return out.signature;
+}
+
+/**
+ * Adapter for Supabase Web3 sign-in: exposes only the public key and message signing. It can
+ * sign a login message; it has no way to sign or send a transaction.
+ */
+export function web3SignInAdapter(w: Wallet, account: WalletAccount): { publicKey: { toBase58: () => string }; signMessage: (message: Uint8Array) => Promise<Uint8Array> } {
+  return {
+    publicKey: { toBase58: () => account.address },
+    signMessage: (message: Uint8Array) => signMessageBytes(w, account, message),
+  };
+}
+
+/**
+ * Reports the wallet's current devnet account whenever it changes (null when disconnected).
+ * Wallets without the standard events feature never report a change.
+ */
+export function onAccountChange(w: Wallet, cb: (address: string | null) => void): () => void {
+  const events = (w.features as Partial<StandardEventsFeature>)[StandardEvents];
+  if (!events) return () => undefined;
+  return events.on("change", (props) => {
+    if (!props.accounts) return;
+    const account = props.accounts.find((a) => a.chains.includes(DEVNET_CHAIN)) ?? props.accounts[0];
+    cb(account?.address ?? null);
+  });
 }
 
 export function base64ToBytes(b64: string): Uint8Array {

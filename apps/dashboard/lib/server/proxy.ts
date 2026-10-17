@@ -42,6 +42,8 @@ export const ROUTES: Record<UpstreamService, Route[]> = {
     r("GET", "/calendar"),
     r("GET", "/handoffs"),
     r("POST", `/handoffs/${ID}/decision`),
+    // Placeholder until the local route ships; see lib/market/controller-registration.ts.
+    r("POST", "/marketplace/controller/registration"),
   ],
   wallet: [
     r("POST", "/deposits/(prepare|register)"),
