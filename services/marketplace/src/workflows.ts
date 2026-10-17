@@ -10,15 +10,17 @@ import {
   WORKFLOW_CATEGORIES,
   workflowApprovalDigest,
   workflowApprovalTermsSchema,
+  payerBindingMessage,
   workflowStepHireKey,
   workflowVersionInputSchema,
   type ToolFacts,
   type ToolIo,
   type WorkflowVersionInput,
 } from "@veilo/contracts/marketplace";
+import { createHash } from "node:crypto";
 import type { Express, Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import type { ControllerActor, UserActor } from "./auth";
+import { verifyEd25519, type ControllerActor, type UserActor } from "./auth";
 import { checkTransfer } from "./chain";
 import { must } from "./db";
 import { MarketError } from "./errors";
@@ -205,17 +207,19 @@ type ReportedStep = z.infer<typeof runReportSchema>["steps"][number];
 /**
  * A controller's "paid" claim is never trusted on its own. A listing step is paid only by the
  * receipt the marketplace already verified for that step's job; an external step only by
- * finalized transfers of exactly the unit price to the tool's recipient, each used once.
+ * finalized transfers of exactly the unit price from the step's bound payer to the tool's
+ * recipient. The database records each signature against one step, atomically with the report.
  */
 export async function verifiedSteps(deps: Deps, workspaceId: string, runId: string, reported: ReportedStep[]): Promise<ReportedStep[]> {
   const { db, chain, config } = deps;
   const run = (await db.admin.from("workflow_runs").select("id").eq("id", runId).eq("buyer_workspace_id", workspaceId).maybeSingle()).data;
   if (!run) throw new MarketError("NOT_FOUND", "workflow run not found");
-  const rows = ((await db.admin.from("workflow_run_steps").select("step_index, tool_kind, tool_id, max_base_units").eq("run_id", runId)).data ?? []) as Array<{
+  const rows = ((await db.admin.from("workflow_run_steps").select("step_index, tool_kind, tool_id, max_base_units, payer").eq("run_id", runId)).data ?? []) as Array<{
     step_index: number;
     tool_kind: "listing" | "external";
     tool_id: string;
     max_base_units: string | number;
+    payer: string | null;
   }>;
   const out: ReportedStep[] = [];
   for (const s of reported) {
@@ -255,9 +259,10 @@ export async function verifiedSteps(deps: Deps, workspaceId: string, runId: stri
     if ((reused.data ?? []).some((r: { run_id: string; step_index: number }) => r.run_id !== runId || r.step_index !== s.index)) {
       throw new MarketError("IDEMPOTENCY_CONFLICT", `step ${s.index} reuses a payment recorded for another step`);
     }
+    if (row.payer === null) throw new MarketError("POLICY_DENIED", `step ${s.index} has no bound payer`);
     const unit = BigInt(String(tool.unit_price_base_units));
     for (const sig of sigs) {
-      const outcome = checkTransfer(await chain.finalizedTransaction(sig), { signature: sig, mint: tool.mint, recipient: tool.pay_to, recipientAta: tool.pay_to_ata, amount: unit });
+      const outcome = checkTransfer(await chain.finalizedTransaction(sig), { signature: sig, mint: tool.mint, recipient: tool.pay_to, recipientAta: tool.pay_to_ata, amount: unit, sourceOwner: row.payer });
       if (outcome.status === "pending") throw new MarketError("SETTLEMENT_UNCERTAIN", `step ${s.index} payment is not finalized yet`);
       if (outcome.status === "invalid") throw new MarketError("SERVICE_NOT_ALLOWED", `step ${s.index} payment rejected: ${outcome.reason}`);
     }
@@ -556,6 +561,53 @@ export function registerWorkflowRoutes(app: Express, deps: Deps, h: WorkflowRout
         }),
         externalTools: extRows,
       };
+    }),
+  );
+
+  app.post(
+    "/controller/workflow-runs/:id/steps/:index/payer",
+    route(async (req) => {
+      const ctl = await h.controller(req);
+      const runId = uuid.parse(req.params.id);
+      const index = z.coerce.number().int().min(0).max(7).parse(req.params.index);
+      const b = z.object({ payer: address, payerProof: signatureB58 }).strict().parse(req.body);
+      const run = (await db.admin.from("workflow_runs").select("approval_digest").eq("id", runId).eq("buyer_workspace_id", ctl.workspaceId).maybeSingle()).data as { approval_digest: string } | null;
+      if (!run) throw new MarketError("NOT_FOUND", "workflow run not found");
+      // The same proof the wallet gives for hires: the one-time payer signs this step's key and the run's approval digest.
+      if (!(await verifyEd25519(b.payer, b.payerProof, payerBindingMessage(workflowStepHireKey(runId, index), run.approval_digest, b.payer)))) {
+        throw new MarketError("FORBIDDEN", "payer proof is invalid");
+      }
+      await db.rpc("mk_bind_workflow_payer", { p_workspace: ctl.workspaceId, p_run: runId, p_index: index, p_payer: b.payer });
+      return { ok: true };
+    }),
+  );
+  app.get(
+    "/controller/jobs/:id/deliverable",
+    route(async (req) => {
+      const ctl = await h.controller(req);
+      const jobId = uuid.parse(req.params.id);
+      const job = (await db.admin.from("jobs").select("id, state, buyer_workspace_id").eq("id", jobId).maybeSingle()).data as { state: string; buyer_workspace_id: string } | null;
+      if (!job || job.buyer_workspace_id !== ctl.workspaceId) throw new MarketError("NOT_FOUND", "job not found");
+      if (job.state !== "succeeded") return { state: job.state, artifacts: [] };
+      const rows = ((await db.admin.from("artifacts").select("id, bucket, object_key, sha256, mime_type, bytes, validation_state").eq("job_id", jobId)).data ?? []) as Array<{
+        id: string;
+        bucket: string;
+        object_key: string;
+        sha256: string;
+        mime_type: string;
+        bytes: number;
+        validation_state: string;
+      }>;
+      const artifacts = [];
+      for (const a of rows.filter((r) => r.validation_state === "validated")) {
+        const file = await db.admin.storage.from(a.bucket).download(a.object_key);
+        if (file.error || !file.data) throw new MarketError("NOT_READY", "deliverable not readable yet");
+        const bytes = Buffer.from(await file.data.arrayBuffer());
+        // Stored bytes must still match the hash recorded when the seller delivered them.
+        if (bytes.length !== a.bytes || createHash("sha256").update(bytes).digest("hex") !== a.sha256) throw new MarketError("SERVICE_NOT_ALLOWED", "deliverable failed its integrity check");
+        artifacts.push({ artifactId: a.id, sha256: a.sha256, mimeType: a.mime_type, text: bytes.toString("utf8") });
+      }
+      return { state: job.state, artifacts };
     }),
   );
 

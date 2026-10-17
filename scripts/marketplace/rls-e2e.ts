@@ -449,6 +449,33 @@ async function main() {
     const peekLive = await signedCall("GET", `/controller/workflow-versions/${wv.body?.versionId}`, undefined, keyId);
     record("a buyer's controller reads live workflow versions only, never another creator's draft", peek.status === 404 && peekLive.status === 200, `draft ${peek.status} live ${peekLive.status}`);
 
+    const terms2: WorkflowApprovalTerms = {
+      workflowVersionId: wv2.body.versionId,
+      network: config.network,
+      mint: config.mint,
+      steps: [
+        { toolKind: "external", toolId: ext.body.toolId, recipient: extPayTo.address, maxBaseUnits: "3000" },
+        { toolKind: "listing", toolId: version.body.versionId, recipient: seller.address, maxBaseUnits: "10000" },
+      ],
+      totalMaxBaseUnits: "13000",
+      runInputsDigest: runInputsDigest({ topic: "token supply" }),
+    };
+    const run2 = await runReq(terms2);
+    const run2Id = run2.body?.runId as string;
+    const bindMsg = payerBindingMessage(`wf:${run2Id}:0`, workflowApprovalDigest(terms2), payerB.address);
+    const forgedPayer = await signedCall("POST", `/controller/workflow-runs/${run2Id}/steps/0/payer`, { payer: payerB.address, payerProof: await payerA.sign(bindMsg) }, keyId);
+    const bound = await signedCall("POST", `/controller/workflow-runs/${run2Id}/steps/0/payer`, { payer: payerB.address, payerProof: await payerB.sign(bindMsg) }, keyId);
+    const otherMsg = payerBindingMessage(`wf:${run2Id}:0`, workflowApprovalDigest(terms2), payerA.address);
+    const rebindPayer = await signedCall("POST", `/controller/workflow-runs/${run2Id}/steps/0/payer`, { payer: payerA.address, payerProof: await payerA.sign(otherMsg) }, keyId);
+    record("an external step's payer is bound once, only with that payer's own proof", forgedPayer.status === 403 && bound.status === 200 && rebindPayer.status === 409, `forged ${forgedPayer.status} bound ${bound.status} rebind ${rebindPayer.status}`);
+    const unboundPaid = await signedCall(
+      "POST",
+      `/controller/workflow-runs/${run.body?.runId}/report`,
+      { status: "running", stopReason: null, steps: [{ index: 0, paymentStatus: "paid", executionStatus: "running", jobId: null, paidBaseUnits: null, fundingSignature: null, merchantSignatures: [FIXTURE_SIG_2], artifactSha256: null, stopReason: null }] },
+      keyId,
+    );
+    record("a listing step cannot be reported paid without its own hire", unboundPaid.status === 400, `status ${unboundPaid.status}`);
+
     const suspend = await call("POST", `/operator/workflows/${wf.body.workflowId}/status`, { token: operatorToken, body: { status: "suspended" } });
     const gone = await anon.from("workflow_catalog").select("slug").eq("slug", wfSlug);
     const halted = await A.client.from("workflow_runs").select("status").eq("id", run.body?.runId ?? "").single();
