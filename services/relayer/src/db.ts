@@ -142,6 +142,27 @@ ALTER TABLE withdrawal_new RENAME TO withdrawal;
 CREATE UNIQUE INDEX withdrawal_one_live_per_nullifier ON withdrawal (nullifier_hash) WHERE state NOT IN ('expired', 'rejected', 'failed');
 `,
   },
+  {
+    // Devnet swaps from a fresh wallet, co-signed by the sponsor as fee payer.
+    version: 3,
+    sql: `
+CREATE TABLE swap (
+  id TEXT PRIMARY KEY,
+  fresh_wallet TEXT NOT NULL,
+  destination TEXT NOT NULL,
+  signature TEXT NOT NULL UNIQUE,
+  blockhash TEXT NOT NULL,
+  last_valid_block_height INTEGER NOT NULL,
+  wsol_rent_lamports INTEGER NOT NULL,
+  usdc_rent_lamports INTEGER NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('submitted', 'finalized', 'failed', 'expired')),
+  fee_lamports INTEGER NOT NULL DEFAULT 0,
+  error TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL
+) STRICT;
+`,
+  },
 ];
 
 export function openRelayerDb(path: string): RelayerDb {

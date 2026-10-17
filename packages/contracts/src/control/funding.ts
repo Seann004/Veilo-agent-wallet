@@ -34,6 +34,24 @@ export interface ExternalBatchTerms {
   maxCalls: number;
 }
 
+/**
+ * The one devnet swap Veilo performs: all funded USDC into the pinned Orca whirlpool for
+ * wrapped SOL, unwrapped to the owner's address. Every party checks these constants itself.
+ */
+export const ORCA_WHIRLPOOL_PROGRAM = "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc";
+/** Orca devnet SOL/USDC whirlpool: token A wrapped SOL, token B the devnet USDC mint. */
+export const DEVNET_SOL_USDC_WHIRLPOOL = "5GPCnpWwoDayCP5FVCJT1cS7dePufC5FrjPTVvPoUYnm";
+export const WRAPPED_SOL_MINT = "So11111111111111111111111111111111111111112";
+export const SWAP_SLIPPAGE_BPS = 100;
+
+export interface SwapTerms {
+  dex: "orca_whirlpool";
+  whirlpool: string;
+  inputMint: string;
+  outputMint: string;
+  slippageBps: number;
+}
+
 export interface FundingBinding {
   origin: string;
   gatewayIdentity: string;
@@ -45,7 +63,17 @@ export interface FundingBinding {
   allowedFeePayers: string[];
   /** Present only for an external x402 batch; Veilo services never set it. */
   external?: ExternalBatchTerms | undefined;
+  /** Present only for a swap; the funded USDC is swapped instead of paid to a merchant. */
+  swap?: SwapTerms | undefined;
 }
+
+/** Swap leg outcome. `submitted` may still land; only chain evidence moves it on. */
+export type SwapResult =
+  | { status: "not_ready"; reason: string }
+  | { status: "recovery_required"; reason: string }
+  | { status: "submitted"; signature: string; minOutLamports: bigint; estOutLamports: bigint; destination: string }
+  | { status: "finalized"; signature: string; minOutLamports: bigint; estOutLamports: bigint; destination: string; sponsorLamports: bigint }
+  | { status: "failed"; signature: string | null; reason: string };
 
 export interface FundingRequest {
   purchaseId: string;
@@ -141,6 +169,9 @@ export interface FundingProvider {
   /** Present only where the provider supports external x402 batches. */
   signExternalCall?(request: ExternalCallSignRequest): Promise<MerchantSignResult>;
   externalCallOutcome?(purchaseId: string, callIndex: number): Promise<ExternalCallOutcome>;
+  /** Present only where the provider supports the devnet swap. */
+  signSwap?(purchaseId: string, fundingRef: string, binding: FundingBinding): Promise<SwapResult>;
+  swapOutcome?(purchaseId: string): Promise<SwapResult>;
   /** Present only where the provider can prove payer-key possession (marketplace hires). */
   signPayerBinding?(request: PayerBindingRequest): Promise<PayerBindingResult>;
 }
@@ -164,8 +195,29 @@ export const fundingBindingWire = z
       })
       .strict()
       .optional(),
+    swap: z
+      .object({
+        dex: z.literal("orca_whirlpool"),
+        whirlpool: z.literal(DEVNET_SOL_USDC_WHIRLPOOL),
+        inputMint: z.string(),
+        outputMint: z.literal(WRAPPED_SOL_MINT),
+        slippageBps: z.number().int().min(1).max(500),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
+
+export const swapRequestWire = z.object({ fundingRef: z.string().min(1), binding: fundingBindingWire }).strict();
+
+export const swapResultWire = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("not_ready"), reason: z.string() }),
+  z.object({ status: z.literal("recovery_required"), reason: z.string() }),
+  z.object({ status: z.literal("submitted"), signature: z.string(), minOutLamports: baseUnitString, estOutLamports: baseUnitString, destination: z.string() }),
+  z.object({ status: z.literal("finalized"), signature: z.string(), minOutLamports: baseUnitString, estOutLamports: baseUnitString, destination: z.string(), sponsorLamports: baseUnitString }),
+  z.object({ status: z.literal("failed"), signature: z.string().nullable(), reason: z.string() }),
+]);
+export type SwapResultWire = z.infer<typeof swapResultWire>;
 
 export const externalCallRequestWire = z
   .object({

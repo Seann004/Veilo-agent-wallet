@@ -96,6 +96,34 @@ export const recoveryViewWire = z
   .strict();
 export type RecoveryViewWire = z.infer<typeof recoveryViewWire>;
 
+export const swapRequestWire = z
+  .object({
+    swapId: z.uuid(),
+    /** Wire transaction (base64) carrying the fresh wallet's signature; the sponsor signs as fee payer. */
+    transaction: base64,
+    lastValidBlockHeight: u64,
+    freshWallet: address,
+    /** Receives the unwrapped SOL. */
+    destination: address,
+  })
+  .strict();
+export type SwapRequestWire = z.infer<typeof swapRequestWire>;
+
+export const swapViewWire = z
+  .object({
+    swapId: z.uuid(),
+    state: z.enum(["submitted", "finalized", "failed", "expired"]),
+    signature: z.string(),
+    lastValidBlockHeight: u64,
+    sponsorFeeLamports: u64,
+    /** Wrapped-SOL account rent the sponsor funded; it leaves with the output and is not recovered. */
+    sponsorRentLamports: u64,
+    rentRecoveredLamports: u64,
+    error: z.string().nullable(),
+  })
+  .strict();
+export type SwapViewWire = z.infer<typeof swapViewWire>;
+
 export const publicLeafWire = z.object({ index: z.number().int().min(0), commitment: decimal, kind: z.enum(["deposit", "change"]), queueSeq: u64 }).strict();
 
 export const publicStateWire = z

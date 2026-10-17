@@ -20,6 +20,7 @@ import { openRelayerDb } from "./db";
 import { readCircuitPins, verifyDeployment, type DeploymentStatus } from "./deployment";
 import { Indexer } from "./indexer";
 import { loadSponsorKey } from "./sponsor";
+import { SwapService } from "./swaps";
 import { RecoveryService, WithdrawalService } from "./withdrawals";
 
 const SERVICE = "relayer";
@@ -62,6 +63,7 @@ async function main(): Promise<void> {
   const ctx = { db, chain, sponsor, manifest, spendVk, sponsorCapLamports: sponsorCap };
   const withdrawals = new WithdrawalService(ctx);
   const recoveries = new RecoveryService(ctx);
+  const swaps = new SwapService(ctx);
   const buildDir = process.env.VEILO_CIRCUIT_BUILD_DIR?.trim() || join(rootDir, "circuits", "build");
   const insertPaths = { wasmPath: join(buildDir, "insert", "insert_js", "insert.wasm"), zkeyPath: join(buildDir, "zkey", "insert_final.zkey") };
   const insertProver = existsSync(insertPaths.zkeyPath)
@@ -94,7 +96,7 @@ async function main(): Promise<void> {
   };
   await checkDeployment().catch((error: Error) => console.error(`[${SERVICE}] deployment check failed: ${error.name}`));
 
-  const app = createApp(health, { db, deployment: () => deployment, indexer: () => indexer, withdrawals, recoveries, walletCredentialDigest });
+  const app = createApp(health, { db, deployment: () => deployment, indexer: () => indexer, withdrawals, recoveries, swaps, walletCredentialDigest });
   app.listen(config.ports.relayer, config.bindHost, () => {
     console.log(`[${SERVICE}] listening on http://${config.bindHost}:${config.ports.relayer} (${config.network.caip2})`);
   });
@@ -105,6 +107,7 @@ async function main(): Promise<void> {
     if (manifest()) {
       for (const id of withdrawals.pendingIds()) await withdrawals.advance(id).catch(() => undefined);
       for (const id of recoveries.pendingIds()) await recoveries.advance(id).catch(() => undefined);
+      for (const id of swaps.pendingIds()) await swaps.advance(id).catch(() => undefined);
       if (crank) await crank.step().catch((e: Error) => console.error(`[${SERVICE}] crank: ${e.name}: ${e.message}`));
     }
     setTimeout(() => void loop(), 5_000);

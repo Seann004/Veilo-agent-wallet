@@ -399,6 +399,9 @@ importers:
 
   services/relayer:
     dependencies:
+      '@orca-so/whirlpools-client':
+        specifier: 7.0.0
+        version: 7.0.0(@solana/kit@5.5.1(typescript@5.9.3))
       '@solana-program/compute-budget':
         specifier: 0.11.0
         version: 0.11.0(@solana/kit@5.5.1(typescript@5.9.3))
@@ -479,6 +482,9 @@ importers:
 
   services/wallet:
     dependencies:
+      '@orca-so/whirlpools':
+        specifier: 8.0.1
+        version: 8.0.1(@solana/kit@5.5.1(typescript@5.9.3))(typescript@5.9.3)
       '@solana-program/compute-budget':
         specifier: 0.11.0
         version: 0.11.0(@solana/kit@5.5.1(typescript@5.9.3))
@@ -1109,6 +1115,24 @@ packages:
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
     engines: {node: ^14.21.3 || >=16}
 
+  '@orca-so/tx-sender@3.0.1':
+    resolution: {integrity: sha512-WuH9ACW4iIZgeF8cmFZxlQkI0pI9W/2VRt0k2AsPUp96scNqDTJFYsyAnvXxOXCloVr7sunU4MSMCTm6d/jTew==}
+    peerDependencies:
+      '@solana/kit': ^5.0.0
+
+  '@orca-so/whirlpools-client@7.0.0':
+    resolution: {integrity: sha512-bpWG+cXe2VqLaH9wBvtsZKdnaH0iWO/dmGCgdrntxOarsS28FTF4fh5ahZnf9gYP8DiwN/8DrOKiXWO4Jn49/A==}
+    peerDependencies:
+      '@solana/kit': ^5.0.0
+
+  '@orca-so/whirlpools-core@3.1.0':
+    resolution: {integrity: sha512-PuP5II56ZHkjjVaE6C7lgQR4x+9HtyvEzUWw2hpHW+Be80MerEjqEuBpUXECTgiG+pPCp1RBzmN/1LbyAT8uAw==}
+
+  '@orca-so/whirlpools@8.0.1':
+    resolution: {integrity: sha512-4R+BhxZWRL1nVAuV0rz6MI8w+8HiUuv5PUQzEmvyy/Cj8mgfZUJxU4DvNA8E9IM3zpZRQM/sDR9Tc0jbjQvlFQ==}
+    peerDependencies:
+      '@solana/kit': ^5.0.0
+
   '@oxc-project/types@0.154.0':
     resolution: {integrity: sha512-KYOUGQFlLWR+s4QMV2Q9ko38TZm7EdO87Qm7rvZLqk/webse/cDjtyxKhg/47l0byCbs/k46LT8qc4PKjAikzA==}
 
@@ -1211,8 +1235,23 @@ packages:
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
 
+  '@solana-program/address-lookup-table@0.10.0':
+    resolution: {integrity: sha512-lcp+IYwoFBODhg8vXsh5vpxweLxpSKqjAu8P1LyqQxgk2yqwYmJGA79YKa+lZvsQjP/c0rzIZYWIGxFMMes2zA==}
+    peerDependencies:
+      '@solana/kit': ^5.0
+
   '@solana-program/compute-budget@0.11.0':
     resolution: {integrity: sha512-7f1ePqB/eURkTwTOO9TNIdUXZcyrZoX3Uy2hNo7cXMfNhPFWp9AVgIyRNBc2jf15sdUa9gNpW+PfP2iV8AYAaw==}
+    peerDependencies:
+      '@solana/kit': ^5.0
+
+  '@solana-program/memo@0.10.0':
+    resolution: {integrity: sha512-1FvQFenL3lzl5SpxhWV4QJCOLU/nvAOXGXjKjS7dprvG+0u971xoanApN7bM/a4NFZolp6S+lP2xVl6vTVIxbg==}
+    peerDependencies:
+      '@solana/kit': ^5.0
+
+  '@solana-program/system@0.10.0':
+    resolution: {integrity: sha512-Go+LOEZmqmNlfr+Gjy5ZWAdY5HbYzk2RBewD9QinEU/bBSzpFfzqDRT55JjFRBGJUvMgf3C2vfXEGT4i8DSI4g==}
     peerDependencies:
       '@solana/kit': ^5.0
 
@@ -3938,6 +3977,34 @@ snapshots:
 
   '@noble/hashes@1.8.0': {}
 
+  '@orca-so/tx-sender@3.0.1(@solana/kit@5.5.1(typescript@5.9.3))':
+    dependencies:
+      '@solana-program/address-lookup-table': 0.10.0(@solana/kit@5.5.1(typescript@5.9.3))
+      '@solana-program/compute-budget': 0.11.0(@solana/kit@5.5.1(typescript@5.9.3))
+      '@solana-program/system': 0.10.0(@solana/kit@5.5.1(typescript@5.9.3))
+      '@solana/kit': 5.5.1(typescript@5.9.3)
+
+  '@orca-so/whirlpools-client@7.0.0(@solana/kit@5.5.1(typescript@5.9.3))':
+    dependencies:
+      '@solana/kit': 5.5.1(typescript@5.9.3)
+
+  '@orca-so/whirlpools-core@3.1.0': {}
+
+  '@orca-so/whirlpools@8.0.1(@solana/kit@5.5.1(typescript@5.9.3))(typescript@5.9.3)':
+    dependencies:
+      '@orca-so/tx-sender': 3.0.1(@solana/kit@5.5.1(typescript@5.9.3))
+      '@orca-so/whirlpools-client': 7.0.0(@solana/kit@5.5.1(typescript@5.9.3))
+      '@orca-so/whirlpools-core': 3.1.0
+      '@solana-program/memo': 0.10.0(@solana/kit@5.5.1(typescript@5.9.3))
+      '@solana-program/system': 0.10.0(@solana/kit@5.5.1(typescript@5.9.3))
+      '@solana-program/token': 0.9.0(@solana/kit@5.5.1(typescript@5.9.3))
+      '@solana-program/token-2022': 0.6.1(@solana/kit@5.5.1(typescript@5.9.3))(@solana/sysvars@5.5.1(typescript@5.9.3))
+      '@solana/kit': 5.5.1(typescript@5.9.3)
+      '@solana/sysvars': 5.5.1(typescript@5.9.3)
+    transitivePeerDependencies:
+      - fastestsmallesttextencoderdecoder
+      - typescript
+
   '@oxc-project/types@0.154.0': {}
 
   '@rolldown/binding-android-arm-eabi@1.2.14':
@@ -3987,7 +4054,19 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
+  '@solana-program/address-lookup-table@0.10.0(@solana/kit@5.5.1(typescript@5.9.3))':
+    dependencies:
+      '@solana/kit': 5.5.1(typescript@5.9.3)
+
   '@solana-program/compute-budget@0.11.0(@solana/kit@5.5.1(typescript@5.9.3))':
+    dependencies:
+      '@solana/kit': 5.5.1(typescript@5.9.3)
+
+  '@solana-program/memo@0.10.0(@solana/kit@5.5.1(typescript@5.9.3))':
+    dependencies:
+      '@solana/kit': 5.5.1(typescript@5.9.3)
+
+  '@solana-program/system@0.10.0(@solana/kit@5.5.1(typescript@5.9.3))':
     dependencies:
       '@solana/kit': 5.5.1(typescript@5.9.3)
 

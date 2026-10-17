@@ -47,6 +47,7 @@ import {
 import { decodeWireTransaction } from "@veilo/x402-client";
 import { createApp } from "../src/app";
 import { openRelayerDb, sponsorTotals } from "../src/db";
+import { SwapService } from "../src/swaps";
 import { verifyDeployment } from "../src/deployment";
 import { Indexer, IndexerError } from "../src/indexer";
 import { RecoveryService, RelayerError, WithdrawalService } from "../src/withdrawals";
@@ -356,6 +357,7 @@ describe("HTTP boundary and deployment manifest", () => {
       indexer: () => null,
       withdrawals: new WithdrawalService(ctx),
       recoveries: new RecoveryService(ctx),
+      swaps: new SwapService(ctx),
       walletCredentialDigest: createHash("sha256").update(TOKEN).digest("hex"),
       log: (l) => logs.push(l),
     });

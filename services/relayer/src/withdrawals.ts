@@ -391,7 +391,7 @@ export class WithdrawalService {
 const SPKI_ED25519_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 const addrEnc = getAddressEncoder();
 
-function verifyEd25519(addr: string, message: Uint8Array, sig: Uint8Array): boolean {
+export function verifyEd25519(addr: string, message: Uint8Array, sig: Uint8Array): boolean {
   const key = createPublicKey({ key: Buffer.concat([SPKI_ED25519_PREFIX, Buffer.from(addrEnc.encode(addr as Address))]), format: "der", type: "spki" });
   return edVerify(null, Buffer.from(message), key, Buffer.from(sig));
 }

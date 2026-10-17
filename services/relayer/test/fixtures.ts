@@ -111,6 +111,7 @@ export class FakeRelayerChain implements RelayerChain {
           ...(this.db.prepare(`SELECT signature FROM withdrawal_attempt`).pluck().all() as string[]),
           ...(this.db.prepare(`SELECT signature FROM recovery`).pluck().all() as string[]),
           ...(this.db.prepare(`SELECT signature FROM crank_attempt`).pluck().all() as string[]),
+          ...(this.db.prepare(`SELECT signature FROM swap`).pluck().all() as string[]),
         ]
       : [];
     this.sent.push({ wire, persistedSignatures: persisted });
