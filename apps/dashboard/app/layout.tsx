@@ -8,9 +8,15 @@ export const metadata = {
 
 export const viewport = { width: "device-width", initialScale: 1 };
 
+// Applies a saved light/dark choice before first paint; without one the system setting applies.
+const THEME_SCRIPT = `try{var t=localStorage.getItem("veilo.theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body>{children}</body>
     </html>
   );

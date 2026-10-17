@@ -34,7 +34,7 @@ export function AgentControls({ agent, onChanged, compact }: { agent: Agent; onC
         confirmLabel={`Confirm revoke ${agent.name}`}
         danger
         disabled={action.busy || terminal}
-        warning="Revocation is permanent. Payments already authorized stay visible and recoverable."
+        warning="Revoke for good? Payments already sent stay visible and recoverable."
         onConfirm={() => void post("revoke")}
       />
       <ConfirmButton
@@ -42,7 +42,7 @@ export function AgentControls({ agent, onChanged, compact }: { agent: Agent; onC
         display={compact ? "Archive" : undefined}
         confirmLabel={`Confirm archive ${agent.name}`}
         disabled={action.busy || agent.status === "archived"}
-        warning="Archiving revokes authority and keeps all records; archived agents cannot schedule work."
+        warning="Archive? It stops for good; its history is kept."
         onConfirm={() => void post("archive")}
       />
       <ErrorNotice error={action.error} />

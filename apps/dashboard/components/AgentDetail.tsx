@@ -12,6 +12,7 @@ import { summarizeResult } from "../lib/results";
 import { AgentControls } from "./AgentControls";
 import { AgentAvatar, AvatarImage, AvatarPicker } from "./Avatar";
 import { Icon } from "./Icon";
+import { Select } from "./Select";
 import { PolicyForm, PolicyReview, type AgentPolicyInput } from "./Policy";
 import { useOwner } from "./Shell";
 import { useAction, useResource } from "./hooks";
@@ -235,15 +236,14 @@ export function CampaignForm({ agent, disabled, handoffs, onQueued }: { agent: A
           <TextField label="Calendar start (planning date)" type="date" value={f.startDate} onChange={set("startDate")} />
         </div>
         <div className="field">
-          <label htmlFor={hid}>Approved research handoff</label>
-          <select id={hid} value={f.handoffId} onChange={(e) => set("handoffId")(e.target.value)}>
-            <option value="">None</option>
-            {approved.map((h) => (
-              <option key={h.id} value={h.id}>
-                Handoff {h.id.slice(0, 8)} {h.note ? `— ${h.note}` : ""}
-              </option>
-            ))}
-          </select>
+          <label htmlFor={hid}>Use approved research</label>
+          <Select
+            id={hid}
+            label="Use approved research"
+            value={f.handoffId}
+            onChange={(v) => set("handoffId")(v)}
+            options={[{ value: "", label: "None" }, ...approved.map((h) => ({ value: h.id, label: h.note ? h.note : `Research ${h.id.slice(0, 8)}` }))]}
+          />
         </div>
       </details>
       {missing.length > 0 ? (
@@ -267,10 +267,10 @@ export function HandoffApprovals({ handoffs, agents, onChanged }: { handoffs: Ha
       await onChanged();
     });
   const name = (id: string) => agents.find((a) => a.id === id)?.name ?? "agent";
-  if (handoffs.length === 0) return <p className="muted">No handoff requests.</p>;
+  if (handoffs.length === 0) return <p className="muted flush">Nothing shared yet.</p>;
   return (
     <>
-      <p className="small">Approving copies the research brief to the receiving agent as a queued task under its own policy. It does not start paid work or change any policy.</p>
+      <p className="hint">Approving gives the brief to the other agent as a task. It doesn&apos;t start paid work.</p>
       <ul className="plain">
         {handoffs.map((h) => (
           <li key={h.id} className="handoff">
@@ -288,7 +288,7 @@ export function HandoffApprovals({ handoffs, agents, onChanged }: { handoffs: Ha
           </li>
         ))}
       </ul>
-      {pending.length === 0 ? <p className="small muted">No handoffs await a decision.</p> : null}
+      {pending.length === 0 ? <p className="small muted flush">Nothing waiting for you.</p> : null}
       <ErrorNotice error={action.error} />
     </>
   );
@@ -649,10 +649,10 @@ export function AgentDetail({ agentId }: { agentId: string }) {
               ["Model profile", agent.modelProfile ?? "default"],
             ]}
           />
-          {current ? <PolicyReview compact policy={agent.activePolicy!} workspacePolicy={wsPolicy} title={`Active policy v${agent.activePolicy!.version}`} /> : <p className="notice notice-warn">No active policy: this agent cannot spend.</p>}
+          {current ? <PolicyReview policy={agent.activePolicy!} workspacePolicy={wsPolicy} title={`Active policy v${agent.activePolicy!.version}`} /> : <p className="notice notice-warn">No active policy: this agent cannot spend.</p>}
           {drafts.map((d) => (
             <div key={d.id} className="draft-policy">
-              <PolicyReview compact policy={d} workspacePolicy={wsPolicy} title={`Draft policy v${d.version} (not active)`} />
+              <PolicyReview policy={d} workspacePolicy={wsPolicy} title={`Draft policy v${d.version} (not active)`} />
               <button
                 type="button"
                 className="btn btn-primary"

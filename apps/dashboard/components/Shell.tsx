@@ -13,6 +13,7 @@ import { ConnectScreen } from "./ConnectScreen";
 import { DevnetBadge } from "./DevnetBadge";
 import { Icon, type IconName } from "./Icon";
 import { useResource } from "./hooks";
+import { setPref, usePref, useTheme } from "../lib/prefs";
 import { ErrorNotice, Loading } from "./ui";
 
 export interface ConnectedWallet {
@@ -40,15 +41,16 @@ export function OwnerProvider({ value, children }: { value: OwnerContextValue; c
   return <OwnerContext.Provider value={value}>{children}</OwnerContext.Provider>;
 }
 
-const NAV: Array<[string, string, IconName]> = [
-  ["/workspace", "Workspace", "home"],
-  ["/activity", "Activity", "activity"],
-  ["/content", "Content", "content"],
-  ["/marketplace", "Marketplace", "store"],
-  ["/wallet", "Wallet", "wallet"],
-  ["/recovery", "Recovery", "recovery"],
-  ["/privacy", "Privacy", "privacy"],
+/** Sidebar entries; the last column lists other paths that count as the same section. */
+const NAV: Array<[string, string, IconName, string[]]> = [
+  ["/workspace", "Workspace", "home", []],
+  ["/market", "Marketplace", "store", []],
+  ["/activity", "Activity", "activity", []],
+  ["/content", "Content", "content", []],
+  ["/wallet", "Wallet", "wallet", ["/recovery", "/privacy"]],
 ];
+
+const inSection = (pathname: string | null, href: string, also: string[]) => [href, ...also].some((h) => pathname?.startsWith(h));
 
 function AgentList({ agents, stopped, query, pathname }: { agents: Agent[]; stopped: boolean; query: string; pathname: string | null }) {
   const q = query.trim().toLowerCase();
@@ -61,7 +63,7 @@ function AgentList({ agents, stopped, query, pathname }: { agents: Agent[]; stop
         const href = `/agents/${a.id}`;
         return (
           <li key={a.id}>
-            <Link href={href} className="agent-item" aria-current={pathname === href ? "page" : undefined}>
+            <Link href={href} className="agent-item" aria-current={pathname === href ? "page" : undefined} title={a.name}>
               <AgentAvatar agent={a} size={40} />
               <span className="agent-item-text">
                 <span className="agent-item-name">{a.name}</span>
@@ -83,6 +85,8 @@ export function Shell({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState<ConnectedWallet | null>(null);
   const [query, setQuery] = useState("");
   const [navOpen, setNavOpen] = useState(false);
+  const collapsed = usePref("veilo.sidebar") === "collapsed";
+  const [theme, toggleTheme] = useTheme();
   const signedIn = ws.data !== undefined && ws.error?.status !== 401;
   useEffect(() => setNavOpen(false), [pathname]);
 
@@ -134,18 +138,30 @@ export function Shell({ children }: { children: ReactNode }) {
       <a href="#main" className="skip-link">
         Skip to content
       </a>
-      <div className="app">
+      <div className={collapsed ? "app collapsed" : "app"}>
         <aside id="sidebar" className={navOpen ? "sidebar open" : "sidebar"} aria-label="Workspace navigation">
           <div className="sidebar-head">
-            <Link href="/workspace" className="brand">
+            <Link href="/workspace" className="brand" aria-label="Veilo workspace">
               <span className="logo" aria-hidden="true">
                 ◆
               </span>
-              Veilo
+              <span className="brand-text">Veilo</span>
             </Link>
-            <Link href="/agents/new" className="icon-btn" aria-label="Create agent" title="Create agent">
-              <Icon name="plus" />
-            </Link>
+            <span className="sidebar-head-actions">
+              <Link href="/agents/new" className="icon-btn" aria-label="Create agent" title="Create agent">
+                <Icon name="plus" />
+              </Link>
+              <button
+                type="button"
+                className="icon-btn collapse-btn"
+                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                aria-pressed={collapsed}
+                onClick={() => setPref("veilo.sidebar", collapsed ? null : "collapsed")}
+              >
+                <Icon name="sidebar" />
+              </button>
+            </span>
           </div>
           <label className="sidebar-search">
             <Icon name="search" size={16} />
@@ -155,11 +171,11 @@ export function Shell({ children }: { children: ReactNode }) {
           <AgentList agents={data.agents} stopped={stopped} query={query} pathname={pathname} />
           <nav aria-label="Workspace" className="side-nav">
             <ul>
-              {NAV.map(([href, label, icon]) => (
+              {NAV.map(([href, label, icon, also]) => (
                 <li key={href}>
-                  <Link href={href} aria-current={pathname?.startsWith(href) ? "page" : undefined}>
+                  <Link href={href} aria-current={inSection(pathname, href, also) ? "page" : undefined} title={label}>
                     <Icon name={icon} />
-                    {label}
+                    <span className="nav-label">{label}</span>
                   </Link>
                 </li>
               ))}
@@ -175,9 +191,12 @@ export function Shell({ children }: { children: ReactNode }) {
                 {shortKey(data.workspace.ownerPubkey)}
               </span>
             </span>
+            <button type="button" className="icon-btn" aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title={theme === "dark" ? "Light mode" : "Dark mode"} onClick={toggleTheme}>
+              <Icon name={theme === "dark" ? "sun" : "moon"} />
+            </button>
             <button
               type="button"
-              className="btn btn-small"
+              className="btn btn-small sign-out"
               onClick={async () => {
                 try {
                   await api("control", "/session/logout", { method: "POST" });

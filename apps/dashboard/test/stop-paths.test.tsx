@@ -87,7 +87,7 @@ describe("stop paths", () => {
     render(withOwner(ws, <RecoveryCenter />));
     const prepare = await screen.findByRole("button", { name: "Prepare recovery" });
     expect((prepare as HTMLButtonElement).disabled).toBe(false);
-    expect(screen.getByText(/Not yet safe: a released withdrawal or signed merchant payment may still settle/)).toBeTruthy();
+    expect(screen.getByText(/Not yet safe: a payment already sent may still go through/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Prepare public exit" })).toBeTruthy();
     expect(screen.getByText(/a public exit is linkable/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Resume workspace" })).toBeTruthy();

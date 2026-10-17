@@ -7,7 +7,7 @@ import type { NoteStatus, WalletNote } from "../lib/types";
 import { connect, listWallets, onWalletsChanged, signAndSend, type OwnerWallet } from "../lib/wallet";
 import { useOwner, type ConnectedWallet } from "./Shell";
 import { useAction, useResource } from "./hooks";
-import { ErrorNotice, Loading, Section, TxLink } from "./ui";
+import { ErrorNotice, Loading, Section, Spinner, TxLink } from "./ui";
 
 export const DEPOSIT_STAGES = ["submitted", "finalized", "indexed", "approved", "spendable"] as const;
 
@@ -43,20 +43,30 @@ export function useOwnerWallet(): { connected: ConnectedWallet | null; wallets: 
 
 export function ConnectWalletPrompt({ purpose }: { purpose: string }) {
   const w = useOwnerWallet();
-  if (w.connected) return <p className="small">Owner wallet connected for signing.</p>;
+  if (w.connected) return <p className="small muted">Wallet connected.</p>;
   return (
     <div className="notice">
-      <p>Connect the owner wallet to {purpose}. It signs in the wallet; Veilo never sees your keys.</p>
-      {w.wallets.length === 0 ? <p className="muted">No compatible wallet detected. Install Phantom (or another Wallet Standard wallet with Solana devnet support), unlock it and reload this page.</p> : null}
-      {w.wallets.map((x) => (
-        <button key={x.name} type="button" className="btn" onClick={() => void w.connectTo(x)}>
-          Connect {x.name}
-        </button>
-      ))}
+      <p className="flush">Connect your wallet to {purpose}. Veilo never sees your keys.</p>
+      {w.wallets.length === 0 ? <p className="small muted">No wallet found. Install or unlock Phantom, then reload.</p> : null}
+      <div className="actions">
+        {w.wallets.map((x) => (
+          <button key={x.name} type="button" className="btn btn-small" onClick={() => void w.connectTo(x)}>
+            Connect {x.name}
+          </button>
+        ))}
+      </div>
       <ErrorNotice error={w.error} />
     </div>
   );
 }
+
+const STAGE_LABEL: Record<(typeof DEPOSIT_STAGES)[number], string> = {
+  submitted: "Sent",
+  finalized: "Confirmed",
+  indexed: "Recorded",
+  approved: "Approved",
+  spendable: "Ready",
+};
 
 export function DepositStages({ note }: { note: WalletNote }) {
   const stages = note.depositStages ?? {};
@@ -64,7 +74,7 @@ export function DepositStages({ note }: { note: WalletNote }) {
     <ol className="stages" aria-label="Deposit progress">
       {DEPOSIT_STAGES.map((s) => (
         <li key={s} className={stages[s] ? "stage done" : "stage"}>
-          <span aria-hidden="true">{stages[s] ? "●" : "○"}</span> {s}
+          <span aria-hidden="true">{stages[s] ? "●" : "○"}</span> {STAGE_LABEL[s]}
           <span className="sr-only">{stages[s] ? " reached" : " not reached"}</span>
         </li>
       ))}
@@ -73,28 +83,26 @@ export function DepositStages({ note }: { note: WalletNote }) {
 }
 
 export function NotesTable({ status }: { status: NoteStatus }) {
-  if (status.notes.length === 0) return <p className="muted">No notes yet. Deposit test-USDC below to fund private payments; nothing is spendable privately until a deposit reaches the spendable stage.</p>;
+  if (status.notes.length === 0) return <p className="muted flush">No deposits yet. Add funds below to get started.</p>;
   return (
     <div className="table-wrap">
       <table>
-        <caption className="sr-only">Pool notes</caption>
+        <caption className="sr-only">Deposits</caption>
         <thead>
           <tr>
-            <th scope="col">Origin</th>
-            <th scope="col">Value</th>
-            <th scope="col">State</th>
-            <th scope="col">Counted as available</th>
-            <th scope="col">Deposit progress</th>
+            <th scope="col">Source</th>
+            <th scope="col">Amount</th>
+            <th scope="col">Ready to spend</th>
+            <th scope="col">Progress</th>
           </tr>
         </thead>
         <tbody>
           {status.notes.map((n) => (
             <tr key={n.id}>
-              <td>{n.origin}</td>
+              <td>{n.origin === "deposit" ? "Deposit" : "Change"}</td>
               <td>{usdc(n.value.amount)}</td>
-              <td>{n.state.replace(/_/g, " ")}</td>
-              <td>{n.available ? "yes" : "no"}</td>
-              <td>{n.origin === "deposit" ? <DepositStages note={n} /> : "change note"}</td>
+              <td>{n.available ? "Yes" : "No"}</td>
+              <td>{n.origin === "deposit" ? <DepositStages note={n} /> : n.state.replace(/_/g, " ")}</td>
             </tr>
           ))}
         </tbody>
@@ -111,32 +119,32 @@ export function WalletView() {
   const [submitted, setSubmitted] = useState<{ signature: string; state: string } | null>(null);
   const action = useAction();
   const base = parseUsdcInput(amount);
+  const t = notes.data?.totals;
 
   return (
     <>
-      <h1>Wallet</h1>
-      <Section title="Pool notes">
-        {notes.data ? (
-          <>
-            <p>
-              <strong>Available (spendable notes only): {usdc(notes.data.totals.spendable.amount)}</strong> · reserved {usdc(notes.data.totals.reserved.amount)} · pending (not
-              available until approved and spendable) {usdc(notes.data.totals.pending.amount)}
-            </p>
-            {notes.data.sync && !notes.data.sync.synced ? <p className="notice notice-warn">Chain sync unavailable: {notes.data.sync.reason}</p> : null}
-            <NotesTable status={notes.data} />
-          </>
-        ) : notes.loading ? (
-          <Loading label="notes" />
-        ) : null}
-        <ErrorNotice error={notes.error} what="wallet service" onRetry={notes.reload} />
-        <button type="button" className="btn" onClick={() => void notes.reload()}>
-          Refresh from chain
-        </button>
-      </Section>
-      <Section title="Deposit test-USDC into the pool">
-        <p className="small">Steps: prepare → sign in your wallet → register. Then the note moves through submitted, finalized, indexed, approved and spendable. Only spendable notes are counted as available.</p>
+      <div className="stats stats-3">
+        <div className="stat">
+          <span className="stat-label">Ready to spend</span>
+          <span className="stat-value">{t ? usdc(t.spendable.amount) : "—"}</span>
+        </div>
+        <div className="stat">
+          <span className="stat-label">Held for purchases</span>
+          <span className="stat-value">{t ? usdc(t.reserved.amount) : "—"}</span>
+        </div>
+        <div className="stat">
+          <span className="stat-label">On the way</span>
+          <span className="stat-value">{t ? usdc(t.pending.amount) : "—"}</span>
+          <span className="stat-sub">Deposits not ready yet</span>
+        </div>
+      </div>
+      <ErrorNotice error={notes.error} what="wallet service" onRetry={notes.reload} />
+
+      <Section title="Add funds">
+        <p className="hint flush">Move test-USDC into your private pool. It can be spent once it reaches “Ready”.</p>
         <ConnectWalletPrompt purpose="sign the deposit" />
         <form
+          className="inline-form"
           onSubmit={(e) => {
             e.preventDefault();
             if (!base) return;
@@ -147,34 +155,40 @@ export function WalletView() {
           }}
         >
           <div className="field">
-            <label htmlFor="deposit-amount">Amount (test-USDC)</label>
-            <input id="deposit-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} aria-invalid={amount !== "" && !base} />
+            <label htmlFor="deposit-amount">Amount</label>
+            <span className="input-unit">
+              <input id="deposit-amount" inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} aria-invalid={amount !== "" && !base} />
+              <span aria-hidden="true">USDC</span>
+            </span>
           </div>
           <button type="submit" className="btn btn-primary" disabled={!base || action.busy}>
-            Prepare deposit
+            {action.busy && !prepared ? <Spinner /> : null}
+            Continue
           </button>
         </form>
         {prepared ? (
           <div className="notice">
-            <p>
-              Deposit of {usdc(prepared.amount)} prepared. <strong>Privacy:</strong> {prepared.privacyWarning}
+            <p className="flush">
+              Ready to deposit {usdc(prepared.amount)}. <strong>Privacy:</strong> {prepared.privacyWarning}
             </p>
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={!connected || action.busy || submitted !== null}
-              onClick={() =>
-                void action.run(async () => {
-                  if (!connected) return;
-                  const signature = await signAndSend(connected.wallet, connected.account, prepared.transaction);
-                  const r = await api<{ state: string }>("wallet", "/deposits/register", { method: "POST", body: { depositId: prepared.depositId, signature } });
-                  setSubmitted({ signature, state: r.state });
-                  await notes.reload();
-                })
-              }
-            >
-              Sign in wallet and register
-            </button>
+            <div className="actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!connected || action.busy || submitted !== null}
+                onClick={() =>
+                  void action.run(async () => {
+                    if (!connected) return;
+                    const signature = await signAndSend(connected.wallet, connected.account, prepared.transaction);
+                    const r = await api<{ state: string }>("wallet", "/deposits/register", { method: "POST", body: { depositId: prepared.depositId, signature } });
+                    setSubmitted({ signature, state: r.state });
+                    await notes.reload();
+                  })
+                }
+              >
+                Sign in wallet
+              </button>
+            </div>
           </div>
         ) : null}
         {submitted ? (
@@ -183,6 +197,26 @@ export function WalletView() {
           </p>
         ) : null}
         <ErrorNotice error={action.error} />
+      </Section>
+
+      <Section
+        title="Deposits"
+        actions={
+          <button type="button" className="btn btn-small" onClick={() => void notes.reload()}>
+            Refresh
+          </button>
+        }
+      >
+        {notes.data ? (
+          <>
+            {notes.data.sync && !notes.data.sync.synced ? <p className="notice notice-warn">Couldn&apos;t sync with the chain: {notes.data.sync.reason}</p> : null}
+            <NotesTable status={notes.data} />
+          </>
+        ) : notes.loading ? (
+          <Loading label="deposits" />
+        ) : (
+          <p className="muted flush">Deposits can&apos;t be shown until the wallet service is available.</p>
+        )}
       </Section>
     </>
   );

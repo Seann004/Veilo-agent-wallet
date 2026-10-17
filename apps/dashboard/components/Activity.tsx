@@ -216,25 +216,31 @@ export function EventLog({ events }: { events: AuditEvent[] }) {
         <caption className="sr-only">Audit events</caption>
         <thead>
           <tr>
-            <th scope="col">Time</th>
-            <th scope="col">Action</th>
-            <th scope="col">Actor</th>
-            <th scope="col">Policy result</th>
-            <th scope="col">Reason</th>
-            <th scope="col">What it means</th>
+            <th scope="col">When</th>
+            <th scope="col">What happened</th>
+            <th scope="col">By</th>
+            <th scope="col">Result</th>
           </tr>
         </thead>
         <tbody>
-          {events.map((e) => (
-            <tr key={e.seq}>
-              <td>{when(e.at)}</td>
-              <td>{e.action}</td>
-              <td>{e.actor.type}</td>
-              <td>{e.policyResult.replace(/_/g, " ")}</td>
-              <td>{e.reasonCode ?? (typeof e.details.reason === "string" ? e.details.reason : "")}</td>
-              <td className="small">{reasonGuidance(e.reasonCode) ?? ""}</td>
-            </tr>
-          ))}
+          {events.map((e) => {
+            const reason = e.reasonCode ?? (typeof e.details.reason === "string" ? e.details.reason : null);
+            const guidance = reasonGuidance(e.reasonCode);
+            return (
+              <tr key={e.seq}>
+                <td className="nowrap small">{when(e.at)}</td>
+                <td>
+                  {e.action.replace(/[._]/g, " ")}
+                  {reason ? <span className="muted small"> · {reason}</span> : null}
+                  {guidance ? <span className="hint block">{guidance}</span> : null}
+                </td>
+                <td className="small">{e.actor.type}</td>
+                <td>
+                  <span className={`pill pill-${e.policyResult === "allowed" ? "ok" : e.policyResult === "denied" ? "danger" : "muted"}`}>{e.policyResult.replace(/_/g, " ")}</span>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

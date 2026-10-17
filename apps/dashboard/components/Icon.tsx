@@ -16,6 +16,11 @@ const PATHS = {
   arrow: "M7 17 17 7M9 7h8v8",
   send: "M12 19V5M5 12l7-7 7 7",
   card: "M3 6h18v12H3zM3 10h18",
+  chevron: "M6 9l6 6 6-6",
+  check: "M5 12.5l4.5 4.5L19 7",
+  sun: "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1.5v2M12 20.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1.5 12h2M20.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4",
+  moon: "M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z",
+  sidebar: "M4 4h16v16H4zM9 4v16",
 } as const;
 
 export type IconName = keyof typeof PATHS;

@@ -5,13 +5,14 @@ import { useEffect, useId, useState } from "react";
 import { api } from "../lib/api";
 import { ROLE_AVATAR, avatarById, setAgentAvatar } from "../lib/avatars";
 import { ROLE_LABEL } from "../lib/labels";
+import { ROLE_TAGLINE } from "../lib/roles";
 import type { Agent, AgentRole } from "../lib/types";
 import { draftPolicyFromText, type PolicyDraftResult } from "../lib/policy-draft";
 import { PolicyForm, PolicyReview, ROLE_TEMPLATES, type AgentPolicyInput } from "./Policy";
 import { AvatarImage, AvatarPicker } from "./Avatar";
 import { useOwner } from "./Shell";
 import { useAction } from "./hooks";
-import { ErrorNotice, Section } from "./ui";
+import { ErrorNotice, Spinner } from "./ui";
 
 /**
  * Create agent: role template, name, job, trigger and model profile, then a structured review.
@@ -57,37 +58,49 @@ export function CreateAgent() {
   const trigger = role === "credit_manager" ? { type: "low_credit_balance", pollSeconds: Number(pollSeconds) } : { type: "owner_task" };
 
   if (created) {
+    const active = created.status === "active";
     return (
-      <Section title={`${created.name} created with draft policy v1`}>
-        <p>The agent cannot spend until you activate its policy.</p>
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={action.busy}
-          onClick={() =>
-            void action.run(async () => {
-              await api("control", `/agents/${created.id}/config`, { method: "PATCH", body: { activatePolicyVersion: 1 } });
-              await reloadWorkspace();
-              setCreated({ ...created, status: "active" });
-            })
-          }
-        >
-          Activate {created.name}
-        </button>{" "}
-        <Link href={`/agents/${created.id}`}>Open agent</Link>
-        {created.status === "active" ? <p role="status">Activated.</p> : null}
+      <section className="panel created">
+        {preview ? <AvatarImage avatar={preview} size={88} /> : null}
+        <h1>{active ? `${created.name} is on` : `${created.name} is ready`}</h1>
+        <p className="muted">{active ? "It can now work within the limits you set." : "It can't spend anything until you activate it."}</p>
+        <div className="actions">
+          {!active ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={action.busy}
+              onClick={() =>
+                void action.run(async () => {
+                  await api("control", `/agents/${created.id}/config`, { method: "PATCH", body: { activatePolicyVersion: 1 } });
+                  await reloadWorkspace();
+                  setCreated({ ...created, status: "active" });
+                })
+              }
+            >
+              {action.busy ? <Spinner /> : null}
+              Activate {created.name}
+            </button>
+          ) : null}
+          <Link className="btn" href={`/agents/${created.id}`}>
+            Open {created.name}
+          </Link>
+        </div>
         <ErrorNotice error={action.error} />
-      </Section>
+      </section>
     );
   }
 
+  const missing = name.trim() === "" ? "Add a name to continue." : job.trim() === "" ? "Describe the job to continue." : !policy ? "Fix the highlighted limits to continue." : null;
+
   return (
     <>
-      <h1>Create agent</h1>
-      <p className="lede">Pick a role and an avatar, then review the limits. A new agent can't spend until you activate its policy.</p>
+      <div className="page-head">
+        <h1>Create agent</h1>
+      </div>
       <section className="panel" aria-label="Role and avatar">
         <div className="avatar-hero">
-          {preview ? <AvatarImage avatar={preview} size={104} /> : null}
+          {preview ? <AvatarImage avatar={preview} size={96} /> : null}
           <AvatarPicker
             value={avatarId}
             onChange={(id) => {
@@ -95,7 +108,6 @@ export function CreateAgent() {
               setAvatarChosen(true);
             }}
           />
-          <span className="hint">Saved in this browser only.</span>
         </div>
         <h2 className="section-title">Role</h2>
         <div className="suggestions">
@@ -106,7 +118,7 @@ export function CreateAgent() {
                 {a ? <AvatarImage avatar={a} size={44} /> : null}
                 <span>
                   <strong>{ROLE_LABEL[r]}</strong>
-                  <span className="small muted">{ROLE_TEMPLATES[r].description}</span>
+                  <span className="small muted">{ROLE_TAGLINE[r]}</span>
                 </span>
               </button>
             );
@@ -116,6 +128,7 @@ export function CreateAgent() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
+          if (missing) return;
           if (step === "edit") {
             setStep("review");
             return;
@@ -131,81 +144,91 @@ export function CreateAgent() {
           });
         }}
       >
-        <fieldset disabled={step === "review"}>
-          <legend>Agent</legend>
-          <div className="grid-2">
-            <div className="field">
-              <label htmlFor={nameId}>Name *</label>
-              <input id={nameId} required maxLength={64} value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div className="field">
-              <label htmlFor={jobId}>Job *</label>
-              <input id={jobId} required maxLength={500} value={job} onChange={(e) => setJob(e.target.value)} />
-            </div>
-            <div className="field">
-              <label htmlFor={modelId}>Model profile</label>
-              <input id={modelId} maxLength={128} value={modelProfile} onChange={(e) => setModelProfile(e.target.value)} />
-            </div>
-            {role === "credit_manager" ? (
-              <div className="field">
-                <label htmlFor={pollId}>Trigger: check every (seconds)</label>
-                <input id={pollId} inputMode="numeric" value={pollSeconds} onChange={(e) => setPollSeconds(e.target.value)} />
+        {step === "edit" ? (
+          <>
+            <section className="panel">
+              <h2 className="panel-title">Details</h2>
+              <div className="grid-2">
+                <div className="field">
+                  <label htmlFor={nameId}>Name</label>
+                  <input id={nameId} required maxLength={64} value={name} placeholder="e.g. Nova" onChange={(e) => setName(e.target.value)} />
+                </div>
+                {role === "credit_manager" ? (
+                  <div className="field">
+                    <label htmlFor={pollId}>Check credits every</label>
+                    <span className="input-unit">
+                      <input id={pollId} inputMode="numeric" value={pollSeconds} onChange={(e) => setPollSeconds(e.target.value)} />
+                      <span aria-hidden="true">sec</span>
+                    </span>
+                  </div>
+                ) : (
+                  <p className="small muted field-note">Starts work when you send it a task{role === "content" ? " or approve research for it" : ""}.</p>
+                )}
               </div>
-            ) : (
-              <p className="small">Trigger: starts when the owner submits a task{role === "content" ? " or approves a research handoff" : ""}.</p>
-            )}
-          </div>
-          <div className="field">
-            <label htmlFor={wordsId}>Describe the limits in words (optional)</label>
-            <textarea id={wordsId} rows={2} value={words} onChange={(e) => setWords(e.target.value)} aria-describedby={`${wordsId}-h`} placeholder="Up to 2 USDC in total, 0.5 per purchase, 1 per task" />
-            <span id={`${wordsId}-h`} className="hint">
-              A rule-based reader, not a model. It only fills the fields below as a draft; nothing is saved or activated until you review it and create the agent.
-            </span>
-            <div className="actions">
-              <button
-                type="button"
-                className="btn"
-                disabled={words.trim() === ""}
-                onClick={() => {
-                  const r = draftPolicyFromText(words, ROLE_TEMPLATES[role].policy);
-                  setDrafted(r);
-                  setBase(r.policy);
-                  setPolicy(r.policy);
-                  setSeed((n) => n + 1);
-                }}
-              >
-                Draft limits from description
+              <div className="field">
+                <label htmlFor={jobId}>Job</label>
+                <textarea id={jobId} required rows={2} maxLength={500} value={job} onChange={(e) => setJob(e.target.value)} />
+              </div>
+              <details className="advanced">
+                <summary>Advanced</summary>
+                <div className="field">
+                  <label htmlFor={modelId}>Model profile</label>
+                  <input id={modelId} maxLength={128} value={modelProfile} onChange={(e) => setModelProfile(e.target.value)} />
+                </div>
+              </details>
+            </section>
+
+            <section className="panel">
+              <h2 className="panel-title">Spending limits</h2>
+              <div className="field">
+                <label htmlFor={wordsId}>Describe them in your own words (optional)</label>
+                <div className="inline-input">
+                  <input id={wordsId} value={words} onChange={(e) => setWords(e.target.value)} placeholder="Up to 2 USDC total, 0.5 per purchase, 1 per task" />
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={words.trim() === ""}
+                    onClick={() => {
+                      const r = draftPolicyFromText(words, ROLE_TEMPLATES[role].policy);
+                      setDrafted(r);
+                      setBase(r.policy);
+                      setPolicy(r.policy);
+                      setSeed((n) => n + 1);
+                    }}
+                  >
+                    Fill in
+                  </button>
+                </div>
+                {drafted ? (
+                  <p role="status" className="hint">
+                    {drafted.understood.length > 0 ? `Filled: ${drafted.understood.join("; ")}.` : "Couldn't find any limits in that."}
+                    {drafted.ignored.length > 0 ? ` Skipped: ${drafted.ignored.join("; ")}.` : ""} Check the fields below.
+                  </p>
+                ) : null}
+              </div>
+              <PolicyForm key={`${role}-${seed}`} initial={base} workspace={workspace} onChange={setPolicy} />
+            </section>
+          </>
+        ) : policy ? (
+          <section className="panel">
+            <h2 className="panel-title">Review</h2>
+            <PolicyReview policy={policy} workspacePolicy={wsPolicy} title={name} />
+            <p className="small muted">The agent starts switched off. You can activate it on the next screen.</p>
+          </section>
+        ) : null}
+        <div className="form-footer">
+          {missing ? <span className="small muted">{missing}</span> : <span />}
+          <span className="actions">
+            {step === "review" ? (
+              <button type="button" className="btn" onClick={() => setStep("edit")}>
+                Back
               </button>
-            </div>
-            {drafted ? (
-              <p role="status" className="notice small">
-                {drafted.understood.length > 0 ? `Filled: ${drafted.understood.join("; ")}.` : "Nothing in the description matched a limit."}
-                {drafted.ignored.length > 0 ? ` Not understood, left unchanged: ${drafted.ignored.join("; ")}.` : ""} Check every field below before continuing.
-              </p>
             ) : null}
-          </div>
-          <PolicyForm key={`${role}-${seed}`} initial={base} workspace={workspace} onChange={setPolicy} />
-        </fieldset>
-        {step === "review" && policy ? (
-          <Section title="Review effective policy">
-            <PolicyReview policy={policy} workspacePolicy={wsPolicy} title={`${name || "New agent"} (draft v1)`} />
-            <p className="small">Creating the agent stores this policy as a draft. You activate it in the next step.</p>
-          </Section>
-        ) : null}
-        {!policy ? (
-          <p className="notice notice-error" role="alert">
-            Fix the policy amounts: use test-USDC with at most 6 decimals and whole microcredits.
-          </p>
-        ) : null}
-        <div className="actions">
-          {step === "review" ? (
-            <button type="button" className="btn" onClick={() => setStep("edit")}>
-              Back to edit
+            <button type="submit" className="btn btn-primary" disabled={missing !== null || action.busy}>
+              {action.busy ? <Spinner /> : null}
+              {step === "edit" ? "Review" : "Create agent"}
             </button>
-          ) : null}
-          <button type="submit" className="btn btn-primary" disabled={!policy || action.busy || name.trim() === ""}>
-            {step === "edit" ? "Review policy" : "Create agent with draft policy"}
-          </button>
+          </span>
         </div>
         <ErrorNotice error={action.error} />
       </form>

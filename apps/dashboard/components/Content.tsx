@@ -8,7 +8,7 @@ import type { CalendarEntry, ContentItem, ReviewState } from "../lib/types";
 import { useAction } from "./hooks";
 import { ErrorNotice } from "./ui";
 
-export const NO_CHARGE_NOTE = "No charge: editing, review changes and calendar edits run no inference, make no purchase and publish nothing.";
+export const NO_CHARGE_NOTE = "Editing is free: it uses no AI, buys nothing and publishes nothing.";
 
 const STATES: ReviewState[] = ["draft", "needs_review", "approved_for_export", "archived"];
 
@@ -43,7 +43,8 @@ export function ContentEditor({ item, onSaved }: { item: ContentItem; onSaved: (
         </span>
       </header>
       <p className="small muted">
-        {item.kind.replace(/_/g, " ")} by {item.agent.name} · revision {item.revision} (last edit by {item.lastAuthor}) · {when(item.updatedAt)}
+        By {item.agent.name} · v{item.revision}
+        {item.lastAuthor === "owner" ? " · edited by you" : ""} · {when(item.updatedAt)}
       </p>
       {item.kind !== "content_calendar" ? (
         <>
@@ -71,15 +72,15 @@ export function ContentEditor({ item, onSaved }: { item: ContentItem; onSaved: (
           </ul>
         </details>
       ) : null}
-      <p className="small">{NO_CHARGE_NOTE}</p>
       <div className="actions" role="group" aria-label={`Review state for ${item.title}`}>
         {item.kind !== "content_calendar" ? (
-          <button type="button" className="btn btn-primary" disabled={!dirty || action.busy || archived} onClick={() => void save()}>
+          <button type="button" className="btn btn-small btn-primary" disabled={!dirty || action.busy || archived} onClick={() => void save()}>
             Save edit
           </button>
         ) : null}
+        <span className="hint actions-note">{NO_CHARGE_NOTE}</span>
         {STATES.filter((s) => s !== item.reviewState && (!archived || s === "draft")).map((s) => (
-          <button key={s} type="button" className="btn" disabled={action.busy} onClick={() => void review(s)}>
+          <button key={s} type="button" className="btn btn-small" disabled={action.busy} onClick={() => void review(s)}>
             {s === "draft" && archived ? "Restore to draft" : `Mark ${REVIEW_LABEL[s]!.toLowerCase()}`}
           </button>
         ))}

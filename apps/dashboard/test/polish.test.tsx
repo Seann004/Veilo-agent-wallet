@@ -154,7 +154,7 @@ describe("privacy membership honesty", () => {
       })).impl,
     );
     render(<PrivacyPanel />);
-    expect(await screen.findByText(/Membership is unverified/)).toBeTruthy();
-    expect(screen.queryByText(/Weak pool: only/)).toBeNull();
+    expect(await screen.findByText(/verify the pool right now/)).toBeTruthy();
+    expect(screen.queryByText(/Weak privacy: only/)).toBeNull();
   });
 });

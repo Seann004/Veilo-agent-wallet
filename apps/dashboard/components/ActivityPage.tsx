@@ -15,20 +15,20 @@ export function ActivityPage() {
   };
   return (
     <>
-      <h1>Activity</h1>
+      <div className="page-head">
+        <h1>Activity</h1>
+        <button type="button" className="btn" onClick={() => void reload()}>
+          Refresh
+        </button>
+      </div>
       <ErrorNotice error={activity.error} what="activity" onRetry={activity.reload} />
-      <Section
-        title="Payments"
-        actions={
-          <button type="button" className="btn" onClick={() => void reload()}>
-            Refresh
-          </button>
-        }
-      >
-        <p className="small">Select a payment to see every leg, the policy result, fees, signatures and devnet explorer links.</p>
-        {activity.data ? <ActivityList activity={activity.data} workspace={workspace} onChanged={reload} /> : <Loading label="activity" />}
+      <Section title="Payments">
+        {activity.data ? <ActivityList activity={activity.data} workspace={workspace} onChanged={reload} /> : <Loading label="payments" />}
       </Section>
-      <Section title="Audit events">{activity.data ? <EventLog events={activity.data.events} /> : null}</Section>
+      <details className="panel disclosure">
+        <summary>Audit log{activity.data ? ` (${activity.data.events.length})` : ""}</summary>
+        {activity.data ? <EventLog events={activity.data.events} /> : <Loading label="audit log" />}
+      </details>
     </>
   );
 }

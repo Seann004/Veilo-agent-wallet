@@ -2,25 +2,17 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { api } from "../lib/api";
 import { AVATARS, ROLE_AVATAR } from "../lib/avatar-options";
 import { credits, usdc } from "../lib/format";
 import { ROLE_LABEL } from "../lib/labels";
+import { ROLE_ORDER as ROLES, ROLE_TAGLINE as TAGLINE } from "../lib/roles";
 import type { AgentRole, Workspace } from "../lib/types";
 import { Icon } from "./Icon";
 import { ROLE_TEMPLATES } from "./Policy";
-import { SitePage } from "./Site";
-import { useResource } from "./hooks";
-import { ErrorNotice, Loading } from "./ui";
+import { useOwner } from "./Shell";
 
 type Filter = "all" | "agents" | "services";
 type Service = Workspace["services"][number];
-const ROLES: AgentRole[] = ["research", "content", "credit_manager"];
-const TAGLINE: Record<AgentRole, string> = {
-  credit_manager: "Keeps inference credits topped up, one pack at a time.",
-  research: "Answers questions with paid, cited sources.",
-  content: "Drafts posts and a seven-day calendar.",
-};
 
 const avatarFor = (role: AgentRole) => AVATARS.find((a) => a.id === ROLE_AVATAR[role]) ?? AVATARS[0]!;
 function hostOf(origin: string): string {
@@ -104,16 +96,8 @@ function ServiceRow({ s }: { s: Service }) {
 }
 
 function Services({ q }: { q: string }) {
-  const ws = useResource(() => api<Workspace>("control", "/workspace"), "market-workspace");
-  if (ws.loading && !ws.data) return <Loading label="services" />;
-  if (ws.error?.status === 401)
-    return (
-      <p className="muted">
-        <Link href="/workspace">Sign in</Link> to see the services approved for your workspace.
-      </p>
-    );
-  if (ws.error) return <ErrorNotice error={ws.error} what="services" onRetry={ws.reload} />;
-  const services = (ws.data?.services ?? []).filter((s) => matches(q, s.service_key, s.origin, ...s.skus.map((k) => k.sku)));
+  const { workspace } = useOwner();
+  const services = workspace.services.filter((s) => matches(q, s.service_key, s.origin, ...s.skus.map((k) => k.sku)));
   if (services.length === 0) return <p className="muted">{q ? "No services match." : "No services are approved for this workspace yet."}</p>;
   return (
     <ul className="market-list">
@@ -124,14 +108,16 @@ function Services({ q }: { q: string }) {
   );
 }
 
-export function Marketplace() {
+export function MarketBrowser() {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
   const roles = ROLES.filter((r) => matches(q, ROLE_LABEL[r], TAGLINE[r], ROLE_TEMPLATES[r].description));
   return (
-    <SitePage current="marketplace">
-      <h1 className="market-title">Marketplace</h1>
+    <>
+      <div className="page-head">
+        <h1>Marketplace</h1>
+      </div>
       <div className="filter-row" role="group" aria-label="Show">
         {(
           [
@@ -166,7 +152,7 @@ export function Marketplace() {
         <section className="market-section" aria-labelledby="m-agents">
           <div className="market-section-head">
             <h2 id="m-agents">Agents</h2>
-            <span className="muted small">Hiring creates a draft; it can't spend until you activate it.</span>
+            <span className="muted small">New agents can't spend until you turn them on.</span>
           </div>
           {roles.length > 0 ? (
             <ul className="market-list">
@@ -184,11 +170,11 @@ export function Marketplace() {
         <section className="market-section" aria-labelledby="m-services">
           <div className="market-section-head">
             <h2 id="m-services">Services</h2>
-            <span className="muted small">Approved x402 services your agents can buy.</span>
+            <span className="muted small">What your agents can buy, and the price.</span>
           </div>
           <Services q={q} />
         </section>
       ) : null}
-    </SitePage>
+    </>
   );
 }

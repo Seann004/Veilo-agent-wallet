@@ -28,7 +28,7 @@ describe("CNT-02 content edits and approval cause no charge", () => {
     const user = userEvent.setup();
     const onSaved = vi.fn();
     render(<ContentEditor item={draft()} onSaved={onSaved} />);
-    expect(screen.getByText(/No charge: editing, review changes and calendar edits run no inference/)).toBeTruthy();
+    expect(screen.getByText(/Editing is free: it uses no AI, buys nothing and publishes nothing/)).toBeTruthy();
 
     const text = screen.getByLabelText("Draft text");
     await user.clear(text);

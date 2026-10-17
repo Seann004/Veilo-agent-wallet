@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { useAction } from "./hooks";
 import { ConfirmButton, ErrorNotice } from "./ui";
 
-export const STOP_KEEPS_RECOVERY = "Stopping blocks all new spending authority. Payments already authorized stay visible, and owner recovery and public exit remain available.";
+export const STOP_KEEPS_RECOVERY = "Stops all new spending at once. Payments already sent stay visible, and you can still recover or withdraw funds.";
 
 /** Global emergency stop. It never disables recovery or public exit. */
 export function EmergencyStop({ stopped, onChanged }: { stopped: boolean; onChanged: () => void | Promise<void> }) {
@@ -16,7 +16,7 @@ export function EmergencyStop({ stopped, onChanged }: { stopped: boolean; onChan
         <ConfirmButton
           label="Resume workspace"
           confirmLabel="Confirm resume"
-          warning="Agents regain authority within their own policies. Paused or revoked agents stay stopped."
+          warning="Active agents can spend again within their limits. Paused agents stay paused."
           disabled={action.busy}
           onConfirm={() =>
             void action.run(async () => {
@@ -30,7 +30,7 @@ export function EmergencyStop({ stopped, onChanged }: { stopped: boolean; onChan
           label="Emergency stop all agents"
           confirmLabel="Confirm emergency stop"
           danger
-          warning="All new authority stops now. Released payments may still settle."
+          warning="Stop every agent now? Payments already sent may still settle."
           disabled={action.busy}
           onConfirm={() =>
             void action.run(async () => {

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AVATARS, ROLE_AVATAR } from "../lib/avatar-options";
 import { ROLE_LABEL } from "../lib/labels";
-import type { AgentRole } from "../lib/types";
+import { ROLE_ORDER, ROLE_TAGLINE } from "../lib/roles";
 import { SitePage } from "./Site";
 
 const FEATURES: Array<[string, string]> = [
@@ -17,12 +17,6 @@ const FAQ: Array<[string, string]> = [
   ["Who pays for model calls?", "The operator, through OpenRouter. They show as demo credits."],
 ];
 
-const ROSTER: AgentRole[] = ["research", "content", "credit_manager"];
-const ROSTER_COPY: Record<AgentRole, string> = {
-  credit_manager: "Keeps inference credits topped up.",
-  research: "Answers questions with paid, cited sources.",
-  content: "Drafts posts and a seven-day calendar.",
-};
 
 export function Landing() {
   return (
@@ -64,13 +58,13 @@ export function Landing() {
           <Link href="/marketplace">View all</Link>
         </div>
         <div className="roster">
-          {ROSTER.map((role) => {
+          {ROLE_ORDER.map((role) => {
             const avatar = AVATARS.find((a) => a.id === ROLE_AVATAR[role]) ?? AVATARS[0]!;
             return (
               <Link key={role} href={`/marketplace#${role}`} className="roster-card">
                 <img className="avatar" src={avatar.src} alt="" width={56} height={56} />
                 <h3>{ROLE_LABEL[role]}</h3>
-                <p>{ROSTER_COPY[role]}</p>
+                <p>{ROLE_TAGLINE[role]}</p>
               </Link>
             );
           })}
