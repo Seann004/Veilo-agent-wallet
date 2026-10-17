@@ -37,6 +37,8 @@ export interface LocalHire {
     label: string;
   };
   brief: string;
+  /** Why a paid or funded hire needs the owner's attention; null when nothing is wrong. */
+  problem?: { code: string; reason: string | null; attempts?: number; nextRetryAt?: string | null } | null;
   basis: "owner_approval" | "listing_grant" | null;
   agentId: string | null;
   approval: { agentId: string; approvedBy: string; approvedAt: string } | null;
@@ -65,6 +67,8 @@ const STATE_LABEL: Record<string, string> = {
   paid: "Paid",
   failed_unpaid: "Failed — nothing was paid",
   rejected: "Rejected — nothing was paid",
+  evidence_rejected: "Paid — evidence refused, retrying",
+  recoverable: "Unpaid — funds recoverable",
 };
 
 /**
@@ -137,7 +141,15 @@ function HireCard({ hire: h, workspace, onChanged }: { hire: LocalHire; workspac
         <h3>
           <PlainText text={h.listing.title ?? h.listing.slug ?? "Listing"} inline />
         </h3>
-        <span className={h.state === "paid" ? "pill pill-ok" : h.state === "rejected" || h.state === "failed_unpaid" ? "pill pill-danger" : "pill pill-warn"}>
+        <span
+          className={
+            h.state === "paid"
+              ? "pill pill-ok"
+              : ["rejected", "failed_unpaid", "evidence_rejected", "recoverable"].includes(h.state)
+                ? "pill pill-danger"
+                : "pill pill-warn"
+          }
+        >
           {STATE_LABEL[h.state] ?? h.state}
         </span>
       </div>
@@ -145,6 +157,26 @@ function HireCard({ hire: h, workspace, onChanged }: { hire: LocalHire; workspac
         Seller: <PlainText text={h.listing.sellerName ?? "unknown"} inline /> · requested by {requester} · {when(h.createdAt)} ·{" "}
         <Link href={`/marketplace/jobs/${h.jobId}`}>marketplace job</Link>
       </p>
+      {h.problem ? (
+        <div role="alert" className="notice notice-error">
+          <p>
+            <strong>{h.state === "evidence_rejected" ? "Paid, but the marketplace refused the payment evidence." : h.state === "recoverable" ? "Funded one-time wallet needs recovery; nothing was paid to the seller." : "Needs attention."}</strong>{" "}
+            Code <code>{h.problem.code}</code>
+            {h.problem.reason ? (
+              <>
+                : <PlainText text={h.problem.reason} inline />
+              </>
+            ) : null}
+          </p>
+          {h.problem.attempts !== undefined ? (
+            <p className="small">
+              Report attempts: {h.problem.attempts}
+              {h.problem.nextRetryAt ? ` · next retry ${when(h.problem.nextRetryAt)}` : ""}. The payment is never shown as unpaid while this is unresolved.
+            </p>
+          ) : null}
+          {h.state === "recoverable" ? <p className="small">Recover the funds from the Recovery page; this uses a public owner exit with its privacy warning.</p> : null}
+        </div>
+      ) : null}
       <h4>Brief</h4>
       <PlainText text={h.brief} className="brief" />
       <h4>Quote being approved (verbatim)</h4>
