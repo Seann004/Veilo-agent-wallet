@@ -67,7 +67,13 @@ export function PrivacyPanel() {
         <ErrorNotice error={ps.error} what="public pool state from the relayer" onRetry={ps.reload} />
         {ps.data && m ? (
           <>
-            {m.weak ? (
+            {!ps.data.approved.consistent || !ps.data.consistent ? (
+              <p className="notice notice-warn" role="alert">
+                Membership is unverified: the approved set this relayer holds does not reconcile with the on-chain approved root, so the counts below may be incomplete. Load the operator&apos;s published
+                approved-labels file (APPROVED_LABELS_PATH) and retry before relying on them.
+              </p>
+            ) : null}
+            {m.weak && ps.data.approved.consistent && ps.data.consistent ? (
               <p className="notice notice-warn" role="alert">
                 Weak pool: only {m.participants} distinct approved depositor(s). Effective privacy is weak; a withdrawal can likely be attributed to you.
               </p>

@@ -137,3 +137,24 @@ describe("reason guidance", () => {
     expect(reasonGuidance(null)).toBeNull();
   });
 });
+
+describe("privacy membership honesty", () => {
+  it("flags unverified membership instead of calling an unreconciled pool weak", async () => {
+    const { PrivacyPanel } = await import("../components/PrivacyPanel");
+    vi.stubGlobal(
+      "fetch",
+      recordingFetch(() => ({
+        finalizedSlot: "1",
+        consistent: true,
+        pool: { minDeposit: "1", maxDeposit: "2", depositsPaused: false, liability: "700000" },
+        deposits: [{ amount: "200000", refundAuthority: "A", state: "inserted", label: "1" }],
+        spends: [],
+        exits: [],
+        approved: { labels: [], version: "3", consistent: false, rule: "rule" },
+      })).impl,
+    );
+    render(<PrivacyPanel />);
+    expect(await screen.findByText(/Membership is unverified/)).toBeTruthy();
+    expect(screen.queryByText(/Weak pool: only/)).toBeNull();
+  });
+});
