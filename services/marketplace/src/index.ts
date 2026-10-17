@@ -7,8 +7,9 @@ import { createDb } from "./db";
 const SWEEP_MS = 30_000;
 
 async function main(): Promise<void> {
-  loadDotEnv({ rootDir: findRepoRoot(), allowMarketplaceSecrets: true });
-  const config = loadConfig();
+  const rootDir = findRepoRoot();
+  loadDotEnv({ rootDir, allowMarketplaceSecrets: true });
+  const config = loadConfig(process.env, rootDir);
   // Fail closed: the marketplace only records devnet receipts for the configured mint.
   if (config.genesisHash !== DEVNET_GENESIS_HASH || isMainnetIdentifier(config.network)) throw new Error("marketplace runs on Solana devnet only");
   const chain = createRpcChain(config.rpcUrl);

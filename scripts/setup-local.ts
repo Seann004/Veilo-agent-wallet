@@ -1,8 +1,9 @@
 // Local setup: validates the toolchain and configuration and creates protected local
 // directories. It never creates or replaces keys, spends funds or calls paid services.
 import { spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdirSync } from "node:fs";
-import { join, relative } from "node:path";
+import { randomBytes } from "node:crypto";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import {
   VeiloConfigError,
   findRepoRoot,
@@ -119,6 +120,21 @@ function ensureOwnerSecret(path: string | undefined) {
   else ok(`OWNER_SERVICE_SECRET_PATH file present at ${rel(path)} (contents not read)`);
 }
 
+// Bearer credentials the marketplace shares with the seller host and the operator CLI. Random,
+// owner-only and never printed; the marketplace stores only their SHA-256 in memory.
+function ensureMarketplaceToken(label: string, path: string | undefined, prefix: string) {
+  if (!path) return;
+  const abs = isAbsolute(path) ? path : join(rootDir, path);
+  if (existsSync(abs)) {
+    ok(`${label} file present at ${rel(abs)} (contents not read)`);
+    return;
+  }
+  ensureDir(dirname(abs), true);
+  writeFileSync(abs, `${prefix}_${randomBytes(32).toString("base64url")}\n`, { mode: 0o600 });
+  restrict(abs, false);
+  ok(`${label} created at ${rel(abs)} (owner-only)`);
+}
+
 function main() {
   console.log("Toolchain");
   checkNode();
@@ -151,6 +167,11 @@ function main() {
   ensureOwnerSecret(config.paths.ownerServiceSecret);
   for (const [service, path] of Object.entries(config.paths.serviceCredentials)) {
     reportSecretPath(`${service} credential`, path);
+  }
+  if (process.env.SUPABASE_URL) {
+    console.log("Marketplace");
+    ensureMarketplaceToken("MARKETPLACE_SELLER_HOST_TOKEN_PATH", process.env.MARKETPLACE_SELLER_HOST_TOKEN_PATH, "vsh");
+    ensureMarketplaceToken("MARKETPLACE_OPERATOR_TOKEN_PATH", process.env.MARKETPLACE_OPERATOR_TOKEN_PATH, "vop");
   }
 }
 

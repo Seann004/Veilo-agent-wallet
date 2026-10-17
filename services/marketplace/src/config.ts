@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
 import { MARKETPLACE_LIMITS } from "@veilo/contracts/marketplace";
 
 export interface MarketplaceConfig {
@@ -38,7 +41,18 @@ function list(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): MarketplaceConfig {
+/** SHA-256 of a bearer credential given directly as a hash or as an owner-only token file. */
+function tokenHash(env: NodeJS.ProcessEnv, name: string, rootDir: string): string | null {
+  const direct = env[`${name}_SHA256`]?.trim();
+  if (direct) return direct;
+  const path = env[`${name}_PATH`]?.trim();
+  if (!path) return null;
+  const abs = isAbsolute(path) ? path : join(rootDir, path);
+  if (!existsSync(abs)) throw new Error(`${name}_PATH does not exist; run pnpm setup:local`);
+  return createHash("sha256").update(readFileSync(abs, "utf8").trim()).digest("hex");
+}
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env, rootDir: string = process.cwd()): MarketplaceConfig {
   const genesisHash = required(env, "EXPECTED_DEVNET_GENESIS_HASH");
   return {
     port: Number(env.MARKETPLACE_PORT ?? 4106),
@@ -51,8 +65,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): MarketplaceCon
     genesisHash,
     mint: required(env, "DEMO_TOKEN_MINT"),
     decimals: Number(env.DEMO_TOKEN_DECIMALS ?? 6),
-    sellerHostTokenHash: env.MARKETPLACE_SELLER_HOST_TOKEN_SHA256?.trim() || null,
-    operatorTokenHash: env.MARKETPLACE_OPERATOR_TOKEN_SHA256?.trim() || null,
+    sellerHostTokenHash: tokenHash(env, "MARKETPLACE_SELLER_HOST_TOKEN", rootDir),
+    operatorTokenHash: tokenHash(env, "MARKETPLACE_OPERATOR_TOKEN", rootDir),
     managedSellerOrigin: env.MARKETPLACE_MANAGED_SELLER_ORIGIN?.trim().replace(/\/$/, "") || null,
     managedSellerIdentity: env.MARKETPLACE_MANAGED_SELLER_IDENTITY?.trim() || "veilo-seller-host-devnet",
     devSellerOrigins: list(env.MARKETPLACE_DEV_SELLER_ORIGINS),

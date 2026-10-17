@@ -33,7 +33,8 @@
     "toolchain:build": "node scripts/toolchain.mjs --build",
     "tc": "node scripts/toolchain.mjs",
     "test:marketplace-rls": "tsx scripts/marketplace/rls-e2e.ts",
-    "marketplace:devnet-smoke": "tsx scripts/marketplace/devnet-smoke.ts"
+    "marketplace:devnet-smoke": "tsx scripts/marketplace/devnet-smoke.ts",
+    "marketplace:operator": "tsx scripts/marketplace/operator.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
