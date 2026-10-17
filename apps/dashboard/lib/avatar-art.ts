@@ -57,5 +57,5 @@ export function pebbleSvg(index: number, style?: Partial<AvatarStyle>): string {
   const ribbon = style?.gender === "woman"
     ? `<g data-accessory="ribbon" transform="translate(${ribbonAnchor[0]} ${ribbonAnchor[1]}) rotate(16)"><path fill="#f7a8ca" d="M-2-3Q-16-16-15-4L-15 3Q-15 12-2 3L-6 13L0 10L6 13L2 3Q15 12 15 3L15-4Q16-16 2-3Z"/><rect x="-3" y="-5" width="6" height="10" rx="2.5" fill="#db2777"/></g>`
     : "";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 100 100"><path fill="${colour}" d="${PEBBLES[safeIndex]}${top}"/><g fill="#fff"><rect x="37" y="51" width="7" height="12" rx="3.5"/><rect x="54" y="51" width="7" height="12" rx="3.5"/></g>${ribbon}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 100 100"><path fill="${colour}" d="${PEBBLES[safeIndex]}"/>${top ? `<path fill="${colour}" d="${top}"/>` : ""}<g fill="#fff"><rect x="37" y="51" width="7" height="12" rx="3.5"/><rect x="54" y="51" width="7" height="12" rx="3.5"/></g>${ribbon}</svg>`;
 }
