@@ -10,9 +10,11 @@ import {
 } from "@veilo/contracts";
 import { MARKETPLACE_LIMITS } from "@veilo/contracts/marketplace";
 import { openControlDatabase } from "@veilo/db";
+import { McpClient } from "@veilo/mcp-client";
 import { createApp } from "./app";
 import { ServiceCredentials } from "./auth/credentials";
 import type { SessionSettings } from "./auth/session";
+import { AgentConnectors, connectorLimitsFromEnv, parseConnectorCatalog } from "./connectors/agent-connectors";
 import { createLedger } from "./context";
 import { createIntegration } from "./integration";
 import { UnavailableFundingProvider, WalletFundingProvider } from "./integration/funding";
@@ -144,8 +146,29 @@ async function main(): Promise<void> {
   await integration.orchestrator.reconcileAll();
   integration.scheduler.start();
 
+  let connectorLimits: ReturnType<typeof connectorLimitsFromEnv>;
+  try {
+    connectorLimits = connectorLimitsFromEnv(process.env);
+  } catch (error) {
+    throw new VeiloConfigError("INVALID_CONFIG", (error as Error).message);
+  }
+  const catalogClient = marketplace?.client;
+  const connectors = new AgentConnectors({
+    ledger,
+    catalog: catalogClient
+      ? async () => {
+          const r = await catalogClient.publicGet("/marketplace/connectors");
+          if (r.status !== 200) throw new Error(`marketplace connectors returned HTTP ${r.status}`);
+          return parseConnectorCatalog(r.body);
+        }
+      : undefined,
+    client: (endpoint) => new McpClient(endpoint, { publicOnly: true, timeoutMs: msEnv("CONNECTOR_CALL_TIMEOUT_MS", 20_000), maxBytes: 1_048_576, clientName: "veilo-control" }),
+    limits: connectorLimits,
+    log: (l) => console.log(`[${SERVICE}] ${l}`),
+  });
+
   const port = config.ports.control;
-  createApp(health, { ledger, session, services, integration, maxExternalBatchUsdc: BigInt(externalMaxRaw) }).listen(port, config.bindHost, () => {
+  createApp(health, { ledger, session, services, integration, connectors, maxExternalBatchUsdc: BigInt(externalMaxRaw) }).listen(port, config.bindHost, () => {
     console.log(`[${SERVICE}] listening on http://${config.bindHost}:${port} (${config.network.caip2})`);
   });
   if (process.env.VEILO_LOG_CONFIG === "1") console.log(JSON.stringify(describeConfig(config)));

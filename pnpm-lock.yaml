@@ -273,6 +273,9 @@ importers:
       '@veilo/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@veilo/mcp-client':
+        specifier: workspace:*
+        version: link:../../packages/mcp-client
       '@veilo/x402-client':
         specifier: workspace:*
         version: link:../../packages/x402-client
@@ -461,6 +464,9 @@ importers:
       '@types/node':
         specifier: 22.20.5
         version: 22.20.5
+      '@veilo/mcp-client':
+        specifier: workspace:*
+        version: link:../../packages/mcp-client
       tsx:
         specifier: 4.23.15
         version: 4.23.15

@@ -2,7 +2,9 @@ import express, { type Express, type NextFunction, type Request, type Response }
 import { AmountError, healthReport, type ServiceHealth } from "@veilo/contracts";
 import { ControlError } from "./errors";
 import type { AuthDeps } from "./http/actor";
+import type { AgentConnectors } from "./connectors/agent-connectors";
 import { agentRouter } from "./http/agent-routes";
+import { connectorRouter } from "./http/connector-routes";
 import { controlRouter } from "./http/routes";
 import { externalRouter } from "./http/external-routes";
 import { workflowRouter } from "./http/workflow-routes";
@@ -19,6 +21,8 @@ export interface ControlDeps extends AuthDeps {
   integration?: Integration | undefined;
   /** Ceiling for one external x402 batch (unit price × max calls), in base units. */
   maxExternalBatchUsdc?: bigint;
+  /** Owner-attached read-only MCP connectors; routes answer NOT_READY when absent. */
+  connectors?: AgentConnectors | undefined;
 }
 
 /**
@@ -56,6 +60,7 @@ export function createApp(health: ServiceHealth, deps?: ControlDeps): Express {
   app.use(marketplaceRouter(deps));
   app.use(externalRouter(deps));
   app.use(workflowRouter(deps));
+  app.use(connectorRouter(deps));
   app.use((_req: Request, res: Response) => {
     res.status(404).json({ error: { code: "NOT_FOUND", message: "no such endpoint" } });
   });

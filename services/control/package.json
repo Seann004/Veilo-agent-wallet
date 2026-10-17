@@ -15,6 +15,7 @@
     "@solana/kit": "5.5.1",
     "@veilo/contracts": "workspace:*",
     "@veilo/db": "workspace:*",
+    "@veilo/mcp-client": "workspace:*",
     "@veilo/x402-client": "workspace:*",
     "@x402/core": "2.28.0",
     "express": "5.3.0",

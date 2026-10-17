@@ -178,6 +178,11 @@ export async function sponsoredPlanning(
   }
 }
 
+/** Citation URL for a successful connector call; research briefs may cite only calls of their own task. */
+export function connectorCitation(connectorId: string, tool: string, callId: string): string {
+  return `mcp:${connectorId}/${tool}#call=${callId}`;
+}
+
 const URL_PATTERN = /\b(?:https?|fixture):\/\/[^\s)\]>"']+/g;
 
 /**
@@ -201,8 +206,13 @@ export function validateResearchCitations(
     const result = JSON.parse(row.result_json) as { records?: Array<{ source?: { url?: string } }> };
     for (const r of result.records ?? []) if (typeof r.source?.url === "string") evidence.add(r.source.url);
   }
+  // Free connector output is citable only from this task's own successful calls.
+  const calls = ledger.db
+    .prepare(`SELECT id, connector_id, tool FROM agent_connector_call WHERE agent_id = ? AND task_id = ? AND outcome = 'ok'`)
+    .all(agentId, a.taskId) as Array<{ id: string; connector_id: string; tool: string }>;
+  for (const c of calls) evidence.add(connectorCitation(c.connector_id, c.tool, c.id));
   for (const c of a.citations) {
-    if (!evidence.has(c.url)) throw new ControlError("POLICY_DENIED", "citation does not map to purchased evidence");
+    if (!evidence.has(c.url)) throw new ControlError("POLICY_DENIED", "citation does not map to purchased evidence or a connector call of this task");
   }
   const task = ownTask(ledger, agentId, a.taskId);
   const ownerSources = new Set<string>(((JSON.parse(task.input_json) as { sources?: string[] }).sources ?? []).map(String));

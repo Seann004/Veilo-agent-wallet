@@ -37,7 +37,7 @@ export class McpClient {
 
   constructor(
     readonly endpoint: string,
-    private readonly o: { fetch?: FetchLike; bearer?: string | undefined; timeoutMs?: number; maxBytes?: number; publicOnly?: boolean } = {},
+    private readonly o: { fetch?: FetchLike; bearer?: string | undefined; timeoutMs?: number; maxBytes?: number; publicOnly?: boolean; clientName?: string } = {},
   ) {
     this.#fetch = o.fetch ?? (o.publicOnly ? publicFetch : (u, i) => fetch(u, i));
   }
@@ -76,7 +76,7 @@ export class McpClient {
   }
 
   async initialize(): Promise<void> {
-    await this.#request("initialize", { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: "veilo-seller-host", version: "1.0.0" } });
+    await this.#request("initialize", { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: this.o.clientName ?? "veilo-seller-host", version: "1.0.0" } });
     await this.#post({ jsonrpc: "2.0", method: "notifications/initialized" });
   }
 
@@ -191,18 +191,29 @@ export async function liveToolMatches(client: McpClient, tool: Pick<McpJobTool, 
 }
 
 /**
- * Calls a pinned tool once. Only text content is kept, bounded, and returned as data; images,
- * resources and links in the reply are dropped, never fetched.
+ * Calls a pinned tool once with arguments the caller has already validated. Only text content is
+ * kept and bounded; images, resources and links in the reply are dropped, never fetched.
  */
-export async function runMcpTool(client: McpClient, tool: McpJobTool, input: string, beforeCall: () => void = () => undefined): Promise<string> {
+export async function callPinnedTool(
+  client: McpClient,
+  tool: Pick<McpJobTool, "toolName" | "toolSha256">,
+  args: Record<string, unknown>,
+  o: { beforeCall?: () => void; maxChars?: number } = {},
+): Promise<{ isError: boolean; text: string }> {
   await client.initialize();
   await liveToolMatches(client, tool);
-  beforeCall();
-  const r = await client.callTool(tool.toolName, renderArgs(tool.argsTemplate, input));
-  if (r.isError) throw new McpError("PROVIDER_FAILED", "the MCP tool reported an error");
+  o.beforeCall?.();
+  const r = await client.callTool(tool.toolName, args);
   const texts = r.content.flatMap((c) => {
     const x = c as { type?: unknown; text?: unknown };
     return x.type === "text" && typeof x.text === "string" ? [x.text] : [];
   });
-  return JSON.stringify({ untrusted: true, connector: tool.connectorId, tool: tool.toolName, text: texts.join("\n").slice(0, 64_000) });
+  return { isError: r.isError, text: texts.join("\n").slice(0, o.maxChars ?? 64_000) };
+}
+
+/** Runs a listing's pinned tool on one text input and returns its output as untrusted JSON data. */
+export async function runMcpTool(client: McpClient, tool: McpJobTool, input: string, beforeCall: () => void = () => undefined): Promise<string> {
+  const r = await callPinnedTool(client, tool, renderArgs(tool.argsTemplate, input), { beforeCall });
+  if (r.isError) throw new McpError("PROVIDER_FAILED", "the MCP tool reported an error");
+  return JSON.stringify({ untrusted: true, connector: tool.connectorId, tool: tool.toolName, text: r.text });
 }
