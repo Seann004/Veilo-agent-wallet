@@ -620,7 +620,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
         ) : null}
         {agent.role === "research" ? <ResearchForm agent={agent} disabled={!canRun} onQueued={reloadAll} /> : null}
         {agent.role === "content" ? <CampaignForm agent={agent} disabled={!canRun} handoffs={handoffs.data?.items ?? []} onQueued={reloadAll} /> : null}
-        {agent.role === "custom" ? <CustomAgentPanel agent={agent} policy={current} canRun={canRun} terminal={terminal} onChanged={reloadAll} /> : null}
+        {agent.role === "custom" ? <CustomAgentPanel part="composer" agent={agent} policy={current} canRun={canRun} terminal={terminal} onChanged={reloadAll} /> : null}
         {configure.allowed ? <AgentWorkflows agentId={agentId} /> : null}
       </section>
 
@@ -634,6 +634,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
           </div>
           <AgentControls agent={agent} onChanged={reloadAll} compact />
         </div>
+        {agent.role === "custom" ? <CustomAgentPanel part="details" agent={agent} policy={current} canRun={canRun} terminal={terminal} onChanged={reloadAll} /> : null}
 
         <div className="panel">
           <h2 className="section-title">Status</h2>

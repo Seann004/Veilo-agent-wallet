@@ -4515,3 +4515,17 @@ ul.cards {
     transition: none;
   }
 }
+
+/* A custom agent's job form stays compact under its thread. */
+.composer-custom {
+  flex: none;
+  max-height: 45%;
+  overflow-y: auto;
+  border-top: 1px solid var(--line-2);
+}
+
+.composer-custom .panel,
+.composer-custom section {
+  border: 0;
+  margin: 0;
+}

@@ -221,19 +221,22 @@ export function CustomRunForm({ agent, disabled, onQueued }: { agent: Agent; dis
     >
       <div className="field">
         <label htmlFor={ids.objective}>Job for {agent.name} *</label>
-        <textarea id={ids.objective} required rows={3} maxLength={CUSTOM_OBJECTIVE_MAX} value={objective} onChange={(e) => setObjective(e.target.value)} />
+        <textarea id={ids.objective} required rows={2} maxLength={CUSTOM_OBJECTIVE_MAX} value={objective} onChange={(e) => setObjective(e.target.value)} />
       </div>
-      <div className="field">
-        <label htmlFor={ids.context}>Context (optional)</label>
-        <textarea id={ids.context} rows={3} maxLength={CUSTOM_CONTEXT_MAX} value={context} onChange={(e) => setContext(e.target.value)} />
-      </div>
-      <div className="field">
-        <label htmlFor={ids.search}>Marketplace search terms (optional)</label>
-        <input id={ids.search} maxLength={CUSTOM_SEARCH_MAX} value={search} onChange={(e) => setSearch(e.target.value)} aria-describedby={`${ids.search}-h`} />
-        <span id={`${ids.search}-h`} className="hint">
-          Left empty, the agent chooses its own terms. Listing text it reads is untrusted.
-        </span>
-      </div>
+      <details className="advanced">
+        <summary>More options</summary>
+        <div className="field">
+          <label htmlFor={ids.context}>Context (optional)</label>
+          <textarea id={ids.context} rows={3} maxLength={CUSTOM_CONTEXT_MAX} value={context} onChange={(e) => setContext(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor={ids.search}>Marketplace search terms (optional)</label>
+          <input id={ids.search} maxLength={CUSTOM_SEARCH_MAX} value={search} onChange={(e) => setSearch(e.target.value)} aria-describedby={`${ids.search}-h`} />
+          <span id={`${ids.search}-h`} className="hint">
+            Left empty, the agent chooses its own terms. Listing text it reads is untrusted.
+          </span>
+        </div>
+      </details>
       <button type="submit" className="btn btn-primary" disabled={disabled || action.busy || objective.trim() === ""}>
         Start job
       </button>
@@ -291,18 +294,29 @@ export function CustomAgentPanel({
   canRun,
   terminal,
   onChanged,
+  part = "all",
 }: {
   agent: Agent;
   policy: AgentPolicyInput | null;
   canRun: boolean;
   terminal: boolean;
   onChanged: () => Promise<void>;
+  /** "composer" is the job form under the thread; "details" is everything else, for the side column. */
+  part?: "all" | "composer" | "details";
 }) {
   const toggle = useAction();
   const run = useCapability("run");
   const configure = useCapability("configure");
   const editable = !terminal && configure.allowed;
   const hiring = hiringAllowed(agent.activePolicy?.permissions?.allowedSkus);
+  const composer = (
+    <Section title={`New job for ${agent.name}`} id="run">
+      <CustomRunForm agent={agent} disabled={!canRun || !run.allowed} onQueued={onChanged} />
+      {!run.allowed ? <DeniedHint reason={run.reason} /> : null}
+      <p className="small muted">Each job saves its result to <Link href="/content">Content</Link>.</p>
+    </Section>
+  );
+  if (part === "composer") return <div className="composer composer-custom">{composer}</div>;
   return (
     <>
       <Section title="Instructions" id="instructions">
@@ -315,12 +329,11 @@ export function CustomAgentPanel({
         <p className="small muted">{TEMPLATE_HINT}</p>
         {editable ? <InstructionsEditor agent={agent} onSaved={onChanged} /> : null}
       </Section>
-      <Section title={`New job for ${agent.name}`} id="run">
+      {part === "all" ? composer : null}
+      <details className="advanced">
+        <summary>Running it locally</summary>
         <RunnerCredentialNote />
-        <CustomRunForm agent={agent} disabled={!canRun || !run.allowed} onQueued={onChanged} />
-        {!run.allowed ? <DeniedHint reason={run.reason} /> : null}
-        <p className="small">Each job saves its result to <Link href="/content">Content</Link> (under Research briefs).</p>
-      </Section>
+      </details>
       <Section title="Offer on the marketplace">
         <p>List these instructions as a specialist that other workspaces can hire and pay you for.</p>
         <p className="small muted">
