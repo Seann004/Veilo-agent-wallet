@@ -45,7 +45,8 @@ begin
     perform private.move_job(j, 'failed', 'failed_unpaid', 'controller', 'payment.failed_unpaid', jsonb_build_object('detail', p_detail));
   end if;
 end $$;
-drop function public.mk_controller_status(uuid, text, text, text);
+-- The superseded 4-argument version is kept but executable by no client role.
+revoke all on function public.mk_controller_status(uuid, text, text, text) from public, anon, authenticated, service_role;
 
 create or replace function public.mk_record_receipt(p_operation text, p_network text, p_signature text, p_ix integer, p_mint text, p_source text,
   p_ata text, p_amount numeric, p_slot bigint) returns jsonb
