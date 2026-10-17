@@ -1,0 +1,59 @@
+{
+  "kind": "ordinary devnet x402 exact payment (no privacy)",
+  "url": "https://x402.payai.network/api/solana-devnet/paid-content",
+  "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+  "genesisHash": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+  "mint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+  "merchant": "8sqyMHQwBh8BCXC99pdgt6BpXwLu9xqfL1hDV5SFYf3R",
+  "merchantAta": "9Nqa7t1iVubvT2vrmxAv1UAvxL9FsGvaHLVUh3DFGo2D",
+  "payer": "3FCio7smQJX7fm5x4Rz2UPPesfHA46FkexC3S3SqkMFd",
+  "payerAta": "8xGGTRNvvnSX9E6ZkRBqNjFFs36FWXr98csdScZQxj92",
+  "payerBalanceBefore": {
+    "usdcBaseUnits": "20000000",
+    "lamports": "10000000000"
+  },
+  "ceilingBaseUnits": "10000",
+  "amountBaseUnits": "10000",
+  "facilitator": "https://facilitator.payai.network",
+  "facilitatorFeePayer": "2wKupLR9q6wXYppw8Gr2NvWxKBUqm4PPJKkQfoxHDBg4",
+  "packages": {
+    "@x402/core": "2.28.0",
+    "@x402/svm": "2.28.0",
+    "@solana/kit": "5.5.1"
+  },
+  "attemptedAt": "2026-10-15T00:40:54.557Z",
+  "state": "finalized",
+  "messageHash": "crFmUT5tQJ9stWMQs8p54vtL0seavXIUvVhHaDdN90U=",
+  "httpStatus": 200,
+  "settleResponse": {
+    "success": true,
+    "transaction": "5ZVj3sdWCWaajBMQxfVEURwji3JhXsACa7uVvym2BMHNgsFwiQ2dwS4dTyLWYzixoaVVM451momocbynRmF9vf63",
+    "transactionId": "5ZVj3sdWCWaajBMQxfVEURwji3JhXsACa7uVvym2BMHNgsFwiQ2dwS4dTyLWYzixoaVVM451momocbynRmF9vf63",
+    "signature": "5ZVj3sdWCWaajBMQxfVEURwji3JhXsACa7uVvym2BMHNgsFwiQ2dwS4dTyLWYzixoaVVM451momocbynRmF9vf63",
+    "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    "payer": "3FCio7smQJX7fm5x4Rz2UPPesfHA46FkexC3S3SqkMFd"
+  },
+  "responseExcerpt": "{\"success\":true,\"transaction\":\"5ZVj3sdWCWaajBMQxfVEURwji3JhXsACa7uVvym2BMHNgsFwiQ2dwS4dTyLWYzixoaVVM451momocbynRmF9vf63\",\"transactionId\":\"5ZVj3sdWCWaajBMQxfVEURwji3JhXsACa7uVvym2BMHNgsFwiQ2dwS4dTyLWYzixoaVVM451momocbynRmF9vf63\",\"signature\":\"5ZVj3sdWCWaajBMQxfVEURwji3JhXsACa7uVvym2BMHNgsFwiQ2dwS4dTyLWYzixoaVVM451momocbynRmF9vf63\",\"network\":\"solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1\",\"payer\":\"3FCio7sm",
+  "signature": "5ZVj3sdWCWaajBMQxfVEURwji3JhXsACa7uVvym2BMHNgsFwiQ2dwS4dTyLWYzixoaVVM451momocbynRmF9vf63",
+  "explorer": "https://explorer.solana.com/tx/5ZVj3sdWCWaajBMQxfVEURwji3JhXsACa7uVvym2BMHNgsFwiQ2dwS4dTyLWYzixoaVVM451momocbynRmF9vf63?cluster=devnet",
+  "finalized": {
+    "slot": "511171050",
+    "err": null,
+    "blockTime": "1792024856",
+    "transferChecked": [
+      {
+        "authority": "3FCio7smQJX7fm5x4Rz2UPPesfHA46FkexC3S3SqkMFd",
+        "destination": "9Nqa7t1iVubvT2vrmxAv1UAvxL9FsGvaHLVUh3DFGo2D",
+        "mint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+        "source": "8xGGTRNvvnSX9E6ZkRBqNjFFs36FWXr98csdScZQxj92",
+        "tokenAmount": {
+          "amount": "10000",
+          "decimals": 6,
+          "uiAmount": 0.01,
+          "uiAmountString": "0.01"
+        }
+      }
+    ]
+  },
+  "reconciledBy": "read-only getTransaction after evidence-serialization crash"
+}
