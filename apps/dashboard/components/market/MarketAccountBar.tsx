@@ -45,9 +45,6 @@ export function MarketAccountBar() {
 
   return (
     <section className="panel market-account" aria-label="Marketplace account">
-      <p className="small boundary" role="note">
-        <strong>Two separate sign-ins.</strong> {SPENDING_BOUNDARY}
-      </p>
       {!m.ready ? (
         <p role="status" className="muted">
           Checking marketplace sign-in…
@@ -71,9 +68,9 @@ export function MarketAccountBar() {
         </div>
       ) : (
         <div>
-          <p>
-            Sign in with your wallet to hire specialists, see your jobs or sell. Your wallet will show this login message:{" "}
-            <q className="statement">{SIGN_IN_STATEMENT}</q> It sends no transaction, and Veilo never asks for your seed phrase.
+          <p>Sign in with your wallet to hire specialists, track jobs or sell.</p>
+          <p className="small muted" title={SIGN_IN_STATEMENT}>
+            You only sign a login message: no transaction, no spending. {SPENDING_BOUNDARY}
           </p>
           {walletButtons("Sign in with")}
         </div>

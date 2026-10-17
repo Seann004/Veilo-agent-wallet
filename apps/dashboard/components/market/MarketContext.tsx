@@ -63,6 +63,11 @@ export function MarketContextProvider({ value, children }: { value: MarketContex
   return <MarketContext.Provider value={value}>{children}</MarketContext.Provider>;
 }
 
+/** Failures thrown by the wallet itself (rejected, locked, malformed request) never reached a server. */
+const walletError = (e: unknown): never => {
+  throw e instanceof ApiError ? e : new ApiError(0, "WALLET_ERROR", (e as Error)?.message ?? "the wallet did not sign");
+};
+
 const asApiError = (e: unknown): ApiError => (e instanceof ApiError ? e : new ApiError(0, "INTERNAL_ERROR", (e as Error)?.message ?? "unexpected error"));
 
 /**
@@ -165,11 +170,11 @@ export function MarketProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(
     async (w: OwnerWallet) => {
-      const account = await connect(w.wallet);
+      const account = await connect(w.wallet).catch(walletError);
       const auth = supabase().auth;
       // A different address never inherits the current session.
       if (meRef.current && meRef.current.address !== account.address) await auth.signOut();
-      const { error } = await auth.signInWithWeb3({ chain: "solana", statement: SIGN_IN_STATEMENT, wallet: web3SignInAdapter(w.wallet, account) });
+      const { error } = await auth.signInWithWeb3({ chain: "solana", statement: SIGN_IN_STATEMENT, wallet: web3SignInAdapter(w.wallet, account) }).catch(walletError);
       if (error) throw new ApiError(error.status ?? 401, "UNAUTHENTICATED", error.message);
       const t = await accessToken();
       if (!t) throw new ApiError(401, "UNAUTHENTICATED", "sign-in returned no session");

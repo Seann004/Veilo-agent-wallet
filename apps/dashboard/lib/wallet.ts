@@ -1,7 +1,16 @@
 "use client";
 
 import { getBase58Decoder } from "@solana/kit";
-import { SolanaSignAndSendTransaction, SolanaSignMessage, type SolanaSignAndSendTransactionFeature, type SolanaSignMessageFeature } from "@solana/wallet-standard-features";
+import {
+  SolanaSignAndSendTransaction,
+  SolanaSignIn,
+  SolanaSignMessage,
+  type SolanaSignAndSendTransactionFeature,
+  type SolanaSignInFeature,
+  type SolanaSignInInput,
+  type SolanaSignInOutput,
+  type SolanaSignMessageFeature,
+} from "@solana/wallet-standard-features";
 import { getWallets } from "@wallet-standard/app";
 import type { Wallet, WalletAccount } from "@wallet-standard/base";
 import { StandardConnect, StandardEvents, type StandardConnectFeature, type StandardEventsFeature } from "@wallet-standard/features";
@@ -57,14 +66,44 @@ export async function signMessageBytes(w: Wallet, account: WalletAccount, messag
   return out.signature;
 }
 
+interface SignInResult {
+  account: { address: string; publicKey: Uint8Array; chains: SolanaSignInOutput["account"]["chains"]; features: SolanaSignInOutput["account"]["features"] };
+  signedMessage: Uint8Array;
+  signature: Uint8Array;
+}
+
+export interface Web3SignInWallet {
+  publicKey: { toBase58: () => string };
+  signMessage: (message: Uint8Array) => Promise<Uint8Array>;
+  signIn?: (input: SolanaSignInInput) => Promise<SignInResult>;
+}
+
 /**
- * Adapter for Supabase Web3 sign-in: exposes only the public key and message signing. It can
- * sign a login message; it has no way to sign or send a transaction.
+ * Adapter for Supabase Web3 sign-in: exposes only the public key, message signing and Sign In
+ * With Solana. It can sign a login message; it has no way to sign or send a transaction.
+ * Wallets that implement solana:signIn build the login message themselves; Phantom rejects a
+ * Sign In With Solana message passed to plain signMessage as invalid formatting.
  */
-export function web3SignInAdapter(w: Wallet, account: WalletAccount): { publicKey: { toBase58: () => string }; signMessage: (message: Uint8Array) => Promise<Uint8Array> } {
+export function web3SignInAdapter(w: Wallet, account: WalletAccount): Web3SignInWallet {
+  const signIn = (w.features as Partial<SolanaSignInFeature>)[SolanaSignIn];
   return {
     publicKey: { toBase58: () => account.address },
     signMessage: (message: Uint8Array) => signMessageBytes(w, account, message),
+    ...(signIn
+      ? {
+          signIn: async (input: SolanaSignInInput): Promise<SignInResult> => {
+            const [out] = await signIn.signIn({ ...input, address: account.address });
+            if (!out) throw new Error("the wallet returned no sign-in");
+            // The session belongs to whichever account signed, so it must be the connected one.
+            if (out.account.address !== account.address) throw new Error("the wallet signed in with a different account");
+            return {
+              account: { address: out.account.address, publicKey: new Uint8Array(out.account.publicKey), chains: out.account.chains, features: out.account.features },
+              signedMessage: new Uint8Array(out.signedMessage),
+              signature: new Uint8Array(out.signature),
+            };
+          },
+        }
+      : {}),
   };
 }
 
