@@ -57,7 +57,7 @@ export function OwnerProvider({ value, children }: { value: OwnerContextValue; c
 /** Sidebar entries; the last column lists other paths that count as the same section. */
 const NAV: Array<[string, string, IconName, string[]]> = [
   ["/workspace", "Workspace", "home", []],
-  ["/market", "Marketplace", "store", []],
+  ["/market", "Catalog", "store", []],
   ["/connectors", "Connectors", "plug", []],
   ["/activity", "Activity", "activity", []],
   ["/content", "Content", "content", []],
@@ -66,26 +66,43 @@ const NAV: Array<[string, string, IconName, string[]]> = [
 
 const inSection = (pathname: string | null, href: string, also: string[]) => [href, ...also].some((h) => pathname?.startsWith(h));
 
-const MARKET_NAV: Array<[string, string]> = [
-  ["/marketplace", "Workflows"],
-  ["/marketplace/create", "Create"],
-  ["/marketplace/tools", "Tools"],
-  ["/marketplace/runs", "Runs"],
-  ["/marketplace/specialists", "Specialists"],
-  ["/marketplace/jobs", "Jobs"],
-  ["/marketplace/seller", "Seller"],
-  ["/marketplace/agents", "Agents"],
-  ["/marketplace/approvals", "Local approval"],
+/** Marketplace sections in the sidebar; each page shows its section's tabs. Browse is the default. */
+const MARKET_GROUPS: Array<{ label: string; tabs: Array<[string, string]> }> = [
+  { label: "Browse", tabs: [["/marketplace", "Workflows"], ["/marketplace/specialists", "Specialists"], ["/marketplace/tools", "Tools"], ["/marketplace/agents", "Agents"]] },
+  { label: "Activity", tabs: [["/marketplace/runs", "Runs"], ["/marketplace/jobs", "Jobs"]] },
+  { label: "Sell", tabs: [["/marketplace/seller", "Seller"], ["/marketplace/create", "Create a workflow"]] },
+  { label: "Approvals", tabs: [["/marketplace/approvals", "Approvals"]] },
 ];
+
+const underPath = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
+
+function marketGroup(pathname: string | null): (typeof MARKET_GROUPS)[number] | null {
+  if (!isMarketplacePath(pathname)) return null;
+  return MARKET_GROUPS.find((g) => g.tabs.some(([h]) => h !== "/marketplace" && underPath(pathname!, h))) ?? MARKET_GROUPS[0]!;
+}
+
+function marketTabCurrent(pathname: string, href: string): boolean {
+  if (href !== "/marketplace") return underPath(pathname, href);
+  return !MARKET_GROUPS.flatMap((g) => g.tabs).some(([h]) => h !== "/marketplace" && underPath(pathname, h));
+}
+
+function MarketTabs({ pathname }: { pathname: string | null }) {
+  const group = marketGroup(pathname);
+  if (!group || group.tabs.length < 2) return null;
+  return (
+    <nav className="tabs" aria-label={`${group.label} sections`}>
+      {group.tabs.map(([href, label]) => (
+        <Link key={href} href={href} aria-current={marketTabCurrent(pathname!, href) ? "page" : undefined}>
+          {label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
 
 /** Marketplace pages carry their own sign-in and never need the local owner session to render. */
 export const isMarketplacePath = (pathname: string | null): boolean => pathname === "/marketplace" || (pathname?.startsWith("/marketplace/") ?? false);
 
-function marketCurrent(pathname: string | null, href: string): boolean {
-  if (!pathname) return false;
-  if (href === "/marketplace") return isMarketplacePath(pathname) && !MARKET_NAV.slice(1).some(([h]) => pathname === h || pathname.startsWith(`${h}/`));
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
 
 function AgentList({ agents, stopped, query, pathname }: { agents: Agent[]; stopped: boolean; query: string; pathname: string | null }) {
   const q = query.trim().toLowerCase();
@@ -273,9 +290,9 @@ export function Shell({ children }: { children: ReactNode }) {
               Open marketplace
             </p>
             <ul>
-              {MARKET_NAV.map(([href, label]) => (
-                <li key={href}>
-                  <Link href={href} aria-current={marketCurrent(pathname, href) ? "page" : undefined} title={label}>
+              {MARKET_GROUPS.map(({ label, tabs }) => (
+                <li key={label}>
+                  <Link href={tabs[0]![0]} aria-current={marketGroup(pathname)?.label === label ? "page" : undefined} title={label}>
                     <Icon name="store" />
                     <span className="nav-label">{label}</span>
                   </Link>
@@ -351,6 +368,7 @@ export function Shell({ children }: { children: ReactNode }) {
               </div>
             ) : null}
             {session.error ? <ErrorNotice error={session.error} what="your session could not be confirmed; showing read-only controls" onRetry={reloadAccess} /> : null}
+            <MarketTabs pathname={pathname} />
             {children}
           </main>
           {network}
