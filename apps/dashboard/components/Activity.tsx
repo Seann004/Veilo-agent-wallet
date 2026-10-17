@@ -6,6 +6,7 @@ import { credits, lamports, shortKey, usdc, when } from "../lib/format";
 import { LEG_LABEL, LABEL_CREDITS_NO_CHARGE, legStateLabel, purchaseLabel } from "../lib/labels";
 import type { Activity, Agent, AuditEvent, PaymentStates, Purchase, Workspace } from "../lib/types";
 import { useAction } from "./hooks";
+import { StateStrip } from "./StateStrip";
 import { ErrorNotice, KV, TxLink } from "./ui";
 
 const LEGS: Array<keyof PaymentStates> = ["authorization", "funding", "merchant", "fulfilment", "recovery"];
@@ -28,11 +29,28 @@ export function ActivityDrawer({
   onChanged: () => void | Promise<void>;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
   const action = useAction();
   useEffect(() => {
     closeRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab" || !drawerRef.current) return;
+      const items = [...drawerRef.current.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex='-1'])")];
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (!first || !last) return;
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !drawerRef.current.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !drawerRef.current.contains(active))) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -53,7 +71,7 @@ export function ActivityDrawer({
     });
   return (
     <div className="drawer-backdrop" onClick={onClose}>
-      <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>
+      <aside ref={drawerRef} className="drawer" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>
         <div className="panel-head">
           <h2 id={titleId}>
             {purchase.sku} · {agent?.name ?? "unknown agent"}
@@ -65,6 +83,7 @@ export function ActivityDrawer({
         <p className="status-line">
           <strong>{purchaseLabel(purchase, { agentStopped: agentStopped(agent, workspace.workspace.stopped) })}</strong>
         </p>
+        <StateStrip purchase={purchase} />
         <h3>Payment legs</h3>
         <ol className="legs">
           {LEGS.map((leg) => (
@@ -156,7 +175,7 @@ export function ActivityList({ activity, workspace, onChanged, limit }: { activi
     setOpenId(null);
     if (id) triggers.current.get(id)?.focus();
   };
-  if (purchases.length === 0) return <p className="muted">No purchases recorded yet.</p>;
+  if (purchases.length === 0) return <p className="muted">No purchases recorded yet. Payments appear here once an agent buys a service: activate the workspace and agent policies, then run Prince or Mira from Overview, or let Shawn check credits.</p>;
   return (
     <>
       <ul className="activity">
@@ -179,6 +198,7 @@ export function ActivityList({ activity, workspace, onChanged, limit }: { activi
                 <span className="activity-label">{purchaseLabel(p, { agentStopped: agentStopped(agent, workspace.workspace.stopped) })}</span>
                 <span className="muted small">{when(p.createdAt)}</span>
               </button>
+              <StateStrip purchase={p} />
             </li>
           );
         })}
@@ -189,7 +209,7 @@ export function ActivityList({ activity, workspace, onChanged, limit }: { activi
 }
 
 export function EventLog({ events }: { events: AuditEvent[] }) {
-  if (events.length === 0) return <p className="muted">No events yet.</p>;
+  if (events.length === 0) return <p className="muted">No audit events yet. Policy changes, stops and purchase decisions are recorded here.</p>;
   return (
     <div className="table-wrap">
       <table>

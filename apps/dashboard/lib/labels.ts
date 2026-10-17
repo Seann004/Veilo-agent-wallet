@@ -81,3 +81,77 @@ export const REVIEW_LABEL: Record<string, string> = {
   approved_for_export: "Approved for export",
   archived: "Archived",
 };
+
+export type StateTone = "ok" | "wait" | "problem" | "idle";
+export interface StateSummary {
+  group: "Payment" | "Fulfilment" | "Recovery";
+  tone: StateTone;
+  text: string;
+}
+
+/**
+ * Three independent owner-facing summaries derived from the leg states. An unknown outcome stays
+ * "uncertain" (tone wait); only a proven outcome is shown as problem.
+ */
+export function stateSummaries(p: Pick<Purchase, "states" | "paymentPath">): [StateSummary, StateSummary, StateSummary] {
+  const s = p.states;
+  const prepaid = p.paymentPath === "prepaid_credits";
+  let payment: Omit<StateSummary, "group">;
+  if (s.authorization === "rejected") payment = { tone: "idle", text: "Not paid: rejected by policy" };
+  else if (s.authorization === "awaiting_approval") payment = { tone: "wait", text: "Not paid yet: awaiting your approval" };
+  else if (prepaid) payment = { tone: "idle", text: "Prepaid credits: no on-chain payment for this call" };
+  else if (s.merchant === "finalized") payment = { tone: "ok", text: "Paid on-chain: merchant settlement finalized" };
+  else if (s.merchant === "uncertain") payment = { tone: "wait", text: "Uncertain: the payment may have settled, checking the chain" };
+  else if (s.merchant === "submitted" || s.merchant === "signed") payment = { tone: "wait", text: "Waiting for confirmation: merchant payment signed or submitted" };
+  else if (s.merchant === "expired_unsettled") payment = { tone: "problem", text: "Not paid: signed payment expired unsettled (proven)" };
+  else if (s.funding === "uncertain") payment = { tone: "wait", text: "Uncertain: pool withdrawal outcome unknown, checking the chain" };
+  else if (s.funding === "proof_released" || s.funding === "submitted") payment = { tone: "wait", text: "Waiting for confirmation: pool withdrawal in flight" };
+  else if (s.funding === "expired_unsettled") payment = { tone: "problem", text: "Not funded: pool withdrawal expired unsettled (proven)" };
+  else if (s.funding === "finalized") payment = { tone: "wait", text: "Fresh wallet funded; merchant not paid yet" };
+  else if (s.merchant === "abandoned" || s.funding === "abandoned") payment = { tone: "idle", text: "Not paid: abandoned before any payment" };
+  else payment = { tone: "idle", text: "Not paid yet: reserved only" };
+
+  let fulfilment: Omit<StateSummary, "group">;
+  switch (s.fulfilment) {
+    case "delivered":
+      fulfilment = { tone: "ok", text: "Result delivered" };
+      break;
+    case "in_progress":
+      fulfilment = { tone: "wait", text: "In progress" };
+      break;
+    case "uncertain":
+      fulfilment = { tone: "wait", text: "Uncertain: checking with the gateway" };
+      break;
+    case "paid_without_result":
+      fulfilment = { tone: "problem", text: "Paid but no result delivered" };
+      break;
+    case "abandoned":
+      fulfilment = { tone: "idle", text: "Abandoned; nothing delivered" };
+      break;
+    default:
+      fulfilment = { tone: "idle", text: "Not started" };
+  }
+
+  let recovery: Omit<StateSummary, "group">;
+  switch (s.recovery) {
+    case "recovered":
+      recovery = { tone: "ok", text: "Recovered to owner account" };
+      break;
+    case "recoverable":
+      recovery = { tone: "wait", text: "Recoverable: owner action needed" };
+      break;
+    case "recovery_submitted":
+      recovery = { tone: "wait", text: "Recovery submitted; waiting for confirmation" };
+      break;
+    case "uncertain":
+      recovery = { tone: "wait", text: "Uncertain: recovery outcome unknown, checking the chain" };
+      break;
+    default:
+      recovery = { tone: "idle", text: "Nothing to recover" };
+  }
+  return [
+    { group: "Payment", ...payment },
+    { group: "Fulfilment", ...fulfilment },
+    { group: "Recovery", ...recovery },
+  ];
+}

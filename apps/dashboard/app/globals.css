@@ -122,7 +122,9 @@ body {
 }
 
 .nav a {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
   padding: 0.4rem 0.7rem;
   border-radius: 6px;
   color: var(--text);
@@ -260,7 +262,7 @@ h3 {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  min-height: 2.25rem;
+  min-height: 2.5rem;
   padding: 0.35rem 0.8rem;
   border: 1px solid #aeb4c0;
   border-radius: 6px;
@@ -291,7 +293,7 @@ h3 {
 }
 
 .btn-small {
-  min-height: 1.9rem;
+  min-height: 2.5rem;
   font-size: 0.8rem;
 }
 
@@ -646,7 +648,53 @@ legend {
   border-bottom: 1px solid #eef0f3;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
 @media (max-width: 640px) {
+  .topbar {
+    padding: 0.5rem 0.6rem;
+  }
+
+  .badge {
+    border-radius: 12px;
+    font-size: 0.8rem;
+  }
+
+  .nav ul {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 0.3rem 0.6rem;
+  }
+
+  .nav a {
+    white-space: nowrap;
+  }
+
+  .confirm {
+    display: flex;
+    width: 100%;
+  }
+
+  .panel-head .btn,
+  .actions .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .drawer {
+    padding: 0.75rem;
+  }
+
+  .inference-label {
+    padding: 0.4rem 0.6rem;
+  }
+
   .kv-row,
   .leg {
     grid-template-columns: 1fr;
@@ -662,5 +710,82 @@ legend {
 
   main {
     padding: 0.6rem;
+  }
+}
+
+/* Payment, fulfilment and recovery states */
+.state-strip {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+  padding: 0;
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.82rem;
+}
+
+.state {
+  border-left: 4px solid #c3c7d0;
+  background: #f8f9fb;
+  padding: 0.25rem 0.5rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.state-group {
+  display: block;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.state-ok {
+  border-left-color: var(--ok);
+}
+
+.state-wait {
+  border-left-color: #d08a00;
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.state-problem {
+  border-left-color: var(--danger);
+  background: var(--danger-bg);
+  color: #5d0711;
+}
+
+.meter {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+}
+
+.meter h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.meter-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0.2rem 0;
+  overflow-wrap: anywhere;
+}
+
+.notice-help {
+  margin: 0.3rem 0;
+}
+
+.empty {
+  padding: 0.5rem 0;
+}
+
+@media (max-width: 900px) {
+  .state-strip {
+    grid-template-columns: 1fr;
   }
 }
