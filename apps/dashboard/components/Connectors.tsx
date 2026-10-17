@@ -11,8 +11,8 @@ import { DeniedHint, EmptyState, ErrorNotice, Loading } from "./ui";
 
 type Tab = "yours" | "discover";
 const TABS: Array<[Tab, string]> = [
-  ["yours", "Yours"],
   ["discover", "Discover"],
+  ["yours", "Yours"],
 ];
 
 function Tabs({ tab, onChange, ids }: { tab: Tab; onChange: (t: Tab) => void; ids: Record<Tab, { tab: string; panel: string }> }) {
@@ -313,12 +313,14 @@ function Yours({ connectors, map, mapError, mapLoading, reloadMap, isOwner, quer
         </h2>
         {attached}
       </section>
-      <section className="connector-section" aria-labelledby="yours-proposals">
-        <h2 id="yours-proposals" className="section-title">
-          Your proposals
-        </h2>
-        <Proposals query={query} />
-      </section>
+      {hasMarketplaceSignIn() ? (
+        <section className="connector-section" aria-labelledby="yours-proposals">
+          <h2 id="yours-proposals" className="section-title">
+            Your proposals
+          </h2>
+          <Proposals query={query} />
+        </section>
+      ) : null}
     </>
   );
 }

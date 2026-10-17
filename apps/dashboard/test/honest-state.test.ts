@@ -22,7 +22,7 @@ describe("backend truth in summaries and errors", () => {
   it("reports the task state, not the job lease outcome, and lists unpurchased services", () => {
     const task = { id: "t1", state: "incomplete" } as Task;
     const s = summarizeResult(job({ artifactId: "x", paid: [{ sku: "research-basic", outcome: "not purchased (SERVICE_NOT_ALLOWED)" }] }), task);
-    expect(s).toBe("Stopped part-way · Research data: not purchased (SERVICE_NOT_ALLOWED) · Saved to Outputs");
+    expect(s).toBe("Stopped part-way · Research data: not purchased (not allowed by its limits) · Saved to Outputs");
     expect(s).not.toContain("completed");
     expect(summarizeResult(job({ decision: "paused_after_rejection", detail: "waiting" }, null))).toBe("paused_after_rejection: waiting");
     expect(summarizeResult(undefined)).toBe("No result yet");

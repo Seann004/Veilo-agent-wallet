@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Fragment, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { api } from "../lib/api";
 import { useAgentAvatar, setAgentAvatar } from "../lib/avatars";
-import { credits, parseUsdcInput, usdc, when } from "../lib/format";
+import { parseUsdcInput, usdc, when } from "../lib/format";
 import { REVIEW_LABEL, ROLE_LABEL, agentStateLabel, purchaseLabel, runBlockedReason, skuLabel, taskStateLabel } from "../lib/labels";
 import type { Activity, Agent, Balances, ContentItem, Handoff, Job, LimitUsage, Purchase, Task } from "../lib/types";
 import { ActivityDrawer } from "./Activity";
@@ -345,6 +345,12 @@ function ResultText({ text }: { text: string }) {
   );
 }
 
+/** The part of an output meant for the owner: everything before its "Details" footer, kept short. */
+function answerOf(content: string): string {
+  const body = content.split(/\n\s*Details\n/)[0]!.trim();
+  return body.length > 900 ? `${body.slice(0, 899)}…` : body;
+}
+
 /** Thread entries come only from recorded tasks, finished jobs, purchases and saved content. */
 function buildThread(
   tasks: Task[],
@@ -369,7 +375,9 @@ function buildThread(
       ),
     });
   }
-  for (const j of jobs.filter((x) => x.state === "completed" || x.state === "failed")) {
+  // A finished job that saved an output is shown by that output; the rest say how they ended.
+  const shown = new Set(items.map((c) => c.taskId));
+  for (const j of jobs.filter((x) => (x.state === "completed" || x.state === "failed") && !(x.state === "completed" && x.taskId && shown.has(x.taskId) && tasks.find((t) => t.id === x.taskId)?.state === "completed"))) {
     out.push({
       at: j.updatedAt,
       key: `j-${j.id}`,
@@ -393,7 +401,7 @@ function buildThread(
             </span>
             <span className="attachment-text">
               <strong>
-                {skuLabel(p.sku)} · {p.paymentPath === "prepaid_credits" ? credits(p.usage.amount) : usdc(p.price.amount)}
+                {skuLabel(p.sku)} · {p.paymentPath === "prepaid_credits" ? "prepaid AI credits" : usdc(p.price.amount)}
               </strong>
               <span>{purchaseLabel(p, { agentStopped })}</span>
             </span>
@@ -404,21 +412,17 @@ function buildThread(
     });
   }
   for (const c of items) {
+    const answer = c.kind === "content_calendar" ? "" : answerOf(c.content);
     out.push({
       at: c.createdAt,
       key: `c-${c.id}`,
       node: (
-        <li className="thread-item">
-          <Link href="/outputs" className="attachment">
-            <span className="attachment-icon">
-              <Icon name="file" />
-            </span>
-            <span className="attachment-text">
-              <strong>{c.title}</strong>
-              <span>{REVIEW_LABEL[c.reviewState] ?? c.reviewState}</span>
-            </span>
-            <Icon name="arrow" size={16} />
-          </Link>
+        <li className="bubble bubble-agent bubble-answer">
+          <strong className="bubble-title">{c.title}</strong>
+          {answer ? <span className="plain-text">{answer}</span> : null}
+          <span className="bubble-meta">
+            {REVIEW_LABEL[c.reviewState] ?? c.reviewState} · <Link href="/outputs">Open in Outputs</Link>
+          </span>
         </li>
       ),
     });

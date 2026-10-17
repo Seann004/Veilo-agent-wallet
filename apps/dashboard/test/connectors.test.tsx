@@ -166,7 +166,7 @@ describe("Discover", () => {
     expect(yours.getAttribute("aria-selected")).toBe("true");
     expect(document.activeElement).toBe(yours);
     expect(screen.getByRole("tabpanel", { name: "Yours" })).toBeTruthy();
-    fireEvent.keyDown(yours, { key: "End" });
+    fireEvent.keyDown(yours, { key: "Home" });
     expect(screen.getByRole("tab", { name: "Discover" }).getAttribute("aria-selected")).toBe("true");
   });
 });
@@ -330,7 +330,8 @@ describe("not available yet", () => {
     render(withRole(<ConnectorsPage />));
     fireEvent.click(screen.getByRole("tab", { name: "Yours" }));
     expect(await screen.findByText("Not available yet.")).toBeTruthy();
-    expect(screen.getByText(/proposals appear here once marketplace sign-in/)).toBeTruthy();
+    // Without marketplace sign-in there are no proposals to list, so the section is not shown.
+    expect(screen.queryByText("Your proposals")).toBeNull();
   });
 
   it("lists attached connectors with tool chips and opens the picker with only unattached ones", async () => {

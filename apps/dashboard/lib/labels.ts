@@ -224,3 +224,26 @@ const TASK_STATE: Record<string, string> = {
   cancelled: "Cancelled",
 };
 export const taskStateLabel = (state: string): string => TASK_STATE[state] ?? state.replace(/_/g, " ");
+
+const CODE_TEXT: Record<string, string> = {
+  BUDGET_EXCEEDED: "over its budget",
+  SERVICE_NOT_ALLOWED: "not allowed by its limits",
+  POLICY_DENIED: "not allowed",
+  ACCOUNT_STOPPED: "agent is off",
+  NOT_READY: "not ready yet",
+  PROVIDER_UNAVAILABLE: "service unavailable",
+};
+
+/** Replaces "(CODE: technical message)" in an outcome with a plain reason. */
+export const plainOutcome = (text: string): string =>
+  text.replace(/\(([A-Z][A-Z_]+)(?::[^)]*)?\)/g, (_, code: string) => `(${CODE_TEXT[code] ?? code.toLowerCase().replace(/_/g, " ")})`);
+
+/**
+ * A payment with nothing left to happen: delivered and settled on chain, or abandoned before any
+ * money moved, with no recovery under way. Anything else still shows where it stands.
+ */
+export function isSettled(st: { authorization: string; merchant: string; fulfilment: string; recovery: string }): boolean {
+  if (st.recovery !== "none" || st.authorization !== "released") return false;
+  if (st.fulfilment === "delivered") return st.merchant === "finalized";
+  return st.fulfilment === "abandoned" && st.merchant === "not_started";
+}

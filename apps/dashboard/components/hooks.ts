@@ -22,17 +22,24 @@ export function usePolling(refresh: () => Promise<void>, key: string, enabled = 
     if (!enabled) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
+    // Browsers mark covered or background windows hidden; keep checking there, just less often.
+    const next = () => (document.hidden ? intervalMs * 4 : intervalMs);
     const poll = async () => {
+      clearTimeout(timer);
       try {
-        if (!document.hidden) await latest.current();
+        await latest.current();
       } catch {
         // Resource reloads surface their own errors; a failed refresh must not stop polling.
       } finally {
-        if (active) timer = setTimeout(() => { void poll(); }, intervalMs);
+        if (active) timer = setTimeout(() => { void poll(); }, next());
       }
     };
-    timer = setTimeout(() => { void poll(); }, intervalMs);
-    return () => { active = false; clearTimeout(timer); };
+    const onVisible = () => {
+      if (!document.hidden) void poll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    timer = setTimeout(() => { void poll(); }, next());
+    return () => { active = false; clearTimeout(timer); document.removeEventListener("visibilitychange", onVisible); };
   }, [key, enabled, intervalMs]);
 }
 

@@ -13,13 +13,6 @@ import { useMarket } from "./MarketContext";
 import { Address, creatorAvatar, DetailHeader, DetailSections, FullValue, Money, PlainText, TestTokenNote, type DetailSection } from "./parts";
 import { Select } from "../Select";
 
-const KIND_LABEL: Record<string, string> = {
-  managed_template: "Managed template (Veilo-hosted inference)",
-  remote_endpoint: "Seller endpoint",
-  provider_adapter: "Provider adapter on the seller's host",
-  external_x402: "External x402 resource",
-};
-
 function willAndWont(w: WorkflowEntry): { will: string[]; wont: string[] } {
   const drafts = w.steps.some((s) => s.effect === "draft_external");
   return {
@@ -112,12 +105,9 @@ export function WorkflowDetail({ slug }: { slug: string }) {
                   </p>
                   <KV
                     rows={[
-                      ["Kind", KIND_LABEL[s.kind] ?? s.kind],
                       ["By", <PlainText key="by" text={s.sellerName ?? "—"} inline />],
-                      ["Price (step maximum)", <Money key="p" amount={s.priceBaseUnits} decimals={decimals} />],
-                      ["Recipient", s.recipient ? <Address key="r" value={s.recipient} /> : "—"],
-                      ["Inputs", Object.entries(s.inputs).map(([k, v]) => `${k} ← ${v.from === "step" ? `step ${v.step + 1} output` : v.from === "run_input" ? `your input “${v.name}”` : "fixed text"}`).join("; ") || "—"],
-                      ["Output", s.output?.kind ?? "—"],
+                      ["Up to", <Money key="p" compact amount={s.priceBaseUnits} decimals={decimals} />],
+                      ["Paid to", s.recipient ? <Address key="r" value={s.recipient} /> : "—"],
                     ]}
                   />
                 </div>
@@ -188,7 +178,7 @@ function RunOnce({ w }: { w: WorkflowEntry }) {
   const agentOptions = [{ value: "", label: "Choose an agent" }, ...agents.map((a) => ({ value: a.id, label: a.name }))];
   return (
     <div className="stack">
-      <p className="small">This prepares the run in your local control service. Nothing is paid until you approve the exact steps, recipients and total below.</p>
+      <p className="small">Nothing is paid until you approve the exact steps and total.</p>
       <ErrorNotice error={ws.error} what="your local agents could not be loaded (sign in to the local dashboard first)" />
       <ErrorNotice error={act.error} what="the run could not be prepared or approved" />
       {!prepared ? (
@@ -266,7 +256,7 @@ function AddToAgent({ w }: { w: WorkflowEntry }) {
   return (
     <div className="stack">
       <p className="small">
-        The agent may propose runs of this version. Proposals within the budget start without asking again; anything else waits for you. Agents can never raise the budget.
+        The agent can run this workflow on its own, within the budget you set here.
       </p>
       <ErrorNotice error={act.error} what="the assignment could not be saved" />
       {done ? (

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../lib/api";
 import { credits, lamports, shortKey, usdc, when } from "../lib/format";
-import { LEG_LABEL, LABEL_CREDITS_NO_CHARGE, legStateLabel, purchaseLabel, reasonGuidance, skuLabel } from "../lib/labels";
+import { LEG_LABEL, LABEL_CREDITS_NO_CHARGE, legStateLabel, isSettled, purchaseLabel, reasonGuidance, skuLabel } from "../lib/labels";
 import { hostOf } from "../lib/connectors";
 import type { Activity, Agent, AuditEvent, PaymentStates, Purchase, Workspace } from "../lib/types";
 import { useCapability } from "./Shell";
@@ -88,7 +88,7 @@ export function ActivityDrawer({
         </p>
         <KV
           rows={[
-            ["Amount", prepaid ? credits(purchase.usage.amount) : usdc(purchase.price.amount)],
+            ["Amount", prepaid ? `Prepaid AI credits (${credits(purchase.usage.amount)})` : usdc(purchase.price.amount)],
             ["Paid by", agent?.name ?? "unknown agent"],
             ["Paid to", service ? hostOf(service.origin) : shortKey(purchase.serviceId)],
             ["Why", purchase.rationale ?? <span className="muted">no reason given</span>],
@@ -165,14 +165,17 @@ export function ActivityDrawer({
               </button>
             </>
           ) : null}
-          <button
-            type="button"
-            className="btn"
-            disabled={action.busy || !decide.allowed}
-            onClick={() => post("reconcile", {})}
-          >
-            Check status again
-          </button>
+          {/* Re-checking only helps while the outcome is still open. */}
+          {isSettled(purchase.states) ? null : (
+            <button
+              type="button"
+              className="btn"
+              disabled={action.busy || !decide.allowed}
+              onClick={() => post("reconcile", {})}
+            >
+              Check status again
+            </button>
+          )}
         </div>
         <DeniedHint reason={decide.reason} />
         <ErrorNotice error={action.error} />
@@ -209,13 +212,12 @@ export function ActivityList({ activity, workspace, onChanged, limit }: { activi
                 aria-haspopup="dialog"
               >
                 <span className="activity-main">
-                  <strong>{agent?.name ?? "agent"}</strong> · {skuLabel(p.sku)} · {p.paymentPath === "prepaid_credits" ? credits(p.usage.amount) : usdc(p.price.amount)}
+                  <strong>{agent?.name ?? "agent"}</strong> · {skuLabel(p.sku)} · {p.paymentPath === "prepaid_credits" ? "prepaid AI credits" : usdc(p.price.amount)}
                 </span>
                 <span className="activity-label">{purchaseLabel(p, { agentStopped: agentStopped(agent, workspace.workspace.stopped) })}</span>
                 <span className="muted small">{when(p.createdAt)}</span>
               </button>
-              {/* A settled, delivered payment needs no detail here; anything else shows where it stands. */}
-              {p.states.fulfilment === "delivered" && p.states.recovery === "none" ? null : <StateStrip purchase={p} />}
+              {isSettled(p.states) ? null : <StateStrip purchase={p} />}
             </li>
           );
         })}

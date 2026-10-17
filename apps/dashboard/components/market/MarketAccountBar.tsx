@@ -69,7 +69,7 @@ export function MarketAccountBar() {
       ) : (
         <div className="account-row">
           <p className="small muted account-who" title={`${SIGN_IN_STATEMENT} ${SPENDING_BOUNDARY}`}>
-            Sign in to hire, track jobs or sell. You only sign a login message: no transaction, no spending.
+            Hiring and selling use a separate marketplace sign-in. It's a login message only, nothing is spent.
           </p>
           {walletButtons("Sign in with")}
         </div>

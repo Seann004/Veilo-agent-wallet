@@ -60,7 +60,6 @@ export function withHiring(p: AgentPolicyInput, on: boolean): AgentPolicyInput {
 export const grantBody = (g: Pick<GrantDraft, "listingId" | "recipient" | "maxTotalUnits">) => ({ listingId: g.listingId, recipient: g.recipient, maxTotalUnits: g.maxTotalUnits });
 
 const TEMPLATE_OPTIONS = AGENT_TEMPLATES.map((t) => ({ value: t, label: TEMPLATE_LABEL[t] }));
-const TEMPLATE_HINT = "Stored with the agent. The runner currently follows your instructions only; the template does not change its tools or limits.";
 
 /** Shown wherever a task for a dashboard-created agent could otherwise look stuck. */
 export function RunnerCredentialNote() {
@@ -76,9 +75,7 @@ export function RunnerCredentialNote() {
 function HiringCopy() {
   return (
     <p className="small">
-      The agent does the work itself when it can, and may propose one specialist per task when it needs outside help. Off: it can never pay a specialist. On:
-      each hire waits for your approval in <Link href="/marketplace/approvals">Marketplace → Approvals</Link>, unless you pre-approve that listing below,
-      and every payment stays inside this agent&apos;s spending policy and the workspace limits.
+      Each hire waits for your OK in <Link href="/marketplace/approvals">Approvals</Link>, and stays within this agent&apos;s limits.
     </p>
   );
 }
@@ -92,9 +89,6 @@ export function CustomAgentFields({ value, onChange }: { value: CustomDraft; onC
       <div className="field">
         <label htmlFor={ids.template}>Starting template</label>
         <Select id={ids.template} label="Starting template" value={value.template} options={TEMPLATE_OPTIONS} onChange={(t) => onChange({ ...value, template: t })} />
-        <span id={`${ids.template}-h`} className="hint">
-          {TEMPLATE_HINT}
-        </span>
       </div>
       <div className="field">
         <label htmlFor={ids.instructions}>Instructions *</label>
@@ -108,8 +102,7 @@ export function CustomAgentFields({ value, onChange }: { value: CustomDraft; onC
           aria-describedby={`${ids.instructions}-h`}
         />
         <span id={`${ids.instructions}-h`} className="hint">
-          How this agent should approach every job ({value.instructions.length}/{CUSTOM_INSTRUCTIONS_MAX} characters). Instructions cannot add tools, raise
-          limits or reach your keys.
+          What this agent does and how. It can&apos;t change its own limits or see your keys.
         </span>
       </div>
       <fieldset>

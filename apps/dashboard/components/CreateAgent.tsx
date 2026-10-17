@@ -5,7 +5,7 @@ import { useEffect, useId, useState } from "react";
 import { api } from "../lib/api";
 import { ROLE_AVATAR, avatarById, setAgentAvatar } from "../lib/avatars";
 import { resolveAvatar } from "../lib/avatar-customization";
-import { ROLE_LABEL } from "../lib/labels";
+import { HIDDEN_SKUS, ROLE_LABEL } from "../lib/labels";
 import { ROLE_TAGLINE } from "../lib/roles";
 import type { Agent, AgentRole } from "../lib/types";
 import type { AttachOutcome, Connector } from "../lib/connectors";
@@ -72,11 +72,14 @@ function CreateAgentForm() {
   const modelId = useId();
   const pollId = useId();
   const wsPolicy = workspace.policies.find((p) => p.scope === "workspace" && p.status === "active");
+  // A new custom agent may buy anything approved today; its owner narrows it in the limits.
+  const approvedSkus = [...new Set(workspace.services.flatMap((sv) => sv.skus.map((k) => k.sku)))].filter((k) => !HIDDEN_SKUS.has(k)).sort();
+  const templateFor = (r: AgentRole): AgentPolicyInput => (r === "custom" && ROLE_TEMPLATES[r].policy.allowedSkus.length === 0 ? { ...ROLE_TEMPLATES[r].policy, allowedSkus: approvedSkus } : ROLE_TEMPLATES[r].policy);
   const chooseRole = (r: AgentRole) => {
     setRole(r);
     setJob(ROLE_TEMPLATES[r].description);
-    setPolicy(ROLE_TEMPLATES[r].policy);
-    setBase(ROLE_TEMPLATES[r].policy);
+    setPolicy(templateFor(r));
+    setBase(templateFor(r));
     setDrafted(null);
     if (!avatarChosen) setAvatarId(ROLE_AVATAR[r]);
   };
@@ -225,7 +228,7 @@ function CreateAgentForm() {
                 body: {
                   name,
                   role,
-                  description: job,
+                  description: isCustom ? (custom.instructions.trim().split("\n")[0]!.slice(0, 500) || job) : job,
                   trigger,
                   modelProfile,
                   ...(isCustom ? { template: custom.template, instructions: custom.instructions.trim() } : {}),
@@ -265,10 +268,12 @@ function CreateAgentForm() {
                   <span />
                 )}
               </div>
-              <div className="field">
-                <label htmlFor={jobId}>Job</label>
-                <textarea id={jobId} required rows={2} maxLength={500} value={job} onChange={(e) => setJob(e.target.value)} />
-              </div>
+              {isCustom ? null : (
+                <div className="field">
+                  <label htmlFor={jobId}>Job</label>
+                  <textarea id={jobId} required rows={2} maxLength={500} value={job} onChange={(e) => setJob(e.target.value)} />
+                </div>
+              )}
               <details className="advanced">
                 <summary>Advanced</summary>
                 <div className="field">

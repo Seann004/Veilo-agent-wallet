@@ -161,7 +161,7 @@ describe("custom agent roles and maps", () => {
     const job = { id: "j", kind: "custom", state: "completed", taskId: "t", result: { hire: { proposalId: "p1", state: "pending" }, artifactId: "a1" } } as unknown as Job;
     expect(summarizeResult(job)).toBe("Done · Wants to hire a specialist (nothing paid until you approve) · Saved to Outputs");
     const refused = { ...job, result: { hire: { code: "POLICY_DENIED" } } } as unknown as Job;
-    expect(summarizeResult(refused)).toBe("Done · Hire refused (POLICY_DENIED)");
+    expect(summarizeResult(refused)).toBe("Done · Hire refused (not allowed)");
   });
 });
 
