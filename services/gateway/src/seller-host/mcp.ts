@@ -1,6 +1,6 @@
 import { lookup as dnsLookup } from "node:dns";
 import { request as httpsRequest } from "node:https";
-import { BlockList, isIP } from "node:net";
+import { BlockList, isIP, type LookupFunction } from "node:net";
 import { Readable } from "node:stream";
 import { mcpToolDigest, mcpToolPinSchema, renderArgs, type McpToolPin } from "@veilo/contracts/marketplace";
 
@@ -161,14 +161,15 @@ export const publicFetch: FetchLike = (url, init = {}) =>
         method: init.method ?? "GET",
         headers: init.headers as Record<string, string>,
         signal: init.signal ?? undefined,
-        lookup: (host, _opts, cb) => {
+        // Node asks for every address when it races IPv4 and IPv6, and for one otherwise.
+        lookup: ((host: string, opts: { all?: boolean }, cb: (err: Error | null, address: unknown, family?: number) => void) => {
           dnsLookup(host, { all: true }, (err, addrs) => {
-            if (err) return cb(err, "", 4);
-            const bad = addrs.length === 0 || addrs.some((a) => !isPublicAddress(a.address));
-            if (bad) return cb(new McpError("PROVIDER_FAILED", "MCP host resolves to a non-public address") as NodeJS.ErrnoException, "", 4);
-            cb(null, addrs[0]!.address, addrs[0]!.family);
+            if (err) return cb(err, opts.all ? [] : "", 4);
+            if (addrs.length === 0 || addrs.some((a) => !isPublicAddress(a.address))) return cb(new McpError("PROVIDER_FAILED", "MCP host resolves to a non-public address"), opts.all ? [] : "", 4);
+            if (opts.all) cb(null, addrs);
+            else cb(null, addrs[0]!.address, addrs[0]!.family);
           });
-        },
+        }) as unknown as LookupFunction,
       },
       (res) => {
         const headers = new Headers();
