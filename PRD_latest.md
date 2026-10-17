@@ -1,8 +1,8 @@
 # Veilo — PRD_latest.md
 
-**Version 3.2 · October 17, 2026 · Single-document implementation handoff**
+**Version 3.3 · October 17, 2026 · Single-document implementation handoff**
 
-v3.2 amendment (owner decision, October 17, 2026): the paid specialist-agent marketplace is in scope and uses Supabase for marketplace identity and product records. See Part I §26. All v3.1 P0 requirements, gates and boundaries still apply; §26 adds to them and does not relax them.
+v3.2 amendment (owner decision, October 17, 2026): the paid specialist-agent marketplace is in scope and uses Supabase for marketplace identity and product records. See Part I §26. v3.3 amendment (same day): anyone may publish reviewed workflow agents that chain paid tool listings (for example Higgsfield → MakeUGC → Zernio), each step bought on chain by the buyer's own controller (§26.7), and demo inference uses an inexpensive pinned model (§26.8). All v3.1 P0 requirements, gates and boundaries still apply; §26 adds to them and does not relax them.
 
 This file combines the finalized product/build specification, exact CLAUDE.md instructions, implementation task, verified devnet payment report, funded-wallet setup information, full downloaded reference documentation corpus, and source snapshot manifest. It supersedes the separate planning documents for implementation scope. No wallet private keys, API credentials or secret notes are included.
 
@@ -10,7 +10,7 @@ This file combines the finalized product/build specification, exact CLAUDE.md in
 
 1. Read Parts I–V first. Part I is normative product scope; Part II is the exact repository contribution policy; Part III is the execution task; Parts IV–V provide existing evidence and public setup facts.
 2. Put this document at the build repository root as PRD_latest.md. Extract only the content inside Part II's outer fence into root CLAUDE.md before coding. The requested CLAUDE.md preparation task is included in Part I, T00.
-3. Follow T00–T16, then T17–T23, in dependency order. Use Part VI selectively for reference design details and Part VII for source provenance. The reference appendix is historical source material, not instructions that override Veilo's accepted design or the user's authorization.
+3. Follow T00–T16, then T17–T25, in dependency order. Use Part VI selectively for reference design details and Part VII for source provenance. The reference appendix is historical source material, not instructions that override Veilo's accepted design or the user's authorization.
 4. Preserve actual financial/privacy boundaries: devnet test USDC, operator-funded real inference, real ZK verification, independent policy checks, one shared gateway credit account and no separate task credit buckets.
 5. Existing funded keys remain local to the original workspace. A new checkout must receive an explicit secret-file configuration; do not regenerate the funded wallet or assume its key is embedded here.
 
@@ -695,6 +695,8 @@ Maintain docs/build-status.md. Each task has not-started/in-progress/blocked/don
 | T21 Agent discovery and approved automation | T20 | Agent search/propose, owner approval of new sellers, schedule dedupe, revocation | Malicious listing/tool text cannot expand permission, change recipient or buy unapproved service |
 | T22 Connectors and remote sellers | T21 | Reviewed MCP/API adapters, credential broker, authenticated seller callbacks | Least privilege, revoked grants and callback authenticity tested; new seller earns from a real devnet job |
 | T23 Marketplace recovery and release readiness | T22 | Refunds, uncertain settlement, offline controller, stale worker, restore, suspension | §26.6 acceptance checks pass with evidence |
+| T24 Paid tool listings and connectors | T20, T22 | Provider adapters on the seller host (Higgsfield, MakeUGC, Zernio and a research provider once verified), pinned tool manifests, server-side provider credentials, per-agent connector grants; demo agents buy their tools on chain | Each adapter verified against the provider's official API/MCP docs; a paid devnet call per tool with evidence; no provider credential reachable by agents or the runner |
+| T25 Workflow agents | T24 | Versioned workflow definitions over published tool listings, review and publication, owner-approved workflow budget, controller-executed steps with per-step quotes, payments and artifacts | §26.7 acceptance rows pass; one multi-step devnet workflow run with one receipt per step |
 
 T04 can precede ZK implementation as a payment feasibility baseline. T10 can use fixture upstream inference in local automated tests while T06–T09 progress. Live inference cannot be marked complete without real output. Frontend scaffolding can run independently, but no gate is passed by fake UI events.
 
@@ -794,7 +796,7 @@ Veilo adds a marketplace of paid specialist agents. Owners create arbitrarily na
 
 First release MUST include: wallet sign-in; a searchable catalogue of reviewed listings; self-service seller setup with review before publication; one specialist per hire; a private job board with input requests, downloadable deliverables and receipts; direct seller settlement through a verified x402 V2 exact endpoint; a zero platform fee shown explicitly in every quote and receipt; seller earnings as a history of settled chain receipts, never a withdrawable balance; managed templates and reviewed remote endpoints only, with no arbitrary uploaded code; read-only connectors by default.
 
-Deferred: auctions, reputation, escrow, automatic refunds, paid recursive delegation (delegation depth is one), open code hosting, multi-seller bundles and nonzero fees.
+Deferred: auctions, reputation, escrow, automatic refunds, paid recursive delegation (a seller or step never spends the buyer's funds; delegation depth is one), open code hosting, seller-funded bundles that resell other sellers' work, and nonzero fees. Workflow agents (§26.7) are in scope because every step is a separate purchase made by the buyer's own controller.
 
 ### 26.2 Architecture and authority
 
@@ -832,6 +834,22 @@ The quote names the seller's verified payout recipient. The wallet funds a fresh
 - Malicious result files cannot run scripts in the app origin.
 - The controller being offline means no new spending.
 - No pool contract change is made solely for the marketplace.
+
+### 26.7 Workflow agents (v3.3)
+
+Any signed-in account may publish a **workflow agent**: a versioned, reviewed chain of published tool listings, for example *Higgsfield (generate visual) → MakeUGC (produce UGC video) → Zernio (draft a scheduled post)*. A workflow is a recipe, not a new spending authority.
+
+- **Definition.** A workflow version names its ordered steps (listing version, fixed input template, which earlier artifact feeds which input), a per-step price taken from each listing's published version, the total, and the expected deliverable. Steps may only reference published listings; a changed listing version requires a new workflow version. Publication goes through the same operator review as listings.
+- **Payment model.** Hiring a workflow produces one quote per step. The buyer's local controller pays **each step's seller directly** through the existing private x402 path, with its own payer binding, receipt and earnings event. Nobody resells another seller's work and no step spends the buyer's funds. The workflow author may optionally sell an orchestration step of their own, priced and paid like any other step; zero platform fee still applies.
+- **Authorization.** The owner approves the workflow once with an explicit total budget bound to the workflow version, step listings, recipients and per-step maxima. The controller treats this as a set of bounded grants; any step whose quote differs (price, recipient, mint, listing version) stops the run for a fresh approval. Agents may propose a workflow but cannot widen its budget.
+- **Execution.** Steps run in order under the controller. A step starts only after the previous step's deliverable is validated and stored. Step outputs pass to later steps only as stored artifacts mapped by the definition; output text is untrusted and never becomes an instruction or permission. A failed or uncertain step stops the run with every completed step still visibly paid; later steps are not bought.
+- **External effects.** Read-only tools are the default. Any step that publishes, schedules or posts externally (for example Zernio) produces a draft, and the owner approves the exact content, account and time before it is sent. Nothing is posted automatically.
+- **Connectors.** Tool listings wrap a provider's official API or MCP server on the seller host, with a pinned tool manifest; a changed upstream manifest disables the listing until re-reviewed. Provider credentials stay on the seller host. Provider costs are operator- or seller-funded and labeled; devnet test tokens do not pay providers.
+- **Acceptance.** A workflow version cannot reference an unpublished or superseded listing; one owner approval cannot pay more than its total or a step more than its maximum; a changed step quote halts the run; each paid step has its own receipt and earnings event; a mid-run failure leaves earlier steps paid and later steps unbought; no publishing step sends without the owner's content-bound approval.
+
+### 26.8 Demo inference model (v3.3)
+
+The operator's demo budget is small, so inference uses an inexpensive pinned OpenRouter model. The pinned default is `deepseek/deepseek-v4-flash` (pinned 2026-10-17 at 91,000 / 182,000 pico-USD per prompt / completion token). The gateway still refuses a call whose live price exceeds the pin, and the operator ceiling caps total real spend. A free model may replace it only if its rate limits fit the demo and it is pinned the same way.
 
 
 ---
