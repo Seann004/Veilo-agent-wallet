@@ -111,10 +111,25 @@ describe("dashboard proxy", () => {
     expect(u.seen).toHaveLength(0);
   });
 
+  it("forwards a connector detach as DELETE only with the CSRF header, and passes 204 through", async () => {
+    const u = upstream(() => new Response(null, { status: 204 }));
+    const path = ["agents", AGENT, "connectors", "solana-developer-docs"];
+    const cookie = "veilo_session=vos_abc; veilo_csrf=tok123";
+    const refused = await proxy(req(`control/${path.join("/")}`, { method: "DELETE", headers: { origin: ORIGIN, cookie } }), "control", path, { config, fetchImpl: u.fetchImpl });
+    expect(refused.status).toBe(403);
+    expect(u.seen).toHaveLength(0);
+    const res = await proxy(req(`control/${path.join("/")}`, { method: "DELETE", headers: { origin: ORIGIN, cookie, "x-csrf-token": "tok123" } }), "control", path, { config, fetchImpl: u.fetchImpl });
+    expect(res.status).toBe(204);
+    expect(u.seen.map((s) => [s.method, s.url])).toEqual([["DELETE", `http://127.0.0.1:4101/agents/${AGENT}/connectors/solana-developer-docs`]]);
+  });
+
   it("does not expose worker, internal, credential-issuing or unknown endpoints", async () => {
     const u = upstream();
     const cases: Array<[string, "control" | "wallet" | "relayer", string[]]> = [
       ["GET", "control", ["worker", "catalog"]],
+      ["POST", "control", ["worker", "connector-calls"]],
+      ["GET", "control", ["worker", "connectors"]],
+      ["DELETE", "control", ["agents", AGENT, "connectors", "Bad_Id"]],
       ["POST", "control", ["purchase-intents"]],
       ["POST", "control", ["agents", AGENT, "worker-credentials"]],
       ["GET", "control", ["internal", "wallet", "notes"]],

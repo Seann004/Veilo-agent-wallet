@@ -5,7 +5,7 @@ export const SESSION_COOKIE = "veilo_session";
 export const CSRF_COOKIE = "veilo_csrf";
 export const CSRF_HEADER = "x-csrf-token";
 
-type Method = "GET" | "POST" | "PATCH" | "PUT";
+type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 interface Route {
   method: Method;
   path: RegExp;
@@ -48,6 +48,9 @@ export const ROUTES: Record<UpstreamService, Route[]> = {
     r("POST", "/marketplace/hires/[A-Za-z0-9._-]{1,128}/(approve|reject)"),
     r("GET", `/agents/${ID}/marketplace-allowlist`),
     r("PUT", `/agents/${ID}/marketplace-allowlist`),
+    r("GET", `/agents/${ID}/connectors`),
+    r("PUT", `/agents/${ID}/connectors/[a-z0-9][a-z0-9-]{2,62}`),
+    r("DELETE", `/agents/${ID}/connectors/[a-z0-9][a-z0-9-]{2,62}`),
     r("GET", "/workflows/runs"),
     r("POST", "/workflows/runs"),
     r("GET", `/workflows/runs/${ID}`),
