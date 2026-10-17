@@ -375,7 +375,7 @@ export function createApp(deps: Deps): Express {
       const actor = await user(req, true);
       const { slug } = z.object({ slug: z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/) }).strict().parse(req.body);
       // These names are dashboard routes under /marketplace; a listing must not shadow them.
-      if (["jobs", "seller", "agents", "approvals"].includes(slug)) throw new MarketError("INVALID_REQUEST", "slug is reserved");
+      if (["jobs", "seller", "agents", "approvals", "create", "tools", "runs", "c", "w", "specialists"].includes(slug)) throw new MarketError("INVALID_REQUEST", "slug is reserved");
       return { listingId: await db.rpc<string>("mk_create_listing", { p_user: actor.userId, p_slug: slug }) };
     }),
   );

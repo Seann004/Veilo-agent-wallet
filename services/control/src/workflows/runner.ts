@@ -388,12 +388,12 @@ export class WorkflowRunner {
   async #ensureCloudRun(run: RunRow): Promise<RunRow> {
     if (run.cloud_run_id !== null) return run;
     const terms = JSON.parse(run.terms_json) as WorkflowApprovalTerms;
-    const agent = getAgent(this.ledger, run.agent_id);
+    // Local control enforces assignments; the cloud record carries no agent attribution.
     const created = await this.deps.market.createRun({
       idempotencyKey: `wfrun-${run.id}`,
       terms,
       approvalDigest: run.approval_digest,
-      localAgentId: run.requested_by === "agent" && agent ? agent.id : null,
+      localAgentId: null,
       isTest: run.is_test === 1n,
     });
     this.ledger.db.prepare(`UPDATE workflow_run SET cloud_run_id = ?, updated_at_ms = ? WHERE id = ? AND cloud_run_id IS NULL`).run(created.runId, this.ledger.now(), run.id);
