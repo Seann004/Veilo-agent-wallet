@@ -622,14 +622,19 @@ async function run(e: Env, s: RunState): Promise<{ shawn: string; prince: string
     });
     const worker = new WorkerClient(e.controlUrl, await e.client.workerToken(mira));
     const svc = (ws.services as Array<{ id: string; skus: Array<{ sku: string; paymentPath: string }> }>).find((x) => x.skus.some((k) => k.sku === "content-package" && k.paymentPath === "private_x402"))!;
+    // Worker purchases are task-scoped, so the requests run under a real Mira task.
+    const run = await e.client.control("POST", `/agents/${mira}/run`, { input: { ...CAMPAIGN, startDate: "2026-11-01" }, triggerKey: `demo-${s.runId}-overbudget` });
+    if (![200, 202].includes(run.status)) throw new Error(`Mira over-budget run: HTTP ${run.status} ${JSON.stringify(run.body)}`);
+    const taskId = run.body.taskId as string;
     const req = (i: number) => {
       const input = { ...CAMPAIGN, startDate: "2026-11-01", brief: `concurrent request ${i}` };
-      return worker.call("POST", "/purchase-intents", { idempotencyKey: `demo-${s.runId}-overbudget-${i}`, serviceId: svc.id, sku: "content-package", paymentPath: "private_x402", requestDigest: computeRequestDigest("content-package", input), input });
+      return worker.call("POST", "/purchase-intents", { idempotencyKey: `demo-${s.runId}-overbudget-${i}`, taskId, serviceId: svc.id, sku: "content-package", paymentPath: "private_x402", requestDigest: computeRequestDigest("content-package", input), input });
     };
     const [a, b] = await Promise.all([req(1), req(2)]);
     const outcomes = [a, b].map((r) => ({ status: r.status, error: r.body.error?.code ?? null, authorization: r.body.purchase?.states?.authorization ?? null }));
     log(`  two concurrent content-package requests with ${usdc(100_000n)} left: ${JSON.stringify(outcomes)}`);
     if (outcomes.some((o) => o.authorization !== null && o.authorization !== "rejected")) throw new Error("an over-budget request was admitted");
+    if (outcomes.some((o) => o.authorization === null && o.error !== "BUDGET_EXCEEDED")) throw new Error(`an over-budget request was refused for another reason: ${JSON.stringify(outcomes)}`);
     const princeWorker = new WorkerClient(e.controlUrl, await e.client.workerToken(prince));
     const revoke = await e.client.control("POST", `/agents/${prince}/revoke`, {});
     const after = await princeWorker.call("GET", "/worker/catalog");
