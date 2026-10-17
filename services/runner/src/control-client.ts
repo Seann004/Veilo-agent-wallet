@@ -37,6 +37,7 @@ const ALLOWED_ARGS: Record<string, readonly string[]> = {
   request_purchase: ["idempotencyKey", "serviceId", "sku", "requestDigest", "taskId", "rationale", "input"],
   consume_inference_sku: ["idempotencyKey", "serviceId", "sku", "requestDigest", "taskId", "rationale", "input"],
   purchase_status: ["id"],
+  run_ai: ["taskId", "sku", "input"],
   save_artifact: ["taskId", "kind", "title", "content", "citations", "sourcePurchaseIds", "artifactId"],
   request_handoff: ["artifactId", "toAgentId", "note"],
   marketplace_search: ["q"],

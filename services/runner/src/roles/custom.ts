@@ -1,12 +1,14 @@
 import { SPONSORED_PLANNING_LABEL } from "@veilo/contracts/gateway";
 import { ToolDenied } from "../control-client";
 import {
+  BYOK_LABEL,
   buy,
   delivered,
   fenceConnectorOutput,
   outcomeText,
   parseJsonObject,
   plan,
+  runAi,
   stripUnlistedUrls,
   tryTool,
   type CatalogItem,
@@ -117,6 +119,8 @@ const listingLine = (l: ListingResult, i: number): string =>
 
 /** Completes the task with one paid analysis over the gathered data: prepaid credits first, then per call. */
 async function doTheWork(ctx: RoleContext, catalog: CatalogItem[], objective: string, material: string): Promise<{ text: string; purchase: string } | undefined> {
+  const own = await runAi(ctx, "analyze", { text: material.slice(0, 20_000), question: objective.slice(0, 1_000) });
+  if (own) return { text: stripUnlistedUrls(own.text ?? "", NO_URLS).text, purchase: `${BYOK_LABEL} (${own.model}), no USDC spent` };
   const prepaid = catalog.find((c) => c.sku === "analyze" && c.paymentPath === "prepaid_credits");
   const perCall = catalog.find((c) => c.sku === "analyze" && c.paymentPath === "private_x402");
   if (!prepaid && !perCall) {
@@ -256,7 +260,7 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
   const lines = [
     `Objective: ${clean(objective, 500)}`,
     "",
-    ...(work ? ["Result:", work.text, "", `Produced by this agent with one paid analysis: ${work.purchase}.`, ""] : []),
+    ...(work ? ["Result:", work.text, "", `Produced by this agent: ${work.purchase}.`, ""] : []),
     ...(swap
       ? [
           `Swap: ${swap.outcome}.`,

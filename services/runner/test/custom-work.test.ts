@@ -7,6 +7,8 @@ import { issueWorkerCredential } from "../../control/src/auth/credentials";
 import { AgentConnectors } from "../../control/src/connectors/agent-connectors";
 import { activatePolicyVersion, insertAgent } from "../../control/src/ledger/workspace";
 import { makeStack, type Stack } from "../../control/test/fixtures/stack";
+import { AiService } from "../../control/src/ai/service";
+import { ProviderKeyVault } from "../../control/src/ai/vault";
 import { runOnce } from "../src/worker";
 
 const DOCS_TOOL: McpToolPin = {
@@ -109,5 +111,68 @@ describe("custom agent doing the work itself", () => {
       .pluck()
       .get(run.body.taskId) as string;
     expect(JSON.parse(citations)).toEqual([{ url: `mcp:solana-developer-docs/${DOCS_TOOL.name}#call=${callId}`, title: `solana-developer-docs/${DOCS_TOOL.name} (read-only connector)` }]);
+  });
+});
+
+describe("custom agent on the owner's own model key", () => {
+  it("plans and does the work on the owner's provider with no purchase at all", async () => {
+    const seen: string[] = [];
+    const fakeModel = async (url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      seen.push(url);
+      const planning = body.messages.some((m) => m.content.includes("You are an agent working for a workspace owner"));
+      const text = planning ? JSON.stringify({ connectorCalls: [], searchQuery: null }) : "Owner-key analysis: accounts store state in data owned by programs.";
+      return new Response(JSON.stringify({ model: "anthropic/claude-sonnet-5-5", choices: [{ message: { content: text } }] }), { status: 200 });
+    };
+    let ai: AiService | undefined;
+    s = await makeStack({
+      ai: (ledger) => {
+        ai = new AiService(ledger, ProviderKeyVault.ephemeral(), fakeModel);
+        return ai;
+      },
+    });
+    const st = s;
+    ai!.set(st.env.ws.id, "owner", { provider: "openrouter", apiKey: "sk-or-v1-test-key-123", model: "anthropic/claude-sonnet-5-5" });
+    const nova = st.env.db
+      .transaction(() =>
+        insertAgent(
+          st.env.ledger,
+          st.env.ws.id,
+          {
+            name: "Nova",
+            role: "custom",
+            template: "analyst",
+            instructions: "Explain Solana concepts simply.",
+            policy: {
+              tier: "bounded_automatic",
+              lifetimeTestUsdc: "1000000",
+              rolling24hTestUsdc: "1000000",
+              maxPurchaseTestUsdc: "500000",
+              taskLimitTestUsdc: "500000",
+              usageAllowanceUnits: "0",
+              taskCreditUnits: "0",
+              allowedSkus: [],
+              allowedPaymentPaths: ["private_x402"],
+            },
+          },
+          "owner",
+        ),
+      )
+      .immediate();
+    activatePolicyVersion(st.env.ledger, st.env.ws.id, nova.id, 1, { type: "owner", id: "owner" });
+    const owner = await st.login();
+    const run = await st.call(`/agents/${nova.id}/run`, { method: "POST", headers: st.ownerHeaders(owner), body: { objective: "How do accounts store state?", input: {} } });
+    expect(run.status).toBe(202);
+    const token = issueWorkerCredential(st.env.ledger, st.env.ws.id, nova.id, "owner").token;
+    const done = await runOnce({ agentId: nova.id, role: "custom", token }, { controlUrl: st.base, workerId: "runner-test", fetchPolicy: { approvedOrigins: [], localServiceOrigins: [] }, now: () => st.gw.clock.t });
+    expect(done!.outcome.taskState).toBe("completed");
+    expect(done!.outcome.summary).toMatchObject({ didWork: true, hire: null });
+    expect(seen.every((u) => u === "https://openrouter.ai/api/v1/chat/completions")).toBe(true);
+    expect(seen.length).toBe(2);
+    expect(Number(st.env.db.prepare("SELECT count(*) FROM purchase WHERE agent_id = ?").pluck().get(nova.id))).toBe(0);
+    const content = st.env.db.prepare("SELECT r.content FROM artifact a JOIN artifact_revision r ON r.artifact_id = a.id WHERE a.task_id = ?").pluck().get(run.body.taskId) as string;
+    expect(content).toContain("Owner-key analysis");
+    expect(content).toContain("no USDC spent");
+    expect(content).not.toContain("sk-or-v1-test-key-123");
   });
 });

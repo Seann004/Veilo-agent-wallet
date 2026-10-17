@@ -46,6 +46,12 @@ export const AGENT_TOOLS: readonly AgentToolDefinition[] = [
     fixed: { paymentPath: "prepaid_credits" },
   },
   {
+    name: "run_ai",
+    description: "Run a summary, analysis or content package on the owner's own model provider. No USDC is spent.",
+    method: "POST",
+    path: "/worker/ai",
+  },
+  {
     name: "save_artifact",
     description: "Save a research or content artifact revision for the current task.",
     method: "POST",

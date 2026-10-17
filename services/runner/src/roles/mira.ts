@@ -1,5 +1,6 @@
 import { SPONSORED_PLANNING_LABEL } from "@veilo/contracts/gateway";
-import { buy, delivered, outcomeText, plan, tryTool, type CatalogItem, type RoleContext, type RoleOutcome } from "./common";
+import type { ControlReply } from "../control-client";
+import { BYOK_LABEL, buy, delivered, outcomeText, plan, runAi, tryTool, type CatalogItem, type RoleContext, type RoleOutcome } from "./common";
 
 interface Draft {
   channel: string;
@@ -51,10 +52,6 @@ export async function runMira(ctx: RoleContext): Promise<RoleOutcome> {
     research = (planned ?? brief.handoff.content.split("\n").filter((l) => l.startsWith("- ")).slice(0, 12).join("\n")).slice(0, 6_000);
   }
 
-  if (!item) {
-    ctx.notes.push("content-package via direct x402 is not in this agent's approved catalog.");
-    return { taskState: "failed", summary: { notes: ctx.notes } };
-  }
   const startDate = brief.startDate ?? new Date(ctx.now()).toISOString().slice(0, 10);
   const input = {
     topic: brief.topic,
@@ -64,13 +61,23 @@ export async function runMira(ctx: RoleContext): Promise<RoleOutcome> {
     startDate,
     ...(research ? { brief: `${brief.deliverables ?? ""}\nResearch (owner-approved handoff, demo fixture data):\n${research}`.slice(0, 16_000) } : brief.deliverables ? { brief: brief.deliverables } : {}),
   };
-  const r = await buy(ctx, item, "content-package", input, "Direct per-call content package for the campaign brief");
-  const purchaseId = (r.body?.purchase?.id as string | undefined) ?? null;
+  // The owner's own model first; a paid content package only if no provider is set.
+  const own = await runAi(ctx, "content-package", input);
+  if (!own && !item) {
+    ctx.notes.push("No model provider is set and content-package via direct x402 is not in this agent's approved catalog.");
+    return { taskState: "failed", summary: { notes: ctx.notes } };
+  }
+  const r: ControlReply = own
+    ? { status: 200, body: { purchase: { states: { fulfilment: "delivered" } }, execution: { result: own.json } } }
+    : await buy(ctx, item!, "content-package", input, "Direct per-call content package for the campaign brief");
+  const purchaseId = own ? null : ((r.body?.purchase?.id as string | undefined) ?? null);
   const result = r.body?.execution?.result as { drafts?: Draft[]; calendar?: CalendarItem[]; provenance?: { label?: string }; issues?: string[]; raw?: string } | null;
   const footer = [
     "",
     "---",
-    `Purchased: content-package via direct x402 (${item.price.amount} test-USDC base units; no prepaid credits) — ${outcomeText(r)}.`,
+    own
+      ? `Generated on ${BYOK_LABEL.toLowerCase()} (${own.model}); no USDC spent.`
+      : `Purchased: content-package via direct x402 (${item!.price.amount} USDC base units) — ${outcomeText(r)}.`,
     result?.provenance?.label ? `Generation: ${result.provenance.label}.` : "",
     `${ctx.client.planningCalls} ${SPONSORED_PLANNING_LABEL} call(s).`,
     "Draft for owner review. Nothing is published or sent automatically.",

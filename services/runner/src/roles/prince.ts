@@ -2,12 +2,14 @@ import { FIXTURE_DATA_LABEL, SPONSORED_PLANNING_LABEL } from "@veilo/contracts/g
 import { ToolDenied } from "../control-client";
 import { safeFetch, type SafeFetchPolicy } from "../safe-fetch";
 import {
+  BYOK_LABEL,
   buy,
   delivered,
   fenceConnectorOutput,
   outcomeText,
   parseJsonObject,
   plan,
+  runAi,
   runProposedCalls,
   stripUnlistedUrls,
   tryTool,
@@ -180,8 +182,10 @@ export async function runPrince(ctx: RoleContext, fetchPolicy: SafeFetchPolicy):
       .join("\n")
       .slice(0, 20_000);
     const analyzeInput = { text: evidenceText, question: question.slice(0, 1_000) };
-    const prepaid = catalog.find((c) => c.sku === "analyze" && c.paymentPath === "prepaid_credits");
-    const perCall = catalog.find((c) => c.sku === "analyze" && c.paymentPath === "private_x402");
+    const own = await runAi(ctx, "analyze", analyzeInput);
+    const prepaid = own ? undefined : catalog.find((c) => c.sku === "analyze" && c.paymentPath === "prepaid_credits");
+    const perCall = own ? undefined : catalog.find((c) => c.sku === "analyze" && c.paymentPath === "private_x402");
+    if (own) analysis = { text: own.text ?? "", label: `${BYOK_LABEL}: ${own.model}` };
     let r = prepaid ? await buy(ctx, prepaid, "analyze:prepaid", analyzeInput, "Analyze purchased evidence with prepaid credits") : undefined;
     if (r && prepaid) paid.push({ purchaseId: r.body?.purchase?.id ?? null, sku: "analyze", path: "prepaid_credits", price: "0", usage: prepaid.usage.amount, outcome: outcomeText(r) });
     const refusedBeforeUse = r !== undefined && !delivered(r) && (r.body?.purchase?.states?.fulfilment === "abandoned" || r.body?.purchase === undefined);
@@ -189,7 +193,9 @@ export async function runPrince(ctx: RoleContext, fetchPolicy: SafeFetchPolicy):
       r = await buy(ctx, perCall, "analyze:per-call", analyzeInput, "Per-call analysis: prepaid credits unavailable");
       paid.push({ purchaseId: r.body?.purchase?.id ?? null, sku: "analyze", path: "private_x402", price: perCall.price.amount, usage: "0", outcome: outcomeText(r) });
     }
-    if (r && delivered(r)) {
+    if (own) {
+      // Analysed on the owner's own provider: nothing was purchased.
+    } else if (r && delivered(r)) {
       const result = r.body.execution?.result as { text?: string; provenance?: { label?: string } } | null;
       analysis = { text: String(result?.text ?? ""), label: String(result?.provenance?.label ?? "") };
       analysisPurchaseId = r.body.purchase.id as string;
@@ -300,8 +306,10 @@ async function analyzeEvidence(
   evidence: string,
   question: string,
   paid: Array<{ purchaseId: string | null; sku: string; path: string; price: string; usage: string; outcome: string }>,
-): Promise<{ text: string; label: string; purchaseId: string } | undefined> {
+): Promise<{ text: string; label: string; purchaseId: string | null } | undefined> {
   const analyzeInput = { text: evidence, question: question.slice(0, 1_000) };
+  const own = await runAi(ctx, "analyze", analyzeInput);
+  if (own) return { text: own.text ?? "", label: `${BYOK_LABEL}: ${own.model}`, purchaseId: null };
   const prepaid = catalog.find((c) => c.sku === "analyze" && c.paymentPath === "prepaid_credits");
   const perCall = catalog.find((c) => c.sku === "analyze" && c.paymentPath === "private_x402");
   let r = prepaid ? await buy(ctx, prepaid, "analyze:prepaid", analyzeInput, "Analyze purchased on-chain data with prepaid credits") : undefined;

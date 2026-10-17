@@ -66,6 +66,25 @@ export async function buy(
   return awaitPurchase(ctx, r);
 }
 
+export const BYOK_LABEL = "Your model provider";
+
+/**
+ * Runs a summary, analysis or content package on the owner's own model provider. Returns
+ * undefined, with a visible note, when no provider is set or the call fails; callers then fall
+ * back to a paid service if their policy allows one.
+ */
+export async function runAi(
+  ctx: RoleContext,
+  sku: "summarize" | "analyze" | "content-package",
+  input: Record<string, unknown>,
+): Promise<{ text?: string; json?: unknown; model: string } | undefined> {
+  const r = await tryTool(ctx, "run_ai", { sku, input });
+  if (r.status === 200 && r.body?.result) return { ...(r.body.result as { text?: string; json?: unknown }), model: String(r.body.model ?? "") };
+  const code = r.body?.error?.code ?? `HTTP ${r.status}`;
+  if (code !== "NOT_READY") ctx.notes.push(`Your model provider did not complete ${sku} (${code}: ${r.body?.error?.message ?? "no detail"}).`);
+  return undefined;
+}
+
 /** Delays between status checks while control is still driving a purchase. */
 export const PURCHASE_STATUS_DELAYS_MS = [15_000, 30_000] as const;
 const STILL_DRIVEN = new Set(["NOT_READY", "SETTLEMENT_UNCERTAIN"]);
