@@ -17,7 +17,7 @@ import { Icon } from "./Icon";
 import { Select } from "./Select";
 import { PolicyForm, PolicyReview, type AgentPolicyInput } from "./Policy";
 import { useCapability, useOwner } from "./Shell";
-import { useAction, useResource } from "./hooks";
+import { useAction, usePolling, useResource } from "./hooks";
 import { DeniedHint, ErrorNotice, KV, Loading } from "./ui";
 import { AgentWorkflows } from "./market/AgentWorkflows";
 
@@ -87,6 +87,7 @@ export function ResearchForm({ agent, disabled: blocked, onQueued }: { agent: Ag
   const [sources, setSources] = useState("");
   const [deadline, setDeadline] = useState("");
   const [budget, setBudget] = useState("");
+  const [budgetError, setBudgetError] = useState<string | null>(null);
   const action = useAction();
   const [queued, setQueued] = useState<string | null>(null);
   const qid = useId();
@@ -97,12 +98,17 @@ export function ResearchForm({ agent, disabled: blocked, onQueued }: { agent: Ag
       onSubmit={(e) => {
         e.preventDefault();
         if (disabled || action.busy || question.trim() === "") return;
+        const limit = budget.trim() && budgetCap.allowed ? parseUsdcInput(budget) : null;
+        if (budget.trim() && budgetCap.allowed && limit === null) {
+          setBudgetError("Enter a task budget such as 0.01, with up to six decimal places, or leave it blank to use the policy budget.");
+          return;
+        }
+        setBudgetError(null);
         void action.run(async () => {
           const list = sources
             .split(/\s+/)
             .map((s) => s.trim())
             .filter(Boolean);
-          const limit = budget && budgetCap.allowed ? parseUsdcInput(budget) : null;
           const r = await api<{ taskId: string; executor: string }>("control", `/agents/${agent.id}/run`, {
             method: "POST",
             body: {
@@ -153,6 +159,7 @@ export function ResearchForm({ agent, disabled: blocked, onQueued }: { agent: Ag
           )}
         </div>
       </details>
+      {budgetError ? <p role="alert" className="notice notice-error">{budgetError}</p> : null}
       {!run.allowed ? <DeniedHint reason={run.reason} /> : null}
       <Queued text={queued} />
       <ErrorNotice error={action.error} />
@@ -507,10 +514,14 @@ export function AgentDetail({ agentId }: { agentId: string }) {
   const [checkResult, setCheckResult] = useState<string | null>(null);
   const avatar = useAgentAvatar(agentId, agent?.role ?? "research");
 
-  if (!agent) return <p className="notice notice-error">Agent not found in this workspace.</p>;
   const reloadAll = async () => {
-    await Promise.all([reloadWorkspace(), tasks.reload(), balances.reload(), activity.reload(), content.reload(), handoffs.reload()]);
+    // Read the job state first so its final artifacts cannot be missed when polling stops.
+    await tasks.reload();
+    await Promise.all([reloadWorkspace(), balances.reload(), activity.reload(), content.reload(), handoffs.reload()]);
   };
+  const activeJob = tasks.data?.jobs.find((j) => j.state === "queued" || j.state === "leased" || j.state === "reconciling");
+  usePolling(reloadAll, agentId, activeJob !== undefined);
+  if (!agent) return <p className="notice notice-error">Agent not found in this workspace.</p>;
   const activateDraft = (version: number) =>
     void save.run(async () => {
       await api("control", `/agents/${agent.id}/config`, { method: "PATCH", body: { activatePolicyVersion: version } });
@@ -525,7 +536,6 @@ export function AgentDetail({ agentId }: { agentId: string }) {
   const budget = balances.data?.agents.find((b) => b.agentId === agent.id);
   const cash = balances.data?.cash?.byAgent.find((c) => c.agentId === agent.id);
   const usage = balances.data?.usageByAgent?.find((u) => u.agentId === agent.id);
-  const activeJob = tasks.data?.jobs.find((j) => j.state === "queued" || j.state === "leased" || j.state === "reconciling");
   const purchases = activity.data?.purchases.filter((p) => p.agentId === agent.id) ?? [];
   const openPurchase = purchases.find((p) => p.id === openPurchaseId);
   const current = policyInputOf(agent);
