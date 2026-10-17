@@ -1,6 +1,10 @@
 -- Identical quotes (same seller, same price) share recipient and amount, so a receipt is bound to
 -- the one-time payer the buyer's controller reported for that operation. The payer is set once.
-alter table public.payment_operations add column expected_payer text check (expected_payer ~ '^[1-9A-HJ-NP-Za-km-z]{32,44}$');
+-- The binding happens while the operation is merely accepted, before the controller releases the
+-- funding proof, so the payer is not yet public; it is unique so no other operation can claim it.
+alter table public.payment_operations
+  add column expected_payer text unique check (expected_payer ~ '^[1-9A-HJ-NP-Za-km-z]{32,44}$'),
+  add column payer_bound_at timestamptz;
 
 create or replace function public.mk_controller_status(p_workspace uuid, p_operation text, p_status text, p_detail text, p_payer text)
 returns void language plpgsql security definer set search_path = '' as $$
@@ -12,10 +16,18 @@ begin
   if j.id is null then perform private.raise_code('NOT_FOUND', 'operation not found'); end if;
   select * into op from public.payment_operations where operation_id = p_operation for update;
   if p_payer is not null then
-    if op.expected_payer is not null and op.expected_payer <> p_payer then
-      perform private.raise_code('IDEMPOTENCY_CONFLICT', 'operation already has a different payer');
+    if op.expected_payer is not null then
+      if op.expected_payer <> p_payer then perform private.raise_code('IDEMPOTENCY_CONFLICT', 'operation already has a different payer'); end if;
+    elsif op.status <> 'controller_accepted' then
+      perform private.raise_code('INVALID_TRANSITION', 'a payer can only be bound right after the controller accepts');
+    else
+      begin
+        update public.payment_operations set expected_payer = p_payer, payer_bound_at = now() where id = op.id;
+      exception when unique_violation then
+        perform private.raise_code('IDEMPOTENCY_CONFLICT', 'payer is already bound to another operation');
+      end;
+      op.expected_payer := p_payer;
     end if;
-    update public.payment_operations set expected_payer = p_payer where id = op.id;
   end if;
   if op.status in ('settled', 'controller_rejected') then return; end if;
   if p_status = 'paying' and coalesce(p_payer, op.expected_payer) is null then
@@ -31,9 +43,10 @@ begin
   end if;
 end $$;
 drop function public.mk_controller_status(uuid, text, text, text);
+drop function public.mk_record_receipt(text, text, text, integer, text, text, text, numeric, bigint);
 
-create or replace function public.mk_record_receipt(p_operation text, p_network text, p_signature text, p_ix integer, p_mint text, p_source text,
-  p_ata text, p_amount numeric, p_slot bigint) returns jsonb
+create function public.mk_record_receipt(p_operation text, p_network text, p_signature text, p_ix integer, p_mint text, p_source text,
+  p_ata text, p_amount numeric, p_slot bigint, p_block_time timestamptz) returns jsonb
 language plpgsql security definer set search_path = '' as $$
 declare
   j public.jobs;
@@ -51,6 +64,9 @@ begin
   end if;
   if op.expected_payer is null then perform private.raise_code('NOT_READY', 'the controller has not reported the payer yet'); end if;
   if p_source is distinct from op.expected_payer then perform private.raise_code('SERVICE_NOT_ALLOWED', 'receipt was not authorized by this operation''s payer'); end if;
+  if p_block_time is null or p_block_time < op.payer_bound_at - interval '2 minutes' then
+    perform private.raise_code('SERVICE_NOT_ALLOWED', 'receipt predates the payer binding');
+  end if;
   select * into q from public.quotes where id = op.quote_id;
   if p_network <> q.network or p_mint <> q.mint or p_ata <> q.recipient_ata or p_amount <> q.total_units then
     perform private.raise_code('SERVICE_NOT_ALLOWED', 'receipt does not match the quote');
@@ -94,7 +110,7 @@ end $$;
 
 revoke all on function public.mk_controller_status(uuid, text, text, text, text) from public, anon, authenticated;
 grant execute on function public.mk_controller_status(uuid, text, text, text, text) to service_role;
-revoke all on function public.mk_record_receipt(text, text, text, integer, text, text, text, numeric, bigint) from public, anon, authenticated;
-grant execute on function public.mk_record_receipt(text, text, text, integer, text, text, text, numeric, bigint) to service_role;
+revoke all on function public.mk_record_receipt(text, text, text, integer, text, text, text, numeric, bigint, timestamptz) from public, anon, authenticated;
+grant execute on function public.mk_record_receipt(text, text, text, integer, text, text, text, numeric, bigint, timestamptz) to service_role;
 revoke all on function public.mk_refund_submitted(uuid, uuid, text) from public, anon, authenticated;
 grant execute on function public.mk_refund_submitted(uuid, uuid, text) to service_role;

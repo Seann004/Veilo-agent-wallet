@@ -180,6 +180,7 @@ export async function submitEvidence(deps: Deps, operationId: string, signature:
     p_ata: t.recipientAta,
     p_amount: t.amount.toString(),
     p_slot: t.slot.toString(),
+    p_block_time: t.blockTime === null ? null : new Date(t.blockTime * 1000).toISOString(),
   });
   return { status: "settled", receiptId: r.receiptId };
 }

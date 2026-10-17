@@ -86,6 +86,7 @@ async function main() {
       const amount = [...quoteTotals.values()][0] ?? 0n;
       const tx: ParsedTransaction = {
         slot: 1,
+        blockTime: Math.floor(Date.now() / 1000),
         meta: { err: null, postTokenBalances: [{ accountIndex: 1, mint: DEMO_TOKEN_MINT, owner: seller.address }] },
         transaction: {
           message: {
@@ -242,6 +243,8 @@ async function main() {
     record("evidence before the payer is bound stays pending", early.status === 202);
     const paying = await signedCall("POST", `/controller/payment-requests/${hire.body.quote.operationId}/status`, { status: "paying", detail: null, payer: buyerA.address }, keyId);
     record("controller bound the one-time payer to the operation", paying.status === 200);
+    const rebind = await signedCall("POST", `/controller/payment-requests/${hire.body.quote.operationId}/status`, { status: "paying", detail: null, payer: buyerB.address }, keyId);
+    record("a bound payer cannot be replaced", rebind.status === 409);
     const preClaim = await call("POST", `/internal/seller-host/jobs/${jobId}/claim`, { token: managedHostToken });
     record("no execution lease before settlement", preClaim.status === 503);
 
@@ -253,14 +256,16 @@ async function main() {
     const hire2 = await call("POST", "/jobs", { token: A.token, body: { listingId: listing.body.listingId, brief: "Second job", idempotencyKey: `idem-${randomUUID()}` } });
     await call("POST", `/jobs/${hire2.body.jobId}/approve`, { token: A.token });
     await signedCall("POST", `/controller/payment-requests/${hire2.body.quote.operationId}/decision`, { decision: "accepted", code: null, controllerRef: "local-2" }, keyId);
-    await signedCall("POST", `/controller/payment-requests/${hire2.body.quote.operationId}/status`, { status: "paying", detail: null, payer: buyerA.address }, keyId);
+    const steal = await signedCall("POST", `/controller/payment-requests/${hire2.body.quote.operationId}/status`, { status: "paying", detail: null, payer: buyerA.address }, keyId);
+    record("another operation cannot bind a payer that is already bound", steal.status === 409);
+    await signedCall("POST", `/controller/payment-requests/${hire2.body.quote.operationId}/status`, { status: "paying", detail: null, payer: buyerB.address }, keyId);
     const reuse = await signedCall("POST", `/controller/payments/${hire2.body.quote.operationId}/evidence`, { operationId: hire2.body.quote.operationId, signature: FIXTURE_SIG }, keyId);
-    record("one settlement signature cannot fund a second job", reuse.status === 409, `status ${reuse.status}`);
+    record("one settlement signature cannot fund a second job", reuse.status === 403 || reuse.status === 409, `status ${reuse.status}`);
 
     const claim = await call("POST", `/internal/seller-host/jobs/${jobId}/claim`, { token: managedHostToken });
     record("seller host claimed a lease after settlement", claim.status === 200);
-    const steal = await call("POST", `/internal/seller-host/jobs/${jobId}/claim`, { token: managedHostToken });
-    record("a second live lease is refused", steal.status === 503);
+    const secondLease = await call("POST", `/internal/seller-host/jobs/${jobId}/claim`, { token: managedHostToken });
+    record("a second live lease is refused", secondLease.status === 503);
     const text = "# Result\n\nFixture deliverable for the access-control test.\n";
     const artifactId = randomUUID();
     const envelope = {

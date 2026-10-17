@@ -20,6 +20,8 @@ export interface VerifiedTransfer {
   recipientAta: string;
   amount: bigint;
   slot: bigint;
+  /** Block time in seconds, as reported by the cluster; null when unavailable. */
+  blockTime: number | null;
 }
 
 export type ReceiptOutcome = { status: "verified"; transfer: VerifiedTransfer } | { status: "pending" } | { status: "invalid"; reason: string };
@@ -33,6 +35,7 @@ interface ParsedIx {
 // The JSON-RPC jsonParsed transaction shape; only the fields read below are typed.
 export interface ParsedTransaction {
   slot: number;
+  blockTime?: number | null;
   meta: {
     err: unknown;
     innerInstructions?: Array<{ index: number; instructions: ParsedIx[] }>;
@@ -90,6 +93,7 @@ export function checkTransfer(tx: ParsedTransaction | null, expected: ExpectedTr
       recipientAta: expected.recipientAta,
       amount: BigInt(rawAmount),
       slot: BigInt(tx.slot),
+      blockTime: tx.blockTime ?? null,
     },
   };
 }
