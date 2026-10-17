@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { getBase58Encoder, getPublicKeyFromAddress, verifySignature, type Address, type SignatureBytes } from "@solana/kit";
+import { DEVNET_CAIP2 } from "@veilo/contracts";
 import { immediate } from "@veilo/db";
 import { num, type Ledger } from "../context";
 import { ControlError } from "../errors";
@@ -30,6 +31,15 @@ export function safeEqualHex(a: string, b: string): boolean {
   return ab.length === bb.length && ab.length > 0 && timingSafeEqual(ab, bb);
 }
 
+/**
+ * Sign In With Solana names the cluster ("devnet"), not the CAIP-2 genesis form; wallets such as
+ * Phantom refuse to display a message whose Chain ID they cannot parse. Only devnet is accepted.
+ */
+function signInChainId(caip2: string): string {
+  if (caip2 !== DEVNET_CAIP2) throw new ControlError("WRONG_NETWORK", "sign-in is only issued for Solana devnet");
+  return "devnet";
+}
+
 export function buildChallengeMessage(p: {
   domain: string;
   address: string;
@@ -47,7 +57,7 @@ export function buildChallengeMessage(p: {
     "",
     `URI: ${p.origin}`,
     "Version: 1",
-    `Chain ID: ${p.chainId}`,
+    `Chain ID: ${signInChainId(p.chainId)}`,
     `Nonce: ${p.nonce}`,
     `Issued At: ${p.issuedAt}`,
     `Expiration Time: ${p.expiresAt}`,
@@ -64,7 +74,8 @@ export function createChallenge(
     if (!ws) throw new ControlError("NOT_FOUND", "workspace is not initialized");
     if (ws.owner_pubkey !== address) throw new ControlError("POLICY_DENIED", "address is not the workspace owner");
     const now = ledger.now();
-    const nonce = randomBytes(24).toString("base64url");
+    // Sign In With Solana nonces are alphanumeric; base64url's "-" and "_" are rejected by wallets.
+    const nonce = randomBytes(24).toString("hex");
     const expiresAtMs = now + settings.challengeTtlMs;
     const message = buildChallengeMessage({
       domain: settings.domain,
