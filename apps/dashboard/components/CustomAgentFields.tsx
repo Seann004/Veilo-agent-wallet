@@ -6,7 +6,7 @@ import { SPECIALIST_SKU } from "@veilo/contracts/marketplace";
 import { api } from "../lib/api";
 import { formatUnits, parseUnits } from "../lib/market/amounts";
 import { marketApi } from "../lib/market/client";
-import { DECIMALS_UNVERIFIED } from "../lib/market/messages";
+import { DECIMALS_UNVERIFIED, OFFER_DRAFT_KEY } from "../lib/market/messages";
 import type { CatalogEntry } from "../lib/market/types";
 import { AGENT_TEMPLATES, type Agent, type AgentTemplate } from "../lib/types";
 import type { AgentPolicyInput } from "./Policy";
@@ -319,7 +319,26 @@ export function CustomAgentPanel({
         <RunnerCredentialNote />
         <CustomRunForm agent={agent} disabled={!canRun || !run.allowed} onQueued={onChanged} />
         {!run.allowed ? <DeniedHint reason={run.reason} /> : null}
-        <p className="small">Each job saves a scouting report to <Link href="/content">Content</Link> (under Research briefs).</p>
+        <p className="small">Each job saves its result to <Link href="/content">Content</Link> (under Research briefs).</p>
+      </Section>
+      <Section title="Offer on the marketplace">
+        <p>List these instructions as a specialist that other workspaces can hire and pay you for.</p>
+        <p className="small muted">
+          Buyers&apos; jobs run on the marketplace&apos;s managed runtime with these instructions. They don&apos;t use this agent&apos;s connectors, AI credits or your private pool.
+        </p>
+        <Link
+          className="btn"
+          href="/marketplace/seller"
+          onClick={() => {
+            try {
+              sessionStorage.setItem(OFFER_DRAFT_KEY, JSON.stringify({ title: agent.name, sellerInstructions: agent.instructions ?? "" }));
+            } catch {
+              // Without storage the seller form simply starts empty.
+            }
+          }}
+        >
+          Create a listing
+        </Link>
       </Section>
       <Section title="Marketplace hiring">
         <p>

@@ -73,19 +73,19 @@ export const ROLE_TEMPLATES: Record<AgentRole, { name: string; description: stri
   },
   custom: {
     name: "Custom agent",
-    description: "Follows your instructions to find a marketplace specialist for each job; it pays nobody without your approval.",
+    description: "Follows your instructions, using its connectors and AI credits to do the work itself. It may propose a marketplace specialist, but pays nobody without your approval.",
     trigger: { type: "owner_task" },
-    // Marketplace hiring is its only paid action; the specialist SKU is added only when the owner opts in.
+    // Analysis lets it do the work itself; the specialist SKU is added only when the owner opts in to hiring.
     policy: {
       tier: "bounded_automatic",
       lifetimeTestUsdc: "2000000",
       rolling24hTestUsdc: "2000000",
       maxPurchaseTestUsdc: "500000",
       taskLimitTestUsdc: "1000000",
-      usageAllowanceUnits: "0",
-      taskCreditUnits: "0",
-      allowedSkus: [],
-      allowedPaymentPaths: ["private_x402"],
+      usageAllowanceUnits: "2000000",
+      taskCreditUnits: "400000",
+      allowedSkus: ["analyze"],
+      allowedPaymentPaths: ["private_x402", "prepaid_credits"],
     },
   },
 };

@@ -136,13 +136,14 @@ describe("custom agent roles and maps", () => {
     for (const role of AGENT_ROLES) expect(agentPolicyInputSchema.safeParse(ROLE_TEMPLATES[role].policy).success).toBe(true);
   });
 
-  it("keeps the custom template unable to pay until hiring is switched on", () => {
+  it("lets the custom template do its own analysis but not hire until hiring is switched on", () => {
     const base = ROLE_TEMPLATES.custom.policy;
+    expect(base.allowedSkus).toEqual(["analyze"]);
     expect(base.allowedSkus).not.toContain(SPECIALIST_SKU);
     const on = withHiring(base, true);
-    expect(on.allowedSkus).toEqual([SPECIALIST_SKU]);
+    expect(on.allowedSkus).toEqual(["analyze", SPECIALIST_SKU]);
     expect(on.allowedPaymentPaths).toContain("private_x402");
-    expect(withHiring(on, false).allowedSkus).toEqual([]);
+    expect(withHiring(on, false).allowedSkus).toEqual(["analyze"]);
     expect(withHiring({ ...base, allowedPaymentPaths: [] }, true).allowedPaymentPaths).toEqual(["private_x402"]);
   });
 
@@ -335,8 +336,18 @@ describe("custom agent page", () => {
     const body = calls[0]!.body as { policy: { allowedSkus: string[] } };
     expect(calls[0]!.method).toBe("PATCH");
     expect(Object.keys(body)).toEqual(["policy"]);
-    expect(body.policy.allowedSkus).toEqual([SPECIALIST_SKU]);
+    expect(body.policy.allowedSkus).toEqual(["analyze", SPECIALIST_SKU]);
     expect(screen.getByRole("link", { name: "seller console" }).getAttribute("href")).toBe("/marketplace/seller");
+  });
+
+  it("hands the agent's instructions to a new seller listing", async () => {
+    const user = userEvent.setup();
+    renderCreate(<CustomAgentPanel agent={customAgent()} policy={policy} canRun terminal={false} onChanged={vi.fn()} />);
+    const link = screen.getByRole("link", { name: "Create a listing" });
+    expect(link.getAttribute("href")).toBe("/marketplace/seller");
+    await user.click(link);
+    expect(JSON.parse(sessionStorage.getItem("veilo.offerDraft") ?? "{}")).toEqual({ title: customAgent().name, sellerInstructions: customAgent().instructions });
+    expect(screen.getByText(/don.t use this agent.s connectors, AI credits or your private pool/)).toBeTruthy();
   });
 
   it("lets a guest run jobs but not edit instructions or hiring", async () => {

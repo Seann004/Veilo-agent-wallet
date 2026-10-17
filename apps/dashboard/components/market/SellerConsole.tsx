@@ -6,7 +6,7 @@ import { shortKey, when } from "../../lib/format";
 import { parseUnits } from "../../lib/market/amounts";
 import { supabase } from "../../lib/market/client";
 import { presentJob } from "../../lib/market/job-state";
-import { DECIMALS_UNVERIFIED, NO_BALANCE_NOTE, payoutProofMessage } from "../../lib/market/messages";
+import { DECIMALS_UNVERIFIED, NO_BALANCE_NOTE, OFFER_DRAFT_KEY, payoutProofMessage } from "../../lib/market/messages";
 import { MANAGED_TEMPLATES, type RefundRow, type SellerDashboard } from "../../lib/market/types";
 import { listWallets, onWalletsChanged, signChallenge, type OwnerWallet } from "../../lib/wallet";
 import { useAction, useResource } from "../hooks";
@@ -280,17 +280,30 @@ function Listings({ d, onChanged }: { d: SellerDashboard; onChanged: () => Promi
   );
 }
 
+/** A custom agent's instructions handed over from its page; the form clears it once mounted. */
+function offerDraft(): { title: string; sellerInstructions: string } {
+  try {
+    const raw = sessionStorage.getItem(OFFER_DRAFT_KEY);
+    const d = raw ? (JSON.parse(raw) as { title?: unknown; sellerInstructions?: unknown }) : {};
+    return {
+      title: typeof d.title === "string" ? d.title.slice(0, 120) : "",
+      sellerInstructions: typeof d.sellerInstructions === "string" ? d.sellerInstructions.slice(0, 8000) : "",
+    };
+  } catch {
+    return { title: "", sellerInstructions: "" };
+  }
+}
+
 function VersionForm({ listingId, d, onCreated }: { listingId: string; d: SellerDashboard; onCreated: () => Promise<void> }) {
   const m = useMarket();
   const action = useAction();
-  const [f, setF] = useState({
-    title: "",
+  const [f, setF] = useState(() => ({
+    ...offerDraft(),
     summary: "",
     description: "",
     runtimeKind: "managed_template" as "managed_template" | "remote_endpoint",
     template: MANAGED_TEMPLATES[0] as string,
     remoteOrigin: "",
-    sellerInstructions: "",
     briefHint: "",
     maxBriefChars: "16000",
     format: "markdown" as "markdown" | "json",
@@ -301,7 +314,14 @@ function VersionForm({ listingId, d, onCreated }: { listingId: string; d: Seller
     refundTerms: "",
     dataHandling: "",
     termsVersion: "1",
-  });
+  }));
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem(OFFER_DRAFT_KEY);
+    } catch {
+      // Nothing to clear without storage.
+    }
+  }, []);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const id = useId();
   const decimals = m.token?.decimals ?? null;
