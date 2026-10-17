@@ -211,6 +211,7 @@ export class InferenceService {
           maxOutputTokens: request.maxOutputTokens,
           jsonObject: request.jsonObject,
           maxPrice: { prompt: usdPerMillion(model.promptPicoPerToken), completion: usdPerMillion(model.completionPicoPerToken) },
+          ...(model.reasoning === "disabled" ? { disableReasoning: true } : {}),
         },
         AbortSignal.timeout(this.deps.timeoutMs),
       );

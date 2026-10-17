@@ -14,6 +14,11 @@ export interface PinnedModel {
   maxCompletionTokens: number;
   /** Tokenizer family; all pinned models use byte-level BPE (see token-bound.ts). */
   tokenizer: string;
+  /**
+   * Hybrid reasoning models spend max_tokens on reasoning first; with a bounded output they can
+   * return no content at all. "disabled" asks OpenRouter to answer without reasoning.
+   */
+  reasoning?: "disabled";
   pinnedAt: string;
   source: string;
 }
@@ -40,6 +45,9 @@ export const PINNED_MODELS: Readonly<Record<string, PinnedModel>> = {
     contextLength: 1_048_575,
     maxCompletionTokens: 943_717,
     tokenizer: "DeepSeek (byte-level BPE)",
+    // Measured 2026-10-17: with reasoning on, an analyze call (2,000-token bound) ended with
+    // finish_reason "length" and null content; with reasoning disabled it returned content.
+    reasoning: "disabled",
     pinnedAt: "2026-10-17T06:52:30Z",
     source: OPENROUTER_MODELS_URL,
   },
