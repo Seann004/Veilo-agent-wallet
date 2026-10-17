@@ -31,11 +31,13 @@
     "restore": "tsx services/wallet/src/cli/backup.ts restore",
     "check:devnet": "tsx scripts/check-devnet.ts",
     "toolchain:build": "node scripts/toolchain.mjs --build",
-    "tc": "node scripts/toolchain.mjs"
+    "tc": "node scripts/toolchain.mjs",
+    "test:marketplace-rls": "tsx scripts/marketplace/rls-e2e.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@solana/kit": "5.5.1",
+    "@supabase/supabase-js": "2.117.2",
     "@types/node": "22.20.5",
     "@veilo/contracts": "workspace:*",
     "@veilo/x402-client": "workspace:*",
