@@ -181,7 +181,7 @@ export function reasonGuidance(code: string | null | undefined): string | null {
 
 /** Why an agent cannot start work right now; null when it can. */
 export function runBlockedReason(status: AgentStatus, workspaceStopped: boolean): string | null {
-  if (workspaceStopped) return "Emergency stop is active. Resume the workspace in Overview before starting work.";
+  if (workspaceStopped) return "Emergency stop is active. Resume the workspace from the Workspace page before starting work.";
   switch (status) {
     case "draft":
       return "The policy is still a draft. Activate it before this agent can run.";

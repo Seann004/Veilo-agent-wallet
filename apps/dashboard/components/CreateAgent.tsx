@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { api } from "../lib/api";
+import { ROLE_AVATAR, avatarById, setAgentAvatar } from "../lib/avatars";
 import { ROLE_LABEL } from "../lib/labels";
 import type { Agent, AgentRole } from "../lib/types";
 import { draftPolicyFromText, type PolicyDraftResult } from "../lib/policy-draft";
 import { PolicyForm, PolicyReview, ROLE_TEMPLATES, type AgentPolicyInput } from "./Policy";
+import { AvatarImage, AvatarPicker } from "./Avatar";
 import { useOwner } from "./Shell";
 import { useAction } from "./hooks";
 import { ErrorNotice, Section } from "./ui";
@@ -29,14 +31,29 @@ export function CreateAgent() {
   const [drafted, setDrafted] = useState<PolicyDraftResult | null>(null);
   const wordsId = useId();
   const [created, setCreated] = useState<Agent | null>(null);
+  const [avatarId, setAvatarId] = useState(ROLE_AVATAR.research);
+  const [avatarChosen, setAvatarChosen] = useState(false);
   const [step, setStep] = useState<"edit" | "review">("edit");
   const action = useAction();
-  const roleId = useId();
   const nameId = useId();
   const jobId = useId();
   const modelId = useId();
   const pollId = useId();
   const wsPolicy = workspace.policies.find((p) => p.scope === "workspace" && p.status === "active");
+  const chooseRole = (r: AgentRole) => {
+    setRole(r);
+    setJob(ROLE_TEMPLATES[r].description);
+    setPolicy(ROLE_TEMPLATES[r].policy);
+    setBase(ROLE_TEMPLATES[r].policy);
+    setDrafted(null);
+    if (!avatarChosen) setAvatarId(ROLE_AVATAR[r]);
+  };
+  // Marketplace links preselect a role with ?role=; read once on mount.
+  useEffect(() => {
+    const r = new URLSearchParams(window.location.search).get("role");
+    if (r && r in ROLE_TEMPLATES) chooseRole(r as AgentRole);
+  }, []);
+  const preview = avatarById(avatarId);
   const trigger = role === "credit_manager" ? { type: "low_credit_balance", pollSeconds: Number(pollSeconds) } : { type: "owner_task" };
 
   if (created) {
@@ -67,7 +84,35 @@ export function CreateAgent() {
   return (
     <>
       <h1>Create agent</h1>
-      <p className="small">An agent is a record plus a constrained worker under its own policy. It cannot create further spending agents.</p>
+      <p className="lede">An agent is a record plus a constrained worker under its own policy. It cannot create further spending agents.</p>
+      <section className="panel" aria-label="Role and avatar">
+        <div className="avatar-hero">
+          {preview ? <AvatarImage avatar={preview} size={104} /> : null}
+          <AvatarPicker
+            value={avatarId}
+            onChange={(id) => {
+              setAvatarId(id);
+              setAvatarChosen(true);
+            }}
+          />
+          <span className="hint">The avatar is saved in this browser only.</span>
+        </div>
+        <h2 className="section-title">Role</h2>
+        <div className="suggestions">
+          {(Object.keys(ROLE_LABEL) as AgentRole[]).map((r) => {
+            const a = avatarById(ROLE_AVATAR[r]);
+            return (
+              <button key={r} type="button" className="suggestion" aria-pressed={role === r} disabled={step === "review"} onClick={() => chooseRole(r)}>
+                {a ? <AvatarImage avatar={a} size={44} /> : null}
+                <span>
+                  <strong>{ROLE_LABEL[r]}</strong>
+                  <span className="small muted">{ROLE_TEMPLATES[r].description}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -80,6 +125,7 @@ export function CreateAgent() {
               method: "POST",
               body: { name, role, description: job, trigger, modelProfile, policy },
             });
+            setAgentAvatar(r.agent.id, avatarId);
             await reloadWorkspace();
             setCreated(r.agent);
           });
@@ -88,27 +134,6 @@ export function CreateAgent() {
         <fieldset disabled={step === "review"}>
           <legend>Agent</legend>
           <div className="grid-2">
-            <div className="field">
-              <label htmlFor={roleId}>Role template</label>
-              <select
-                id={roleId}
-                value={role}
-                onChange={(e) => {
-                  const r = e.target.value as AgentRole;
-                  setRole(r);
-                  setJob(ROLE_TEMPLATES[r].description);
-                  setPolicy(ROLE_TEMPLATES[r].policy);
-                  setBase(ROLE_TEMPLATES[r].policy);
-                  setDrafted(null);
-                }}
-              >
-                {(Object.keys(ROLE_LABEL) as AgentRole[]).map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_LABEL[r]}
-                  </option>
-                ))}
-              </select>
-            </div>
             <div className="field">
               <label htmlFor={nameId}>Name *</label>
               <input id={nameId} required maxLength={64} value={name} onChange={(e) => setName(e.target.value)} />

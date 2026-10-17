@@ -1,4 +1,4 @@
-import { ContentView } from "../../components/ContentView";
+import { ContentView } from "../../../components/ContentView";
 
 export default function ContentPage() {
   return <ContentView />;

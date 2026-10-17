@@ -6,6 +6,7 @@ import { credits, usdc, when } from "../lib/format";
 import { ROLE_LABEL, agentStateLabel, runBlockedReason } from "../lib/labels";
 import type { Agent, AgentBudget, Balances, Job, Task } from "../lib/types";
 import { AgentControls } from "./AgentControls";
+import { AgentAvatar } from "./Avatar";
 import { useAction } from "./hooks";
 import { ErrorNotice } from "./ui";
 
@@ -50,9 +51,12 @@ export function AgentCard({
   return (
     <article className={`card card-${agent.role}`} aria-labelledby={headingId}>
       <header className="card-head">
-        <h3 id={headingId}>
-          <Link href={`/agents/${agent.id}`}>{agent.name}</Link>
-        </h3>
+        <span className="card-title">
+          <AgentAvatar agent={agent} size={40} />
+          <h3 id={headingId}>
+            <Link href={`/agents/${agent.id}`}>{agent.name}</Link>
+          </h3>
+        </span>
         <span className={`pill pill-${agent.status === "active" && !workspaceStopped ? "ok" : agent.status === "paused" ? "warn" : "danger"}`}>
           {agentStateLabel(agent.status, workspaceStopped)}
         </span>

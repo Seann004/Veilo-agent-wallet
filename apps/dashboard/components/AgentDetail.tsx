@@ -1,18 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState } from "react";
+import { Fragment, useId, useState, type KeyboardEvent, type ReactNode } from "react";
 import { api } from "../lib/api";
+import { useAgentAvatar, setAgentAvatar } from "../lib/avatars";
 import { credits, parseUsdcInput, usdc, when } from "../lib/format";
-import { ROLE_LABEL, agentStateLabel, runBlockedReason } from "../lib/labels";
-import type { Activity, Agent, Balances, ContentItem, Handoff, Job, Task } from "../lib/types";
-import { ActivityList } from "./Activity";
+import { REVIEW_LABEL, ROLE_LABEL, agentStateLabel, purchaseLabel, runBlockedReason } from "../lib/labels";
+import type { Activity, Agent, Balances, ContentItem, Handoff, Job, Purchase, Task } from "../lib/types";
+import { ActivityDrawer } from "./Activity";
 import { summarizeResult } from "./AgentCard";
 import { AgentControls } from "./AgentControls";
+import { AgentAvatar, AvatarImage, AvatarPicker } from "./Avatar";
+import { Icon } from "./Icon";
 import { PolicyForm, PolicyReview, type AgentPolicyInput } from "./Policy";
 import { useOwner } from "./Shell";
 import { useAction, useResource } from "./hooks";
-import { ErrorNotice, KV, Loading, Section } from "./ui";
+import { ErrorNotice, KV, Loading } from "./ui";
 
 function policyInputOf(agent: Agent): AgentPolicyInput | null {
   const p = agent.activePolicy;
@@ -55,6 +58,22 @@ const toIso = (local: string): string | undefined => {
   return Number.isNaN(d.getTime()) ? undefined : d.toISOString().replace(/\.\d{3}Z$/, ".000Z");
 };
 
+/** Enter sends, Shift+Enter adds a line. */
+function submitOnEnter(e: KeyboardEvent<HTMLTextAreaElement>) {
+  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+    e.preventDefault();
+    e.currentTarget.form?.requestSubmit();
+  }
+}
+
+function Queued({ text }: { text: string | null }) {
+  return text ? (
+    <p role="status" className="small muted">
+      {text}
+    </p>
+  ) : null;
+}
+
 /** Prince: research question, optional sources and deadline. Queues a task; the runner executes it. */
 export function ResearchForm({ agent, disabled, onQueued }: { agent: Agent; disabled: boolean; onQueued: () => void | Promise<void> }) {
   const [question, setQuestion] = useState("");
@@ -67,8 +86,10 @@ export function ResearchForm({ agent, disabled, onQueued }: { agent: Agent; disa
   const sid = useId();
   return (
     <form
+      className="composer"
       onSubmit={(e) => {
         e.preventDefault();
+        if (question.trim() === "") return;
         void action.run(async () => {
           const list = sources
             .split(/\s+/)
@@ -85,33 +106,43 @@ export function ResearchForm({ agent, disabled, onQueued }: { agent: Agent; disa
             },
           });
           setQueued(`Task ${r.taskId} ${r.executor}.`);
+          setQuestion("");
           await onQueued();
         });
       }}
     >
-      <div className="field">
-        <label htmlFor={qid}>Research question *</label>
-        <textarea id={qid} required rows={3} value={question} onChange={(e) => setQuestion(e.target.value)} />
+      <div className="composer-box">
+        <label htmlFor={qid} className="sr-only">
+          Research question
+        </label>
+        <textarea
+          id={qid}
+          rows={1}
+          value={question}
+          disabled={disabled}
+          placeholder={disabled ? `${agent.name} cannot take tasks right now` : `Ask ${agent.name} a research question`}
+          onChange={(e) => setQuestion(e.target.value)}
+          onKeyDown={submitOnEnter}
+        />
+        <button type="submit" className="send-btn" aria-label="Start research task" disabled={disabled || action.busy || question.trim() === ""}>
+          <Icon name="send" />
+        </button>
       </div>
-      <div className="field">
-        <label htmlFor={sid}>Optional sources (URLs, one per line)</label>
-        <textarea id={sid} rows={2} value={sources} onChange={(e) => setSources(e.target.value)} aria-describedby={`${sid}-h`} />
-        <span id={`${sid}-h`} className="hint">
-          Only approved services are purchased; suggested sources are untrusted input.
-        </span>
-      </div>
-      <div className="grid-2">
-        <TextField label="Deadline" type="datetime-local" value={deadline} onChange={setDeadline} />
-        <TextField label="Task budget (test-USDC, optional)" value={budget} onChange={setBudget} hint="Defaults to the policy's per-task budget." />
-      </div>
-      <button type="submit" className="btn btn-primary" disabled={disabled || action.busy || question.trim() === ""}>
-        Start research task
-      </button>
-      {queued ? (
-        <p role="status" className="notice">
-          {queued}
-        </p>
-      ) : null}
+      <details className="composer-more">
+        <summary>Sources, deadline and budget</summary>
+        <div className="field">
+          <label htmlFor={sid}>Optional sources (URLs, one per line)</label>
+          <textarea id={sid} rows={2} value={sources} onChange={(e) => setSources(e.target.value)} aria-describedby={`${sid}-h`} />
+          <span id={`${sid}-h`} className="hint">
+            Only approved services are purchased; suggested sources are untrusted input.
+          </span>
+        </div>
+        <div className="grid-2">
+          <TextField label="Deadline" type="datetime-local" value={deadline} onChange={setDeadline} />
+          <TextField label="Task budget (test-USDC, optional)" value={budget} onChange={setBudget} hint="Defaults to the policy's per-task budget." />
+        </div>
+      </details>
+      <Queued text={queued} />
       <ErrorNotice error={action.error} />
     </form>
   );
@@ -124,11 +155,31 @@ export function CampaignForm({ agent, disabled, handoffs, onQueued }: { agent: A
   const action = useAction();
   const [queued, setQueued] = useState<string | null>(null);
   const hid = useId();
+  const tid = useId();
+  const [more, setMore] = useState(false);
+  const [missing, setMissing] = useState<string[]>([]);
   const approved = handoffs.filter((h) => h.toAgentId === agent.id && h.state === "approved");
+  const REQUIRED: Array<[keyof typeof f, string]> = [
+    ["topic", "topic"],
+    ["audience", "audience"],
+    ["c1", "channel 1"],
+    ["c2", "channel 2"],
+    ["c3", "channel 3"],
+    ["voice", "voice"],
+    ["deliverables", "deliverables"],
+  ];
   return (
     <form
+      className="composer"
+      noValidate
       onSubmit={(e) => {
         e.preventDefault();
+        const empty = REQUIRED.filter(([k]) => f[k].trim() === "").map(([, label]) => label);
+        setMissing(empty);
+        if (empty.length > 0) {
+          setMore(true);
+          return;
+        }
         void action.run(async () => {
           const r = await api<{ taskId: string; executor: string }>("control", `/agents/${agent.id}/run`, {
             method: "POST",
@@ -151,43 +202,56 @@ export function CampaignForm({ agent, disabled, handoffs, onQueued }: { agent: A
         });
       }}
     >
-      <div className="grid-2">
-        <TextField label="Topic" required value={f.topic} onChange={set("topic")} />
-        <TextField label="Audience" required value={f.audience} onChange={set("audience")} />
+      <div className="composer-box">
+        <label htmlFor={tid} className="sr-only">
+          Campaign topic
+        </label>
+        <textarea
+          id={tid}
+          rows={1}
+          required
+          value={f.topic}
+          disabled={disabled}
+          placeholder={disabled ? `${agent.name} cannot take tasks right now` : `Brief ${agent.name}: campaign topic`}
+          onChange={(e) => set("topic")(e.target.value)}
+          onKeyDown={submitOnEnter}
+        />
+        <button type="submit" className="send-btn" aria-label="Start campaign task" disabled={disabled || action.busy}>
+          <Icon name="send" />
+        </button>
       </div>
-      <fieldset>
-        <legend>Three channels</legend>
+      <details className="composer-more" open={more} onToggle={(e) => setMore(e.currentTarget.open)}>
+        <summary>Audience, channels, voice and dates</summary>
+        <TextField label="Audience" required value={f.audience} onChange={set("audience")} />
         <div className="grid-3">
           <TextField label="Channel 1" required value={f.c1} onChange={set("c1")} />
           <TextField label="Channel 2" required value={f.c2} onChange={set("c2")} />
           <TextField label="Channel 3" required value={f.c3} onChange={set("c3")} />
         </div>
-      </fieldset>
-      <TextField label="Voice" required value={f.voice} onChange={set("voice")} />
-      <TextField label="Deliverables" required value={f.deliverables} onChange={set("deliverables")} />
-      <div className="grid-2">
-        <TextField label="Deadline" type="datetime-local" value={f.deadline} onChange={set("deadline")} />
-        <TextField label="Calendar start (planning date)" type="date" value={f.startDate} onChange={set("startDate")} />
-      </div>
-      <div className="field">
-        <label htmlFor={hid}>Approved research handoff</label>
-        <select id={hid} value={f.handoffId} onChange={(e) => set("handoffId")(e.target.value)}>
-          <option value="">None</option>
-          {approved.map((h) => (
-            <option key={h.id} value={h.id}>
-              Handoff {h.id.slice(0, 8)} {h.note ? `— ${h.note}` : ""}
-            </option>
-          ))}
-        </select>
-      </div>
-      <button type="submit" className="btn btn-primary" disabled={disabled || action.busy}>
-        Start campaign task
-      </button>
-      {queued ? (
-        <p role="status" className="notice">
-          {queued}
+        <div className="grid-2">
+          <TextField label="Voice" required value={f.voice} onChange={set("voice")} />
+          <TextField label="Deliverables" required value={f.deliverables} onChange={set("deliverables")} />
+          <TextField label="Deadline" type="datetime-local" value={f.deadline} onChange={set("deadline")} />
+          <TextField label="Calendar start (planning date)" type="date" value={f.startDate} onChange={set("startDate")} />
+        </div>
+        <div className="field">
+          <label htmlFor={hid}>Approved research handoff</label>
+          <select id={hid} value={f.handoffId} onChange={(e) => set("handoffId")(e.target.value)}>
+            <option value="">None</option>
+            {approved.map((h) => (
+              <option key={h.id} value={h.id}>
+                Handoff {h.id.slice(0, 8)} {h.note ? `— ${h.note}` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      </details>
+      {missing.length > 0 ? (
+        <p role="alert" className="small notice notice-warn">
+          Fill in {missing.join(", ")} before sending.
         </p>
       ) : null}
+      <Queued text={queued} />
       <ErrorNotice error={action.error} />
     </form>
   );
@@ -232,6 +296,135 @@ export function HandoffApprovals({ handoffs, agents, onChanged }: { handoffs: Ha
 
 const decide = (id: string, decision: "approve" | "reject") => api("control", `/handoffs/${id}/decision`, { method: "POST", body: { decision } });
 
+
+interface ThreadEntry {
+  at: string;
+  key: string;
+  node: ReactNode;
+}
+
+function dayLabel(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "short", day: "numeric", month: "short", year: "numeric" }).format(new Date(iso));
+}
+
+/** Thread entries come only from recorded tasks, finished jobs, purchases and saved content. */
+function buildThread(
+  tasks: Task[],
+  jobs: Job[],
+  purchases: Purchase[],
+  items: ContentItem[],
+  agentStopped: boolean,
+  openPurchase: (id: string) => void,
+): ThreadEntry[] {
+  const out: ThreadEntry[] = [];
+  for (const t of tasks) {
+    out.push({
+      at: t.createdAt,
+      key: `t-${t.id}`,
+      node: (
+        <li className="bubble bubble-owner">
+          {t.objective}
+          <span className="bubble-meta">
+            Task {t.state.replace(/_/g, " ")} · budget {usdc(t.limits.taskUsdc)} · {when(t.createdAt)}
+          </span>
+        </li>
+      ),
+    });
+  }
+  for (const j of jobs.filter((x) => x.state === "completed" || x.state === "failed")) {
+    out.push({
+      at: j.updatedAt,
+      key: `j-${j.id}`,
+      node: (
+        <li className="bubble bubble-agent">
+          {summarizeResult(j, tasks.find((t) => t.id === j.taskId))}
+          <span className="bubble-meta">
+            {j.kind.replace(/_/g, " ")} · {when(j.updatedAt)}
+          </span>
+        </li>
+      ),
+    });
+  }
+  for (const p of purchases) {
+    out.push({
+      at: p.createdAt,
+      key: `p-${p.id}`,
+      node: (
+        <li className="thread-item">
+          <button type="button" className="attachment" aria-haspopup="dialog" onClick={() => openPurchase(p.id)}>
+            <span className="attachment-icon">
+              <Icon name="card" />
+            </span>
+            <span className="attachment-text">
+              <strong>
+                {p.sku} · {p.paymentPath === "prepaid_credits" ? credits(p.usage.amount) : usdc(p.price.amount)}
+              </strong>
+              <span>{purchaseLabel(p, { agentStopped })}</span>
+            </span>
+            <Icon name="arrow" size={16} />
+          </button>
+        </li>
+      ),
+    });
+  }
+  for (const c of items) {
+    out.push({
+      at: c.createdAt,
+      key: `c-${c.id}`,
+      node: (
+        <li className="thread-item">
+          <Link href="/content" className="attachment">
+            <span className="attachment-icon">
+              <Icon name="file" />
+            </span>
+            <span className="attachment-text">
+              <strong>{c.title}</strong>
+              <span>
+                {c.kind.replace(/_/g, " ")} · revision {c.revision} · {REVIEW_LABEL[c.reviewState] ?? c.reviewState}
+              </span>
+            </span>
+            <Icon name="arrow" size={16} />
+          </Link>
+        </li>
+      ),
+    });
+  }
+  return out.sort((a, b) => a.at.localeCompare(b.at));
+}
+
+function Routines({ agent, stopped }: { agent: Agent; stopped: boolean }) {
+  const t = agent.trigger as { type?: string; pollSeconds?: number };
+  const running = agent.status === "active" && !stopped;
+  const rows: Array<[string, string]> =
+    t.type === "low_credit_balance"
+      ? [[`Credit check every ${t.pollSeconds ?? 60} s`, running ? "Scheduled" : "Paused until the agent is active"]]
+      : [["Runs when you send a task", running ? "Ready" : "Not accepting tasks"]];
+  return (
+    <ul className="routines">
+      {rows.map(([title, sub]) => (
+        <li key={title} className={running ? "" : "paused"}>
+          <Icon name={running ? "clock" : "pause"} />
+          <div>
+            {title}
+            <span>{sub}</span>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function AvatarSettings({ agent }: { agent: Agent }) {
+  const current = useAgentAvatar(agent.id, agent.role);
+  return (
+    <details>
+      <summary className="small">Change avatar</summary>
+      <AvatarPicker value={current.id} onChange={(id) => setAgentAvatar(agent.id, id)} label={`${agent.name} avatar`} />
+      <p className="hint">Saved in this browser only.</p>
+    </details>
+  );
+}
+
 export function AgentDetail({ agentId }: { agentId: string }) {
   const { workspace, reloadWorkspace } = useOwner();
   const agent = workspace.agents.find((a) => a.id === agentId);
@@ -242,204 +435,232 @@ export function AgentDetail({ agentId }: { agentId: string }) {
   const handoffs = useResource(() => api<{ items: Handoff[] }>("control", "/handoffs"), "handoffs");
   const [draft, setDraft] = useState<AgentPolicyInput | null>(null);
   const [settings, setSettings] = useState({ name: agent?.name ?? "", description: agent?.description ?? "", modelProfile: agent?.modelProfile ?? "" });
+  const [openPurchaseId, setOpenPurchaseId] = useState<string | null>(null);
   const save = useAction();
   const check = useAction();
   const [checkResult, setCheckResult] = useState<string | null>(null);
+  const avatar = useAgentAvatar(agentId, agent?.role ?? "research");
 
   if (!agent) return <p className="notice notice-error">Agent not found in this workspace.</p>;
   const reloadAll = async () => {
     await Promise.all([reloadWorkspace(), tasks.reload(), balances.reload(), activity.reload(), content.reload(), handoffs.reload()]);
   };
+  const activateDraft = (version: number) =>
+    void save.run(async () => {
+      await api("control", `/agents/${agent.id}/config`, { method: "PATCH", body: { activatePolicyVersion: version } });
+      await reloadAll();
+    });
   const stopped = workspace.workspace.stopped;
   const canRun = agent.status === "active" && !stopped;
   const terminal = agent.status === "revoked" || agent.status === "archived";
+  const agentStopped = stopped || agent.status !== "active";
   const wsPolicy = workspace.policies.find((p) => p.scope === "workspace" && p.status === "active");
   const drafts = workspace.policies.filter((p) => p.scope === "agent" && p.agentId === agent.id && p.status === "draft");
   const budget = balances.data?.agents.find((b) => b.agentId === agent.id);
   const cash = balances.data?.cash?.byAgent.find((c) => c.agentId === agent.id);
   const usage = balances.data?.usageByAgent?.find((u) => u.agentId === agent.id);
   const activeJob = tasks.data?.jobs.find((j) => j.state === "queued" || j.state === "leased" || j.state === "reconciling");
-  const agentActivity = activity.data ? { events: activity.data.events, purchases: activity.data.purchases.filter((p) => p.agentId === agent.id) } : undefined;
+  const purchases = activity.data?.purchases.filter((p) => p.agentId === agent.id) ?? [];
+  const openPurchase = purchases.find((p) => p.id === openPurchaseId);
   const current = policyInputOf(agent);
+  const loaded = tasks.data !== undefined && activity.data !== undefined && content.data !== undefined;
+  const entries = tasks.data && content.data ? buildThread(tasks.data.tasks, tasks.data.jobs, purchases, content.data.items, agentStopped, setOpenPurchaseId) : [];
+  const blocked = runBlockedReason(agent.status, stopped);
+  const tz = workspace.workspace.timezone || "UTC";
+
+  let lastDay = "";
+  const threadNodes: ReactNode[] = [];
+  for (const e of entries) {
+    const day = dayLabel(e.at, tz);
+    if (day !== lastDay) {
+      threadNodes.push(
+        <li key={`d-${day}`} className="thread-day" aria-hidden="true">
+          {day}
+        </li>,
+      );
+      lastDay = day;
+    }
+    threadNodes.push(<Fragment key={e.key}>{e.node}</Fragment>);
+  }
 
   return (
-    <>
-      <p>
-        <Link href="/">← Overview</Link>
-      </p>
-      <h1>
-        {agent.name} <span className="muted">· {ROLE_LABEL[agent.role]}</span>
-      </h1>
-      <p>
-        <span className="pill">{agentStateLabel(agent.status, stopped)}</span> policy v{agent.policyVersion} · revocation epoch {agent.revocationEpoch}
-      </p>
-      <AgentControls agent={agent} onChanged={reloadAll} />
-      {runBlockedReason(agent.status, stopped) ? (
-        <p className="notice notice-warn" role="status">
-          {runBlockedReason(agent.status, stopped)}
-        </p>
-      ) : null}
+    <div className="agent-view">
+      <section className="thread-panel" aria-label={`${agent.name} thread`}>
+        <header className="thread-head">
+          <AgentAvatar agent={agent} size={36} />
+          <div>
+            <h1>{agent.name}</h1>
+            <p className="role">{ROLE_LABEL[agent.role]}</p>
+          </div>
+          <span className={`pill pill-${canRun ? "ok" : agent.status === "paused" || agent.status === "draft" ? "warn" : "danger"}`}>{agentStateLabel(agent.status, stopped)}</span>
+        </header>
+        {blocked ? (
+          <div className="notice notice-warn thread-notice" role="status">
+            {blocked}
+            {agent.status === "draft" && drafts.length > 0 ? (
+              <button type="button" className="btn btn-small btn-primary" disabled={save.busy} onClick={() => activateDraft(drafts.at(-1)!.version)}>
+                Activate policy v{drafts.at(-1)!.version}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        <ol className="thread" aria-label="Tasks, results and payments">
+          {!loaded ? (
+            <li className="thread-empty">
+              <Loading label="thread" />
+            </li>
+          ) : threadNodes.length === 0 ? (
+            <li className="thread-empty">
+              {agent.role === "credit_manager"
+                ? `No credit checks recorded yet. ${agent.name} checks on schedule once its policy is active, or use Check now.`
+                : canRun
+                  ? `No tasks yet. Send ${agent.name} a task below.`
+                  : `No tasks yet. ${agent.name} can take tasks once its policy is active and it is not stopped.`}
+            </li>
+          ) : (
+            threadNodes
+          )}
+        </ol>
+        <ErrorNotice error={tasks.error ?? activity.error ?? content.error} what="thread" onRetry={reloadAll} />
+        {agent.role === "credit_manager" ? (
+          <div className="composer">
+            <div className="composer-box composer-static">
+              <span className="small muted">Runs the same deterministic threshold check as the schedule. It never calls a model.</span>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!canRun || check.busy}
+                onClick={() =>
+                  void check.run(async () => {
+                    const r = await api<{ check?: { decision: string; detail: string } | null; executor: string }>("control", `/agents/${agent.id}/run`, { method: "POST", body: {} });
+                    setCheckResult(r.check ? `${r.check.decision}: ${r.check.detail}` : r.executor);
+                    await reloadAll();
+                  })
+                }
+              >
+                Check now
+              </button>
+            </div>
+            <Queued text={checkResult} />
+            <ErrorNotice error={check.error} what="credit check" />
+          </div>
+        ) : null}
+        {agent.role === "research" ? <ResearchForm agent={agent} disabled={!canRun} onQueued={reloadAll} /> : null}
+        {agent.role === "content" ? <CampaignForm agent={agent} disabled={!canRun} handoffs={handoffs.data?.items ?? []} onQueued={reloadAll} /> : null}
+      </section>
 
-      {agent.role === "credit_manager" ? (
-        <Section title="Credit check" id="run">
-          <p className="small">Runs the same deterministic threshold check as the 60-second schedule. It never calls a model and respects cooldown and caps.</p>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={!canRun || check.busy}
-            onClick={() =>
-              void check.run(async () => {
-                const r = await api<{ check?: { decision: string; detail: string } | null; executor: string }>("control", `/agents/${agent.id}/run`, { method: "POST", body: {} });
-                setCheckResult(r.check ? `${r.check.decision}: ${r.check.detail}` : r.executor);
-                await reloadAll();
-              })
-            }
-          >
-            Check now
-          </button>
-          {checkResult ? (
-            <p role="status" className="notice">
-              {checkResult}
+      <aside className="details-panel" aria-label={`${agent.name} details`}>
+        <div className="panel">
+          <div className="details-avatar">
+            <AvatarImage avatar={avatar} size={88} />
+            <strong>{agent.name}</strong>
+            <span className="small muted">
+              policy v{agent.policyVersion} · revocation epoch {agent.revocationEpoch}
+            </span>
+          </div>
+          <AvatarSettings agent={agent} />
+          <AgentControls agent={agent} onChanged={reloadAll} />
+        </div>
+
+        <div className="panel">
+          <h2 className="section-title">Routines</h2>
+          <Routines agent={agent} stopped={stopped} />
+          <h2 className="section-title section-gap">
+            Active job
+          </h2>
+          {activeJob ? (
+            <p className="small flush">
+              {activeJob.kind.replace(/_/g, " ")} · {activeJob.state} · scheduled {when(activeJob.scheduledAt)} · attempt {activeJob.attempts}
             </p>
-          ) : null}
-          <ErrorNotice error={check.error} what="credit check" />
-        </Section>
-      ) : null}
-      {agent.role === "research" ? (
-        <Section title="New research task" id="run">
-          <ResearchForm agent={agent} disabled={!canRun} onQueued={reloadAll} />
-        </Section>
-      ) : null}
-      {agent.role === "content" ? (
-        <>
-          <Section title="Research handoffs">
-            {handoffs.data ? <HandoffApprovals handoffs={handoffs.data.items.filter((h) => h.toAgentId === agent.id)} agents={workspace.agents} onChanged={reloadAll} /> : <Loading label="handoffs" />}
-          </Section>
-          <Section title="New campaign brief" id="run">
-            <CampaignForm agent={agent} disabled={!canRun} handoffs={handoffs.data?.items ?? []} onQueued={reloadAll} />
-          </Section>
-        </>
-      ) : null}
+          ) : (
+            <p className="small muted flush">
+              No queued or running job.
+            </p>
+          )}
+        </div>
 
-      <Section title="Active job">
-        {activeJob ? (
+        <div className="panel">
+          <h2 className="section-title">Spending</h2>
           <KV
             rows={[
-              ["Kind", activeJob.kind],
-              ["State", activeJob.state],
-              ["Scheduled", when(activeJob.scheduledAt)],
-              ["Attempts", String(activeJob.attempts)],
+              ["Lifetime allowance", budget?.lifetime ? `${usdc(budget.lifetime.available)} left of ${usdc(budget.lifetime.limit)}` : "not activated"],
+              ["Rolling 24 h", budget?.rolling24h ? `${usdc(budget.rolling24h.available)} left of ${usdc(budget.rolling24h.limit)}` : "—"],
+              ["Cash spent / reserved", cash ? `${usdc(cash.spent)} / ${usdc(cash.reserved)}` : "—"],
+              ["Credit usage", usage ? `${credits(usage.consumedUnits)} consumed, ${credits(usage.reservedUnits)} reserved` : "—"],
+              ...(usage && usage.packsPurchased > 0 ? [["Credit packs bought", `${usage.packsPurchased} (${usdc(usage.packCashSpent)}, counted once in cash spent)`] as [string, string]] : []),
             ]}
           />
-        ) : (
-          <p className="muted">No queued or running job.</p>
-        )}
-        <ErrorNotice error={tasks.error} what="tasks" onRetry={tasks.reload} />
-      </Section>
-
-      <Section title="Spending">
-        <KV
-          rows={[
-            ["Lifetime allowance", budget?.lifetime ? `${usdc(budget.lifetime.available)} remaining of ${usdc(budget.lifetime.limit)}` : "not activated"],
-            ["Rolling 24 h", budget?.rolling24h ? `${usdc(budget.rolling24h.available)} remaining of ${usdc(budget.rolling24h.limit)}` : "—"],
-            ["Cash spent / reserved", cash ? `${usdc(cash.spent)} / ${usdc(cash.reserved)}` : "—"],
-            ["Credit usage", usage ? `${credits(usage.consumedUnits)} consumed, ${credits(usage.reservedUnits)} reserved` : "—"],
-            ...(usage && usage.packsPurchased > 0 ? [["Credit packs bought", `${usage.packsPurchased} (${usdc(usage.packCashSpent)}, counted once in cash spent)`] as [string, string]] : []),
-          ]}
-        />
-        {agentActivity ? <ActivityList activity={agentActivity} workspace={workspace} onChanged={reloadAll} /> : <Loading label="purchases" />}
-      </Section>
-
-      <Section title="Result history">
-        {tasks.data && tasks.data.tasks.length > 0 ? (
-          <ul className="plain">
-            {tasks.data.tasks.map((t) => (
-              <li key={t.id}>
-                <strong>{t.objective}</strong> — {t.state} · {when(t.createdAt)} · tools {t.used.toolCalls}/{t.limits.maxToolCalls}, purchases {t.used.paidPurchases}/{t.limits.maxPaidPurchases}, planning {t.used.planningCalls}/
-                {t.limits.maxPlanningCalls} · budget {usdc(t.limits.taskUsdc)}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {tasks.data ? (
-          <ul className="plain small">
-            {tasks.data.jobs
-              .filter((j) => j.state === "completed" || j.state === "failed")
-              .map((j) => (
-                <li key={j.id}>
-                  {when(j.updatedAt)} — {summarizeResult(j, tasks.data?.tasks.find((t) => t.id === j.taskId))}
-                </li>
-              ))}
-          </ul>
-        ) : (
-          <Loading label="results" />
-        )}
-        {content.data && content.data.items.length > 0 ? (
-          <p>
-            {content.data.items.length} saved artifact(s). <Link href="/content">Open content</Link>
+          <p className="small muted section-foot">
+            {purchases.length} purchase{purchases.length === 1 ? "" : "s"} recorded. <Link href="/activity">All activity</Link>
           </p>
-        ) : null}
-      </Section>
+        </div>
 
-      <Section title="Settings and trigger" id="settings">
-        <KV
-          rows={[
-            ["Job", agent.description ?? "—"],
-            ["Trigger", Object.entries(agent.trigger).map(([k, v]) => `${k}: ${String(v)}`).join(", ") || "—"],
-            ["Model profile", agent.modelProfile ?? "default"],
-          ]}
-        />
-        {current ? <PolicyReview policy={agent.activePolicy!} workspacePolicy={wsPolicy} title={`Active policy v${agent.activePolicy!.version}`} /> : <p className="notice notice-warn">No active policy: this agent cannot spend.</p>}
-        {drafts.map((d) => (
-          <div key={d.id} className="draft-policy">
-            <PolicyReview policy={d} workspacePolicy={wsPolicy} title={`Draft policy v${d.version} (not active)`} />
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={save.busy || terminal}
-              onClick={() =>
-                void save.run(async () => {
-                  await api("control", `/agents/${agent.id}/config`, { method: "PATCH", body: { activatePolicyVersion: d.version } });
-                  await reloadAll();
-                })
-              }
-            >
-              Activate policy v{d.version}
-            </button>
+        {agent.role === "content" ? (
+          <div className="panel">
+            <h2 className="section-title">Research handoffs</h2>
+            {handoffs.data ? <HandoffApprovals handoffs={handoffs.data.items.filter((h) => h.toAgentId === agent.id)} agents={workspace.agents} onChanged={reloadAll} /> : <Loading label="handoffs" />}
           </div>
-        ))}
-        {!terminal ? (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void save.run(async () => {
-                const body: Record<string, unknown> = {};
-                if (settings.name && settings.name !== agent.name) body.name = settings.name;
-                if (settings.description && settings.description !== (agent.description ?? "")) body.description = settings.description;
-                if (settings.modelProfile && settings.modelProfile !== (agent.modelProfile ?? "")) body.modelProfile = settings.modelProfile;
-                if (draft) body.policy = draft;
-                if (Object.keys(body).length === 0) return;
-                await api("control", `/agents/${agent.id}/config`, { method: "PATCH", body });
-                setDraft(null);
-                await reloadAll();
-              });
-            }}
-          >
-            <h3>Edit settings</h3>
-            <div className="grid-3">
-              <TextField label="Name" value={settings.name} onChange={(v) => setSettings({ ...settings, name: v })} />
-              <TextField label="Job description" value={settings.description} onChange={(v) => setSettings({ ...settings, description: v })} />
-              <TextField label="Model profile" value={settings.modelProfile} onChange={(v) => setSettings({ ...settings, modelProfile: v })} />
-            </div>
-            {current ? <PolicyForm initial={current} workspace={workspace} onChange={setDraft} /> : null}
-            <p className="small">Saving a policy change creates a new draft version; it takes effect only after you activate it.</p>
-            <button type="submit" className="btn btn-primary" disabled={save.busy}>
-              Save settings{draft ? " and create policy draft" : ""}
-            </button>
-          </form>
         ) : null}
-        <ErrorNotice error={save.error} />
-      </Section>
-    </>
+
+        <div className="panel" id="settings">
+          <h2 className="section-title">Job, trigger and policy</h2>
+          <KV
+            rows={[
+              ["Job", agent.description ?? "—"],
+              ["Trigger", Object.entries(agent.trigger).map(([k, v]) => `${k}: ${String(v)}`).join(", ") || "—"],
+              ["Model profile", agent.modelProfile ?? "default"],
+            ]}
+          />
+          {current ? <PolicyReview policy={agent.activePolicy!} workspacePolicy={wsPolicy} title={`Active policy v${agent.activePolicy!.version}`} /> : <p className="notice notice-warn">No active policy: this agent cannot spend.</p>}
+          {drafts.map((d) => (
+            <div key={d.id} className="draft-policy">
+              <PolicyReview policy={d} workspacePolicy={wsPolicy} title={`Draft policy v${d.version} (not active)`} />
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={save.busy || terminal}
+                onClick={() => activateDraft(d.version)}
+              >
+                Activate policy v{d.version}
+              </button>
+            </div>
+          ))}
+          {!terminal ? (
+            <details>
+              <summary className="small">Edit settings and policy</summary>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void save.run(async () => {
+                    const body: Record<string, unknown> = {};
+                    if (settings.name && settings.name !== agent.name) body.name = settings.name;
+                    if (settings.description && settings.description !== (agent.description ?? "")) body.description = settings.description;
+                    if (settings.modelProfile && settings.modelProfile !== (agent.modelProfile ?? "")) body.modelProfile = settings.modelProfile;
+                    if (draft) body.policy = draft;
+                    if (Object.keys(body).length === 0) return;
+                    await api("control", `/agents/${agent.id}/config`, { method: "PATCH", body });
+                    setDraft(null);
+                    await reloadAll();
+                  });
+                }}
+              >
+                <TextField label="Name" value={settings.name} onChange={(v) => setSettings({ ...settings, name: v })} />
+                <TextField label="Job description" value={settings.description} onChange={(v) => setSettings({ ...settings, description: v })} />
+                <TextField label="Model profile" value={settings.modelProfile} onChange={(v) => setSettings({ ...settings, modelProfile: v })} />
+                {current ? <PolicyForm initial={current} workspace={workspace} onChange={setDraft} /> : null}
+                <p className="small">Saving a policy change creates a new draft version; it takes effect only after you activate it.</p>
+                <button type="submit" className="btn btn-primary" disabled={save.busy}>
+                  Save settings{draft ? " and create policy draft" : ""}
+                </button>
+              </form>
+            </details>
+          ) : null}
+          <ErrorNotice error={save.error} />
+        </div>
+      </aside>
+      {openPurchase && activity.data ? (
+        <ActivityDrawer purchase={openPurchase} events={activity.data.events} workspace={workspace} onClose={() => setOpenPurchaseId(null)} onChanged={reloadAll} />
+      ) : null}
+    </div>
   );
 }
