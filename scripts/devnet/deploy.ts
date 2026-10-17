@@ -31,6 +31,7 @@ import {
 import { verifyDeployment } from "../../services/relayer/src/deployment";
 import { createRpcRelayerChain } from "../../services/relayer/src/chain";
 import { TOOLCHAIN_IMAGE } from "../toolchain-image.mjs";
+import { isNativeToolchain, nativeToolchainProblems } from "../toolchain-native.mjs";
 import { fillEnv } from "./env-file";
 import {
   argValue,
@@ -353,13 +354,20 @@ async function stepFundRoles(p: Progress, pl: Plan, funding: KeyPairSigner): Pro
   );
 }
 
-function dockerSolana(args: string[]): { status: number; stdout: string } {
-  const r = spawnSync(
-    "docker",
-    ["run", "--rm", "-v", `${rootDir}:/workspace`, "-w", "/workspace", TOOLCHAIN_IMAGE, "solana", ...args],
-    { stdio: ["ignore", "pipe", "inherit"], encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
-  );
-  if (r.error) stop(`docker failed to start: ${r.error.message}`);
+const toolchainLabel = isNativeToolchain() ? "the host toolchain (VEILO_TOOLCHAIN=native)" : TOOLCHAIN_IMAGE;
+
+/** Runs the pinned solana CLI from the repository root, in the toolchain image or natively. */
+function toolchainSolana(args: string[]): { status: number; stdout: string } {
+  const native = isNativeToolchain();
+  if (native) {
+    const problems = nativeToolchainProblems();
+    if (problems.length > 0) stop(`VEILO_TOOLCHAIN=native: host toolchain does not match docker/toolchain.Dockerfile: ${problems.join("; ")}`);
+  }
+  const [cmd, cmdArgs] = native
+    ? ["solana", args]
+    : ["docker", ["run", "--rm", "-v", `${rootDir}:/workspace`, "-w", "/workspace", TOOLCHAIN_IMAGE, "solana", ...args]];
+  const r = spawnSync(cmd, cmdArgs, { cwd: rootDir, stdio: ["ignore", "pipe", "inherit"], encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  if (r.error) stop(`${cmd} failed to start: ${r.error.message}`);
   return { status: r.status ?? 1, stdout: r.stdout ?? "" };
 }
 
@@ -400,10 +408,10 @@ async function stepDeploy(p: Progress, roles: RolesFile, a: Addresses, binary: U
     "--output",
     "json",
   ];
-  p.steps["deploy-program"] = { state: "sent", details: { command: "solana program deploy (toolchain image)", maxLen: binary.length, buffer: roles.roles.programBuffer.publicKey }, at: now() };
+  p.steps["deploy-program"] = { state: "sent", details: { command: `solana program deploy (${isNativeToolchain() ? "native toolchain" : "toolchain image"})`, maxLen: binary.length, buffer: roles.roles.programBuffer.publicKey }, at: now() };
   saveProgress(p);
-  console.log(`  deploy-program: running solana program deploy in ${TOOLCHAIN_IMAGE} (RPC ${redactUrl(config.network.rpcUrl)}); buffer ${roles.roles.programBuffer.publicKey} makes an interrupted deploy resumable`);
-  const r = dockerSolana(args);
+  console.log(`  deploy-program: running solana program deploy in ${toolchainLabel} (RPC ${redactUrl(config.network.rpcUrl)}); buffer ${roles.roles.programBuffer.publicKey} makes an interrupted deploy resumable`);
+  const r = toolchainSolana(args);
   const json = /\{[\s\S]*\}\s*$/.exec(r.stdout)?.[0];
   if (r.status !== 0 || !json) stop(`solana program deploy exited ${r.status}; rerun the same command to resume from the buffer (or reclaim it with: pnpm tc -- solana program close ${roles.roles.programBuffer.publicKey} --url <rpc> --keypair ${rel("deployer")})`);
   const out = JSON.parse(json!) as { programId?: string; signature?: string };

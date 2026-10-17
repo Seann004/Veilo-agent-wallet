@@ -1,0 +1,113 @@
+{
+  "kind": "M2 devnet private smoke: spend",
+  "profile": "devnet",
+  "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+  "recordedAt": "2026-10-17T07:42:08.328Z",
+  "authority": "smoke authority: operator --execute --confirm stands in for control's prepare/release stages (no control ledger reservation)",
+  "purchaseId": "467ec656-eb95-45bc-8cb5-931c8da8d791",
+  "logicalOperationId": "m2-smoke-467ec656-eb95-45bc-8cb5-931c8da8d791",
+  "attempts": [
+    {
+      "purchaseId": "467ec656-eb95-45bc-8cb5-931c8da8d791",
+      "operationId": "m2-smoke-467ec656-eb95-45bc-8cb5-931c8da8d791",
+      "startedAt": "2026-10-17T07:41:52.758Z",
+      "outcome": "finalized",
+      "walletStep": "finalized",
+      "freshPayer": "3Hn1f9eoo7QGqQFxdaYZo4xaYNs4VJznyYbWoU2hMGCu",
+      "validUntilSlot": "512002022",
+      "relayerWithdrawalId": "a7cd2e14-9c23-4c3a-a792-d02468dfa24c",
+      "relayerRecord": "finalized"
+    }
+  ],
+  "freshPayer": "3Hn1f9eoo7QGqQFxdaYZo4xaYNs4VJznyYbWoU2hMGCu",
+  "freshPayerExplorer": "https://explorer.solana.com/address/3Hn1f9eoo7QGqQFxdaYZo4xaYNs4VJznyYbWoU2hMGCu?cluster=devnet",
+  "payout": "10000",
+  "validUntilSlot": "512002022",
+  "nullifierHash": "0934f87a4863479a65b29f97d4486381a2e085554a21e3832a9ba0ee61f52c80",
+  "ataTransaction": {
+    "signature": "2djfg75KTtiXuYb3TowkzAeMsyoQWvwFqQvjBpcshmJonocTRX2cM3PNwodMcrV7FoeCwK9azL5RSZzjjMSxEzuk",
+    "explorer": "https://explorer.solana.com/tx/2djfg75KTtiXuYb3TowkzAeMsyoQWvwFqQvjBpcshmJonocTRX2cM3PNwodMcrV7FoeCwK9azL5RSZzjjMSxEzuk?cluster=devnet",
+    "slot": "512001292",
+    "err": null,
+    "feeLamports": "5000",
+    "computeUnitsConsumed": "13518",
+    "lamportChanges": [
+      {
+        "account": "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+        "delta": "-1493440"
+      },
+      {
+        "account": "91XwiMK9s68LFkXig7AswFvFXW6ZJ6QX32m4HFG9TUKY",
+        "delta": "1488440"
+      }
+    ],
+    "accountKeys": [
+      "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+      "91XwiMK9s68LFkXig7AswFvFXW6ZJ6QX32m4HFG9TUKY",
+      "11111111111111111111111111111111",
+      "3Hn1f9eoo7QGqQFxdaYZo4xaYNs4VJznyYbWoU2hMGCu",
+      "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+      "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+      "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+    ]
+  },
+  "spendTransaction": {
+    "signature": "2fbWQ6ws2y2sHFUgBeELnKVsdVKZwpBnx6ma9kkwhkHtdw9ki2fBq14UN3nqdFMBcGsLQKUVK36aE1w7DBcPJLE3",
+    "explorer": "https://explorer.solana.com/tx/2fbWQ6ws2y2sHFUgBeELnKVsdVKZwpBnx6ma9kkwhkHtdw9ki2fBq14UN3nqdFMBcGsLQKUVK36aE1w7DBcPJLE3?cluster=devnet",
+    "slot": "512001315",
+    "err": null,
+    "feeLamports": "5000",
+    "computeUnitsConsumed": "144091",
+    "lamportChanges": [
+      {
+        "account": "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+        "delta": "-2219880"
+      },
+      {
+        "account": "AKMrsXdiCCk8PfsN7GTR5gCPESUWbMwH9o16g4nqFth",
+        "delta": "1310640"
+      },
+      {
+        "account": "GrwEXmDSbkvUVzYB8bPEaztwCon77CE4VuqH43k93mpT",
+        "delta": "904240"
+      }
+    ],
+    "accountKeys": [
+      "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+      "5MwxHt19yYSqcACa3UpABdQNsQhBN3v6jHLNSeKjBrGu",
+      "5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe",
+      "91XwiMK9s68LFkXig7AswFvFXW6ZJ6QX32m4HFG9TUKY",
+      "AKMrsXdiCCk8PfsN7GTR5gCPESUWbMwH9o16g4nqFth",
+      "GrwEXmDSbkvUVzYB8bPEaztwCon77CE4VuqH43k93mpT",
+      "11111111111111111111111111111111",
+      "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
+      "93626hbqJEjEY376ZH2goAgP8pWifvDECxSrhF5BqTkw",
+      "AwEDp4gTWkXZzGhefaQ3rZhYuTAaSrEKBzci4RqZN33y",
+      "ComputeBudget111111111111111111111111111111",
+      "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+    ]
+  },
+  "sponsorLamports": {
+    "fees": "10000",
+    "rentOutstanding": "1488440",
+    "relayerTotals": {
+      "feesSpent": "20000",
+      "rentOutstanding": "1488440",
+      "rentRecovered": "0"
+    }
+  },
+  "priv07": {
+    "check": "spend transaction account keys and bytes contain no deposit refund authority, its ATA, PendingDeposit/SeenPrecommitment PDA, deposit commitment, label, precommitment or salt",
+    "linkedAccounts": [],
+    "depositFieldBytesFound": [],
+    "passed": true,
+    "caveat": "Amounts, timing, the fresh payer and the sponsor are public; with two synthetic participants the anonymity set is two at most."
+  },
+  "proofTimingsMs": [
+    {
+      "circuit": "spend",
+      "ms": 406,
+      "at": "2026-10-17T07:41:55.042Z"
+    }
+  ]
+}

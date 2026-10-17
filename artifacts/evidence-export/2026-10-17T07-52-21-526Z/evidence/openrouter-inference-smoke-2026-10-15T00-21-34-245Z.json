@@ -1,0 +1,58 @@
+{
+  "kind": "live OpenRouter inference smoke (operator-funded real inference)",
+  "label": "Real model output via the operator-funded OpenRouter account",
+  "startedAt": "2026-10-15T00:21:34.245Z",
+  "model": "mistralai/mistral-nemo",
+  "pinnedTariff": {
+    "promptPicoUsdPerToken": "29000",
+    "completionPicoUsdPerToken": "30000",
+    "pinnedAt": "2026-10-14T14:08:19Z",
+    "source": "https://openrouter.ai/api/v1/models"
+  },
+  "pricingCheck": {
+    "ok": true,
+    "fetchedAt": "2026-10-15T00:21:34.140Z"
+  },
+  "bounds": {
+    "maxInputTokens": 400,
+    "maxOutputTokens": 64,
+    "worstCaseMicroUsd": "14"
+  },
+  "outcome": {
+    "status": "succeeded",
+    "executionId": "exe_7af397a2-5e15-4364-a773-168b0fe154bd",
+    "text": "It reduces waste.",
+    "model": "mistralai/mistral-nemo",
+    "reportedModel": "mistralai/mistral-nemo",
+    "mode": "live",
+    "promptTokens": 18,
+    "completionTokens": 5,
+    "costMicro": "1",
+    "finishReason": null
+  },
+  "execution": {
+    "id": "exe_7af397a2-5e15-4364-a773-168b0fe154bd",
+    "state": "succeeded",
+    "http_status": "200",
+    "generation_id": "gen-1792023694-ehGlQ2NOs9cnaCpBgpvj",
+    "reported_model": "mistralai/mistral-nemo",
+    "prompt_tokens": "18",
+    "completion_tokens": "5",
+    "started_at": "2026-10-15T00:21:34.245Z",
+    "finished_at": "2026-10-15T00:21:35.625Z"
+  },
+  "operatorLedger": {
+    "worst_case_micro": "14",
+    "actual_micro": "1",
+    "actual_source": "provider_reported",
+    "state": "settled"
+  },
+  "operatorBudget": {
+    "ceilingMicro": "1000000",
+    "exposureMicro": "1",
+    "remainingMicro": "999999",
+    "settledActualMicro": "1",
+    "openReservations": 0,
+    "uncertain": 0
+  }
+}

@@ -1,0 +1,232 @@
+{
+  "schemaVersion": 1,
+  "protocolVersion": 1,
+  "encodingVersion": "v1",
+  "network": {
+    "cluster": "devnet",
+    "caip2": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    "genesisHash": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+    "genesisHashHex": "ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
+  },
+  "program": {
+    "programId": "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
+    "programDataAddress": "ErofgrMt7PU56rkkk4kiazRvSnw2VjR1g1wecYgFNcr4",
+    "upgradeAuthority": "FcAoTX7M7GnQHgQRVN81bAfd7khph1ZpC8gz37c9AAhy",
+    "binarySha256": "864410cdc896bf5387b595450ce45d9568d3b2978be9729fc5630fcd92b862f9",
+    "binaryBytes": 378080,
+    "maxLen": 378080,
+    "sbpfVersion": "v3",
+    "anchorVersion": "1.2.1",
+    "solanaToolsVersion": "agave 4.1.2, platform-tools v1.57",
+    "rustToolchain": "1.97.1",
+    "groth16SolanaVersion": "0.2.0",
+    "deploySignature": "2Y93xbBd4owGckARoskBmpB33SRRgHS67w5EWRGowKMUazEoS9TZd1vv1UYE5vzcj6RMLo13bh9d9jg1sSBrBfaH"
+  },
+  "pool": {
+    "poolId": "39cced46df181bdbf4813f07e9ad553c4f7c02a4ab14730cead9ca2b6e100c3e",
+    "poolState": "5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe",
+    "vaultAuthority": "AwEDp4gTWkXZzGhefaQ3rZhYuTAaSrEKBzci4RqZN33y",
+    "vault": "5MwxHt19yYSqcACa3UpABdQNsQhBN3v6jHLNSeKjBrGu",
+    "approvalState": "93626hbqJEjEY376ZH2goAgP8pWifvDECxSrhF5BqTkw",
+    "initSignature": "4RVgpXQYKNCXMxiEGASA7CJc5HsXiogrqn4NsDDr17Um9shoqCpTq8XN1CEsqtmFkfeQMFGazRmKqvxNuWjToRne"
+  },
+  "token": {
+    "mint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+    "decimals": 6,
+    "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+    "mintKind": "devnet-usdc",
+    "freezeAuthority": "CJtyoKSLrktozQzjERTiK3btQtiTK3nN4QrqGHLidyCT"
+  },
+  "crypto": {
+    "curve": "bn254",
+    "scalarField": "21888242871839275222246405745257275088548364400416034343698204186575808495617",
+    "proofSystem": "groth16",
+    "hash": {
+      "name": "poseidon-circomlib",
+      "sbox": 5,
+      "fullRounds": 8,
+      "partialRounds": {
+        "2": 57,
+        "3": 56
+      },
+      "arities": [
+        2,
+        3
+      ]
+    },
+    "labelDomain": "veilo/label/v1",
+    "intentDomain": "veilo/intent/v1",
+    "contextHash": "sha256-first31-be",
+    "vectorsFile": "artifacts/vectors/v1.json",
+    "vectorsSha256": "128f715e745c280d5da0a54877ed3bcdbb0a4e0a519a8278c171ff1354299f68"
+  },
+  "trees": {
+    "commitmentDepth": 16,
+    "approvedDepth": 16,
+    "rootHistory": 32,
+    "emptyRoot": "19217088683336594659449020493828377907203207941212636669271704950158751593251",
+    "capacity": 65536,
+    "changeReserve": 1024,
+    "queueMaxLiveDeposits": 64
+  },
+  "circuits": {
+    "spend": {
+      "name": "spend",
+      "sourceSha256": "c3a21da66a7a44a19dd6bc9356f0c6ebf8e45d7c6df5450d02a2948f0e1476eb",
+      "circomVersion": "circom compiler 2.2.3",
+      "compilerFlags": [
+        "--r1cs",
+        "--wasm",
+        "--sym",
+        "--O2",
+        "--prime",
+        "bn128",
+        "-l",
+        "node_modules/.pnpm/circomlib@2.0.5/node_modules"
+      ],
+      "constraints": 9181,
+      "nPublic": 6,
+      "publicInputOrder": [
+        "context",
+        "stateRoot",
+        "approvedRoot",
+        "nullifierHash",
+        "withdrawnValue",
+        "newCommitment"
+      ],
+      "r1csSha256": "b6d151dc92655654429da8341a82ede511a05f82168ba1a053f44d017dc52279",
+      "wasmSha256": "605fda3ec8f8d6649153277f408b3776cdb201d6312f6f96d76888762ea33ea2",
+      "zkeySha256": "af6af498c0b022b16911a5611ab0ba225d5f6e87b0639edb519393c5b3de81ef",
+      "vkeyJsonSha256": "1c79fb920c5e90d407af61d87cee9e87c3d9af435fb28dcccfadb2d4f2fc8e26",
+      "vkRustSha256": "683a33aceac8266cb38a38d44b4591606578566667f324c95051e5ba77f727c2",
+      "ptau": {
+        "file": "circuits/build/ptau/pot15_veilo_dev_final.ptau",
+        "sha256": "47ce57fd2a7e93f38e51810e4cdb56376608737f8f0eff8492f4db67f423132e",
+        "power": 15,
+        "source": "local deterministic development generation with snarkjs 0.7.6 (public beacon only); not a trusted ceremony"
+      },
+      "setup": {
+        "kind": "development",
+        "contributions": [
+          "phase1: beacon f631e9a3be13fc858dc1d237741cee80fa28703724ff4855bcbbef4a8540da01 2^10",
+          "phase2: beacon 3e96053921ef8aa352e6a433c05ab58da52336f7c5c549528b798dec7820fbd2 2^10"
+        ],
+        "beacon": "sha256(\"veilo/dev-setup/v1/phase2/spend\") = 3e96053921ef8aa352e6a433c05ab58da52336f7c5c549528b798dec7820fbd2, 2^10 iterations"
+      }
+    },
+    "insert": {
+      "name": "insert",
+      "sourceSha256": "713ac302fbd0f2632f68bf54db7ffa96bd9ee3a644d6d6679e2b9eda274f8820",
+      "circomVersion": "circom compiler 2.2.3",
+      "compilerFlags": [
+        "--r1cs",
+        "--wasm",
+        "--sym",
+        "--O2",
+        "--prime",
+        "bn128",
+        "-l",
+        "node_modules/.pnpm/circomlib@2.0.5/node_modules"
+      ],
+      "constraints": 7745,
+      "nPublic": 4,
+      "publicInputOrder": [
+        "oldRoot",
+        "newRoot",
+        "leafIndex",
+        "leaf"
+      ],
+      "r1csSha256": "4ff634a7e62eb7b602a0e32faaa0855c74b50ab4bf804684c6a48c860d442b72",
+      "wasmSha256": "e48677432f231a70410c67de26e7d04e8facca9e5fa6aaaa04d53d81081ba8e5",
+      "zkeySha256": "2f81f9b14a0f398f59853d9ae4c2d537150134db41ffd842d47b654ed8d97e97",
+      "vkeyJsonSha256": "196006c4805100c49c5e2c0be97c0c8ada2ec14d9f6b8a817526040c821f4447",
+      "vkRustSha256": "7f62e0f55b84104ecb3d3cd46b270607eb61a52f751f6119a3e571d8009451af",
+      "ptau": {
+        "file": "circuits/build/ptau/pot15_veilo_dev_final.ptau",
+        "sha256": "47ce57fd2a7e93f38e51810e4cdb56376608737f8f0eff8492f4db67f423132e",
+        "power": 15,
+        "source": "local deterministic development generation with snarkjs 0.7.6 (public beacon only); not a trusted ceremony"
+      },
+      "setup": {
+        "kind": "development",
+        "contributions": [
+          "phase1: beacon f631e9a3be13fc858dc1d237741cee80fa28703724ff4855bcbbef4a8540da01 2^10",
+          "phase2: beacon b6251290159653d08e19ab501d11d5d2561fbe0dda8c61562292aa5889b06e7b 2^10"
+        ],
+        "beacon": "sha256(\"veilo/dev-setup/v1/phase2/insert\") = b6251290159653d08e19ab501d11d5d2561fbe0dda8c61562292aa5889b06e7b, 2^10 iterations"
+      }
+    },
+    "exit": {
+      "name": "exit",
+      "sourceSha256": "755ace3db7dc0291bc825930d38bf0fa14fd8e595c4bace42508583dde6a82ae",
+      "circomVersion": "circom compiler 2.2.3",
+      "compilerFlags": [
+        "--r1cs",
+        "--wasm",
+        "--sym",
+        "--O2",
+        "--prime",
+        "bn128",
+        "-l",
+        "node_modules/.pnpm/circomlib@2.0.5/node_modules"
+      ],
+      "constraints": 4678,
+      "nPublic": 4,
+      "publicInputOrder": [
+        "stateRoot",
+        "label",
+        "value",
+        "nullifierHash"
+      ],
+      "r1csSha256": "a528a381ebc964c474ac3e3b46fe31e1b5dad004c08fadfaab7453d56e61881c",
+      "wasmSha256": "359bcdd0d683e06180798503d42d9fc3a5a1fcbe45aa42e02872a114ee100622",
+      "zkeySha256": "e7057f45eaa9b39964f75b827e94157359e9d9f83c75108c3b7e566e13e05486",
+      "vkeyJsonSha256": "46511e797221dc626446a10f0701bd053cdfdfb0a3c80db4e4fdf0b535ced501",
+      "vkRustSha256": "1b24479bf0e3315fd31e70e9dcc53d2b276461d47c7dbdac7d4211bd5c59f843",
+      "ptau": {
+        "file": "circuits/build/ptau/pot15_veilo_dev_final.ptau",
+        "sha256": "47ce57fd2a7e93f38e51810e4cdb56376608737f8f0eff8492f4db67f423132e",
+        "power": 15,
+        "source": "local deterministic development generation with snarkjs 0.7.6 (public beacon only); not a trusted ceremony"
+      },
+      "setup": {
+        "kind": "development",
+        "contributions": [
+          "phase1: beacon f631e9a3be13fc858dc1d237741cee80fa28703724ff4855bcbbef4a8540da01 2^10",
+          "phase2: beacon 5da312d16f9a0386da1e5da86f8f64b9775f4028aa4c6638b68d831af9d4ca42 2^10"
+        ],
+        "beacon": "sha256(\"veilo/dev-setup/v1/phase2/exit\") = 5da312d16f9a0386da1e5da86f8f64b9775f4028aa4c6638b68d831af9d4ca42, 2^10 iterations"
+      }
+    }
+  },
+  "bounds": {
+    "minDeposit": "100000",
+    "maxDeposit": "20000000",
+    "liabilityCap": "100000000",
+    "maxRelayerFee": "0",
+    "maxIntentSlots": 750,
+    "hardMaxDeposit": "20000000",
+    "hardLiabilityCap": "100000000",
+    "hardMaxRelayerFee": "100000"
+  },
+  "authorities": {
+    "deployer": "FcAoTX7M7GnQHgQRVN81bAfd7khph1ZpC8gz37c9AAhy",
+    "configAuthority": "5797zmtBdH4rWVAryxjtTreNpiQajkMYX6GqmkTSPmbe",
+    "approvalAuthority": "7gpa8LcVEm3MLX4JqPtfbv95heRFKpsFCA4R84EhdDRE",
+    "sponsor": "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+    "relayer": "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd"
+  },
+  "rootHistoryRule": "spend/exit accept any of the newest 32 commitment roots; insert accepts only the current root; spend accepts only the current approved root",
+  "signatures": {
+    "fundRoles": "2cvdK45jcFy73zTRzQtrt36NkamkjvN6Zooxg7hAkJteosAfum3wFym5XiMbSAYDe1VSr3KQ9C4gPoobS1nKfcwt",
+    "deploy": "2Y93xbBd4owGckARoskBmpB33SRRgHS67w5EWRGowKMUazEoS9TZd1vv1UYE5vzcj6RMLo13bh9d9jg1sSBrBfaH",
+    "initializePool": "4RVgpXQYKNCXMxiEGASA7CJc5HsXiogrqn4NsDDr17Um9shoqCpTq8XN1CEsqtmFkfeQMFGazRmKqvxNuWjToRne",
+    "merchantAta": "5Z4jBuT27MpFuDVGzoMGZu1VKAzUG7EuFXsECBdN2ME4DHdgzpBBnyUaLL1GrddDX2cnu7j8REpttKQ1Usz7vQLp"
+  },
+  "gateway": {
+    "merchantAddress": "3hbVsik3DMzaXaCCBrtua2xJt4M152hCsZ17bkLHueFT",
+    "merchantAta": "45oAG4yFR88nFQQVN6iGKtfKPD55vaNtXoxzGhrwaatz",
+    "facilitatorFeePayer": "2wKupLR9q6wXYppw8Gr2NvWxKBUqm4PPJKkQfoxHDBg4"
+  },
+  "createdAt": "2026-10-17T07:40:47.659Z"
+}

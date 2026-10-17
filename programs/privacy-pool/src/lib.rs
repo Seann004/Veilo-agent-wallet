@@ -14,7 +14,7 @@ pub mod util;
 use instructions::*;
 use state::{ConfigUpdate, Groth16Proof, WithdrawalIntent};
 
-declare_id!("3B6Db74gPstdciTfr1gdYG4DuhA2DpTGqYM9jgthYUrq");
+declare_id!("27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd");
 
 #[program]
 pub mod privacy_pool {
