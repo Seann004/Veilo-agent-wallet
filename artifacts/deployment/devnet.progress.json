@@ -1,0 +1,208 @@
+{
+  "schema": "veilo-devnet-deploy-progress-v1",
+  "programId": "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
+  "poolId": "39cced46df181bdbf4813f07e9ad553c4f7c02a4ab14730cead9ca2b6e100c3e",
+  "steps": {
+    "fund-roles": {
+      "state": "done",
+      "sent": {
+        "signature": "2cvdK45jcFy73zTRzQtrt36NkamkjvN6Zooxg7hAkJteosAfum3wFym5XiMbSAYDe1VSr3KQ9C4gPoobS1nKfcwt",
+        "lastValidBlockHeight": "499217182",
+        "sentAt": "2026-10-17T07:40:06.522Z"
+      },
+      "outcome": {
+        "signature": "2cvdK45jcFy73zTRzQtrt36NkamkjvN6Zooxg7hAkJteosAfum3wFym5XiMbSAYDe1VSr3KQ9C4gPoobS1nKfcwt",
+        "slot": "512000827",
+        "err": null,
+        "fee": "5000",
+        "computeUnitsConsumed": "750",
+        "explorer": "https://explorer.solana.com/tx/2cvdK45jcFy73zTRzQtrt36NkamkjvN6Zooxg7hAkJteosAfum3wFym5XiMbSAYDe1VSr3KQ9C4gPoobS1nKfcwt?cluster=devnet"
+      },
+      "details": {
+        "transfers": [
+          {
+            "role": "deployer",
+            "to": "FcAoTX7M7GnQHgQRVN81bAfd7khph1ZpC8gz37c9AAhy",
+            "lamports": "3879752560"
+          },
+          {
+            "role": "sponsor",
+            "to": "D7iWAmNqEJvJ3GaoiGX4rzdEnmpcMrykMDmZvvw6uamd",
+            "lamports": "300000000"
+          },
+          {
+            "role": "approvalAuthority",
+            "to": "7gpa8LcVEm3MLX4JqPtfbv95heRFKpsFCA4R84EhdDRE",
+            "lamports": "10000000"
+          },
+          {
+            "role": "testOwnerA",
+            "to": "7oTzRWg33mod7KxVUiVWBUyMna6wgrQXUv3dC58ZsabE",
+            "lamports": "30000000"
+          },
+          {
+            "role": "testOwnerB",
+            "to": "mYG89rxGotGF2VYoT3tffbMbsaKdCaJEoAPbTXzWEZ2",
+            "lamports": "30000000"
+          }
+        ]
+      },
+      "at": "2026-10-17T07:40:10.928Z"
+    },
+    "deploy-program": {
+      "state": "done",
+      "outcome": {
+        "signature": "2Y93xbBd4owGckARoskBmpB33SRRgHS67w5EWRGowKMUazEoS9TZd1vv1UYE5vzcj6RMLo13bh9d9jg1sSBrBfaH",
+        "slot": "512000921",
+        "err": null,
+        "fee": "10000",
+        "computeUnitsConsumed": "2670",
+        "explorer": "https://explorer.solana.com/tx/2Y93xbBd4owGckARoskBmpB33SRRgHS67w5EWRGowKMUazEoS9TZd1vv1UYE5vzcj6RMLo13bh9d9jg1sSBrBfaH?cluster=devnet"
+      },
+      "details": {
+        "deploySignature": "2Y93xbBd4owGckARoskBmpB33SRRgHS67w5EWRGowKMUazEoS9TZd1vv1UYE5vzcj6RMLo13bh9d9jg1sSBrBfaH",
+        "maxLen": 378080
+      },
+      "at": "2026-10-17T07:40:40.166Z"
+    },
+    "initialize-pool": {
+      "state": "done",
+      "sent": {
+        "signature": "4RVgpXQYKNCXMxiEGASA7CJc5HsXiogrqn4NsDDr17Um9shoqCpTq8XN1CEsqtmFkfeQMFGazRmKqvxNuWjToRne",
+        "lastValidBlockHeight": "499217326",
+        "sentAt": "2026-10-17T07:40:40.350Z"
+      },
+      "outcome": {
+        "signature": "4RVgpXQYKNCXMxiEGASA7CJc5HsXiogrqn4NsDDr17Um9shoqCpTq8XN1CEsqtmFkfeQMFGazRmKqvxNuWjToRne",
+        "slot": "512000970",
+        "err": null,
+        "fee": "5000",
+        "computeUnitsConsumed": "51930",
+        "explorer": "https://explorer.solana.com/tx/4RVgpXQYKNCXMxiEGASA7CJc5HsXiogrqn4NsDDr17Um9shoqCpTq8XN1CEsqtmFkfeQMFGazRmKqvxNuWjToRne?cluster=devnet"
+      },
+      "details": {
+        "poolState": "5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe",
+        "vault": "5MwxHt19yYSqcACa3UpABdQNsQhBN3v6jHLNSeKjBrGu",
+        "approvalState": "93626hbqJEjEY376ZH2goAgP8pWifvDECxSrhF5BqTkw",
+        "emptyRoot": "19217088683336594659449020493828377907203207941212636669271704950158751593251",
+        "currentRoot": "19217088683336594659449020493828377907203207941212636669271704950158751593251",
+        "approvedRoot": "19217088683336594659449020493828377907203207941212636669271704950158751593251",
+        "approvedVersion": "0",
+        "minDeposit": "100000",
+        "maxDeposit": "20000000",
+        "liabilityCap": "100000000",
+        "maxRelayerFee": "0",
+        "nextLeafIndex": "0"
+      },
+      "at": "2026-10-17T07:40:43.756Z"
+    },
+    "merchant-ata": {
+      "state": "done",
+      "sent": {
+        "signature": "5Z4jBuT27MpFuDVGzoMGZu1VKAzUG7EuFXsECBdN2ME4DHdgzpBBnyUaLL1GrddDX2cnu7j8REpttKQ1Usz7vQLp",
+        "lastValidBlockHeight": "499217342",
+        "sentAt": "2026-10-17T07:40:44.155Z"
+      },
+      "outcome": {
+        "signature": "5Z4jBuT27MpFuDVGzoMGZu1VKAzUG7EuFXsECBdN2ME4DHdgzpBBnyUaLL1GrddDX2cnu7j8REpttKQ1Usz7vQLp",
+        "slot": "512000986",
+        "err": null,
+        "fee": "5000",
+        "computeUnitsConsumed": "13518",
+        "explorer": "https://explorer.solana.com/tx/5Z4jBuT27MpFuDVGzoMGZu1VKAzUG7EuFXsECBdN2ME4DHdgzpBBnyUaLL1GrddDX2cnu7j8REpttKQ1Usz7vQLp?cluster=devnet"
+      },
+      "details": {
+        "merchant": "3hbVsik3DMzaXaCCBrtua2xJt4M152hCsZ17bkLHueFT",
+        "merchantAta": "45oAG4yFR88nFQQVN6iGKtfKPD55vaNtXoxzGhrwaatz"
+      },
+      "at": "2026-10-17T07:40:47.489Z"
+    },
+    "approval-root": {
+      "state": "done",
+      "details": {
+        "approvedRoot": "19217088683336594659449020493828377907203207941212636669271704950158751593251",
+        "version": "0",
+        "note": "initialize_pool sets the empty approved root (version 0); no transaction is needed until a deposit is inserted and approved",
+        "labelsFile": "artifacts/deployment/approved-labels.json"
+      },
+      "at": "2026-10-17T07:40:47.583Z"
+    },
+    "manifest": {
+      "state": "done",
+      "details": {
+        "path": "artifacts/deployment/devnet.json"
+      },
+      "at": "2026-10-17T07:40:47.707Z"
+    },
+    "fund-test-usdc": {
+      "state": "done",
+      "sent": {
+        "signature": "47gEjkook7XBEmAnDNK6iwZbCPkesfZLxs3hFtKdU75Msi93LTHpRdaENJkmfvJnb4d9wfe4h1D5KX7yT2KQ8z12",
+        "lastValidBlockHeight": "499217439",
+        "sentAt": "2026-10-17T07:41:07.394Z"
+      },
+      "outcome": {
+        "signature": "47gEjkook7XBEmAnDNK6iwZbCPkesfZLxs3hFtKdU75Msi93LTHpRdaENJkmfvJnb4d9wfe4h1D5KX7yT2KQ8z12",
+        "slot": "512001084",
+        "err": null,
+        "fee": "5000",
+        "computeUnitsConsumed": "30246",
+        "explorer": "https://explorer.solana.com/tx/47gEjkook7XBEmAnDNK6iwZbCPkesfZLxs3hFtKdU75Msi93LTHpRdaENJkmfvJnb4d9wfe4h1D5KX7yT2KQ8z12?cluster=devnet"
+      },
+      "details": {
+        "perParticipant": "200000",
+        "transfers": [
+          {
+            "role": "testOwnerA",
+            "ata": "Dda34PDLJGfhXcugc18mxUrPPB3xf7Vo7Pawib3yrKNy",
+            "amount": "200000"
+          },
+          {
+            "role": "testOwnerB",
+            "ata": "8YoWsgUmLRN8GXun7NUdifQTFsZpTbjwnWpQTD4dBTSh",
+            "amount": "200000"
+          }
+        ]
+      },
+      "at": "2026-10-17T07:41:10.755Z"
+    }
+  },
+  "attempts": [
+    {
+      "step": "fund-roles",
+      "sent": {
+        "signature": "2cvdK45jcFy73zTRzQtrt36NkamkjvN6Zooxg7hAkJteosAfum3wFym5XiMbSAYDe1VSr3KQ9C4gPoobS1nKfcwt",
+        "lastValidBlockHeight": "499217182",
+        "sentAt": "2026-10-17T07:40:06.522Z"
+      },
+      "result": "finalized"
+    },
+    {
+      "step": "initialize-pool",
+      "sent": {
+        "signature": "4RVgpXQYKNCXMxiEGASA7CJc5HsXiogrqn4NsDDr17Um9shoqCpTq8XN1CEsqtmFkfeQMFGazRmKqvxNuWjToRne",
+        "lastValidBlockHeight": "499217326",
+        "sentAt": "2026-10-17T07:40:40.350Z"
+      },
+      "result": "finalized"
+    },
+    {
+      "step": "merchant-ata",
+      "sent": {
+        "signature": "5Z4jBuT27MpFuDVGzoMGZu1VKAzUG7EuFXsECBdN2ME4DHdgzpBBnyUaLL1GrddDX2cnu7j8REpttKQ1Usz7vQLp",
+        "lastValidBlockHeight": "499217342",
+        "sentAt": "2026-10-17T07:40:44.155Z"
+      },
+      "result": "finalized"
+    },
+    {
+      "step": "fund-test-usdc",
+      "sent": {
+        "signature": "47gEjkook7XBEmAnDNK6iwZbCPkesfZLxs3hFtKdU75Msi93LTHpRdaENJkmfvJnb4d9wfe4h1D5KX7yT2KQ8z12",
+        "lastValidBlockHeight": "499217439",
+        "sentAt": "2026-10-17T07:41:07.394Z"
+      },
+      "result": "finalized"
+    }
+  ]
+}
