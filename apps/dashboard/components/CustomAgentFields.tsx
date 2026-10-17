@@ -75,7 +75,7 @@ export function RunnerCredentialNote() {
 function HiringCopy() {
   return (
     <p className="small">
-      The agent searches the marketplace and may propose one specialist per task. Off: it only reports what it found and can never pay a specialist. On:
+      The agent does the work itself when it can, and may propose one specialist per task when it needs outside help. Off: it can never pay a specialist. On:
       each hire waits for your approval in <Link href="/marketplace/approvals">Marketplace → Approvals</Link>, unless you pre-approve that listing below,
       and every payment stays inside this agent&apos;s spending policy and the workspace limits.
     </p>
