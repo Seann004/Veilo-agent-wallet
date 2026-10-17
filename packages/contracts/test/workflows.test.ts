@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   checkWorkflowPublication,
   stepQuoteProblem,
+  toolKey,
   toolManifestDigest,
   workflowApprovalDigest,
   workflowVersionInputSchema,
@@ -19,7 +20,8 @@ const R2 = "CPZSjRmyfTS95UjQD8ZdeTEWbQvW9QvEXnn6aGP7yyMN";
 
 function tool(id: string, over: Partial<ToolFacts> = {}): ToolFacts {
   return {
-    listingVersionId: id,
+    toolKind: id === DATA ? "external" : "listing",
+    toolId: id,
     current: true,
     reviewStatus: "approved",
     listingStatus: "published",
@@ -32,7 +34,7 @@ function tool(id: string, over: Partial<ToolFacts> = {}): ToolFacts {
 }
 
 function tools(...t: ToolFacts[]): Map<string, ToolFacts> {
-  return new Map(t.map((x) => [x.listingVersionId, x]));
+  return new Map(t.map((x) => [toolKey(x.toolKind, x.toolId), x]));
 }
 
 const base = (): WorkflowVersionInput =>
@@ -44,8 +46,8 @@ const base = (): WorkflowVersionInput =>
     safetyPromise: "",
     runInputs: [{ name: "mint", label: "Token mint", maxChars: 64 }],
     steps: [
-      { listingVersionId: DATA, maxBaseUnits: "3000", inputs: { query: { from: "run_input", name: "mint" } } },
-      { listingVersionId: BRIEF, maxBaseUnits: "10000", inputs: { query: { from: "step", step: 0 } } },
+      { toolKind: "external", toolId: DATA, maxBaseUnits: "3000", inputs: { query: { from: "run_input", name: "mint" } } },
+      { toolKind: "listing", toolId: BRIEF, maxBaseUnits: "10000", inputs: { query: { from: "step", step: 0 } } },
     ],
     totalMaxBaseUnits: "13000",
     payoutVersionId: PAYOUT,
@@ -65,16 +67,16 @@ describe("workflow publication checks (§26.7)", () => {
 
   it("goes to review when a step's tool is still in review", () => {
     const f = facts();
-    f.set(BRIEF, { ...f.get(BRIEF)!, reviewStatus: "pending", listingStatus: "in_review", current: false });
+    f.set(`listing:${BRIEF}`, { ...f.get(`listing:${BRIEF}`)!, reviewStatus: "pending", listingStatus: "in_review", current: false });
     expect(checkWorkflowPublication(base(), f, true).decision).toBe("review");
   });
 
   it("rejects superseded, suspended or unknown tools", () => {
     const superseded = facts();
-    superseded.set(DATA, { ...superseded.get(DATA)!, current: false });
+    superseded.set(`external:${DATA}`, { ...superseded.get(`external:${DATA}`)!, current: false });
     expect(checkWorkflowPublication(base(), superseded, true).problems).toContain("step 0: tool version is unpublished or superseded");
     const suspended = facts();
-    suspended.set(DATA, { ...suspended.get(DATA)!, listingStatus: "suspended" });
+    suspended.set(`external:${DATA}`, { ...suspended.get(`external:${DATA}`)!, listingStatus: "suspended" });
     expect(checkWorkflowPublication(base(), suspended, true).decision).toBe("rejected");
     expect(checkWorkflowPublication(base(), tools(tool(BRIEF)), true).problems).toContain("step 0: tool version not found");
   });
@@ -93,7 +95,7 @@ describe("workflow publication checks (§26.7)", () => {
 
   it("type-checks mappings and only allows earlier steps", () => {
     const f = facts();
-    f.set(BRIEF, { ...f.get(BRIEF)!, io: { inputs: [{ name: "query", kind: "image_url", required: true, maxChars: 500 }], output: { kind: "markdown" } } });
+    f.set(`listing:${BRIEF}`, { ...f.get(`listing:${BRIEF}`)!, io: { inputs: [{ name: "query", kind: "image_url", required: true, maxChars: 500 }], output: { kind: "markdown" } } });
     expect(checkWorkflowPublication(base(), f, true).problems).toContain("step 1: query expects image_url but step 0 produces json");
     const forward = base();
     forward.steps[0]!.inputs = { query: { from: "step", step: 1 } };
@@ -109,10 +111,10 @@ describe("workflow publication checks (§26.7)", () => {
   it("requires a verified payout and a safety promise for external drafting steps", () => {
     expect(checkWorkflowPublication(base(), facts(), false).problems).toContain("creator payout wallet is not verified");
     const w = base();
-    w.steps.push({ listingVersionId: DRAFT, maxBaseUnits: "2000", inputs: { query: { from: "step", step: 1 } } });
+    w.steps.push({ toolKind: "listing", toolId: DRAFT, maxBaseUnits: "2000", inputs: { query: { from: "step", step: 1 } } });
     w.totalMaxBaseUnits = "15000";
     const f = facts();
-    f.set(DRAFT, tool(DRAFT, { priceBaseUnits: 2000n, effect: "draft_external", io: { inputs: [{ name: "query", kind: "text", required: true, maxChars: 2000 }], output: { kind: "draft_post" } } }));
+    f.set(`listing:${DRAFT}`, tool(DRAFT, { priceBaseUnits: 2000n, effect: "draft_external", io: { inputs: [{ name: "query", kind: "text", required: true, maxChars: 2000 }], output: { kind: "draft_post" } } }));
     expect(checkWorkflowPublication(w, f, true).problems).toContain("a workflow with an external drafting step needs a safety promise");
     w.safetyPromise = "Drafts only; nothing posts without your approval.";
     expect(checkWorkflowPublication(w, f, true).decision).toBe("live");
@@ -125,13 +127,13 @@ describe("workflow approval terms", () => {
     network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
     mint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
     steps: [
-      { listingVersionId: DATA, recipient: R1, maxBaseUnits: "3000" },
-      { listingVersionId: BRIEF, recipient: R2, maxBaseUnits: "10000" },
+      { toolKind: "external", toolId: DATA, recipient: R1, maxBaseUnits: "3000" },
+      { toolKind: "listing", toolId: BRIEF, recipient: R2, maxBaseUnits: "10000" },
     ],
     totalMaxBaseUnits: "13000",
     runInputsDigest: "a".repeat(64),
   };
-  const quote = { listingVersionId: BRIEF, recipient: R2, totalBaseUnits: 10_000n, network: terms.network, mint: terms.mint };
+  const quote = { toolKind: "listing" as const, toolId: BRIEF, recipient: R2, totalBaseUnits: 10_000n, network: terms.network, mint: terms.mint };
 
   it("binds every term into the digest", () => {
     const d = workflowApprovalDigest(terms);
@@ -145,7 +147,8 @@ describe("workflow approval terms", () => {
     expect(stepQuoteProblem(terms, 1, { ...quote, totalBaseUnits: 10_001n })).toBe("step price changed");
     expect(stepQuoteProblem(terms, 1, { ...quote, totalBaseUnits: 9_999n })).toBe("step price changed");
     expect(stepQuoteProblem(terms, 1, { ...quote, recipient: R1 })).toBe("step recipient changed");
-    expect(stepQuoteProblem(terms, 1, { ...quote, listingVersionId: DATA })).toBe("step tool version changed");
+    expect(stepQuoteProblem(terms, 1, { ...quote, toolId: DATA })).toBe("step tool version changed");
+    expect(stepQuoteProblem(terms, 1, { ...quote, toolKind: "external" })).toBe("step tool version changed");
     expect(stepQuoteProblem(terms, 1, { ...quote, mint: R1 })).toBe("step mint changed");
     expect(stepQuoteProblem(terms, 2, quote)).toBe("step is not part of the approved workflow");
   });

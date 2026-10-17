@@ -87,10 +87,15 @@ export const stepInputSchema = z.discriminatedUnion("from", [
 ]);
 export type StepInput = z.infer<typeof stepInputSchema>;
 
+/** A step names a published listing version, or an operator-approved external x402 tool. */
+export const STEP_TOOL_KINDS = ["listing", "external"] as const;
+export type StepToolKind = (typeof STEP_TOOL_KINDS)[number];
+
 export const workflowStepSchema = z
   .object({
-    listingVersionId: z.uuid(),
-    /** The step's price ceiling. Publication requires it to equal the listing's published price. */
+    toolKind: z.enum(STEP_TOOL_KINDS),
+    toolId: z.uuid(),
+    /** The step's price ceiling. Publication requires it to equal the tool's published price. */
     maxBaseUnits: baseUnits,
     inputs: z.record(z.string().regex(/^[a-z][a-z0-9_]{0,39}$/), stepInputSchema),
   })
@@ -117,9 +122,12 @@ export const workflowVersionInputSchema = z
   .strict();
 export type WorkflowVersionInput = z.infer<typeof workflowVersionInputSchema>;
 
+export const toolKey = (kind: StepToolKind, id: string): string => `${kind}:${id}`;
+
 /** The published facts about a step's tool that publication checks rely on. */
 export interface ToolFacts {
-  listingVersionId: string;
+  toolKind: StepToolKind;
+  toolId: string;
   /** True only for the listing's current, approved, published version. */
   current: boolean;
   reviewStatus: "pending" | "approved" | "rejected";
@@ -150,7 +158,7 @@ export function checkWorkflowPublication(input: WorkflowVersionInput, tools: Rea
   if (!payoutVerified) problems.push("creator payout wallet is not verified");
 
   input.steps.forEach((step, i) => {
-    const t = tools.get(step.listingVersionId);
+    const t = tools.get(toolKey(step.toolKind, step.toolId));
     if (!t) {
       problems.push(`step ${i}: tool version not found`);
       return;
@@ -180,7 +188,8 @@ export function checkWorkflowPublication(input: WorkflowVersionInput, tools: Rea
           problems.push(`step ${i}: ${want.name} must come from an earlier step`);
           continue;
         }
-        const from = tools.get(input.steps[src.step]?.listingVersionId ?? "");
+        const prior = input.steps[src.step];
+        const from = prior ? tools.get(toolKey(prior.toolKind, prior.toolId)) : undefined;
         if (from && !compatible(from.io.output.kind, want.kind)) {
           problems.push(`step ${i}: ${want.name} expects ${want.kind} but step ${src.step} produces ${from.io.output.kind}`);
         }
@@ -208,7 +217,7 @@ export const workflowApprovalTermsSchema = z
     network: z.string().min(1),
     mint: solanaAddress,
     steps: z
-      .array(z.object({ listingVersionId: z.uuid(), recipient: solanaAddress, maxBaseUnits: baseUnits }).strict())
+      .array(z.object({ toolKind: z.enum(STEP_TOOL_KINDS), toolId: z.uuid(), recipient: solanaAddress, maxBaseUnits: baseUnits }).strict())
       .min(1)
       .max(8),
     totalMaxBaseUnits: baseUnits,
@@ -229,11 +238,11 @@ export function runInputsDigest(values: Record<string, string>): string {
 export function stepQuoteProblem(
   terms: WorkflowApprovalTerms,
   index: number,
-  quote: { listingVersionId: string; recipient: string; totalBaseUnits: bigint; network: string; mint: string },
+  quote: { toolKind: StepToolKind; toolId: string; recipient: string; totalBaseUnits: bigint; network: string; mint: string },
 ): string | null {
   const s = terms.steps[index];
   if (!s) return "step is not part of the approved workflow";
-  if (quote.listingVersionId !== s.listingVersionId) return "step tool version changed";
+  if (quote.toolKind !== s.toolKind || quote.toolId !== s.toolId) return "step tool version changed";
   if (quote.recipient !== s.recipient) return "step recipient changed";
   if (quote.network !== terms.network) return "step network changed";
   if (quote.mint !== terms.mint) return "step mint changed";
