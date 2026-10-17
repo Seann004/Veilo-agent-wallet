@@ -7,6 +7,7 @@ import { agentRouter } from "./http/agent-routes";
 import { connectorRouter } from "./http/connector-routes";
 import { controlRouter } from "./http/routes";
 import { externalRouter } from "./http/external-routes";
+import { swapRouter } from "./http/swap-routes";
 import { workflowRouter } from "./http/workflow-routes";
 import { marketplaceRouter } from "./http/marketplace-routes";
 import { ownerRouter } from "./http/owner-routes";
@@ -59,6 +60,7 @@ export function createApp(health: ServiceHealth, deps?: ControlDeps): Express {
   app.use(ownerRouter(deps));
   app.use(marketplaceRouter(deps));
   app.use(externalRouter(deps));
+  app.use(swapRouter(deps));
   app.use(workflowRouter(deps));
   app.use(connectorRouter(deps));
   app.use((_req: Request, res: Response) => {
