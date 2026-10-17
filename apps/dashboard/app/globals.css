@@ -4409,3 +4409,109 @@ h4 {
 .usdc-icon {
   flex: none;
 }
+
+/* ---------- Marketplace browse ---------- */
+
+.market-nav {
+  margin-bottom: 1.25rem;
+}
+
+.market-nav .tabs {
+  margin-bottom: 0.75rem;
+}
+
+.subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.subtabs a {
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-2);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.subtabs a:hover {
+  color: var(--ink);
+}
+
+.subtabs a[aria-current="page"] {
+  color: var(--ink);
+  background: var(--surface-2);
+  border-color: var(--ink-3);
+}
+
+ul.cards {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.workflow-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 1.1rem 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.workflow-card:hover {
+  border-color: var(--ink-3);
+}
+
+.workflow-card .listing-title {
+  margin: 0;
+  font-size: 1.02rem;
+}
+
+.workflow-card .listing-title a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.workflow-card .listing-title a:hover {
+  text-decoration: underline;
+}
+
+.workflow-card .role,
+.workflow-card p {
+  margin: 0;
+}
+
+.workflow-card .workflow-price {
+  margin-top: auto;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--line-2);
+}
+
+.market-search-form {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1.5rem;
+}
+
+.market-search-form input {
+  flex: 1;
+  min-width: 0;
+}
+
+.creator-row .avatar {
+  border-radius: 12px;
+}
+
+.workflow-section {
+  margin-top: 1.75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-card {
+    transition: none;
+  }
+}

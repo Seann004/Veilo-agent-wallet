@@ -7,6 +7,7 @@ import type { JobPresentation } from "../../lib/market/job-state";
 import { DECIMALS_UNVERIFIED, TEST_TOKEN_LABEL } from "../../lib/market/messages";
 import { toBaseUnits } from "../../lib/market/amounts";
 import { useMarket } from "./MarketContext";
+import { UsdcIcon } from "../UsdcIcon";
 
 const GLYPH = { ok: "✓", wait: "…", problem: "!", idle: "·" } as const;
 
@@ -14,9 +15,18 @@ const GLYPH = { ok: "✓", wait: "…", problem: "!", idle: "·" } as const;
  * A token amount: the exact integer base units always, plus a decimal rendering only when the
  * local controller has verified the mint's decimals. Always carries the test-token label.
  */
-export function Money({ amount, decimals, unit = "USDC" }: { amount: unknown; decimals: number | null | undefined; unit?: string }) {
+export function Money({ amount, decimals, unit = "USDC", compact = false }: { amount: unknown; decimals: number | null | undefined; unit?: string; compact?: boolean }) {
   const raw = toBaseUnits(amount);
   const text = decimals === null || decimals === undefined ? null : formatUnits(amount, decimals);
+  // Cards show the amount alone; the exact base units stay available on hover.
+  if (compact && raw !== null && text !== null) {
+    return (
+      <span className="money amount-usdc" title={`${raw} base units (${TEST_TOKEN_LABEL})`}>
+        {unit === "USDC" ? <UsdcIcon size={16} /> : null}
+        {text} {unit}
+      </span>
+    );
+  }
   if (raw === null) {
     return (
       <span className="money">

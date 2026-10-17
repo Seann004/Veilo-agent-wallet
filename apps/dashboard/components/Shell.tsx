@@ -57,6 +57,7 @@ export function OwnerProvider({ value, children }: { value: OwnerContextValue; c
 /** Sidebar entries; the last column lists other paths that count as the same section. */
 const NAV: Array<[string, string, IconName, string[]]> = [
   ["/workspace", "Workspace", "home", []],
+  ["/marketplace", "Marketplace", "store", []],
   ["/connectors", "Connectors", "plug", []],
   ["/activity", "Activity", "activity", []],
   ["/content", "Content", "content", []],
@@ -88,17 +89,29 @@ function marketTabCurrent(pathname: string, href: string): boolean {
   return !MARKET_GROUPS.flatMap((g) => g.tabs).some(([h]) => h !== "/marketplace" && underPath(pathname, h));
 }
 
+/** Marketplace sections as tabs, and the open section's pages as a second row. */
 function MarketTabs({ pathname }: { pathname: string | null }) {
   const group = marketGroup(pathname);
-  if (!group || group.tabs.length < 2) return null;
+  if (!group) return null;
   return (
-    <nav className="tabs" aria-label={`${group.label} sections`}>
-      {group.tabs.map(([href, label]) => (
-        <Link key={href} href={href} aria-current={marketTabCurrent(pathname!, href) ? "page" : undefined}>
-          {label}
-        </Link>
-      ))}
-    </nav>
+    <div className="market-nav">
+      <nav className="tabs" aria-label="Marketplace sections">
+        {MARKET_GROUPS.map((g) => (
+          <Link key={g.label} href={g.tabs[0]![0]} aria-current={g === group ? "page" : undefined}>
+            {g.label}
+          </Link>
+        ))}
+      </nav>
+      {group.tabs.length > 1 ? (
+        <nav className="subtabs" aria-label={`${group.label} pages`}>
+          {group.tabs.map(([href, label]) => (
+            <Link key={href} href={href} aria-current={marketTabCurrent(pathname!, href) ? "page" : undefined}>
+              {label}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
+    </div>
   );
 }
 
@@ -287,21 +300,7 @@ export function Shell({ children }: { children: ReactNode }) {
               </nav>
             </>
           ) : null}
-          <nav aria-label="Marketplace" className="side-nav side-nav-market">
-            <p className="side-nav-heading" aria-hidden="true">
-              Open marketplace
-            </p>
-            <ul>
-              {MARKET_GROUPS.map(({ label, tabs }) => (
-                <li key={label}>
-                  <Link href={tabs[0]![0]} aria-current={marketGroup(pathname)?.label === label ? "page" : undefined} title={label}>
-                    <Icon name="store" />
-                    <span className="nav-label">{label}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
+
           <div className="sidebar-foot">
             <span className="owner-chip" aria-hidden="true">
               {(access.address ?? ROLE_TITLE[access.role]).slice(0, 1)}

@@ -7,6 +7,8 @@ import { CATEGORIES, categoryLabel, kindGlyph, type WorkflowEntry } from "../../
 import { useResource } from "../hooks";
 import { EmptyState, ErrorNotice, Loading } from "../ui";
 import { useMarket } from "./MarketContext";
+import { AVATARS } from "../../lib/avatar-options";
+import { AvatarImage } from "../Avatar";
 import { Money, PlainText, TestTokenNote } from "./parts";
 
 const SECTION_SIZE = 4;
@@ -14,7 +16,7 @@ const SECTION_SIZE = 4;
 function WorkflowCard({ w }: { w: WorkflowEntry }) {
   const m = useMarket();
   return (
-    <li className="card workflow-card">
+    <li className="workflow-card">
       <h3 className="listing-title">
         <Link href={`/marketplace/w/${encodeURIComponent(w.slug)}`}>
           <PlainText text={w.title} inline />
@@ -45,10 +47,17 @@ function WorkflowCard({ w }: { w: WorkflowEntry }) {
         ))}
       </ol>
       <p className="workflow-price">
-        <Money amount={String(w.total_base_units)} decimals={m.decimalsFor(w.mint, w.network)} /> per run
+        <Money compact amount={String(w.total_base_units)} decimals={m.decimalsFor(w.mint, w.network)} /> <span className="muted">per run</span>
       </p>
     </li>
   );
+}
+
+/** A stable avatar picture per creator name. */
+function creatorAvatar(name: string) {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATARS[h % AVATARS.length]!;
 }
 
 /** Creators shown above the sections, ranked by paid runs then by how many live workflows they have. */
@@ -86,10 +95,10 @@ export function WorkflowBrowse({ category }: { category?: string }) {
 
   return (
     <>
-      <h1>Marketplace</h1>
-      <p className="small">
-        Workflow agents chain paid tools. Every step is its own purchase from your private pool, approved once by you with a total budget. Zero platform fee.
-      </p>
+      <div className="page-head">
+        <h1>Marketplace</h1>
+      </div>
+      <p className="hint flush">Workflow agents chain paid tools. You approve one total budget, and each step is paid privately from your pool. No platform fee.</p>
       <TestTokenNote />
       <nav aria-label="Categories" className="category-tabs">
         <ul>
@@ -109,7 +118,7 @@ export function WorkflowBrowse({ category }: { category?: string }) {
       </nav>
       <form
         role="search"
-        className="search"
+        className="market-search-form"
         onSubmit={(e) => {
           e.preventDefault();
           setQ(draft.trim());
@@ -135,10 +144,6 @@ export function WorkflowBrowse({ category }: { category?: string }) {
           </button>
         ) : null}
       </form>
-      <p className="small">
-        <Link href="/marketplace/create">Create a workflow</Link> · <Link href="/marketplace/tools">Tool library</Link> · <Link href="/marketplace/specialists">Specialist listings</Link> ·{" "}
-        <Link href="/marketplace/runs">Your runs</Link>
-      </p>
       {data.loading && !data.data ? <Loading label="workflows" /> : null}
       <ErrorNotice error={data.error} what="the workflow catalogue could not be loaded" onRetry={data.reload} />
       {!active && !q && creators.length > 0 ? (
@@ -147,9 +152,7 @@ export function WorkflowBrowse({ category }: { category?: string }) {
           <ul className="creator-row">
             {creators.map((c) => (
               <li key={c.name} className="creator">
-                <span className="creator-avatar" aria-hidden="true">
-                  {c.name.trim().slice(0, 1).toUpperCase() || "?"}
-                </span>
+                <AvatarImage avatar={creatorAvatar(c.name)} size={44} />
                 <span>
                   <PlainText text={c.name} inline />
                   {c.demo ? <span className="pill pill-muted"> demo</span> : null}
