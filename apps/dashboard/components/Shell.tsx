@@ -46,6 +46,23 @@ const NAV: Array<[string, string]> = [
   ["/privacy", "Privacy"],
 ];
 
+const MARKET_NAV: Array<[string, string]> = [
+  ["/marketplace", "Catalogue"],
+  ["/marketplace/jobs", "Jobs"],
+  ["/marketplace/seller", "Seller"],
+  ["/marketplace/agents", "Agents"],
+  ["/marketplace/approvals", "Local approval"],
+];
+
+/** Marketplace pages carry their own sign-in and never need the local owner session to render. */
+export const isMarketplacePath = (pathname: string | null): boolean => pathname === "/marketplace" || (pathname?.startsWith("/marketplace/") ?? false);
+
+function marketCurrent(pathname: string | null, href: string): boolean {
+  if (!pathname) return false;
+  if (href === "/marketplace") return isMarketplacePath(pathname) && !MARKET_NAV.slice(1).some(([h]) => pathname === h || pathname.startsWith(`${h}/`));
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const health = useResource(() => fetchHealth<Health>("control"), "health");
@@ -54,7 +71,8 @@ export function Shell({ children }: { children: ReactNode }) {
   const signedIn = ws.data !== undefined && ws.error?.status !== 401;
 
   let body: ReactNode;
-  if (ws.loading && ws.data === undefined) body = <Loading label="workspace" />;
+  if (isMarketplacePath(pathname)) body = children;
+  else if (ws.loading && ws.data === undefined) body = <Loading label="workspace" />;
   else if (ws.error?.status === 401 || ws.data === undefined) {
     body =
       ws.error && ws.error.status !== 401 ? (
@@ -104,7 +122,7 @@ export function Shell({ children }: { children: ReactNode }) {
               }
             }}
           >
-            Sign out
+            Sign out of owner workspace
           </button>
         ) : null}
       </header>
@@ -127,6 +145,20 @@ export function Shell({ children }: { children: ReactNode }) {
           </ul>
         </nav>
       ) : null}
+      <nav aria-label="Marketplace" className="nav nav-market">
+        <ul>
+          <li className="nav-label" aria-hidden="true">
+            Marketplace
+          </li>
+          {MARKET_NAV.map(([href, label]) => (
+            <li key={href}>
+              <Link href={href} aria-current={marketCurrent(pathname, href) ? "page" : undefined}>
+                {label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
       <main id="main" tabIndex={-1}>
         {body}
       </main>

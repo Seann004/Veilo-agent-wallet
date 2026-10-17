@@ -23,7 +23,7 @@ export function csrfToken(cookie: string = typeof document === "undefined" ? "" 
 }
 
 /** Calls an owner endpoint through the same-origin dashboard proxy. */
-export async function api<T = unknown>(service: Service, path: string, init: { method?: "GET" | "POST" | "PATCH"; body?: unknown } = {}): Promise<T> {
+export async function api<T = unknown>(service: Service, path: string, init: { method?: "GET" | "POST" | "PATCH" | "PUT"; body?: unknown } = {}): Promise<T> {
   const method = init.method ?? "GET";
   const headers: Record<string, string> = { accept: "application/json" };
   if (method !== "GET") {

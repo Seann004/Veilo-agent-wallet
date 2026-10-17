@@ -19,3 +19,4 @@ async function handle(req: Request, { params }: Params): Promise<Response> {
 export const GET = handle;
 export const POST = handle;
 export const PATCH = handle;
+export const PUT = handle;
