@@ -98,6 +98,8 @@ Every process serves `GET /health`.
 | `CONTROL_GATEWAY_ACCOUNT_TOKEN_PATH` | `<VEILO_SECRETS_DIR>/control/gateway-account.token` | Bearer token of the workspace's single gateway credit account. Agents never receive it. Missing: purchases stay authorization-only (NOT_READY). |
 | `CONTROL_SERVICE_CREDENTIAL_PATH` | empty | Control's bearer credential towards the wallet service funding API. Unset: the funding provider is `unavailable` and returns NOT_READY; it never reports a funded purchase. |
 | `GATEWAY_PLANNING_CREDENTIAL_PATH` | `<VEILO_SECRETS_DIR>/gateway/planning.token` | Read by control to proxy operator-sponsored planning (`POST /worker/planning`); withheld from the runner. |
+| `CONTROL_PURCHASE_WAIT_MS` | `120000` | How long a purchase request (worker intent, owner reconcile, Shawn check) keeps reconciling a pending chain outcome of the same operation before it replies. Waiting never authorizes, proves or signs anything new. |
+| `CONTROL_PURCHASE_SWEEP_MS` | `15000` | The scheduler reconciles every purchase with unresolved execution at most this often, so a withdrawal or payment that finalizes after its request returned still completes. |
 
 `pnpm demo:seed` (requires `VEILO_OWNER_PUBKEY`) is idempotent. It seeds the workspace, the three agents with **draft** policies and the fixed catalog. It creates one shared gateway account and the integration secret files above, plus the runner's worker-credential file. If the gateway merchant and fee payer are configured, it binds the unbound services to that recipient. A rerun changes nothing and never issues credits. If the account exists but its token file is lost, it stops instead of creating a second account.
 
@@ -118,6 +120,8 @@ Wallet note secrets and fresh-wallet keys use a separate SQLite file, `<VEILO_SE
 | `GATEWAY_SETTLEMENT_WAIT_MS` | `40000` | How long one execute request waits for finality before returning 202. |
 | `USAGE_PERMIT_PUBLIC_KEY_PATH` | empty | PEM Ed25519 public key of the control service's usage-permit signer. Unset: prepaid usage disabled. |
 | `GATEWAY_PLANNING_CREDENTIAL_PATH` | empty | File holding the sponsored-planning bearer token (only its SHA-256 is kept in memory). Control presents it on behalf of running tasks; the runner never holds it. |
+| `GATEWAY_TEST_PROVIDER_URL` | empty | Local test validator profile only (loopback URL): an OpenRouter-compatible mock replaces OpenRouter. The provider is labeled `fixture` and never counts as real inference. Rejected under the devnet profile. |
+| `VEILO_TEST_CRASH_POINTS` | empty | Local test validator profile only. Comma-separated `gateway.afterClaim`, `gateway.afterPaymentFinalized` or `gateway.beforeProviderCall`: the gateway exits with code 86 at that hook, so tests can restart it at that boundary. Rejected under the devnet profile. |
 
 The deployment manifest may carry `{"gateway": {"merchantAddress", "merchantAta", "facilitatorFeePayer"}}`; when the manifest and the environment both set a value they must agree. The gateway keeps its own SQLite ledger at `GATEWAY_DATABASE_PATH`. Accounts are created with `pnpm --filter @veilo/gateway account:create -- --workspace <id> --out <token-file>`; the token is written to a new owner-only file and never printed.
 
@@ -143,6 +147,7 @@ The deployment manifest may carry `{"gateway": {"merchantAddress", "merchantAta"
 | `APPROVED_PARTICIPANTS` | empty | Comma-separated synthetic/test participant addresses whose inserted deposits the prototype rule approves. |
 | `VEILO_CIRCUIT_BUILD_DIR` | `circuits/build` | Proving files (hash-checked against `artifacts/circuits/manifest.json`). |
 | `VEILO_CONTROL_URL`, `VEILO_RELAYER_URL` | loopback + service port | Overrides for the wallet's control and relayer clients. |
+| `WALLET_NOTE_SYNC_MS` | `10000` | Interval of the wallet's background note sync against verified public state. Inserted deposits and change notes become spendable, and are reported to control, without an owner session. |
 
 `pnpm backup` writes an AES-256-GCM encrypted snapshot (SQLite backup API) of the wallet secrets DB and control ledger to `backups/`. `pnpm restore -- --file <path> [--include-control]` must run with the wallet stopped; it validates every encrypted row, moves the old files aside, advances key counters by 1000 and blocks new proofs and signatures until the wallet's startup reconciliation passes.
 
@@ -153,6 +158,7 @@ The deployment manifest may carry `{"gateway": {"merchantAddress", "merchantAta"
 | `VEILO_ENV_FILE` | Alternate env file path. |
 | `VEILO_LOG_CONFIG=1` | Services print a redacted configuration summary at startup (`describeConfig`). |
 | `VEILO_TOOLCHAIN_IMAGE` | Override the toolchain image tag used by `pnpm tc`. |
+| `VEILO_CHAIN_PROFILE` | `devnet` (default) or `local-test-validator`. The local profile is for `pnpm test:integration` and `pnpm demo:run -- --local-rehearsal`. Under it, `DEVNET_RPC_URL` and `FACILITATOR_URL` must be loopback (http is allowed). The chain guard also requires a genesis hash that is neither devnet nor mainnet, so this profile never acts on a public cluster. Mint checks are unchanged. Under `devnet` the facilitator must use https. |
 | `VEILO_DEPLOY_PROFILE` | `local-rehearsal` points `keys:init`, `deploy:devnet` and `demo:private-smoke` at `work/rehearsal/` and a loopback test validator (non-loopback, devnet and mainnet RPC refused). Unset or anything else: devnet. See docs/deployment.md, "Local rehearsal". |
 
 ## Owner-only permissions

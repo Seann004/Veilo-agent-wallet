@@ -5,14 +5,17 @@ import {
   createServiceHealth,
   describeConfig,
   findRepoRoot,
+  isLoopbackUrl,
   loadConfig,
   loadDotEnv,
   startChainGuard,
+  type VeiloConfig,
 } from "@veilo/contracts";
 import { loadGatewayConfig, loadUsagePermitPublicKey } from "@veilo/contracts/gateway";
 import { createApp } from "./app";
 import { hashToken } from "./auth";
 import { createRpcChain } from "./chain";
+import type { GatewayHooks } from "./context";
 import { openGatewayDb } from "./db/database";
 import { Gateway } from "./gateway";
 import { OpenRouterProvider } from "./provider/openrouter";
@@ -23,6 +26,34 @@ const REFRESH_MS = 5 * 60_000;
 function readSecretFile(path: string | undefined): string | undefined {
   if (!path || !existsSync(path)) return undefined;
   return readFileSync(path, "utf8").trim();
+}
+
+/**
+ * Integration-test wiring, honored only under the local-test-validator profile: a loopback
+ * OpenRouter-compatible mock provider (labeled fixture) and named crash points that end the
+ * process at a gateway hook, to test restart at that boundary.
+ */
+function localTestOptions(config: VeiloConfig): { providerUrl?: string; hooks?: GatewayHooks } {
+  const providerUrl = process.env.GATEWAY_TEST_PROVIDER_URL?.trim() || undefined;
+  const crash = (process.env.VEILO_TEST_CRASH_POINTS ?? "").split(",").map((s) => s.trim()).filter((s) => s !== "");
+  if (!providerUrl && crash.length === 0) return {};
+  if (config.network.profile !== "local-test-validator") {
+    throw new VeiloConfigError("INVALID_CONFIG", "GATEWAY_TEST_PROVIDER_URL and VEILO_TEST_CRASH_POINTS require VEILO_CHAIN_PROFILE=local-test-validator");
+  }
+  if (providerUrl && !isLoopbackUrl(providerUrl)) throw new VeiloConfigError("INVALID_CONFIG", "GATEWAY_TEST_PROVIDER_URL must be a loopback URL");
+  const point = (name: keyof GatewayHooks) =>
+    crash.includes(`gateway.${name}`)
+      ? () => {
+          console.error(`[${SERVICE}] crash point gateway.${name} reached; exiting`);
+          process.exit(86);
+        }
+      : undefined;
+  const hooks: GatewayHooks = {};
+  for (const name of ["afterClaim", "afterPaymentFinalized", "beforeProviderCall"] as const) {
+    const fn = point(name);
+    if (fn) hooks[name] = fn;
+  }
+  return { ...(providerUrl ? { providerUrl: providerUrl.replace(/\/$/, "") } : {}), ...(crash.length > 0 ? { hooks } : {}) };
 }
 
 async function main(): Promise<void> {
@@ -42,7 +73,15 @@ async function main(): Promise<void> {
   const permitPem = readSecretFile(gw.usagePermitPublicKeyPath);
   const planningToken = readSecretFile(gw.planningCredentialPath);
   const apiKey = config.openRouterApiKey;
-  const provider = config.inference.realInferenceEnabled && apiKey ? new OpenRouterProvider(apiKey) : null;
+  const local = localTestOptions(config);
+  const provider = local.providerUrl
+    ? config.inference.operatorMaxRealUsdMicro > 0n
+      ? new OpenRouterProvider("local-mock-provider", fetch, local.providerUrl, "fixture")
+      : null
+    : config.inference.realInferenceEnabled && apiKey
+      ? new OpenRouterProvider(apiKey)
+      : null;
+  if (local.providerUrl) console.log(`[${SERVICE}] FIXTURE provider: local OpenRouter-compatible mock (not real inference)`);
 
   const gateway = new Gateway({
     db,
@@ -69,9 +108,11 @@ async function main(): Promise<void> {
     plannerModelId: config.inference.plannerModelId,
     pricingMaxAgeSeconds: gw.pricingMaxAgeSeconds,
     providerTimeoutMs: gw.providerTimeoutMs,
+    ...(local.providerUrl ? { pricingFetch: (_url: string, init?: RequestInit) => fetch(`${local.providerUrl}/models`, init) } : {}),
     ...(permitPem ? { permitPublicKey: loadUsagePermitPublicKey(permitPem) } : {}),
     ...(planningToken ? { planningTokenHash: hashToken(planningToken) } : {}),
     ...(provider ? { providerKeyCheck: () => provider.keyLimitRemainingMicro(AbortSignal.timeout(15_000)) } : {}),
+    ...(local.hooks ? { hooks: local.hooks } : {}),
     serviceHealth: health,
   });
 

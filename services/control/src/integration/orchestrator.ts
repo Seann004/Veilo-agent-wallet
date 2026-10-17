@@ -76,6 +76,9 @@ export interface OrchestratorDeps {
   gateway: GatewayClient | undefined;
   permits: PermitSigner | undefined;
   funding: FundingProvider;
+  /** How long a purchase request keeps reconciling a pending chain outcome before replying. */
+  settleWaitMs?: number;
+  settlePollMs?: number;
 }
 
 /** Margin after permit expiry before an absent gateway reservation counts as proof of none. */
@@ -175,6 +178,20 @@ export class PurchaseOrchestrator {
       }
       return { purchase: getPurchaseRow(this.ledger, purchaseId), execution: this.view(purchaseId) };
     });
+  }
+
+  /**
+   * Drives a purchase and, while its only blocker is a pending chain outcome, keeps reconciling
+   * the same operation for up to `settleWaitMs` (wall clock). Nothing new is authorized, proved or
+   * signed by waiting; each pass is an ordinary idempotent drive.
+   */
+  async driveUntilSettled(purchaseId: string): Promise<{ purchase: PurchaseRow; execution: ExecutionView }> {
+    const deadline = Date.now() + (this.deps.settleWaitMs ?? 0);
+    for (;;) {
+      const r = await this.drive(purchaseId);
+      if (r.execution.blocked?.code !== "SETTLEMENT_UNCERTAIN" || Date.now() >= deadline) return r;
+      await new Promise((resolve) => setTimeout(resolve, this.deps.settlePollMs ?? 2_000));
+    }
   }
 
   /** Startup and lease-expiry reconciliation for every purchase with unresolved execution. */
@@ -500,7 +517,21 @@ export class PurchaseOrchestrator {
         return true;
       case "proof_prepared":
         return (this.execution(p.id) as ExecutionRow).funding_ref === null ? this.#fundingPrepare(p, quote) : this.#fundingRelease(p);
-      case "proof_released":
+      case "proof_released": {
+        const r = await this.deps.funding.status(p.id);
+        if (r.status !== "prepared") return this.#applyFunding(p, r);
+        // Release authority was recorded but the request never reached the wallet (the proof is
+        // still there). The same release is re-sent while authority is still current.
+        try {
+          immediate(this.ledger.db, () => assertAuthorityCurrent(this.ledger, getPurchaseRow(this.ledger, p.id)));
+        } catch (error) {
+          if (error instanceof ControlError) throw new Blocked("RECOVERY_REQUIRED", `release was recorded but never delivered and authority has since stopped: ${error.message}`);
+          throw error;
+        }
+        const ex = this.execution(p.id) as ExecutionRow;
+        this.#intent(p, "wallet.funding.release", { fundingRef: ex.funding_ref, resend: true });
+        return this.#applyFunding(p, await this.deps.funding.release(p.id, ex.funding_ref as string));
+      }
       case "submitted":
       case "uncertain":
         return this.#applyFunding(p, await this.deps.funding.status(p.id));

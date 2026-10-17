@@ -21,16 +21,18 @@ const intOrUndefined = (v: unknown) => (typeof v === "number" && Number.isSafeIn
  * this object and is sent only in the Authorization header to OpenRouter.
  */
 export class OpenRouterProvider implements ChatProvider {
-  readonly mode = "live" as const;
+  /** `fixture` when pointed at a local OpenRouter-compatible mock (tests and rehearsals only). */
+  readonly mode: "live" | "fixture";
   readonly #apiKey: string;
   readonly #fetch: FetchLike;
   readonly #baseUrl: string;
 
-  constructor(apiKey: string, fetchImpl: FetchLike = fetch, baseUrl: string = OPENROUTER_BASE_URL) {
+  constructor(apiKey: string, fetchImpl: FetchLike = fetch, baseUrl: string = OPENROUTER_BASE_URL, mode: "live" | "fixture" = "live") {
     if (!apiKey) throw new Error("OpenRouter API key is required");
     this.#apiKey = apiKey;
     this.#fetch = fetchImpl;
     this.#baseUrl = baseUrl;
+    this.mode = mode;
   }
 
   async complete(request: ChatRequest, signal: AbortSignal): Promise<ChatResult> {

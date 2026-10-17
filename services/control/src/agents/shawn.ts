@@ -258,7 +258,7 @@ async function evaluate(deps: CreditCheckDeps, agentId: string, opts: { jobId?: 
   if (purchase.authorization_state === "awaiting_approval") {
     return result("top_up_started", "top-up awaits owner approval", { ...obs, episodeId, purchaseId });
   }
-  await orchestrator.drive(purchaseId);
+  await orchestrator.driveUntilSettled(purchaseId);
   const settled = settleEpisode(ledger, episodeId);
   const decision: CreditDecision = settled.state === "completed" ? "top_up_completed" : settled.state === "open" ? "top_up_started" : "rejected";
   return result(decision, `episode ${settled.state}`, { ...obs, episodeId, purchaseId, sequence: replenishment(ledger, accountId).sequence });

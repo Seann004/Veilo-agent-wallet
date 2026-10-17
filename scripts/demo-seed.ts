@@ -105,11 +105,11 @@ async function main(): Promise<void> {
     const ata = await deriveAta(gw.merchantAddress, config.network.mint);
     const r = db
       .prepare(
-        `UPDATE approved_service SET status = 'approved', gateway_identity = ?, recipient = ?, recipient_ata = ?, updated_at_ms = ?
+        `UPDATE approved_service SET status = 'approved', gateway_identity = ?, origin = ?, recipient = ?, recipient_ata = ?, updated_at_ms = ?
          WHERE workspace_id = ? AND status = 'unbound'`,
       )
-      .run(gw.identity, gw.merchantAddress, ata, Date.now(), workspace.id);
-    log(`${r.changes} unbound service(s) bound to gateway ${gw.identity}, merchant ${gw.merchantAddress}`);
+      .run(gw.identity, gw.publicOrigin, gw.merchantAddress, ata, Date.now(), workspace.id);
+    log(`${r.changes} unbound service(s) bound to gateway ${gw.identity} at ${gw.publicOrigin}, merchant ${gw.merchantAddress}`);
   } else {
     log("gateway merchant/fee payer not configured: services stay unbound and cannot be purchased (fails closed)");
   }

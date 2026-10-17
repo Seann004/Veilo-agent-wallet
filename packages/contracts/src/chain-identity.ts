@@ -1,5 +1,6 @@
 import type { VeiloConfig } from "./config";
 import { VeiloConfigError } from "./errors";
+import { isLoopbackUrl } from "./config";
 import { DEMO_TOKEN_DECIMALS, SPL_TOKEN_PROGRAM_ID, isMainnetIdentifier } from "./network";
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
@@ -51,7 +52,9 @@ interface AccountInfoResult {
 
 /**
  * Fails closed unless the RPC endpoint is Solana devnet and the configured mint is a
- * six-decimal, initialized mint owned by the original SPL Token program.
+ * six-decimal, initialized mint owned by the original SPL Token program. Under the
+ * local-test-validator profile the endpoint must instead be a loopback validator whose genesis
+ * is neither devnet nor mainnet, so that profile never acts on a public cluster.
  * Read-only: issues getGenesisHash and getAccountInfo at finalized commitment.
  */
 export async function verifyChainIdentity(
@@ -67,14 +70,21 @@ export async function verifyChainIdentity(
   if (isMainnetIdentifier(genesisHash)) {
     throw new VeiloConfigError("WRONG_NETWORK", "RPC endpoint is Solana mainnet; refusing to continue");
   }
-  if (genesisHash !== expectedGenesis) {
-    throw new VeiloConfigError(
-      "WRONG_NETWORK",
-      `RPC genesis hash ${genesisHash} does not match expected devnet genesis ${expectedGenesis}`,
-    );
-  }
-  if (`solana:${genesisHash.slice(0, 32)}` !== caip2) {
-    throw new VeiloConfigError("WRONG_NETWORK", `CAIP-2 network ${caip2} does not match RPC genesis hash`);
+  if (config.network.profile === "local-test-validator") {
+    if (!isLoopbackUrl(rpcUrl)) throw new VeiloConfigError("WRONG_NETWORK", "local-test-validator profile requires a loopback RPC");
+    if (genesisHash === expectedGenesis) {
+      throw new VeiloConfigError("WRONG_NETWORK", "local-test-validator profile refuses the devnet cluster");
+    }
+  } else {
+    if (genesisHash !== expectedGenesis) {
+      throw new VeiloConfigError(
+        "WRONG_NETWORK",
+        `RPC genesis hash ${genesisHash} does not match expected devnet genesis ${expectedGenesis}`,
+      );
+    }
+    if (`solana:${genesisHash.slice(0, 32)}` !== caip2) {
+      throw new VeiloConfigError("WRONG_NETWORK", `CAIP-2 network ${caip2} does not match RPC genesis hash`);
+    }
   }
 
   const account = await rpcCall<AccountInfoResult>(fetchImpl, rpcUrl, "getAccountInfo", [

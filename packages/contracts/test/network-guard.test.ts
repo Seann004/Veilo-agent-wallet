@@ -188,3 +188,34 @@ describe("NET-01 live chain identity check (mocked RPC)", () => {
     await expectCode(verifyChainIdentity(config, erroring), "RPC_UNAVAILABLE");
   });
 });
+
+describe("NET-01 local-test-validator profile", () => {
+  const local = { ...baseEnv, VEILO_CHAIN_PROFILE: "local-test-validator", DEVNET_RPC_URL: "http://127.0.0.1:18899", FACILITATOR_URL: "http://127.0.0.1:18990" };
+  const LOCAL_GENESIS = "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY";
+
+  it("keeps https-only facilitators and devnet identity in the default profile", () => {
+    expect(loadConfig(baseEnv).network.profile).toBe("devnet");
+    expect(() => loadConfig({ ...baseEnv, FACILITATOR_URL: "http://127.0.0.1:18990" })).toThrow(VeiloConfigError);
+  });
+
+  it("requires a loopback RPC and facilitator", () => {
+    expect(loadConfig(local).network.profile).toBe("local-test-validator");
+    expect(() => loadConfig({ ...local, DEVNET_RPC_URL: "https://api.devnet.solana.com" })).toThrow(VeiloConfigError);
+    expect(() => loadConfig({ ...local, FACILITATOR_URL: "https://facilitator.payai.network" })).toThrow(VeiloConfigError);
+    expect(() => loadConfig({ ...local, VEILO_CHAIN_PROFILE: "mainnet" })).toThrow(VeiloConfigError);
+  });
+
+  it("accepts a loopback validator with its own genesis and the pinned mint", async () => {
+    await expect(verifyChainIdentity(loadConfig(local), mockRpc({ genesis: LOCAL_GENESIS }).fetch)).resolves.toMatchObject({ genesisHash: LOCAL_GENESIS });
+  });
+
+  it("refuses devnet and mainnet genesis", async () => {
+    const config = loadConfig(local);
+    await expectCode(verifyChainIdentity(config, mockRpc({ genesis: DEVNET_GENESIS_HASH }).fetch), "WRONG_NETWORK");
+    await expectCode(verifyChainIdentity(config, mockRpc({ genesis: MAINNET_GENESIS_HASH }).fetch), "WRONG_NETWORK");
+  });
+
+  it("still applies the mint checks", async () => {
+    await expectCode(verifyChainIdentity(loadConfig(local), mockRpc({ genesis: LOCAL_GENESIS, owner: TOKEN_2022 }).fetch), "WRONG_MINT");
+  });
+});

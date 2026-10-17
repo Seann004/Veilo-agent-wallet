@@ -77,11 +77,9 @@ import {
   type SentTx,
   type TxOutcome,
 } from "./lib";
+import { deploymentManifest, GENESIS_HEX } from "./manifest";
 import { currentProgramIds } from "./set-program-id";
 
-const GENESIS_HEX = "ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab";
-const SCALAR_FIELD = "21888242871839275222246405745257275088548364400416034343698204186575808495617";
-const ROOT_HISTORY_RULE = "spend/exit accept any of the newest 32 commitment roots; insert accepts only the current root; spend accepts only the current approved root";
 /** Bytes per loader-v3 Write transaction used for the fee estimate (the CLI packs slightly more). */
 const WRITE_CHUNK = 1_000;
 const FEE_RETRY_FACTOR = 2n;
@@ -540,76 +538,33 @@ async function stepManifest(p: Progress, roles: RolesFile, a: Addresses, binary:
   const manifestPath = config.pool.deploymentManifestPath;
   const st = await verifyPool(roles, a);
   const circuits = JSON.parse(readFileSync(join(rootDir, "artifacts", "circuits", "manifest.json"), "utf8")) as { circuits: Record<string, Record<string, unknown>> };
-  const pick = (name: string) => {
-    const c = circuits.circuits[name]!;
-    const keys = ["name", "sourceSha256", "circomVersion", "compilerFlags", "constraints", "nPublic", "publicInputOrder", "r1csSha256", "wasmSha256", "zkeySha256", "vkeyJsonSha256", "vkRustSha256", "ptau", "setup"];
-    return Object.fromEntries(keys.map((k) => [k, c[k]]));
-  };
   const deploySig = (p.steps["deploy-program"]?.details?.deploySignature as string | null | undefined) ?? p.steps["deploy-program"]?.outcome?.signature ?? null;
   const sig = (s: StepName) => p.steps[s]?.outcome?.signature ?? p.steps[s]?.sent?.signature ?? null;
-  const manifest = {
-    schemaVersion: 1,
-    protocolVersion: 1,
-    encodingVersion: "v1",
-    network: { cluster: "devnet", caip2: config.network.caip2, genesisHash: config.network.genesisHash, genesisHashHex: GENESIS_HEX },
-    program: {
-      programId: a.programId,
-      programDataAddress: a.programData,
-      upgradeAuthority: roles.roles.deployer.publicKey,
-      binarySha256: sha256Hex(binary),
-      binaryBytes: binary.length,
-      maxLen: binary.length,
-      sbpfVersion: "v3",
-      anchorVersion: "1.2.1",
-      solanaToolsVersion: "agave 4.1.2, platform-tools v1.57",
-      rustToolchain: "1.97.1",
-      groth16SolanaVersion: "0.2.0",
-      deploySignature: deploySig ?? "",
-    },
-    pool: { poolId: roles.poolId, poolState: a.poolState, vaultAuthority: a.vaultAuthority, vault: a.vault, approvalState: a.approvalState, initSignature: sig("initialize-pool") ?? "" },
-    token: { mint, decimals: 6, tokenProgram: TOKEN_PROGRAM, mintKind: "devnet-usdc", freezeAuthority: mintInfo.freezeAuthority },
-    crypto: {
-      curve: "bn254",
-      scalarField: SCALAR_FIELD,
-      proofSystem: "groth16",
-      hash: { name: "poseidon-circomlib", sbox: 5, fullRounds: 8, partialRounds: { "2": 57, "3": 56 }, arities: [2, 3] },
-      labelDomain: "veilo/label/v1",
-      intentDomain: "veilo/intent/v1",
-      contextHash: "sha256-first31-be",
-      vectorsFile: "artifacts/vectors/v1.json",
-      vectorsSha256: sha256Hex(new Uint8Array(readFileSync(join(rootDir, "artifacts", "vectors", "v1.json")))),
-    },
-    trees: { commitmentDepth: 16, approvedDepth: 16, rootHistory: 32, emptyRoot: st.emptyRoot, capacity: 65536, changeReserve: 1024, queueMaxLiveDeposits: 64 },
-    circuits: { spend: pick("spend"), insert: pick("insert"), exit: pick("exit") },
-    bounds: {
-      minDeposit: st.minDeposit,
-      maxDeposit: st.maxDeposit,
-      liabilityCap: st.liabilityCap,
-      maxRelayerFee: st.maxRelayerFee,
-      maxIntentSlots: 750,
-      hardMaxDeposit: "20000000",
-      hardLiabilityCap: "100000000",
-      hardMaxRelayerFee: "100000",
-    },
+  const manifest = deploymentManifest({
+    rootDir,
+    caip2: config.network.caip2,
+    genesisHash: config.network.genesisHash,
+    programId: a.programId,
+    programData: a.programData,
+    binary,
+    poolId: roles.poolId,
+    poolState: a.poolState,
+    vaultAuthority: a.vaultAuthority,
+    vault: a.vault,
+    approvalState: a.approvalState,
+    mint,
+    freezeAuthority: mintInfo.freezeAuthority,
+    pool: { emptyRoot: st.emptyRoot!, minDeposit: st.minDeposit!, maxDeposit: st.maxDeposit!, liabilityCap: st.liabilityCap!, maxRelayerFee: st.maxRelayerFee! },
     authorities: {
       deployer: roles.roles.deployer.publicKey,
       configAuthority: roles.roles.configAuthority.publicKey,
       approvalAuthority: roles.roles.approvalAuthority.publicKey,
       sponsor: roles.roles.sponsor.publicKey,
-      relayer: roles.roles.sponsor.publicKey,
     },
-    rootHistoryRule: ROOT_HISTORY_RULE,
-    signatures: Object.fromEntries(
-      [
-        ["fundRoles", sig("fund-roles")],
-        ["deploy", deploySig],
-        ["initializePool", sig("initialize-pool")],
-        ["merchantAta", sig("merchant-ata")],
-      ].filter((e): e is [string, string] => typeof e[1] === "string" && e[1] !== ""),
-    ),
+    signatures: { fundRoles: sig("fund-roles"), deploy: deploySig, initializePool: sig("initialize-pool"), merchantAta: sig("merchant-ata") },
     gateway: { merchantAddress: roles.roles.merchant.publicKey, merchantAta: a.merchantAta, facilitatorFeePayer: feePayer },
     createdAt: now(),
-  };
+  });
   parseDeploymentManifest(manifest);
   const pins = circuits.circuits as unknown as Parameters<typeof assertManifestMatches>[1]["circuitHashes"];
   assertManifestMatches(parseDeploymentManifest(manifest), { programId: a.programId, poolId: roles.poolId, mint, circuitHashes: pins });

@@ -89,7 +89,7 @@ pnpm dev                # dashboard :3000, control :4101, runner :4102, wallet :
 
 `setup:local` never creates or replaces keys, never moves funds and never calls paid services. Pass `--skip-toolchain` to skip the Docker checks when you only work on TypeScript services.
 
-These commands exist but exit with status 2 and "not implemented yet (Txx)" until their task lands: `test:integration` (T15), `demo:run` (T15), `evidence:export` (T16).
+`pnpm test:integration`, `pnpm demo:run` and `pnpm evidence:export` are described in "Integration suite", "Demo run" and "Evidence export" below.
 
 ## Program
 
@@ -293,3 +293,137 @@ It also resumed correctly after a killed run. Measured on that validator:
 | exit_public (with idempotent ATA creation) | 121,534–126,034 |
 
 Proof latency on this host: spend ≈1.0 s, exit ≈0.55 s, insert 0.8–2.8 s (the first proof per process includes setup).
+
+## Integration suite (`pnpm test:integration`)
+
+`pnpm test:integration` runs `tests/integration/suite.test.ts` against a local stack that `scripts/local-stack/` builds from nothing:
+
+- **Chain:** a loopback `solana-test-validator` in the toolchain container (`veilo-integration-validator`, RPC `127.0.0.1:5630`). The deployed program binary (`target/deploy/privacy_pool.so`, the devnet build) is preloaded at the devnet program id, and a 6-decimal mint is preloaded at the pinned mint address with a throwaway mint authority. The pool is initialized with `initialize_pool`, and the manifest comes from the same builder `deploy:devnet` uses (`scripts/devnet/manifest.ts`). Every key is a throwaway key under `work/integration/keys/`.
+- **Services:** control, runner, wallet, relayer and gateway run as separate OS processes (`services/*/src/index.ts`) with `VEILO_CHAIN_PROFILE=local-test-validator`. That profile accepts only loopback RPC and facilitator URLs and refuses devnet and mainnet genesis, so it cannot act on a public cluster.
+- **Merchant leg:** the Veilo gateway with a self-hosted facilitator (`scripts/local-stack/facilitator.ts`). It is the official `@x402/core` `x402Facilitator` with the `@x402/svm` exact scheme, signing as fee payer with a local key and settling on the local validator. It is not PayAI or Kora.
+- **Provider:** a loopback OpenRouter-compatible mock (`scripts/local-stack/mock-provider.ts`), labeled FIXTURE; it never counts as real inference.
+- **Proofs:** real Groth16 proofs (snarkjs, manifest-pinned zkeys), verified on chain by the program. Nothing in the private path is mocked.
+- **Fault injection:** every inter-service link runs through a loopback proxy (`scripts/local-stack/proxy.ts`): control→wallet, control→gateway, wallet→control, wallet→relayer, runner→control, gateway→facilitator, and the relayer/wallet/gateway RPC links. A rule can:
+  - drop a request before delivery
+  - drop the reply after the callee committed
+  - hold a request
+  - kill every service process at that boundary
+
+  A restart is a hard kill and a fresh process over the same databases. Under the local profile only, the gateway also honours `VEILO_TEST_CRASH_POINTS` (`gateway.afterClaim`, `gateway.afterPaymentFinalized`, `gateway.beforeProviderCall`).
+
+Requirements: Docker running, `target/deploy/privacy_pool.so` built and `circuits/build` present (`pnpm test:circuits`). The command writes `artifacts/evidence/integration-<date>.json` with:
+
+- counts, environment and PRD IDs
+- failed and skipped tests
+- per-scenario evidence
+
+That file is labeled local-validator evidence: it contains no devnet transaction and no real inference. Optional variables:
+
+- `VEILO_IT_KEEP=1` keeps the validator container afterwards
+- `VEILO_IT_REUSE=1` reuses `work/integration/` and the running validator
+- `VEILO_IT_BASE_PORT` (default 5600) moves every port
+
+Extra arguments go to vitest, for example `--bail=1`.
+
+## Demo run (`pnpm demo:run`)
+
+`pnpm demo:run` drives the PRD §16 script through the real backend services: control, runner, wallet, relayer and gateway as processes. No dashboard events are faked.
+
+- **Demo owner:** the funding wallet (`FUNDING_KEY_PATH`). It signs the owner session challenge, the deposits and the exit.
+- **Isolation:** each run gets its own control, gateway, relayer and wallet databases and service credentials under `work/demo/devnet/<runId>/`.
+- **Provider key:** the OpenRouter key goes to the gateway process in memory only and is never written to a file.
+- **Resume:** run state lives in `work/demo/devnet-state.json`. A rerun after a 429, a timeout or any stop continues from the last completed step: deposits and the exit are reconciled by their recorded signatures, and purchases and tasks by their stable idempotency and trigger keys. Nothing is signed twice for one step.
+
+### Plan and costs
+
+Amounts follow the seeded SKU catalog. Each private purchase spends one note.
+
+| Step | What happens | Test USDC | Notes |
+|---|---|---|---|
+| a | 3 owner deposits of 1.0 test USDC; relayer insert crank; approval authority approves the owner's labels (prototype rule) | 3.0 into the pool | owner pays deposit rent ≈ 0.0038 SOL each |
+| b | Shawn: gateway credits start at 0 (< 200,000). "Check now" runs the scheduled check: private pool → fresh wallet → x402 to the Veilo gateway (merchant `GATEWAY_MERCHANT_ADDRESS`, PayAI devnet facilitator) → one 1,000,000-credit issuance | 1.0 | |
+| c | Prince research task (runner): compares research-basic and research-expanded, buys one via private x402, consumes `analyze` with prepaid credits (real bounded OpenRouter inference), saves a cited brief (demo fixture data), requests a handoff | 0.2 (or 0.1) | ≤ 2 sponsored planning calls |
+| d | Owner approves the handoff; Mira buys `content-package` directly via private x402 with real inference → three drafts and a seven-day calendar | 0.3 | ≤ 2 sponsored planning calls |
+| e | Duplicate check: the same research purchase request and another Shawn check | 0 | must create no purchase |
+| f | Mira's allowance is lowered below one package and two concurrent package requests are both rejected; Prince is revoked and a later tool call is refused | 0 | |
+| g | Owner public exit of the largest spendable change note back to the funding wallet, with the privacy warning | returns 0.5–0.9 | owner pays exit rent ≈ 0.0013 SOL |
+
+Totals:
+
+- **Test USDC:** merchant spend at most 1.5. Of the 3.0 deposited, the exit returns 0.5–0.9 (the largest change note); the rest stays in the pool as notes.
+- **SOL:** about 0.04. The owner pays about 0.013. The sponsor pays about 0.02 for three fresh-payer ATAs, spend rent, inserts and fees. The approval authority pays about 0.00002. The facilitator pays the merchant fees.
+
+**OpenRouter budget guard.** The worst case is maximum input plus maximum output tokens per call, at the pinned `mistralai/mistral-nemo` tariff:
+
+| Call | Worst case (micro-USD) |
+|---|---|
+| Prince planning | 2 × 140 |
+| analyze | 292 |
+| per-call analyze fallback (runs only if prepaid is refused) | 292 |
+| Mira planning | 2 × 140 |
+| content-package | 322 |
+| **Total** | **≤ 1,466 (≈ $0.0015)** |
+
+Before executing, `demo:run` adds the exposure already recorded by live calls in the known gateway ledgers. It refuses if the total exceeds `OPERATOR_MAX_REAL_USD_MICRO`, and sets the demo gateway's own ceiling to the remainder. If real inference is disabled, the run reports `BLOCKED real-demo gate` and stops before signing.
+
+### Operator commands, in order
+
+1. Readiness and plan (read-only; no signing and no OpenRouter call):
+   `pnpm demo:run`
+   Expected lines:
+   - `chain: devnet genesis EtWT…ZBG`
+   - `pool: verified — program 3B6D…rUrq, PoolState 65FN…8Tab`
+   - `gateway merchant 49TE…AVWX: ATA 9YVR…MuC exists`
+   - `facilitator https://facilitator.payai.network: exact/devnet supported, fee payer 2wKu…DBg4`
+   - balances for the demo owner, the sponsor and the approval authority
+   - the allowance checks, the OpenRouter budget table and the plan
+   - `readiness: all checks passed`, then `DRY RUN complete`
+2. Run (signs with the funding wallet, the approval authority and the sponsor; about 10–20 minutes):
+   `pnpm demo:run -- --execute --confirm`
+   Expected lines, in order:
+   - `[0-policies]`
+   - `[a-deposits]`: three `deposit … finalized` lines and an `update_approved_root` signature
+   - `[b-shawn-topup]`: `credit pack delivered`, then credits usable 1000000
+   - `[c-prince-research]`: `task completed`
+   - `[d-handoff-mira]`: `Mira task completed`
+   - `[e-duplicate-check]`: `new purchases 0`
+   - `[f-over-budget-and-revoke]`
+   - `[g-owner-exit]`: `PRIVACY WARNING …`, then `exit … finalized`
+   - `evidence: artifacts/evidence/demo-<runId>`
+   - `Demo run <runId> complete`
+3. If it stops, rerun the same command; it resumes from the recorded state. To start a new run instead, move `work/demo/devnet-state.json` aside.
+4. `pnpm evidence:export` bundles the result (see below).
+
+The evidence directory, `artifacts/evidence/demo-<runId>/`, contains:
+
+- `summary.json`: steps, deposit, approval and exit signatures with explorer links, and labels that separate operator-funded inference, demo fixture data and test-chain payments
+- `ledger.json`: the redacted owner ledger (purchases with both legs' signatures, balances, tasks)
+- `inference-receipts.json`: model, mode, tokens and worst-case and actual cost per provider call; no prompts or inputs
+- `artifacts/`: the brief, the three drafts and the calendar
+- `run-state.json`
+
+The directory is scanned for every known secret value: the provider key, every role and funding keypair, and the run's credentials. It is also scanned for secret-shaped patterns. Any hit fails the run.
+
+### Local rehearsal
+
+`pnpm demo:run -- --local-rehearsal` runs the same steps against a fresh local stack (`work/demo-rehearsal/`, ports 5800 and up) with throwaway keys, the self-hosted facilitator and the FIXTURE provider. It reports the real-demo gate as blocked by design and writes its evidence to `work/demo-rehearsal/evidence/`.
+
+## Evidence export (`pnpm evidence:export`)
+
+`pnpm evidence:export [-- --out <dir>]` writes `artifacts/evidence-export/<timestamp>/` with:
+
+- the deployment manifest, the role public keys and the approved-label list
+- sha256 hashes of the program binary, IDL, circuit manifest, verification keys, vectors and manifest
+- the program, pool and token addresses
+- every transaction signature found in `artifacts/evidence/*.json` and the latest `demo-*` run, with explorer links
+- the integration outcome summaries
+- the latest demo run's redacted ledger
+
+Before the bundle is accepted, it is scanned for:
+
+- the provider key
+- every keypair under `work/keys`, `work/integration/keys` and `work/demo-rehearsal/keys`
+- every credential and secret file
+- secret-shaped patterns: provider keys, PEM private keys, 64-byte key arrays and bearer tokens
+
+Any hit fails with exit code 1.

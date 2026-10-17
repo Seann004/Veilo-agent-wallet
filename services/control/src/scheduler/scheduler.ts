@@ -14,6 +14,8 @@ export interface SchedulerDeps {
   orchestrator: PurchaseOrchestrator;
   workerId?: string;
   leaseMs?: number;
+  /** When set, each tick also reconciles unresolved purchases at most this often (wall clock). */
+  purchaseSweepMs?: number;
   log?: (line: string) => void;
 }
 
@@ -31,6 +33,7 @@ export class Scheduler {
   readonly leaseMs: number;
   #timer: NodeJS.Timeout | undefined;
   #running = false;
+  #lastSweep = 0;
 
   constructor(readonly deps: SchedulerDeps) {
     this.workerId = deps.workerId ?? "control-scheduler";
@@ -141,6 +144,11 @@ export class Scheduler {
       await this.reconcileExpired();
       this.enqueueDueChecks();
       await this.runCreditJobs();
+      const sweep = this.deps.purchaseSweepMs;
+      if (sweep !== undefined && Date.now() - this.#lastSweep >= sweep) {
+        this.#lastSweep = Date.now();
+        await this.deps.orchestrator.reconcileAll();
+      }
     } catch (error) {
       this.deps.log?.(`[scheduler] tick failed: ${(error as Error).name}: ${(error as Error).message}`);
     } finally {

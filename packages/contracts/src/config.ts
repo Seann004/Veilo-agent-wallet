@@ -50,6 +50,23 @@ const notMainnet = (label: string) => (value: string, ctx: z.RefinementCtx) => {
 
 const httpUrl = z.url({ protocol: /^https?$/ });
 
+/**
+ * "devnet" is the only profile that reaches a public cluster. "local-test-validator" runs the
+ * services against a loopback solana-test-validator for integration tests and rehearsals: the RPC
+ * and facilitator must be loopback, and the chain guard refuses devnet and mainnet genesis.
+ */
+export const CHAIN_PROFILES = ["devnet", "local-test-validator"] as const;
+export type ChainProfile = (typeof CHAIN_PROFILES)[number];
+
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+export const isLoopbackUrl = (value: string): boolean => {
+  try {
+    return LOOPBACK_HOSTS.has(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+};
+
 const envSchema = z.object({
   DEVNET_RPC_URL: httpUrl,
   EXPECTED_DEVNET_GENESIS_HASH: z
@@ -70,7 +87,8 @@ const envSchema = z.object({
     .string()
     .trim()
     .refine((v) => v === DEMO_TOKEN_MINT, `must equal the pinned devnet test mint ${DEMO_TOKEN_MINT}`),
-  FACILITATOR_URL: z.url({ protocol: /^https$/ }),
+  FACILITATOR_URL: httpUrl,
+  VEILO_CHAIN_PROFILE: z.preprocess(emptyToUndefined, z.enum(CHAIN_PROFILES).default("devnet")),
   POOL_PROGRAM_ID: optionalAddress,
   POOL_ID: optionalString,
   DEPLOYMENT_MANIFEST_PATH: z.preprocess(
@@ -110,6 +128,7 @@ const envSchema = z.object({
 
 export interface VeiloConfig {
   network: {
+    profile: ChainProfile;
     rpcUrl: string;
     genesisHash: string;
     caip2: string;
@@ -167,6 +186,12 @@ export function loadConfig(
     );
   }
   const e = parsed.data;
+  if (e.VEILO_CHAIN_PROFILE === "devnet" && !e.FACILITATOR_URL.startsWith("https:")) {
+    throw new VeiloConfigError("INVALID_CONFIG", "Invalid Veilo configuration: FACILITATOR_URL: must use https");
+  }
+  if (e.VEILO_CHAIN_PROFILE === "local-test-validator" && (!isLoopbackUrl(e.DEVNET_RPC_URL) || !isLoopbackUrl(e.FACILITATOR_URL))) {
+    throw new VeiloConfigError("INVALID_CONFIG", "Invalid Veilo configuration: VEILO_CHAIN_PROFILE=local-test-validator requires loopback DEVNET_RPC_URL and FACILITATOR_URL");
+  }
   const rootDir = options.rootDir ?? process.cwd();
   const abs = (p: string) => (isAbsolute(p) ? p : resolve(rootDir, p));
   const absOpt = (p: string | undefined) => (p === undefined ? undefined : abs(p));
@@ -174,6 +199,7 @@ export function loadConfig(
 
   return {
     network: {
+      profile: e.VEILO_CHAIN_PROFILE,
       rpcUrl: e.DEVNET_RPC_URL,
       genesisHash: e.EXPECTED_DEVNET_GENESIS_HASH,
       caip2: e.SOLANA_CAIP2_NETWORK,
@@ -244,5 +270,5 @@ export function describeConfig(config: VeiloConfig): Record<string, unknown> {
 /** RPC URLs may embed provider API keys in the path or query; only the origin is printable. */
 export function redactUrl(url: string): string {
   const parsed = new URL(url);
-  return parsed.pathname === "/" && parsed.search === "" ? parsed.origin : `${parsed.origin}/…`;
+  return parsed.pathname === "/" && parsed.search === "" ? parsed.origin : `${parsed.origin}/â€¦`;
 }

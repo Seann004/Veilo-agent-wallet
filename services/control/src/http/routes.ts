@@ -428,7 +428,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     if (integration && body.input !== undefined) {
       integration.orchestrator.storeInput(purchase, body.input);
       if (purchase.authorization_state !== "awaiting_approval") {
-        const driven = await integration.orchestrator.drive(purchase.id);
+        const driven = await integration.orchestrator.driveUntilSettled(purchase.id);
         purchase = driven.purchase;
         execution = driven.execution;
       } else {
@@ -470,7 +470,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     if (integration?.orchestrator.configured && integration.orchestrator.input(p.id) !== undefined) {
       // Reconciliation queries the existing gateway/wallet operation; it never creates a new one.
       const before = JSON.stringify(purchaseView(ledger, p).states);
-      const driven = await integration.orchestrator.drive(p.id);
+      const driven = await integration.orchestrator.driveUntilSettled(p.id);
       const view = purchaseView(ledger, driven.purchase);
       res.json({ purchase: view, execution: driven.execution, reconciled: true, changed: JSON.stringify(view.states) !== before });
       return;

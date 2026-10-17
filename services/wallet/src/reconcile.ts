@@ -54,7 +54,10 @@ export async function reconcileOnStartup(d: WalletDeps, svc: { funding: FundingS
   for (const p of await d.control.livePurchases()) {
     const f = store.funding(p.id);
     const released = ["proof_released", "submitted", "uncertain", "finalized"].includes(p.funding);
-    if (released && (!f || f.step === "prepared" || f.step === "discarded")) {
+    // Control records release authority before calling the wallet, so a crash between the two
+    // leaves control at proof_released with the proof still here; control re-sends that release.
+    const releasePending = p.funding === "proof_released" && f?.step === "prepared";
+    if (released && !releasePending && (!f || f.step === "prepared" || f.step === "discarded")) {
       report.mismatches.push(`purchase ${p.id}: control shows released funding (${p.funding}) without matching wallet state`);
       store.setFlag(`recovery_required:${p.id}`, "control released funding that this wallet cannot account for");
     }

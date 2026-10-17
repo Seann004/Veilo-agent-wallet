@@ -86,7 +86,18 @@ async function main(): Promise<void> {
     ? new WalletFundingProvider({ baseUrl: `http://${config.bindHost}:${config.ports.wallet}`, serviceToken: walletToken })
     : new UnavailableFundingProvider("CONTROL_SERVICE_CREDENTIAL_PATH is not configured; private funding is unavailable");
   console.log(`[${SERVICE}] private funding provider: ${funding.mode}`);
-  const integration = createIntegration(ledger, { gateway, permits, funding, log: (l) => console.log(`[${SERVICE}] ${l}`) });
+  const msEnv = (name: string, fallback: number) => {
+    const v = Number(process.env[name] ?? fallback);
+    return Number.isInteger(v) && v >= 0 ? v : fallback;
+  };
+  const integration = createIntegration(ledger, {
+    gateway,
+    permits,
+    funding,
+    log: (l) => console.log(`[${SERVICE}] ${l}`),
+    settleWaitMs: msEnv("CONTROL_PURCHASE_WAIT_MS", 120_000),
+    purchaseSweepMs: msEnv("CONTROL_PURCHASE_SWEEP_MS", 15_000),
+  });
   // Startup reconciles existing operations before any new job starts.
   await integration.scheduler.reconcileExpired();
   await integration.orchestrator.reconcileAll();

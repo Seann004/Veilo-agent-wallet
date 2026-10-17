@@ -21,7 +21,14 @@ export function openSqlite(path: string): SqliteDatabase {
   return db;
 }
 
-const MIGRATIONS_DIR = fileURLToPath(new URL("../migrations/", import.meta.url));
+/** Read-only connection for inspection and evidence tools; it never migrates or writes. */
+export function openSqliteReadonly(path: string): SqliteDatabase {
+  const db = new Database(path, { readonly: true, fileMustExist: true });
+  db.pragma("busy_timeout = 5000");
+  return db;
+}
+
+const MIGRATIONS_DIR =fileURLToPath(new URL("../migrations/", import.meta.url));
 
 export function loadMigrations(set: "control" | "secrets"): Migration[] {
   const dir = join(MIGRATIONS_DIR, set);

@@ -77,6 +77,56 @@ describe("direct x402 purchase through funding provider and gateway", () => {
   });
 });
 
+describe("background reconciliation of pending purchases", () => {
+  it("the scheduler sweep completes a purchase whose withdrawal finalized after the request returned", async () => {
+    s = await makeStack({ purchaseSweepMs: 0 });
+    // A scheduled credit check would start its own purchase on the same tick.
+    const owner = await s.login();
+    await s.call(`/agents/${s.env.agents.Shawn.id}/pause`, { method: "POST", headers: s.ownerHeaders(owner), body: {} });
+    s.testFunding.behavior = "submitted_then_finalize";
+    const r = await intent(s, "Prince", "sweep-1", "research-basic", "private_x402", { query: "sweep" });
+    expect(r.body.purchase.states.funding).toBe("submitted");
+    await s.integration.scheduler.tick();
+    expect((await s.call(`/purchases/${r.body.purchase.id}`, { headers: { authorization: `Bearer ${s.worker("Prince")}` } })).body.purchase.states.funding).toBe("submitted");
+    s.testFunding.settle(r.body.purchase.id);
+    await s.integration.scheduler.tick();
+    const after = await s.call(`/purchases/${r.body.purchase.id}`, { headers: { authorization: `Bearer ${s.worker("Prince")}` } });
+    expect(after.body.purchase.states).toMatchObject({ funding: "finalized", merchant: "finalized", fulfilment: "delivered" });
+    expect(s.testFunding.calls).toMatchObject({ prepare: 1, release: 1, sign: 1 });
+    expect(s.gw.facilitator.settleCalls).toBe(1);
+  });
+});
+
+describe("REC-01 release recorded but never delivered to the wallet", () => {
+  it("re-sends the same release while authority is current, and refuses after a pause", async () => {
+    s = await makeStack();
+    const realRelease = s.testFunding.release.bind(s.testFunding);
+    let lost = 0;
+    // What the live provider reports when the wallet never received the request.
+    s.testFunding.release = async () => {
+      lost += 1;
+      return { status: "recovery_required", reason: "wallet service unreachable: TypeError" };
+    };
+    const r = await intent(s, "Prince", "lost-release", "research-basic", "private_x402", { query: "lost release" });
+    expect(r.body.purchase.states.funding).toBe("proof_released");
+    expect(lost).toBe(1);
+    s.testFunding.release = realRelease;
+    const owner = await s.login();
+    const rec = await s.call(`/purchases/${r.body.purchase.id}/reconcile`, { method: "POST", headers: s.ownerHeaders(owner), body: {} });
+    expect(rec.body.purchase.states).toMatchObject({ funding: "finalized", merchant: "finalized", fulfilment: "delivered" });
+    expect(s.testFunding.calls).toMatchObject({ prepare: 1, release: 1, sign: 1 });
+
+    s.testFunding.release = async () => ({ status: "recovery_required", reason: "wallet service unreachable: TypeError" });
+    const r2 = await intent(s, "Prince", "lost-release-2", "research-basic", "private_x402", { query: "lost release 2" });
+    s.testFunding.release = realRelease;
+    await s.call(`/agents/${s.env.agents.Prince.id}/pause`, { method: "POST", headers: s.ownerHeaders(owner), body: {} });
+    const rec2 = await s.call(`/purchases/${r2.body.purchase.id}/reconcile`, { method: "POST", headers: s.ownerHeaders(owner), body: {} });
+    expect(rec2.body.purchase.states.funding).toBe("proof_released");
+    expect(rec2.body.execution.blocked.code).toBe("RECOVERY_REQUIRED");
+    expect(s.testFunding.calls.release).toBe(1);
+  });
+});
+
 describe("USG-01 failure between scoped and account reservations", () => {
   it("a lost authorize reply is reconciled with the same permit: one reservation, one debit", async () => {
     s = await makeStack();

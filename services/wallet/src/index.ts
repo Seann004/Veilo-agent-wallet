@@ -51,6 +51,18 @@ async function main(): Promise<void> {
   });
   if (process.env.VEILO_LOG_CONFIG === "1") console.log(JSON.stringify(describeConfig(config)));
 
+  // Inserted deposits and change notes become spendable (and are reported to control) only
+  // through a sync against verified public state, so it also runs without an owner session.
+  const syncMs = Number(process.env.WALLET_NOTE_SYNC_MS ?? "10000");
+  const syncLoop = async () => {
+    try {
+      await rt!.notes.sync();
+    } catch (error) {
+      console.error(`[${SERVICE}] note sync failed (${(error as Error).name}); retrying`);
+    }
+    setTimeout(() => void syncLoop(), Number.isInteger(syncMs) && syncMs >= 1_000 ? syncMs : 10_000).unref();
+  };
+
   // New funding work waits for reconciliation of every existing multi-leg operation.
   const attempt = async () => {
     try {
@@ -59,6 +71,7 @@ async function main(): Promise<void> {
       for (const m of report.mismatches) console.log(`[${SERVICE}]   ${m}`);
       ready = report.ready;
       if (!ready) setTimeout(attempt, 30_000);
+      else void syncLoop();
     } catch (error) {
       console.error(`[${SERVICE}] startup reconciliation incomplete (${(error as Error).name}); retrying`);
       setTimeout(attempt, 15_000);
