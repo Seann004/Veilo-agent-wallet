@@ -134,6 +134,20 @@ const MANAGED: ManagedTool[] = [
       "Under Caption write one TikTok caption under 300 characters with at most five hashtags.",
     ].join(" "),
   },
+  {
+    creator: "studio-north",
+    slug: "tiktok-photo-edit-planner",
+    title: "TikTok ad edit planner",
+    summary: "Turns a product brief into three photo-edit instructions and a caption for a before-and-after TikTok carousel.",
+    template: "content-package",
+    price: "20000",
+    sections: ["Slides", "Caption"],
+    sellerInstructions: [
+      "Under Slides write exactly three lines, each in the form \"Slide N: <edit instruction>\".",
+      "Each instruction restages the owner's own product photo for a vertical 9:16 ad: keep the product exactly as it is and change the scene, light and mood (for example a sunlit cafe table, a clean studio, an outdoor lifestyle shot). No added text, logos or real people's names.",
+      "Under Caption write one TikTok caption under 300 characters with at most five hashtags.",
+    ].join(" "),
+  },
 ];
 
 interface ProviderTool {
@@ -162,6 +176,16 @@ const PROVIDERS: ProviderTool[] = [
     provider: "higgsfield",
     toolName: "generate_carousel_images",
     price: "200000",
+    origin: CAROUSEL_HOST,
+  },
+  {
+    creator: "studio-north",
+    slug: "higgsfield-photo-edits",
+    title: "Higgsfield product photo edits",
+    summary: "Restages one product photo into up to three vertical ad shots with Higgsfield Marketing Studio, keeping the original as the first slide. Workflow step only.",
+    provider: "higgsfield",
+    toolName: "edit_carousel_images",
+    price: "150000",
     origin: CAROUSEL_HOST,
   },
   {
@@ -458,6 +482,24 @@ async function main(): Promise<void> {
       steps: [
         step_("tiktok-carousel-planner", { brief: { from: "run_input", name: "topic" } }),
         step_("higgsfield-carousel-images", { slides: { from: "step", step: 0 } }),
+        step_("zernio-tiktok-carousel-draft", { carousel: { from: "step", step: 1 } }),
+      ],
+      sampleOutput: null,
+    });
+    await workflow("studio-north", "tiktok-ad-from-photo", {
+      category: "social",
+      title: "TikTok ad from your product photo",
+      summary: "DeepSeek plans three ad scenes, Higgsfield restages your photo into them, Zernio puts a before-and-after carousel draft in your TikTok inbox.",
+      description:
+        "Step 1 writes three edit instructions and a caption with DeepSeek V4 Flash. Step 2 edits your photo into each scene with Higgsfield Marketing Studio on the seller's key; the original stays as the first slide. Step 3 sends the carousel to the seller's TikTok inbox as a private draft through Zernio; a person publishes it in the TikTok app.",
+      safetyPromise: "Draft only: the carousel lands in a TikTok inbox as a private draft and is never published by this workflow.",
+      runInputs: [
+        { name: "brief", label: "Product and campaign", maxChars: 500 },
+        { name: "photo", label: "Product photo URL (https)", maxChars: 2048 },
+      ],
+      steps: [
+        step_("tiktok-photo-edit-planner", { brief: { from: "run_input", name: "brief" } }),
+        step_("higgsfield-photo-edits", { slides: { from: "step", step: 0 }, photo: { from: "run_input", name: "photo" } }),
         step_("zernio-tiktok-carousel-draft", { carousel: { from: "step", step: 1 } }),
       ],
       sampleOutput: null,

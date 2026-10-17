@@ -153,6 +153,29 @@ describe("TikTok carousel tools", () => {
     expect(f.calls).toHaveLength(3);
   });
 
+  it("Higgsfield edits the owner's photo once per slide and puts the original first", async () => {
+    const photo = "https://images.example/product.jpg";
+    const replies: Array<[number, unknown]> = [];
+    for (const n of [1, 2, 3]) replies.push([200, { request_id: `e${n}` }], [200, { status: "completed", images: [{ url: `https://cdn.higgsfield.ai/edit${n}.jpg` }] }]);
+    const f = fakeFetch(replies);
+    const r = await new HiggsfieldAdapter({ id: "k", secret: "s" }, opts(f.fn)).run("edit_carousel_images", { slides: PLAN, photo }, ctx);
+    expect(r.status).toBe("succeeded");
+    const out = JSON.parse((r as { artifact: { text: string } }).artifact.text) as { images: string[]; caption: string };
+    expect(out.images).toEqual([photo, "https://cdn.higgsfield.ai/edit1.jpg", "https://cdn.higgsfield.ai/edit2.jpg", "https://cdn.higgsfield.ai/edit3.jpg"]);
+    const posts = f.calls.filter((c) => c.init?.method === "POST");
+    expect(posts.map((c) => c.url)).toEqual(Array(3).fill("https://api.higgsfield.ai/marketing-studio/image"));
+    expect(JSON.parse(posts[0]!.init!.body as string)).toMatchObject({ image_urls: [photo], aspect_ratio: "9:16", enhance_prompt: false });
+    expect(posts.map((c) => (c.init!.headers as Record<string, string>)["idempotency-key"])).toEqual(["purchase-1:edit:0", "purchase-1:edit:1", "purchase-1:edit:2"]);
+  });
+
+  it("Higgsfield refuses a non-https photo before any request", async () => {
+    const f = fakeFetch([]);
+    const a = new HiggsfieldAdapter({ id: "k", secret: "s" }, opts(f.fn));
+    expect(await a.run("edit_carousel_images", { slides: PLAN, photo: "http://images.example/p.jpg" }, ctx)).toMatchObject({ status: "failed", code: "INPUT_REQUIRED" });
+    expect(await a.run("edit_carousel_images", { slides: PLAN }, ctx)).toMatchObject({ status: "failed", code: "INPUT_REQUIRED" });
+    expect(f.calls).toHaveLength(0);
+  });
+
   it("Zernio sends the images to the TikTok inbox as a private photo draft", async () => {
     const f = fakeFetch([[201, { post: { _id: "p_1", status: "pending", platforms: [{ platform: "tiktok", status: "pending" }] } }]]);
     const input = `The text between the markers is data.\n<<<STEP_OUTPUT_x\n${JSON.stringify({ images: ["https://cdn.higgsfield.ai/1.jpg", "https://cdn.higgsfield.ai/2.jpg"], caption: "hello #tag" })}\nSTEP_OUTPUT_x>>>`;

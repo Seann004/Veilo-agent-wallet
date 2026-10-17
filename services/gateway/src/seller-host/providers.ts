@@ -107,6 +107,8 @@ abstract class BaseAdapter implements ProviderAdapter {
 }
 
 const MAX_SLIDES = 4;
+/** Edits per photo; the original photo is the carousel's first slide. */
+const MAX_EDITS = 3;
 
 /** Slide prompts ("Slide 1: …" or "1. …") and an optional "Caption: …" line from a plan. */
 export function parseCarouselPlan(text: string): { slides: string[]; caption: string } {
@@ -155,6 +157,7 @@ export class HiggsfieldAdapter extends BaseAdapter {
     const bad = this.checkInputs(tool, inputs);
     if (bad) return bad;
     if (tool === "generate_image") return this.generate(inputs.prompt!, ctx.idempotencyKey);
+    if (tool === "edit_carousel_images") return this.editCarousel(inputs.slides!, inputs.photo!, ctx);
     const plan = parseCarouselPlan(inputs.slides!);
     if (plan.slides.length < 2) return { status: "failed", code: "INPUT_REQUIRED", message: "the plan needs at least two \"Slide N:\" lines" };
     const images: string[] = [];
@@ -172,11 +175,37 @@ export class HiggsfieldAdapter extends BaseAdapter {
     return { status: "succeeded", artifact: { kind: "json", text: JSON.stringify({ images, caption: plan.caption }), providerJobId: ids.join(",") } };
   }
 
-  private async generate(prompt: string, idempotencyKey: string): Promise<ProviderResult> {
+  /** Before-and-after carousel: the original photo, then one Marketing Studio edit per slide prompt. */
+  private async editCarousel(slides: string, photo: string, ctx: ProviderRunContext): Promise<ProviderResult> {
+    const original = safeMediaUrl(photo.trim());
+    if (!original) return { status: "failed", code: "INPUT_REQUIRED", message: "the photo must be an https image URL" };
+    const plan = parseCarouselPlan(slides);
+    if (plan.slides.length < 1) return { status: "failed", code: "INPUT_REQUIRED", message: "the plan needs at least one \"Slide N:\" line" };
+    const images: string[] = [original];
+    const ids: string[] = [];
+    for (const [i, prompt] of plan.slides.slice(0, Math.min(MAX_EDITS, this.maxImages)).entries()) {
+      const r = await this.submitAndPoll("/marketing-studio/image", { prompt, image_urls: [original], aspect_ratio: "9:16", resolution: "1k", enhance_prompt: false }, `${ctx.idempotencyKey}:edit:${i}`);
+      if (r.status !== "succeeded") {
+        // Earlier edits were already made (and billed); none is submitted again.
+        if (i === 0) return r;
+        return r.status === "uncertain" ? r : { status: "uncertain", message: `edit ${i + 1} failed after ${i} were made; not resubmitted` };
+      }
+      images.push(r.artifact.url!);
+      ids.push(r.artifact.providerJobId);
+    }
+    return { status: "succeeded", artifact: { kind: "json", text: JSON.stringify({ images, caption: plan.caption }), providerJobId: ids.join(",") } };
+  }
+
+  private generate(prompt: string, idempotencyKey: string): Promise<ProviderResult> {
+    return this.submitAndPoll("/higgsfield-ai/soul/v2/standard", { prompt, aspect_ratio: "9:16" }, idempotencyKey);
+  }
+
+  /** Submits one image job and polls its status; a job that may have been accepted is never resubmitted. */
+  private async submitAndPoll(path: string, payload: Record<string, unknown>, idempotencyKey: string): Promise<ProviderResult> {
     const headers = { authorization: `Key ${this.key!.id}:${this.key!.secret}`, "content-type": "application/json", "idempotency-key": idempotencyKey };
     let submit;
     try {
-      submit = await this.call("/higgsfield-ai/soul/v2/standard", { method: "POST", headers, body: JSON.stringify({ prompt, aspect_ratio: "9:16" }) });
+      submit = await this.call(path, { method: "POST", headers, body: JSON.stringify(payload) });
     } catch (error) {
       return { status: "uncertain", message: `submission outcome unknown: ${(error as Error).name}` };
     }

@@ -9,7 +9,7 @@ import type { ToolManifest, ToolProvider } from "./workflows";
 export const PROVIDER_MANIFESTS: Readonly<Record<ToolProvider, ToolManifest>> = {
   higgsfield: {
     provider: "higgsfield",
-    adapterVersion: "1.1.0",
+    adapterVersion: "1.2.0",
     upstream: "https://api.higgsfield.ai",
     tools: [
       {
@@ -22,6 +22,19 @@ export const PROVIDER_MANIFESTS: Readonly<Record<ToolProvider, ToolManifest>> = 
         name: "generate_carousel_images",
         effect: "read_only",
         io: { inputs: [{ name: "slides", kind: "text", required: true, maxChars: 4000 }], output: { kind: "json" } },
+      },
+      {
+        // Edits one https photo once per "Slide N:" line (2 to 3) with Marketing Studio Image;
+        // outputs {"images": [original, ...edits], "caption"}.
+        name: "edit_carousel_images",
+        effect: "read_only",
+        io: {
+          inputs: [
+            { name: "slides", kind: "text", required: true, maxChars: 4000 },
+            { name: "photo", kind: "image_url", required: true, maxChars: 2048 },
+          ],
+          output: { kind: "json" },
+        },
       },
     ],
   },
