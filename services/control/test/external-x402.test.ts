@@ -359,3 +359,45 @@ describe("external x402 batch through private funding", () => {
     expect(() => buy("over-cap")).toThrow(/per-purchase limit/);
   });
 });
+
+describe("workflow-scoped external bindings", () => {
+  it("are never purchasable through a general purchase intent", async () => {
+    const { makeStack } = await import("./fixtures/stack");
+    const st = await makeStack();
+    try {
+      const [merchant, feePayer] = await Promise.all([generateKeyPairSigner(), generateKeyPairSigner()]);
+      const origins = new SellerOriginPolicy({ localTestOrigins: ["https://rpc.example.com"] });
+      const scoped = await approveExternalBinding(
+        st.env.ledger,
+        st.env.ws.id,
+        "owner",
+        {
+          label: "Workflow tool",
+          origin: "https://rpc.example.com",
+          resourcePath: PATH,
+          network: DEVNET_CAIP2,
+          mint: DEMO_TOKEN_MINT,
+          payTo: merchant.address,
+          payToAta: await deriveAta(merchant.address, DEMO_TOKEN_MINT),
+          unitPriceUsdc: UNIT,
+          maxCalls: 1,
+          allowedFeePayers: [feePayer.address],
+        },
+        origins,
+        100_000n,
+        "workflow",
+      );
+      expect(scoped.scope).toBe("workflow");
+      const input = { bindingId: scoped.id, calls: [rpc("getSlot")] };
+      const r = await st.call("/purchase-intents", {
+        method: "POST",
+        headers: { authorization: `Bearer ${st.worker("Prince")}` },
+        body: { idempotencyKey: "scoped-1", serviceId: scoped.service_id, sku: EXTERNAL_BATCH_SKU, paymentPath: "private_x402", requestDigest: computeRequestDigest(EXTERNAL_BATCH_SKU, input), input },
+      });
+      expect(r.status).toBe(403);
+      expect(r.body.error.code).toBe("SERVICE_NOT_ALLOWED");
+    } finally {
+      await st.close();
+    }
+  });
+});

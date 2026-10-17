@@ -1,3 +1,4 @@
+import { externalBindingForService } from "../external/bindings";
 import { Router, type Request, type Response } from "express";
 import type { z } from "zod";
 import {
@@ -433,6 +434,10 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     if (serviceKey?.startsWith(LISTING_SERVICE_PREFIX)) {
       // Listing bindings exist only for locally authorized marketplace hires; agents propose hires instead.
       throw new ControlError("SERVICE_NOT_ALLOWED", "marketplace listings are paid only through an authorized marketplace hire");
+    }
+    if (externalBindingForService(ledger, body.serviceId)?.scope === "workflow") {
+      // Installed for an approved workflow step; agents propose workflow runs instead.
+      throw new ControlError("SERVICE_NOT_ALLOWED", "this external binding is used only by approved workflow runs");
     }
     const result = authorizePurchase(ledger, {
       workspaceId: a.workspaceId,

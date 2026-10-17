@@ -217,7 +217,7 @@ export const workflowApprovalTermsSchema = z
     network: z.string().min(1),
     mint: solanaAddress,
     steps: z
-      .array(z.object({ toolKind: z.enum(STEP_TOOL_KINDS), toolId: z.uuid(), recipient: solanaAddress, maxBaseUnits: baseUnits }).strict())
+      .array(z.object({ toolKind: z.enum(STEP_TOOL_KINDS), toolId: z.uuid(), recipient: solanaAddress, maxBaseUnits: baseUnits, toolDigest: hex64 }).strict())
       .min(1)
       .max(8),
     totalMaxBaseUnits: baseUnits,
@@ -225,6 +225,27 @@ export const workflowApprovalTermsSchema = z
   })
   .strict();
 export type WorkflowApprovalTerms = z.infer<typeof workflowApprovalTermsSchema>;
+
+/** Every term an external tool step is paid under; a listing step is bound by its version and recipient. */
+export type StepToolTerms =
+  | { toolKind: "listing"; toolId: string; recipient: string }
+  | {
+      toolKind: "external";
+      toolId: string;
+      origin: string;
+      resourcePath: string;
+      payTo: string;
+      payToAta: string;
+      unitPriceBaseUnits: string;
+      callsPerStep: number;
+      feePayers: string[];
+      rpcMethods: string[] | null;
+      callTemplate: unknown;
+    };
+
+export function stepToolDigest(t: StepToolTerms): string {
+  return sha256Hex(`veilo:workflow-step-tool:v1\n${canonicalJson(t)}`);
+}
 
 export function workflowApprovalDigest(terms: WorkflowApprovalTerms): string {
   return sha256Hex(`veilo:workflow-approval:v1\n${canonicalJson(terms)}`);

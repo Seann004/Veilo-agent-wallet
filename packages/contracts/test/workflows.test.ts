@@ -127,8 +127,8 @@ describe("workflow approval terms", () => {
     network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
     mint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
     steps: [
-      { toolKind: "external", toolId: DATA, recipient: R1, maxBaseUnits: "3000" },
-      { toolKind: "listing", toolId: BRIEF, recipient: R2, maxBaseUnits: "10000" },
+      { toolKind: "external", toolId: DATA, recipient: R1, maxBaseUnits: "3000", toolDigest: "1".repeat(64) },
+      { toolKind: "listing", toolId: BRIEF, recipient: R2, maxBaseUnits: "10000", toolDigest: "2".repeat(64) },
     ],
     totalMaxBaseUnits: "13000",
     runInputsDigest: "a".repeat(64),
@@ -140,6 +140,7 @@ describe("workflow approval terms", () => {
     expect(workflowApprovalDigest({ ...terms, totalMaxBaseUnits: "13001" })).not.toBe(d);
     expect(workflowApprovalDigest({ ...terms, steps: [terms.steps[0]!, { ...terms.steps[1]!, recipient: R1 }] })).not.toBe(d);
     expect(workflowApprovalDigest(structuredClone(terms))).toBe(d);
+    expect(workflowApprovalDigest({ ...terms, steps: [{ ...terms.steps[0]!, toolDigest: "3".repeat(64) }, terms.steps[1]!] })).not.toBe(d);
   });
 
   it("halts on any changed price, recipient, tool version, network or mint", () => {

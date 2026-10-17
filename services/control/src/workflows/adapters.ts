@@ -207,6 +207,7 @@ export class LocalExternalPort implements ExternalPort {
       },
       this.batches.deps.origins,
       this.maxBatchUsdc,
+      "workflow",
     );
   }
 

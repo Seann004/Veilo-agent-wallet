@@ -18,6 +18,7 @@ import {
   controllerSigningMessage,
   payerBindingMessage,
   runInputsDigest,
+  stepToolDigest,
   workflowApprovalDigest,
   type WorkflowApprovalTerms,
 } from "@veilo/contracts/marketplace";
@@ -413,15 +414,17 @@ async function main() {
       workflowVersionId: wv.body.versionId,
       network: config.network,
       mint: config.mint,
-      steps: [{ toolKind: "listing", toolId: version.body.versionId, recipient: seller.address, maxBaseUnits: "10000" }],
+      steps: [{ toolKind: "listing", toolId: version.body.versionId, recipient: seller.address, maxBaseUnits: "10000", toolDigest: stepToolDigest({ toolKind: "listing", toolId: version.body.versionId, recipient: seller.address }) }],
       totalMaxBaseUnits: "10000",
       runInputsDigest: runInputsDigest({ topic: "repair cafes" }),
     };
     const runReq = (t: WorkflowApprovalTerms, digest = workflowApprovalDigest(t), key = `wfrun-${randomUUID()}`) =>
       signedCall("POST", "/controller/workflow-runs", { idempotencyKey: key, terms: t, approvalDigest: digest, localAgentId: null, isTest: false }, keyId);
-    const wrongRecipient = { ...terms, steps: [{ ...terms.steps[0]!, recipient: buyerA.address }] };
+    const wrongRecipient = { ...terms, steps: [{ ...terms.steps[0]!, recipient: buyerA.address, toolDigest: stepToolDigest({ toolKind: "listing", toolId: version.body.versionId, recipient: buyerA.address }) }] };
     const badRun = await runReq(wrongRecipient);
     const badDigest = await runReq(terms, "0".repeat(64));
+    const badTool = await runReq({ ...terms, steps: [{ ...terms.steps[0]!, toolDigest: "f".repeat(64) }] });
+    record("a run whose approval covers different tool terms is refused", badTool.status === 409, `status ${badTool.status}`);
     record("a run whose approval names another recipient or digest is refused", badRun.status === 409 && badDigest.status === 409, `statuses ${badRun.status}/${badDigest.status}`);
     const run = await runReq(terms);
     record("the local controller records a run bound to the approved terms", run.status === 200 && typeof run.body?.runId === "string");
@@ -454,8 +457,26 @@ async function main() {
       network: config.network,
       mint: config.mint,
       steps: [
-        { toolKind: "external", toolId: ext.body.toolId, recipient: extPayTo.address, maxBaseUnits: "3000" },
-        { toolKind: "listing", toolId: version.body.versionId, recipient: seller.address, maxBaseUnits: "10000" },
+        {
+          toolKind: "external",
+          toolId: ext.body.toolId,
+          recipient: extPayTo.address,
+          maxBaseUnits: "3000",
+          toolDigest: stepToolDigest({
+            toolKind: "external",
+            toolId: ext.body.toolId,
+            origin: "https://rpc.example.com",
+            resourcePath: "/solana-mainnet",
+            payTo: extPayTo.address,
+            payToAta: await deriveAta(extPayTo.address, DEMO_TOKEN_MINT),
+            unitPriceBaseUnits: "1000",
+            callsPerStep: 3,
+            feePayers: [controllerKey.address],
+            rpcMethods: ["getSlot"],
+            callTemplate: [0, 1, 2].map((id) => ({ method: "POST", path: "/solana-mainnet", body: { jsonrpc: "2.0", id, method: "getSlot", params: [{ commitment: "finalized" }] } })),
+          }),
+        },
+        { toolKind: "listing", toolId: version.body.versionId, recipient: seller.address, maxBaseUnits: "10000", toolDigest: stepToolDigest({ toolKind: "listing", toolId: version.body.versionId, recipient: seller.address }) },
       ],
       totalMaxBaseUnits: "13000",
       runInputsDigest: runInputsDigest({ topic: "token supply" }),

@@ -29,6 +29,7 @@ export interface ExternalBindingRow {
   allowed_fee_payers_json: string;
   allowed_rpc_methods_json: string | null;
   status: "approved" | "disabled";
+  scope: "owner" | "workflow";
   approved_by: string;
   created_at_ms: bigint;
   updated_at_ms: bigint;
@@ -77,6 +78,7 @@ export async function approveExternalBinding(
   input: ExternalBindingInput,
   origins: OriginCheck,
   maxBatchUsdc: bigint,
+  scope: "owner" | "workflow" = "owner",
 ): Promise<ExternalBindingRow> {
   if (input.network !== DEVNET_CAIP2 || isMainnetIdentifier(input.network)) throw new ControlError("WRONG_NETWORK", "external bindings are devnet only");
   if (input.mint !== DEMO_TOKEN_MINT) throw new ControlError("WRONG_MINT", "external bindings must use the pinned devnet mint");
@@ -123,12 +125,12 @@ export async function approveExternalBinding(
     ledger.db
       .prepare(
         `INSERT INTO external_binding (id, workspace_id, service_id, label, origin, resource_path, network, mint, pay_to, pay_to_ata,
-           unit_price_usdc, max_calls, allowed_fee_payers_json, allowed_rpc_methods_json, status, approved_by, created_at_ms, updated_at_ms)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?)`,
+           unit_price_usdc, max_calls, allowed_fee_payers_json, allowed_rpc_methods_json, status, scope, approved_by, created_at_ms, updated_at_ms)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?, ?)`,
       )
       .run(id, workspaceId, serviceId, input.label, input.origin, input.resourcePath, input.network, input.mint, input.payTo, input.payToAta,
         input.unitPriceUsdc, input.maxCalls, JSON.stringify(input.allowedFeePayers),
-        input.allowedRpcMethods === undefined ? null : JSON.stringify(input.allowedRpcMethods), ownerId, now, now);
+        input.allowedRpcMethods === undefined ? null : JSON.stringify(input.allowedRpcMethods), scope, ownerId, now, now);
     writeAudit(ledger, {
       workspaceId,
       scope: `external:${id}`,

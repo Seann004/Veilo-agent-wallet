@@ -11,6 +11,7 @@ import {
   workflowApprovalDigest,
   workflowApprovalTermsSchema,
   payerBindingMessage,
+  stepToolDigest,
   workflowStepHireKey,
   workflowVersionInputSchema,
   type ToolFacts,
@@ -200,6 +201,48 @@ export async function loadToolFacts(deps: Deps, steps: ReadonlyArray<{ toolKind:
     }
   }
   return facts;
+}
+
+/** Each approved step's tool digest must match the tool facts this marketplace stores now. */
+async function toolDigestProblem(deps: Deps, terms: z.infer<typeof workflowApprovalTermsSchema>): Promise<string | null> {
+  for (const [i, s] of terms.steps.entries()) {
+    let expected: string | null = null;
+    if (s.toolKind === "listing") {
+      const c = (await deps.db.admin.from("catalog_entries").select("recipient").eq("listing_version_id", s.toolId).maybeSingle()).data as { recipient: string } | null;
+      if (c) expected = stepToolDigest({ toolKind: "listing", toolId: s.toolId, recipient: c.recipient });
+    } else {
+      const e = (await deps.db.admin.from("external_tools").select("id, origin, resource_path, pay_to, pay_to_ata, unit_price_base_units, calls_per_step, fee_payers, rpc_methods, call_template").eq("id", s.toolId).maybeSingle()).data as {
+        id: string;
+        origin: string;
+        resource_path: string;
+        pay_to: string;
+        pay_to_ata: string;
+        unit_price_base_units: string | number;
+        calls_per_step: number;
+        fee_payers: string[];
+        rpc_methods: string[] | null;
+        call_template: unknown;
+      } | null;
+      if (e) {
+        expected = stepToolDigest({
+          toolKind: "external",
+          toolId: e.id,
+          origin: e.origin,
+          resourcePath: e.resource_path,
+          payTo: e.pay_to,
+          payToAta: e.pay_to_ata,
+          unitPriceBaseUnits: String(e.unit_price_base_units),
+          callsPerStep: e.calls_per_step,
+          feePayers: e.fee_payers,
+          rpcMethods: e.rpc_methods,
+          callTemplate: e.call_template,
+        });
+      }
+    }
+    if (expected === null) return `step ${i} tool is not available`;
+    if (expected !== s.toolDigest) return `step ${i} tool terms differ from the approved terms`;
+  }
+  return null;
 }
 
 type ReportedStep = z.infer<typeof runReportSchema>["steps"][number];
@@ -505,6 +548,8 @@ export function registerWorkflowRoutes(app: Express, deps: Deps, h: WorkflowRout
         .strict()
         .parse(req.body);
       if (workflowApprovalDigest(b.terms) !== b.approvalDigest) throw new MarketError("PRICE_CHANGED", "approval digest does not match the terms");
+      const problem = await toolDigestProblem(deps, b.terms);
+      if (problem) throw new MarketError("PRICE_CHANGED", problem);
       if (b.terms.network !== config.network || b.terms.mint !== config.mint) throw new MarketError("WRONG_NETWORK", "terms name another network or mint");
       let agentId: string | null = null;
       if (b.localAgentId !== null) {

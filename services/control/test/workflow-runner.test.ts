@@ -192,10 +192,17 @@ describe("workflow runner (§26.7)", () => {
     const run = await runner.prepare({ versionId: V1, agentId: env.agents.Prince.id, runInputs: { mint: "m" }, isTest: false, requestedBy: "owner" });
     await expect(runner.approve(run.id, OWNER, "0".repeat(64))).rejects.toMatchObject({ code: "PRICE_CHANGED" });
     const terms = JSON.parse(run.terms_json) as WorkflowApprovalTerms;
-    expect(terms.steps).toEqual([
+    expect(terms.steps).toMatchObject([
       { toolKind: "external", toolId: DATA, recipient: RPC, maxBaseUnits: "2000" },
       { toolKind: "listing", toolId: BRIEF, recipient: SELLER, maxBaseUnits: "10000" },
     ]);
+    // The external step's digest covers origin, path, ATA, fee payers, methods and the call template.
+    const changedTemplate = facts();
+    changedTemplate.tools[0]!.external = { ...rpcTool, origin: "https://other.example.com" };
+    market.v = changedTemplate;
+    const other = await runner.prepare({ versionId: V1, agentId: env.agents.Prince.id, runInputs: { mint: "m" }, isTest: false, requestedBy: "owner" });
+    expect((JSON.parse(other.terms_json) as WorkflowApprovalTerms).steps[0]!.toolDigest).not.toBe(terms.steps[0]!.toolDigest);
+    expect(other.approval_digest).not.toBe(run.approval_digest);
     expect(terms.totalMaxBaseUnits).toBe("12000");
   });
 
