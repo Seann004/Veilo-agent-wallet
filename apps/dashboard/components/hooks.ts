@@ -37,16 +37,30 @@ export function usePolling(refresh: () => Promise<void>, key: string, enabled = 
 }
 
 /** Loads backend state; keeps the last good value while reloading and reports errors as-is. */
+// Last result per resource key, so moving between pages shows what was there while it refreshes.
+const resourceCache = new Map<string, unknown>();
+
+/** Drops every cached result; called when the signed-in owner changes. */
+export function clearResourceCache(): void {
+  resourceCache.clear();
+}
+
 export function useResource<T>(load: () => Promise<T>, key: string): Resource<T> {
-  const [data, setData] = useState<T>();
+  const [data, setData] = useState<T | undefined>(() => resourceCache.get(key) as T | undefined);
   const [error, setError] = useState<ApiError>();
   const [loading, setLoading] = useState(true);
   const loader = useRef(load);
   loader.current = load;
+  const keyRef = useRef(key);
+  keyRef.current = key;
   const reload = useCallback(async () => {
     setLoading(true);
+    const k = keyRef.current;
+    if (resourceCache.has(k)) setData(resourceCache.get(k) as T);
     try {
-      setData(await loader.current());
+      const next = await loader.current();
+      resourceCache.set(k, next);
+      if (keyRef.current === k) setData(next);
       setError(undefined);
     } catch (e) {
       setError(asApiError(e));

@@ -1,5 +1,5 @@
-import { WorkflowBrowse } from "../../../components/market/WorkflowBrowse";
+import { MarketHome } from "../../../components/market/MarketHome";
 
 export default function MarketplacePage() {
-  return <WorkflowBrowse />;
+  return <MarketHome />;
 }

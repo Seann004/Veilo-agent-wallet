@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -217,6 +217,7 @@ describe("hire idempotency", () => {
       return {};
     }) as unknown as MarketContextValue["call"];
     render(withMarket(marketValue(call), <ListingDetail slug="research-desk" />));
+    await user.click(within(await screen.findByRole("navigation", { name: "Sections" })).getByRole("button", { name: /^Hire/ }));
     await user.type(await screen.findByLabelText("Brief *"), "Summarize devnet fees");
     await user.click(screen.getByRole("button", { name: "Request quote" }));
     expect(await screen.findByText(/lost reply/)).toBeTruthy();
@@ -344,8 +345,16 @@ describe("untrusted content", () => {
     vi.stubGlobal("fetch", async () => Response.json({ listing: listing(), samples: [{ id: "s1", title: "Sample", content: HOSTILE }] }));
     const { container } = render(withMarket(marketValue(vi.fn() as unknown as MarketContextValue["call"]), <ListingDetail slug="research-desk" />));
     await screen.findByText("Research desk");
-    expect(container.querySelectorAll("script, img, b, iframe, object, embed")).toHaveLength(0);
-    expect(screen.getAllByText(HOSTILE).length).toBeGreaterThanOrEqual(4);
+    // The only image is the page's own avatar; every seller field is visited and stays text.
+    const markup = () => [...container.querySelectorAll("script, img, b, iframe, object, embed")].filter((el) => !el.classList.contains("detail-avatar"));
+    let seen = 0;
+    for (const section of ["About", "Payment and refunds", "Samples"]) {
+      fireEvent.click(within(screen.getByRole("navigation", { name: "Sections" })).getByRole("button", { name: new RegExp(`^${section}`) }));
+      expect(markup(), section).toHaveLength(0);
+      seen += screen.queryAllByText(HOSTILE).length;
+    }
+    expect(seen).toBeGreaterThanOrEqual(4);
+    expect(container.querySelector(".detail-avatar")!.getAttribute("src")).toMatch(/^\/avatars\//);
     expect((window as unknown as { __pwned?: number }).__pwned).toBeUndefined();
   });
 
@@ -494,7 +503,7 @@ describe("amount scaling trusts only the local controller", () => {
     const unverified = marketValue(vi.fn() as unknown as MarketContextValue["call"], { token: { network: NETWORK, mint: MINT, decimals: null }, decimalsFor: () => null });
     render(withMarket(unverified, <ListingDetail slug="research-desk" />));
     await screen.findByText("Research desk");
-    expect(screen.getByText(/1500000 base units/)).toBeTruthy();
+    expect(screen.getAllByText(/1500000 base units/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/token decimals not verified by your local controller/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/15,000/)).toBeNull();
     expect(screen.queryByText(/1\.5 USDC/)).toBeNull();
@@ -504,7 +513,8 @@ describe("amount scaling trusts only the local controller", () => {
     vi.stubGlobal("fetch", async () => Response.json({ listing: listing({ decimals: 2, description: "plain" }), samples: [] }));
     render(withMarket(marketValue(vi.fn() as unknown as MarketContextValue["call"]), <ListingDetail slug="research-desk" />));
     await screen.findByText("Research desk");
-    expect(screen.getByText(/1\.5 USDC/).textContent).toContain("= 1500000 base units");
+    // The full price row shows the raw integer next to the scaled amount; the header button is compact.
+    expect(screen.getAllByText(/1\.5 USDC/).some((el) => el.textContent!.includes("= 1500000 base units"))).toBe(true);
     expect(screen.queryByText(/15,000/)).toBeNull();
   });
 });

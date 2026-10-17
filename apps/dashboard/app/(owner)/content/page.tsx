@@ -1,5 +1,5 @@
-import { ContentView } from "../../../components/ContentView";
+import { redirect } from "next/navigation";
 
 export default function ContentPage() {
-  return <ContentView />;
+  redirect("/outputs");
 }

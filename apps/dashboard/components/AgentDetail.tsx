@@ -410,7 +410,7 @@ function buildThread(
       key: `c-${c.id}`,
       node: (
         <li className="thread-item">
-          <Link href="/content" className="attachment">
+          <Link href="/outputs" className="attachment">
             <span className="attachment-icon">
               <Icon name="file" />
             </span>

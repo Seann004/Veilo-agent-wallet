@@ -5,5 +5,6 @@ export default defineProject({
     name: "dashboard",
     environment: "node",
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
+    setupFiles: ["test/setup.ts"],
   },
 });

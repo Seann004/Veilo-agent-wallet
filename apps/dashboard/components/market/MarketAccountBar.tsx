@@ -36,7 +36,7 @@ export function MarketAccountBar() {
     ) : (
       <div className="actions">
         {wallets.map((w) => (
-          <button key={w.name} type="button" className="btn btn-primary" disabled={action.busy} onClick={() => void action.run(() => m.signIn(w))}>
+          <button key={w.name} type="button" className="btn btn-small btn-primary" disabled={action.busy} onClick={() => void action.run(() => m.signIn(w))}>
             <img src={w.icon} alt="" width={20} height={20} /> {verb} {w.name}
           </button>
         ))}
@@ -44,33 +44,32 @@ export function MarketAccountBar() {
     );
 
   return (
-    <section className="panel market-account" aria-label="Marketplace account">
+    <section className="market-account" aria-label="Marketplace account">
       {!m.ready ? (
         <p role="status" className="muted">
           Checking marketplace sign-in…
         </p>
       ) : m.me ? (
         <div className="account-row">
-          <p className="account-who" role="status">
-            Signed in to the marketplace as <Address value={m.me.address} />
-            {m.wallet ? <span className="pill pill-ok">wallet connected</span> : <span className="pill pill-muted">wallet not connected in this tab</span>}
+          <p className="account-who small" role="status">
+            Marketplace account <Address value={m.me.address} />
+            {m.wallet ? null : <span className="muted"> · wallet not connected in this tab</span>}
           </p>
           <div className="actions">
-            <button type="button" className="btn" disabled={action.busy} onClick={() => void action.run(() => m.signOut())}>
+            <button type="button" className="btn btn-small" disabled={action.busy} onClick={() => void action.run(() => m.signOut())}>
               Sign out of marketplace
             </button>
             {m.wallet ? (
-              <button type="button" className="btn" disabled={action.busy} onClick={() => void action.run(() => m.disconnectWallet())}>
+              <button type="button" className="btn btn-small" disabled={action.busy} onClick={() => void action.run(() => m.disconnectWallet())}>
                 Disconnect wallet
               </button>
             ) : null}
           </div>
         </div>
       ) : (
-        <div>
-          <p>Sign in with your wallet to hire specialists, track jobs or sell.</p>
-          <p className="small muted" title={SIGN_IN_STATEMENT}>
-            You only sign a login message: no transaction, no spending. {SPENDING_BOUNDARY}
+        <div className="account-row">
+          <p className="small muted account-who" title={`${SIGN_IN_STATEMENT} ${SPENDING_BOUNDARY}`}>
+            Sign in to hire, track jobs or sell. You only sign a login message: no transaction, no spending.
           </p>
           {walletButtons("Sign in with")}
         </div>

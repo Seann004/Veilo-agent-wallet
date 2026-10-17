@@ -1,5 +1,5 @@
-import { MarketBrowser } from "../../../../components/MarketBrowser";
+import { redirect } from "next/navigation";
 
-export default function AgentTemplatesPage() {
-  return <MarketBrowser />;
+export default function Page() {
+  redirect("/marketplace");
 }

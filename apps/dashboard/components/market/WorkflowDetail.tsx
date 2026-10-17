@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { api } from "../../lib/api";
@@ -9,9 +8,9 @@ import { marketApi } from "../../lib/market/client";
 import { categoryLabel, kindGlyph, type LocalRun, type WorkflowEntry } from "../../lib/market/workflows";
 import type { Workspace } from "../../lib/types";
 import { useAction, useResource } from "../hooks";
-import { ConfirmButton, ErrorNotice, KV, Loading, Section } from "../ui";
+import { ConfirmButton, ErrorNotice, KV, Loading } from "../ui";
 import { useMarket } from "./MarketContext";
-import { Address, FullValue, Money, PlainText, TestTokenNote } from "./parts";
+import { Address, creatorAvatar, DetailHeader, DetailSections, FullValue, Money, PlainText, TestTokenNote, type DetailSection } from "./parts";
 import { Select } from "../Select";
 
 const KIND_LABEL: Record<string, string> = {
@@ -42,6 +41,7 @@ function willAndWont(w: WorkflowEntry): { will: string[]; wont: string[] } {
 /** One live workflow: its chain, prices and recipients, and the two ways to use it. */
 export function WorkflowDetail({ slug }: { slug: string }) {
   const m = useMarket();
+  const [open, setOpen] = useState("about");
   const res = useResource(() => marketApi<{ workflow: WorkflowEntry }>(`/marketplace/workflows/${encodeURIComponent(slug)}`), `workflow:${slug}`);
   if (res.loading && !res.data) return <Loading label="workflow" />;
   if (res.error || !res.data) return <ErrorNotice error={res.error} what="this workflow could not be loaded" onRetry={res.reload} />;
@@ -49,93 +49,124 @@ export function WorkflowDetail({ slug }: { slug: string }) {
   const decimals = m.decimalsFor(w.mint, w.network);
   const ww = willAndWont(w);
   const unavailable = w.steps.filter((s) => s.providerStatus === "not_configured" || s.providerStatus === "unknown" || s.providerStatus === "manifest_changed");
+  const sections: DetailSection[] = [
+    {
+      id: "about",
+      label: "About",
+      sub: "What it does and won't do",
+      body: (
+        <div className="stack">
+          <PlainText text={w.description ?? w.summary} />
+          {w.safety_promise ? (
+            <p className="notice notice-help">
+              <PlainText text={w.safety_promise} inline />
+            </p>
+          ) : null}
+          {unavailable.length > 0 ? (
+            <p className="notice notice-warn" role="note">
+              {unavailable.length} step{unavailable.length === 1 ? " uses a provider" : "s use providers"} that the seller has not configured or that need re-review. Those steps
+              cannot be quoted, so a run stops before paying them.
+            </p>
+          ) : null}
+          <div className="grid-2">
+            <div>
+              <h3>It will</h3>
+              <ul>
+                {ww.will.map((x) => (
+                  <li key={x}>{x}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3>It won't</h3>
+              <ul>
+                {ww.wont.map((x) => (
+                  <li key={x}>{x}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <p className="small muted">
+            {categoryLabel(w.category)} · {w.paid_runs} paid run{w.paid_runs === 1 ? "" : "s"}
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: "steps",
+      label: "Steps",
+      sub: `${w.steps.length} paid tool${w.steps.length === 1 ? "" : "s"} in order`,
+      body: (
+        <>
+          <ol className="chain" aria-label="Tool chain">
+            {w.steps.map((s) => (
+              <li key={s.index} className="chain-step">
+                <span className="chain-glyph" aria-hidden="true">
+                  {kindGlyph(s.kind, s.provider)}
+                </span>
+                <div>
+                  <p className="chain-title">
+                    Step {s.index + 1}: <PlainText text={s.title ?? "Unknown tool"} inline /> {s.effect === "draft_external" ? <span className="pill pill-warn">drafts only</span> : null}
+                    {s.providerStatus === "not_configured" || s.providerStatus === "unknown" ? <span className="pill pill-muted">Provider not configured</span> : null}
+                    {s.providerStatus === "manifest_changed" ? <span className="pill pill-danger">Manifest changed</span> : null}
+                  </p>
+                  <KV
+                    rows={[
+                      ["Kind", KIND_LABEL[s.kind] ?? s.kind],
+                      ["By", <PlainText key="by" text={s.sellerName ?? "—"} inline />],
+                      ["Price (step maximum)", <Money key="p" amount={s.priceBaseUnits} decimals={decimals} />],
+                      ["Recipient", s.recipient ? <Address key="r" value={s.recipient} /> : "—"],
+                      ["Inputs", Object.entries(s.inputs).map(([k, v]) => `${k} ← ${v.from === "step" ? `step ${v.step + 1} output` : v.from === "run_input" ? `your input “${v.name}”` : "fixed text"}`).join("; ") || "—"],
+                      ["Output", s.output?.kind ?? "—"],
+                    ]}
+                  />
+                </div>
+              </li>
+            ))}
+          </ol>
+          <p className="workflow-total">
+            Total per run: <Money amount={String(w.total_base_units)} decimals={decimals} /> · Platform fee: {w.fee_bps === 0 ? "none" : <span className="pill pill-danger">{w.fee_bps} bps</span>}
+          </p>
+        </>
+      ),
+    },
+    { id: "run", label: "Run once", sub: "Approve one run and its total", body: <RunOnce w={w} /> },
+    { id: "add", label: "Add to an agent", sub: "Let an agent use it within a budget", body: <AddToAgent w={w} /> },
+    ...(w.sample_output
+      ? [
+          {
+            id: "sample",
+            label: "Sample",
+            sub: "Example output from the creator",
+            body: (
+              <pre className="plain-text">
+                <PlainText text={w.sample_output} />
+              </pre>
+            ),
+          },
+        ]
+      : []),
+  ];
   return (
     <>
-      <p className="small">
-        <Link href="/marketplace">← Back to the marketplace</Link>
-      </p>
-      <h1>
-        <PlainText text={w.title} inline />
-      </h1>
-      <p className="role">
-        by <PlainText text={w.creator_name} inline /> {w.demo ? <span className="pill pill-muted">demo</span> : null} · {categoryLabel(w.category)} · {w.paid_runs} paid run
-        {w.paid_runs === 1 ? "" : "s"}
-      </p>
+      <DetailHeader
+        avatar={creatorAvatar(w.title)}
+        title={w.title}
+        by={`${w.creator_name}${w.demo ? " (demo)" : ""}`}
+        summary={w.summary}
+        actions={
+          <>
+            <button type="button" className="btn btn-primary btn-pill" onClick={() => setOpen("run")}>
+              Run once · <Money compact amount={String(w.total_base_units)} decimals={decimals} />
+            </button>
+            <button type="button" className="btn btn-pill" onClick={() => setOpen("add")}>
+              Add to an agent
+            </button>
+          </>
+        }
+      />
       <TestTokenNote />
-      <p>
-        <PlainText text={w.description ?? w.summary} />
-      </p>
-      {w.safety_promise ? (
-        <p className="notice notice-help">
-          <PlainText text={w.safety_promise} inline />
-        </p>
-      ) : null}
-      {unavailable.length > 0 ? (
-        <p className="notice notice-warn" role="note">
-          {unavailable.length} step{unavailable.length === 1 ? " uses a provider" : "s use providers"} that the seller has not configured or that need re-review. Those steps
-          cannot be quoted, so a run stops before paying them.
-        </p>
-      ) : null}
-
-      <Section title="Tool chain">
-        <ol className="chain">
-          {w.steps.map((s) => (
-            <li key={s.index} className="chain-step">
-              <span className="chain-glyph" aria-hidden="true">
-                {kindGlyph(s.kind, s.provider)}
-              </span>
-              <div>
-                <p className="chain-title">
-                  Step {s.index + 1}: <PlainText text={s.title ?? "Unknown tool"} inline /> {s.effect === "draft_external" ? <span className="pill pill-warn">drafts only</span> : null}
-                  {s.providerStatus === "not_configured" || s.providerStatus === "unknown" ? <span className="pill pill-muted">Provider not configured</span> : null}
-                  {s.providerStatus === "manifest_changed" ? <span className="pill pill-danger">Manifest changed</span> : null}
-                </p>
-                <KV
-                  rows={[
-                    ["Kind", KIND_LABEL[s.kind] ?? s.kind],
-                    ["By", <PlainText key="by" text={s.sellerName ?? "—"} inline />],
-                    ["Price (step maximum)", <Money key="p" amount={s.priceBaseUnits} decimals={decimals} />],
-                    ["Recipient", s.recipient ? <Address key="r" value={s.recipient} /> : "—"],
-                    ["Inputs", Object.entries(s.inputs).map(([k, v]) => `${k} ← ${v.from === "step" ? `step ${v.step + 1} output` : v.from === "run_input" ? `your input “${v.name}”` : "fixed text"}`).join("; ") || "—"],
-                    ["Output", s.output?.kind ?? "—"],
-                  ]}
-                />
-              </div>
-            </li>
-          ))}
-        </ol>
-        <p className="workflow-total">
-          Total per run: <Money amount={String(w.total_base_units)} decimals={decimals} /> · Platform fee: {w.fee_bps === 0 ? "none" : <span className="pill pill-danger">{w.fee_bps} bps</span>}
-        </p>
-      </Section>
-
-      <div className="grid-2">
-        <Section title="What it will do">
-          <ul>
-            {ww.will.map((x) => (
-              <li key={x}>{x}</li>
-            ))}
-          </ul>
-        </Section>
-        <Section title="What it won't do">
-          <ul>
-            {ww.wont.map((x) => (
-              <li key={x}>{x}</li>
-            ))}
-          </ul>
-        </Section>
-      </div>
-
-      {w.sample_output ? (
-        <Section title="Sample output (from the creator)">
-          <pre className="plain-text">
-            <PlainText text={w.sample_output} />
-          </pre>
-        </Section>
-      ) : null}
-
-      <RunOnce w={w} />
-      <AddToAgent w={w} />
+      <DetailSections sections={sections} open={open} onOpen={setOpen} />
     </>
   );
 }
@@ -156,7 +187,7 @@ function RunOnce({ w }: { w: WorkflowEntry }) {
   const agents = (ws.data?.agents ?? []).filter((a) => a.status === "active");
   const agentOptions = [{ value: "", label: "Choose an agent" }, ...agents.map((a) => ({ value: a.id, label: a.name }))];
   return (
-    <Section title="Run once">
+    <div className="stack">
       <p className="small">This prepares the run in your local control service. Nothing is paid until you approve the exact steps, recipients and total below.</p>
       <ErrorNotice error={ws.error} what="your local agents could not be loaded (sign in to the local dashboard first)" />
       <ErrorNotice error={act.error} what="the run could not be prepared or approved" />
@@ -191,7 +222,7 @@ function RunOnce({ w }: { w: WorkflowEntry }) {
           if (r) router.push(`/marketplace/runs/${r.run.id}`);
         }} busy={act.busy} />
       )}
-    </Section>
+    </div>
   );
 }
 
@@ -233,7 +264,7 @@ function AddToAgent({ w }: { w: WorkflowEntry }) {
   const agents = (ws.data?.agents ?? []).filter((a) => a.status === "active");
   const agentOptions = [{ value: "", label: "Choose an agent" }, ...agents.map((a) => ({ value: a.id, label: a.name }))];
   return (
-    <Section title="Add to agent">
+    <div className="stack">
       <p className="small">
         The agent may propose runs of this version. Proposals within the budget start without asking again; anything else waits for you. Agents can never raise the budget.
       </p>
@@ -278,6 +309,6 @@ function AddToAgent({ w }: { w: WorkflowEntry }) {
           </button>
         </form>
       )}
-    </Section>
+    </div>
   );
 }

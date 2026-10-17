@@ -1,5 +1,5 @@
-import { Catalogue } from "../../../../components/market/Catalogue";
+import { redirect } from "next/navigation";
 
-export default function SpecialistsPage() {
-  return <Catalogue />;
+export default function Page() {
+  redirect("/marketplace");
 }

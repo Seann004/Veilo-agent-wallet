@@ -5,6 +5,7 @@ import type { Activity } from "../lib/types";
 import { ActivityList, EventLog } from "./Activity";
 import { useOwner } from "./Shell";
 import { useResource } from "./hooks";
+import { WalletTabs } from "./WalletTabs";
 import { ErrorNotice, Loading, Section } from "./ui";
 
 export function ActivityPage() {
@@ -15,9 +16,9 @@ export function ActivityPage() {
   };
   return (
     <>
-      <div className="page-head">
-        <h1>Activity</h1>
-        <button type="button" className="btn" onClick={() => void reload()}>
+      <WalletTabs />
+      <div className="actions">
+        <button type="button" className="btn btn-small" onClick={() => void reload()}>
           Refresh
         </button>
       </div>

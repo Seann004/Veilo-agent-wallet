@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const TABS: Array<[string, string]> = [
   ["/wallet", "Funds"],
+  ["/activity", "Activity"],
   ["/recovery", "Recovery"],
   ["/privacy", "Privacy"],
 ];
@@ -18,7 +19,7 @@ export function WalletTabs() {
       </div>
       <nav className="tabs" aria-label="Wallet sections">
         {TABS.map(([href, label]) => (
-          <Link key={href} href={href} aria-current={pathname === href ? "page" : undefined}>
+          <Link key={href} href={href} scroll={false} aria-current={pathname === href ? "page" : undefined}>
             {label}
           </Link>
         ))}

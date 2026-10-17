@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
+import { AVATARS, type AvatarOption } from "../../lib/avatar-options";
 import { shortKey } from "../../lib/format";
 import { formatUnits } from "../../lib/market/amounts";
 import type { JobPresentation } from "../../lib/market/job-state";
@@ -161,4 +163,70 @@ export function PausedNotice() {
       Actions are paused: your wallet switched accounts. Sign in again to continue.
     </p>
   );
+}
+
+/** A stable avatar picture per name, so the same agent always looks the same. */
+export function creatorAvatar(name: string): AvatarOption {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATARS[h % AVATARS.length]!;
+}
+
+/** Top of a marketplace detail page: back link, picture, name, creator, summary and main actions. */
+export function DetailHeader({ avatar, title, by, summary, actions }: { avatar: AvatarOption; title: string; by: string; summary: string; actions?: ReactNode }) {
+  return (
+    <header className="detail-head">
+      <Link href="/marketplace" className="back-link">
+        ← Back to Marketplace
+      </Link>
+      <img className="detail-avatar" src={avatar.src} alt="" width={96} height={96} />
+      <h1>
+        <PlainText text={title} inline />
+      </h1>
+      <p className="detail-by">
+        By <PlainText text={by} inline />
+      </p>
+      <p className="detail-summary">
+        <PlainText text={summary} inline />
+      </p>
+      {actions ? <div className="detail-actions">{actions}</div> : null}
+    </header>
+  );
+}
+
+export interface DetailSection {
+  id: string;
+  label: string;
+  sub: string;
+  body: ReactNode;
+}
+
+/**
+ * Sections of a detail page: a menu on the left and the open section on the right. Switching
+ * is local state, so the page never reloads or jumps to the top.
+ */
+export function DetailSections({ sections, open, onOpen }: { sections: DetailSection[]; open: string; onOpen: (id: string) => void }) {
+  const current = sections.find((s) => s.id === open) ?? sections[0]!;
+  return (
+    <div className="detail-sections">
+      <nav aria-label="Sections" className="detail-menu">
+        {sections.map((s) => (
+          <button key={s.id} type="button" aria-current={s.id === current.id ? "true" : undefined} onClick={() => onOpen(s.id)}>
+            <span className="detail-menu-label">{s.label}</span>
+            <span className="detail-menu-sub">{s.sub}</span>
+          </button>
+        ))}
+      </nav>
+      <section className="detail-panel" aria-label={current.label}>
+        {current.body}
+      </section>
+    </div>
+  );
+}
+
+export function turnaround(minutes: number): string {
+  if (!Number.isFinite(minutes) || minutes <= 0) return "—";
+  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 1440) return `${Math.round((minutes / 60) * 10) / 10} h`;
+  return `${Math.round((minutes / 1440) * 10) / 10} days`;
 }

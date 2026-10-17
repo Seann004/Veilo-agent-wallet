@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { clearResourceCache } from "../components/hooks";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentConnectors } from "../components/AgentConnectors";
@@ -99,6 +100,7 @@ describe("Discover", () => {
     render(withRole(<ConnectorsPage />));
     expect(await screen.findByText(/No connectors are approved yet/)).toBeTruthy();
     cleanup();
+    clearResourceCache();
     vi.stubEnv("NEXT_PUBLIC_MARKETPLACE_URL", "");
     const calls = serve(catalogue([SOLANA]));
     render(withRole(<ConnectorsPage />));

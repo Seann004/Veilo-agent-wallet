@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MarketContextProvider, type MarketContextValue } from "../components/market/MarketContext";
-import { WorkflowBrowse } from "../components/market/WorkflowBrowse";
+import { MarketHome } from "../components/market/MarketHome";
 import { WorkflowRunView } from "../components/market/WorkflowRuns";
 import { matchRoute } from "../lib/server/proxy";
 import type { LocalRun, WorkflowEntry } from "../lib/market/workflows";
@@ -78,21 +78,30 @@ function workflow(i: number, extra: Partial<WorkflowEntry> = {}): WorkflowEntry 
   };
 }
 
-describe("workflow browse", () => {
-  it("shows category tabs as links, prices in USDC, the chain, and hostile text as text", async () => {
-    const list = [0, 1, 2, 3, 4].map((i) => workflow(i));
-    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ workflows: list })));
-    render(withMarket(<WorkflowBrowse />));
-    const tabs = await screen.findByRole("navigation", { name: "Categories" });
-    expect(within(tabs).getByRole("link", { name: "Research" }).getAttribute("href")).toBe("/marketplace/c/research");
-    expect(within(tabs).getByRole("link", { name: "All" }).getAttribute("aria-current")).toBe("page");
-    expect(await screen.findByRole("link", { name: "View all" })).toBeTruthy();
-    expect(screen.getAllByText(/per run/).length).toBe(4);
+describe("marketplace browse", () => {
+  it("lists workflows and starter agents together, filters in place, and shows hostile text as text", async () => {
+    const list = [0, 1, 2, 3, 4].map((i) => workflow(i, i === 4 ? { category: "media", title: "Clip maker" } : {}));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => (String(url).includes("/listings") ? Response.json({ listings: [] }) : Response.json({ workflows: list }))),
+    );
+    render(withMarket(<MarketHome />));
+    expect(await screen.findAllByText(/per run/)).toHaveLength(5);
+    expect(screen.getByRole("heading", { name: "Featured" })).toBeTruthy();
+    // Without an owner session a starter agent can't be added; the button says why instead of linking.
+    expect(screen.getAllByRole("button", { name: "Add" }).every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
     expect(screen.getAllByText(/Solana devnet · USDC/).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("list", { name: "Tool chain" })[0]!.textContent).toContain("RPC");
     expect(screen.getAllByText(HOSTILE).length).toBeGreaterThan(0);
     expect(document.querySelector("script")).toBeNull();
     expect((window as unknown as { __pwned?: number }).__pwned).toBeUndefined();
+
+    const cats = screen.getByRole("group", { name: "Categories" });
+    expect(within(cats).queryAllByRole("link")).toHaveLength(0);
+    fireEvent.click(within(cats).getByRole("button", { name: "Media" }));
+    expect(screen.queryByRole("heading", { name: "Featured" })).toBeNull();
+    const rows = within(screen.getByRole("list", { name: "Marketplace agents" })).getAllByRole("listitem");
+    expect(rows.map((r) => r.textContent).join(" ")).toContain("Clip maker");
+    expect(screen.getAllByText(/per run/)).toHaveLength(1);
   });
 });
 

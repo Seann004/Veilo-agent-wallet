@@ -13,7 +13,7 @@ import { AgentAvatar } from "./Avatar";
 import { ConnectScreen } from "./ConnectScreen";
 import { NetworkStatus } from "./NetworkStatus";
 import { Icon, type IconName } from "./Icon";
-import { useResource } from "./hooks";
+import { clearResourceCache, useResource } from "./hooks";
 import { setPref, usePref, useTheme } from "../lib/prefs";
 import { ErrorNotice, Loading } from "./ui";
 
@@ -59,9 +59,8 @@ const NAV: Array<[string, string, IconName, string[]]> = [
   ["/workspace", "Workspace", "home", []],
   ["/marketplace", "Marketplace", "store", []],
   ["/connectors", "Connectors", "plug", []],
-  ["/activity", "Activity", "activity", []],
-  ["/content", "Content", "content", []],
-  ["/wallet", "Wallet", "wallet", ["/recovery", "/privacy"]],
+  ["/outputs", "Outputs", "content", ["/content"]],
+  ["/wallet", "Wallet", "wallet", ["/activity", "/recovery", "/privacy"]],
   ["/settings", "Settings", "settings", []],
 ];
 
@@ -69,12 +68,9 @@ const inSection = (pathname: string | null, href: string, also: string[]) => [hr
 
 /** Marketplace sections in the sidebar; each page shows its section's tabs. Browse is the default. */
 const MARKET_GROUPS: Array<{ label: string; tabs: Array<[string, string]> }> = [
-  {
-    label: "Browse",
-    tabs: [["/marketplace", "Workflows"], ["/marketplace/specialists", "Specialists"], ["/marketplace/tools", "Tools"], ["/marketplace/agents", "Agents"], ["/marketplace/templates", "Agent templates"]],
-  },
-  { label: "Activity", tabs: [["/marketplace/runs", "Runs"], ["/marketplace/jobs", "Jobs"]] },
-  { label: "Sell", tabs: [["/marketplace/seller", "Seller"], ["/marketplace/create", "Create a workflow"]] },
+  { label: "Browse", tabs: [["/marketplace", "Browse"]] },
+  { label: "Your activity", tabs: [["/marketplace/runs", "Runs"], ["/marketplace/jobs", "Jobs"], ["/marketplace/agents", "Hiring agents"]] },
+  { label: "Sell", tabs: [["/marketplace/seller", "Seller"], ["/marketplace/create", "Create a workflow"], ["/marketplace/tools", "Tools"]] },
   { label: "Approvals", tabs: [["/marketplace/approvals", "Approvals"]] },
 ];
 
@@ -98,7 +94,7 @@ function MarketTabs({ pathname }: { pathname: string | null }) {
     <div className="market-nav">
       <nav className="tabs" aria-label="Marketplace sections">
         {MARKET_GROUPS.map((g) => (
-          <Link key={g.label} href={g.tabs[0]![0]} aria-current={g === group ? "page" : undefined}>
+          <Link key={g.label} href={g.tabs[0]![0]} scroll={false} aria-current={g === group ? "page" : undefined}>
             {g.label}
           </Link>
         ))}
@@ -106,7 +102,7 @@ function MarketTabs({ pathname }: { pathname: string | null }) {
       {group.tabs.length > 1 ? (
         <nav className="subtabs" aria-label={`${group.label} pages`}>
           {group.tabs.map(([href, label]) => (
-            <Link key={href} href={href} aria-current={marketTabCurrent(pathname!, href) ? "page" : undefined}>
+            <Link key={href} href={href} scroll={false} aria-current={marketTabCurrent(pathname!, href) ? "page" : undefined}>
               {label}
             </Link>
           ))}
@@ -204,6 +200,7 @@ export function Shell({ children }: { children: ReactNode }) {
       body = (
         <ConnectScreen
           onSignedIn={async (c) => {
+            clearResourceCache();
             setConnected(c);
             setSigningIn(false);
             await reloadAccess();
@@ -328,6 +325,7 @@ export function Shell({ children }: { children: ReactNode }) {
                   try {
                     await api("control", "/session/logout", { method: "POST" });
                   } finally {
+                    clearResourceCache();
                     setConnected(null);
                     await reloadAccess();
                   }

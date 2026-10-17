@@ -313,7 +313,7 @@ export function CustomAgentPanel({
     <Section title={`New job for ${agent.name}`} id="run">
       <CustomRunForm agent={agent} disabled={!canRun || !run.allowed} onQueued={onChanged} />
       {!run.allowed ? <DeniedHint reason={run.reason} /> : null}
-      <p className="small muted">Each job saves its result to <Link href="/content">Content</Link>.</p>
+      <p className="small muted">Each job saves its result to <Link href="/outputs">Outputs</Link>.</p>
     </Section>
   );
   if (part === "composer") return <div className="composer composer-custom">{composer}</div>;
