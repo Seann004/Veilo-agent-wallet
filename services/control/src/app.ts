@@ -4,6 +4,7 @@ import { ControlError } from "./errors";
 import type { AuthDeps } from "./http/actor";
 import { agentRouter } from "./http/agent-routes";
 import { controlRouter } from "./http/routes";
+import { externalRouter } from "./http/external-routes";
 import { marketplaceRouter } from "./http/marketplace-routes";
 import { ownerRouter } from "./http/owner-routes";
 import type { Integration } from "./integration";
@@ -15,6 +16,8 @@ export interface ControlDeps extends AuthDeps {
   log?: LogSink;
   /** Gateway, funding and scheduler integration; absent until configured. */
   integration?: Integration | undefined;
+  /** Ceiling for one external x402 batch (unit price × max calls), in base units. */
+  maxExternalBatchUsdc?: bigint;
 }
 
 /**
@@ -50,6 +53,7 @@ export function createApp(health: ServiceHealth, deps?: ControlDeps): Express {
   app.use(agentRouter(deps));
   app.use(ownerRouter(deps));
   app.use(marketplaceRouter(deps));
+  app.use(externalRouter(deps));
   app.use((_req: Request, res: Response) => {
     res.status(404).json({ error: { code: "NOT_FOUND", message: "no such endpoint" } });
   });

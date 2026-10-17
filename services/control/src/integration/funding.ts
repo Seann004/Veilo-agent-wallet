@@ -1,7 +1,10 @@
 import {
+  externalCallOutcomeWire,
   fundingResultWire,
   merchantSignResultWire,
   payerBindingResultWire,
+  type ExternalCallOutcome,
+  type ExternalCallSignRequest,
   type FundingProvider,
   type FundingRequest,
   type FundingResult,
@@ -127,5 +130,25 @@ export class WalletFundingProvider implements FundingProvider {
     if (!r.ok) return { status: "recovery_required", reason: r.reason };
     const parsed = merchantSignResultWire.safeParse(r.body);
     return parsed.success ? parsed.data : { status: "recovery_required", reason: "wallet service returned an unrecognized signing state" };
+  }
+
+  async signExternalCall(q: ExternalCallSignRequest): Promise<MerchantSignResult> {
+    const r = await this.#call("POST", `/fundings/${q.purchaseId}/external-calls`, {
+      fundingRef: q.fundingRef,
+      callIndex: q.callIndex,
+      paymentRequired: q.paymentRequired,
+      binding: q.binding,
+    });
+    if (!r.ok) return { status: "recovery_required", reason: r.reason };
+    const parsed = merchantSignResultWire.safeParse(r.body);
+    return parsed.success ? parsed.data : { status: "recovery_required", reason: "wallet service returned an unrecognized signing state" };
+  }
+
+  /** A transport failure is reported as "signed": the call may have settled and must not be re-signed. */
+  async externalCallOutcome(purchaseId: string, callIndex: number): Promise<ExternalCallOutcome> {
+    const r = await this.#call("GET", `/fundings/${purchaseId}/external-calls/${callIndex}`, undefined);
+    if (!r.ok) return { status: "signed" };
+    const parsed = externalCallOutcomeWire.safeParse(r.body);
+    return parsed.success ? parsed.data : { status: "signed" };
   }
 }

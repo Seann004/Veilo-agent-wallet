@@ -124,11 +124,14 @@ async function main(): Promise<void> {
   } else {
     console.log(`[${SERVICE}] MARKETPLACE_URL is unset; marketplace hires are disabled`);
   }
+  const externalMaxRaw = process.env.EXTERNAL_X402_MAX_BATCH_UNITS?.trim() || "100000";
+  if (!/^[1-9][0-9]{0,18}$/.test(externalMaxRaw)) throw new VeiloConfigError("INVALID_CONFIG", "EXTERNAL_X402_MAX_BATCH_UNITS must be a positive integer of base units");
   const integration = createIntegration(ledger, {
     gateway,
     permits,
     funding,
     marketplace,
+    external: { origins: new SellerOriginPolicy({ localTestOrigins: list(process.env.EXTERNAL_X402_LOCAL_ORIGINS) }) },
     log: (l) => console.log(`[${SERVICE}] ${l}`),
     settleWaitMs: msEnv("CONTROL_PURCHASE_WAIT_MS", 120_000),
     purchaseSweepMs: msEnv("CONTROL_PURCHASE_SWEEP_MS", 15_000),
@@ -139,7 +142,7 @@ async function main(): Promise<void> {
   integration.scheduler.start();
 
   const port = config.ports.control;
-  createApp(health, { ledger, session, services, integration }).listen(port, config.bindHost, () => {
+  createApp(health, { ledger, session, services, integration, maxExternalBatchUsdc: BigInt(externalMaxRaw) }).listen(port, config.bindHost, () => {
     console.log(`[${SERVICE}] listening on http://${config.bindHost}:${port} (${config.network.caip2})`);
   });
   if (process.env.VEILO_LOG_CONFIG === "1") console.log(JSON.stringify(describeConfig(config)));

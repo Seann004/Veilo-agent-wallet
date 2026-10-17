@@ -1,5 +1,6 @@
 import type { FundingProvider } from "@veilo/contracts";
 import type { Ledger } from "../context";
+import { ExternalBatchRunner, type ExternalBatchDeps } from "../external/batch";
 import { MarketplaceBridge, type ChainIdentity } from "../marketplace/bridge";
 import type { MarketplaceClient } from "../marketplace/client";
 import type { ControllerIdentity } from "../marketplace/controller-identity";
@@ -15,6 +16,7 @@ export interface Integration {
   scheduler: Scheduler;
   /** Present only when MARKETPLACE_URL is configured. */
   marketplace?: MarketplaceBridge | undefined;
+  external?: ExternalBatchRunner | undefined;
 }
 
 export interface MarketplaceIntegrationOptions {
@@ -39,8 +41,10 @@ export function createIntegration(
     settleWaitMs?: number;
     purchaseSweepMs?: number;
     marketplace?: MarketplaceIntegrationOptions | undefined;
+    external?: Pick<ExternalBatchDeps, "origins" | "timeoutMs"> | undefined;
   },
 ): Integration {
+  const external = o.external ? new ExternalBatchRunner({ ledger, funding: o.funding, ...o.external }) : undefined;
   // The orchestrator's hooks reach the bridge, which is built from the orchestrator below.
   const bridgeRef: { current?: MarketplaceBridge } = {};
   const orchestrator = new PurchaseOrchestrator({
@@ -48,6 +52,7 @@ export function createIntegration(
     gateway: o.gateway,
     permits: o.permits,
     funding: o.funding,
+    external,
     ...(o.marketplace ? { sellers: o.marketplace.sellers, onPayerKnown: (purchaseId: string, payer: string) => bridgeRef.current?.payerKnown(purchaseId, payer),
           beforeRelease: (purchaseId: string) => bridgeRef.current?.beforeRelease(purchaseId) ?? Promise.resolve({ outcome: "ok" as const }),
           beforeMerchant: (purchaseId: string) => bridgeRef.current?.beforeMerchant(purchaseId) ?? { outcome: "ok" as const },
@@ -77,5 +82,5 @@ export function createIntegration(
     ...(o.leaseMs !== undefined ? { leaseMs: o.leaseMs } : {}),
     ...(o.purchaseSweepMs !== undefined ? { purchaseSweepMs: o.purchaseSweepMs } : {}),
   });
-  return { orchestrator, gateway: o.gateway, scheduler, marketplace };
+  return { orchestrator, gateway: o.gateway, scheduler, marketplace, external };
 }
