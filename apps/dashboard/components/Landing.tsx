@@ -11,7 +11,7 @@ const FEATURES: Array<[string, string]> = [
 ];
 
 const FAQ: Array<[string, string]> = [
-  ["Is this real money?", "No. Veilo runs on Solana devnet with test-USDC and refuses to start against mainnet."],
+  ["Is this real money?", "No. Veilo runs on Solana devnet with devnet USDC and refuses to start against mainnet."],
   ["What does the private pool hide?", "Which deposit paid for a withdrawal. Deposits, payouts, amounts, merchant, fees and timing are public. A small pool gives weak privacy."],
   ["Can an agent overspend?", "Every purchase must fit all limits at once. The limits are enforced by your owner wallet service, so a compromised owner machine is outside what they protect."],
   ["Who pays for model calls?", "The operator, through OpenRouter. They show as demo credits."],
@@ -22,7 +22,7 @@ export function Landing() {
   return (
     <SitePage>
       <section className="hero" id="product">
-        <p className="eyebrow">Solana devnet · test-USDC</p>
+        <p className="eyebrow">Solana devnet · USDC</p>
         <h1>Agents with budgets, not blank cheques</h1>
         <p className="lede">Give each agent a job and a spending limit. Stop them whenever you want.</p>
         <div className="hero-actions">

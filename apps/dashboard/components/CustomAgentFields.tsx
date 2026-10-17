@@ -153,7 +153,7 @@ function GrantDraftPicker({ grants, onChange }: { grants: GrantDraft[]; onChange
         <ul className="plain">
           {grants.map((g) => (
             <li key={g.listingId} className="version">
-              {g.title} · up to {decimals === null ? `${g.maxTotalUnits} base units` : `${formatUnits(g.maxTotalUnits, decimals)} test tokens`}{" "}
+              {g.title} · up to {decimals === null ? `${g.maxTotalUnits} base units` : `${formatUnits(g.maxTotalUnits, decimals)} USDC`}{" "}
               <button type="button" className="btn btn-small" onClick={() => onChange(grants.filter((x) => x.listingId !== g.listingId))}>
                 Remove {g.title}
               </button>

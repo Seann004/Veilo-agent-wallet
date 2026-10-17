@@ -40,7 +40,7 @@ export function SiteFooter() {
     <footer className="site-footer">
       <span>
         <span className="logo" aria-hidden="true" />{" "}
-        Veilo · Solana devnet only · test-USDC, no real funds
+        Veilo · Solana devnet only · USDC, no real funds
       </span>
       <span>
         <Link href="/marketplace">Marketplace</Link> · <Link href="/workspace">Workspace</Link> · <Link href="/#faq">FAQ</Link>
