@@ -291,6 +291,13 @@ describe("workflow runner (§26.7)", () => {
     const p4 = await runner.propose({ agentId: mira, versionId: V1, runInputs: { mint: "m4" } });
     expect(p4.status).toBe("awaiting_approval");
     await expect(runner.assign({ agentId: mira, versionId: V1, budgetUsdc: 100n, ownerPubkey: OWNER })).rejects.toMatchObject({ code: "BUDGET_EXCEEDED" });
+    // Revoking the assignment halts its pre-approved run before anything more is bought.
+    env.db.prepare(`UPDATE workflow_assignment SET status = 'revoked' WHERE agent_id = ?`).run(mira);
+    const halted = await runner.advance(p2.id);
+    expect(halted.status).toBe("halted");
+    expect(halted.stop_code).toBe("APPROVAL_REQUIRED");
+    expect(external.calls).toHaveLength(0);
+    expect((await runner.approve(p2.id, OWNER, p2.approval_digest)).approved_by).toBe(OWNER);
   });
 
   it("an external step's funding is released only after its payer is bound to the run step", async () => {

@@ -468,6 +468,18 @@ export class WorkflowRunner {
         this.#setStatus(this.run(runId) as RunRow, "running");
         continue;
       }
+      // A run pre-approved by an assignment stops buying once that assignment is revoked; the owner may approve it directly.
+      if (run.approved_by?.startsWith("assignment:")) {
+        const active = this.ledger.db
+          .prepare(`SELECT 1 FROM workflow_assignment WHERE id = ? AND status = 'active'`)
+          .pluck()
+          .get(run.approved_by.slice("assignment:".length));
+        if (!active) {
+          const pending = this.steps(runId).find((s) => s.state !== "delivered");
+          this.#stop(run, pending ? num(pending.step_index) : 0, "halted", "APPROVAL_REQUIRED", "the assignment that pre-approved this run was revoked");
+          break;
+        }
+      }
       const steps = this.steps(runId);
       const next = steps.find((s) => s.state !== "delivered");
       if (!next) {
@@ -494,8 +506,11 @@ export class WorkflowRunner {
   #ownerOf(run: RunRow): string {
     if (run.approved_by === null) throw new ControlError("APPROVAL_REQUIRED", "workflow run is not approved");
     if (!run.approved_by.startsWith("assignment:")) return run.approved_by;
-    const owner = this.ledger.db.prepare(`SELECT owner_pubkey FROM workflow_assignment WHERE id = ?`).pluck().get(run.approved_by.slice("assignment:".length)) as string | undefined;
-    if (!owner) throw new ControlError("RECOVERY_REQUIRED", "the assignment behind this run is missing");
+    const owner = this.ledger.db
+      .prepare(`SELECT owner_pubkey FROM workflow_assignment WHERE id = ? AND workspace_id = ? AND status = 'active'`)
+      .pluck()
+      .get(run.approved_by.slice("assignment:".length), run.workspace_id) as string | undefined;
+    if (!owner) throw new ControlError("APPROVAL_REQUIRED", "the assignment behind this run was revoked");
     return owner;
   }
 
