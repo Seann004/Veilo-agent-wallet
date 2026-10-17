@@ -90,7 +90,7 @@ export function Overview() {
       {draftWs ? (
         <div className="notice notice-warn notice-row" role="status">
           <span>
-            Workspace policy v{draftWs.version} is a draft: {usdc(draftWs.lifetimeTestUsdc)} lifetime, {usdc(draftWs.rolling24hTestUsdc)} per 24 h. No agent can spend until you activate it.
+            <strong>Agents can’t spend yet.</strong> Confirm the workspace limits — {usdc(draftWs.lifetimeTestUsdc)} in total, {usdc(draftWs.rolling24hTestUsdc)} a day — to let them start.
           </span>
           <button
             type="button"
@@ -104,19 +104,19 @@ export function Overview() {
               })
             }
           >
-            Activate workspace policy v{draftWs.version}
+            Confirm limits
           </button>
           <DeniedHint reason={configure.reason} />
         </div>
       ) : null}
       <ErrorNotice error={activate.error} />
-      {!activeWs && !draftWs ? <p className="notice notice-warn">No workspace policy exists; no agent can spend.</p> : null}
+      {!activeWs && !draftWs ? <p className="notice notice-warn">No workspace spending limits are set, so no agent can spend.</p> : null}
 
       <div className="stats">
         <Stat label="Spendable in pool" value={b?.tokens.buckets ? usdc(b.tokens.buckets.approved_unreserved ?? "0") : "—"} sub="Approved, unreserved notes" />
         <Stat label="Left today" value={wsBudget ? usdc(wsBudget.rolling24h.available) : "—"} sub={wsBudget ? `of ${usdc(wsBudget.rolling24h.limit)} per 24 h` : "No active workspace policy"} />
         <Stat label="Cash spent" value={b?.cash ? usdc(b.cash.spent) : "—"} sub={b?.cash ? `${usdc(b.cash.reserved)} reserved` : undefined} />
-        <Stat label="Prepaid credits" value={gc ? (gc.available ? credits(gc.usable) : "Not ready") : "—"} sub="Demo, operator-funded" />
+        <Stat label="AI credits" value={gc ? (gc.available ? credits(gc.usable) : "Not ready") : "—"} sub="Bought from the pool" />
       </div>
       <ErrorNotice error={balances.error} what="balances" onRetry={balances.reload} />
 

@@ -17,6 +17,7 @@ export function Select<T extends string>({
   label,
   id,
   disabled,
+  required,
 }: {
   value: T;
   options: Array<SelectOption<T>>;
@@ -24,6 +25,8 @@ export function Select<T extends string>({
   label: string;
   id?: string;
   disabled?: boolean;
+  /** Blocks form submission while the value is empty, as a native required select would. */
+  required?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -103,6 +106,9 @@ export function Select<T extends string>({
         <span>{current?.label}</span>
         <Icon name="chevron" size={16} />
       </button>
+      {required ? (
+        <input className="select-required" tabIndex={-1} aria-hidden="true" required value={value} onChange={() => undefined} onFocus={() => trigger.current?.focus()} />
+      ) : null}
       {open ? (
         <ul ref={listbox} tabIndex={-1} onKeyDown={onKey} className="select-menu" role="listbox" id={listId} aria-label={label} aria-activedescendant={options[active] ? `${listId}-${active}` : undefined}>
           {options.map((o, i) => (

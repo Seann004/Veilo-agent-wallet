@@ -1,7 +1,7 @@
 "use client";
 
 import { credits, lamports, minBase, usdc } from "../lib/format";
-import { GATEWAY_CREDIT_LABEL, LABEL_CREDITS_NO_CHARGE, ROLE_LABEL, SPONSORED_PLANNING_LABEL } from "../lib/labels";
+import { LABEL_CREDITS_NO_CHARGE, ROLE_LABEL, SPONSORED_PLANNING_LABEL } from "../lib/labels";
 import type { Agent, Balances, LimitUsage } from "../lib/types";
 import { KV, Section } from "./ui";
 
@@ -55,7 +55,7 @@ export function TreasurySummary({ balances, agents }: { balances: Balances; agen
           <p className="small muted">{balances.cash ? `${usdc(balances.cash.reserved)} reserved by live purchases` : "Cash accounting unavailable."}</p>
         </div>
         <div className="meter">
-          <h3>Prepaid credits</h3>
+          <h3>AI credits</h3>
           <p className="meter-value">{gc.available ? credits(gc.usable) : "Not ready"}</p>
           <p className="small muted">
             {gc.available ? `${credits(gc.consumed)} consumed so far. Using credits is not a second payment.` : "The gateway balance could not be read; no balance is shown."}
@@ -147,7 +147,7 @@ export function TreasurySummary({ balances, agents }: { balances: Balances; agen
 
       <div className="grid-2">
         <div>
-          <h3>{GATEWAY_CREDIT_LABEL}</h3>
+          <h3>AI credits</h3>
           {gc.available ? (
             <>
               <KV
@@ -160,7 +160,7 @@ export function TreasurySummary({ balances, agents }: { balances: Balances; agen
               />
               {gc.stale ? <p className="notice notice-warn">Balance is stale; Shawn pauses top-up checks until it refreshes.</p> : null}
               <p className="small">
-                Credit packs are bought with USDC and counted once in cash spent. Calls that use prepaid credits: “{LABEL_CREDITS_NO_CHARGE}”.
+                Credit packs are bought with USDC from the private pool and counted once in cash spent. Calls that use credits: “{LABEL_CREDITS_NO_CHARGE}”. Model calls run on the operator’s OpenRouter account.
               </p>
             </>
           ) : (

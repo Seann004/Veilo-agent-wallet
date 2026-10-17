@@ -7,11 +7,11 @@ import type { Wallet, WalletAccount } from "@wallet-standard/base";
 import { NO_ACCESS, ROLE_TITLE, can, deniedReason, type Access, type Capability, type SessionInfo } from "../lib/access";
 import { api, health as fetchHealth } from "../lib/api";
 import { shortKey } from "../lib/format";
-import { GATEWAY_CREDIT_LABEL, OPERATOR_INFERENCE_LABEL, ROLE_LABEL, agentStateLabel } from "../lib/labels";
+import { ROLE_LABEL, agentStateLabel } from "../lib/labels";
 import type { Agent, Health, Workspace } from "../lib/types";
 import { AgentAvatar } from "./Avatar";
 import { ConnectScreen } from "./ConnectScreen";
-import { DevnetBadge } from "./DevnetBadge";
+import { NetworkStatus } from "./NetworkStatus";
 import { Icon, type IconName } from "./Icon";
 import { useResource } from "./hooks";
 import { setPref, usePref, useTheme } from "../lib/prefs";
@@ -159,12 +159,7 @@ export function Shell({ children }: { children: ReactNode }) {
     menuButton.current?.focus();
   };
 
-  const badge = <DevnetBadge health={health.data} healthError={health.error} workspace={ws.data?.workspace} />;
-  const inferenceLabel = (
-    <span className="inference-label" role="note" title={OPERATOR_INFERENCE_LABEL}>
-      {GATEWAY_CREDIT_LABEL}
-    </span>
-  );
+  const network = <NetworkStatus health={health.data} healthError={health.error} workspace={ws.data?.workspace} />;
 
   const market = isMarketplacePath(pathname);
   const waiting = (ws.loading && ws.data === undefined) || (session.loading && session.data === undefined);
@@ -190,14 +185,11 @@ export function Shell({ children }: { children: ReactNode }) {
             <span className="logo" aria-hidden="true" />
             Veilo
           </Link>
-          <span className="top-pills">
-            {badge}
-            {inferenceLabel}
-          </span>
         </header>
         <main id="main" tabIndex={-1} className="signin-main">
           {body}
         </main>
+        {network}
       </div>
     );
   }
@@ -341,8 +333,6 @@ export function Shell({ children }: { children: ReactNode }) {
               <span className="logo" aria-hidden="true" />
               Veilo
             </Link>
-            {badge}
-            {inferenceLabel}
             {stopped ? (
               <span className="pill pill-danger" role="status">
                 Emergency stop active
@@ -363,6 +353,7 @@ export function Shell({ children }: { children: ReactNode }) {
             {session.error ? <ErrorNotice error={session.error} what="your session could not be confirmed; showing read-only controls" onRetry={reloadAccess} /> : null}
             {children}
           </main>
+          {network}
         </div>
       </div>
     </>

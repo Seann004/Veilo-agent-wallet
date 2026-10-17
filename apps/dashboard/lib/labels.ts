@@ -100,7 +100,7 @@ export function stateSummaries(p: Pick<Purchase, "states" | "paymentPath">): [St
   let payment: Omit<StateSummary, "group">;
   if (s.authorization === "rejected") payment = { tone: "idle", text: "Not paid: rejected by policy" };
   else if (s.authorization === "awaiting_approval") payment = { tone: "wait", text: "Not paid yet: awaiting your approval" };
-  else if (prepaid) payment = { tone: "idle", text: "Prepaid credits: no on-chain payment for this call" };
+  else if (prepaid) payment = { tone: "idle", text: "AI credits: no on-chain payment for this call" };
   else if (s.merchant === "finalized") payment = { tone: "ok", text: "Paid on-chain: merchant settlement finalized" };
   else if (s.merchant === "uncertain") payment = { tone: "wait", text: "Uncertain: the payment may have settled, checking the chain" };
   else if (s.merchant === "submitted" || s.merchant === "signed") payment = { tone: "wait", text: "Waiting for confirmation: merchant payment signed or submitted" };

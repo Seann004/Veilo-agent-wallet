@@ -464,44 +464,25 @@ img {
   display: none;
 }
 
-.badge {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  align-items: baseline;
-  padding: 0.25rem 0.7rem;
-  border-radius: 999px;
-  font-size: 0.82rem;
-  border: 1px solid transparent;
+/* Desktop needs the top bar only for the emergency-stop pill; mobile keeps it for navigation. */
+.app-top:not(:has(.pill)) {
+  display: none;
 }
 
-.badge-ok {
-  background: var(--ok-bg);
-  border-color: rgba(15, 107, 58, 0.18);
-  color: var(--ok-ink);
+.app-foot {
+  margin-top: auto;
+  padding: 0 1.5rem 1.5rem;
+  text-align: center;
 }
 
-.badge-warn {
-  background: var(--warn-bg);
-  border-color: rgba(122, 75, 0, 0.18);
+.net-status {
+  font-size: 0.78rem;
+  letter-spacing: 0.01em;
+  color: var(--ink-3);
+}
+
+.net-status-warn {
   color: var(--warn-ink);
-}
-
-.inference-label {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.25rem 0.7rem;
-  border-radius: 999px;
-  font-size: 0.82rem;
-  color: var(--accent-ink);
-  background: var(--accent-soft);
-  border: 1px solid rgba(75, 77, 219, 0.16);
-}
-
-.top-pills {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
 }
 
 main {
@@ -2149,15 +2130,6 @@ details > summary {
     padding: 0.5rem 0.75rem;
   }
 
-  .badge {
-    border-radius: 12px;
-    font-size: 0.8rem;
-  }
-
-  .inference-label {
-    font-size: 0.8rem;
-  }
-
   .stats {
     grid-template-columns: 1fr 1fr;
   }
@@ -2860,34 +2832,27 @@ main:has(.agent-view) {
   .top-brand {
     display: inline-flex;
   }
-}
 
-@media (max-width: 640px) {
-  .app-top .badge-detail {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-  }
-
-  .app-top .inference-label {
-    order: 10;
-    flex-basis: 100%;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    background: none;
-    color: var(--ink-2);
-    font-size: 0.8rem;
+  .app-top:not(:has(.pill)) {
+    display: flex;
   }
 }
+
 
 /* ---------- Select, loading and motion ---------- */
 
 .select {
   position: relative;
+}
+
+.select-required {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .select-trigger {

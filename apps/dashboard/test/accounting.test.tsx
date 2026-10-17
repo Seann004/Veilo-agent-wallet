@@ -19,7 +19,7 @@ describe("CRE-05 treasury accounting display", () => {
     expect(text).toContain("Credits consumed300,000 microcredits");
     expect(text).toContain("Credits available700,000 microcredits");
     expect(text).toContain("Credits purchased; no extra on-chain charge for this call");
-    expect(text).toContain("Demo inference credits — backed by the operator's OpenRouter account");
+    expect(text).toContain("Model calls run on the operator’s OpenRouter account");
     expect(text).toContain("(already in cash spent)");
     expect(text).toContain("operator-sponsored planning");
   });
