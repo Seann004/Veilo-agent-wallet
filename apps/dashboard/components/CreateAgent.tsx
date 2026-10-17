@@ -182,13 +182,16 @@ function CreateAgentForm() {
       <section className="panel" aria-label="Role and avatar">
         <div className="avatar-hero">
           {preview ? <AvatarImage avatar={preview} size={96} /> : null}
-          <AvatarPicker
-            value={avatarId}
-            onChange={(id) => {
-              setAvatarId(id);
-              setAvatarChosen(true);
-            }}
-          />
+          <details className="advanced">
+            <summary>Change look</summary>
+            <AvatarPicker
+              value={avatarId}
+              onChange={(id) => {
+                setAvatarId(id);
+                setAvatarChosen(true);
+              }}
+            />
+          </details>
         </div>
         <h2 className="section-title">Role</h2>
         <div className="suggestions">
@@ -259,7 +262,7 @@ function CreateAgentForm() {
                     </span>
                   </div>
                 ) : (
-                  <p className="small muted field-note">Starts work when you send it a task{role === "content" ? " or approve research for it" : ""}.</p>
+                  <span />
                 )}
               </div>
               <div className="field">

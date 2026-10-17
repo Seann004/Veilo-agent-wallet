@@ -1,11 +1,5 @@
-import { PrivacyPanel } from "../../../components/PrivacyPanel";
-import { WalletTabs } from "../../../components/WalletTabs";
+import { redirect } from "next/navigation";
 
-export default function PrivacyPage() {
-  return (
-    <>
-      <WalletTabs />
-      <PrivacyPanel />
-    </>
-  );
+export default function Page() {
+  redirect("/settings");
 }

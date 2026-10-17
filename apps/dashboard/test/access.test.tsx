@@ -87,7 +87,7 @@ describe.each<[AccessRole, { stop: boolean; run: boolean; budget: boolean; decid
     render(withRole(<ActivityDrawer purchase={p} events={[]} workspace={workspace()} onClose={vi.fn()} onChanged={vi.fn()} />, role));
     expect(button("Approve purchase").disabled).toBe(!allowed.decide);
     expect(button("Reject purchase").disabled).toBe(!allowed.decide);
-    expect(button("Reconcile with chain and gateway").disabled).toBe(!allowed.decide);
+    expect(button("Check status again").disabled).toBe(!allowed.decide);
   });
 
   it("gates content review and keeps text read-only for non-owners", () => {

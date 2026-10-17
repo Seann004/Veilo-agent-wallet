@@ -129,7 +129,7 @@ export function Overview() {
       {ai.data && !aiModel && configure.allowed ? (
         <div className="notice notice-row" role="status">
           <span>
-            <strong>Bring your own AI key.</strong> Agents think and write with your model provider; USDC is only spent on paid data, tools and swaps.
+            <strong>Add your AI key</strong> so agents run on your own model.
           </span>
           <Link className="btn btn-small btn-primary" href="/settings">
             Add key
@@ -169,7 +169,7 @@ export function Overview() {
       <Section
         title="Recent payments"
         actions={
-          <Link className="btn btn-small" href="/activity">
+          <Link className="btn btn-small" href="/wallet">
             View all
           </Link>
         }

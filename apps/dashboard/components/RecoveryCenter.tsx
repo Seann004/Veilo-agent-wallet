@@ -3,10 +3,9 @@
 import { useId, useState } from "react";
 import { api } from "../lib/api";
 import { usdc, when } from "../lib/format";
-import { agentStateLabel, hasLiveAuthority } from "../lib/labels";
+import { hasLiveAuthority } from "../lib/labels";
 import type { Activity, NoteStatus, Purchase } from "../lib/types";
 import { signAndSend } from "../lib/wallet";
-import { AgentControls } from "./AgentControls";
 import { useCapability, useOwner } from "./Shell";
 import { EmergencyStop } from "./StopControls";
 import { ConnectWalletPrompt, OwnerOnlyNotice, useOwnerWallet } from "./WalletView";
@@ -115,7 +114,7 @@ function PublicExit({ notes, onChanged }: { notes: NoteStatus; onChanged: () => 
   return (
     <>
       <p className="hint flush">
-        Sends a deposit back to your wallet. Heads up: a public exit is linkable — anyone can see which deposit it was, how much, and roughly how much you spent.
+        Sends money back to your wallet. Note: a public exit is linkable to the deposit it came from.
       </p>
       <ConnectWalletPrompt purpose="sign the withdrawal" />
       {exitable.length === 0 ? <p className="muted flush">Nothing to withdraw yet. Deposits can be withdrawn once they&apos;re recorded.</p> : null}
@@ -200,32 +199,21 @@ function OwnerRecoveryCenter() {
   const history = [...groups.in_recovery, ...groups.recovered];
   return (
     <>
-      <p className="lede page-lede">Get money back from stuck payments or take funds out of the pool. This keeps working even when everything is stopped.</p>
-      <Section title="Stop spending">
-        <EmergencyStop stopped={workspace.workspace.stopped} onChanged={reloadAll} />
-        {workspace.agents
-          .filter((a) => a.status !== "archived")
-          .map((a) => (
-            <div key={a.id} className="stop-agent">
-              <span>
-                <strong>{a.name}</strong> <span className="muted">· {agentStateLabel(a.status, workspace.workspace.stopped)}</span>
-              </span>
-              <AgentControls agent={a} onChanged={reloadAll} compact />
-            </div>
-          ))}
-        {live.length > 0 ? <p className="small section-foot">{live.length} payment(s) already sent may still settle. They stay listed until they do.</p> : null}
-      </Section>
-      {activity.loading && !activity.data ? <Loading label="payments" /> : null}
-      <ErrorNotice error={activity.error} what="activity" onRetry={activity.reload} />
-      <Section title="Stuck payments">
-        {stuck.length === 0 ? <p className="muted flush">Nothing to recover.</p> : null}
-        {groups.safe.length > 0 ? list(groups.safe, "") : null}
-        {groups.pending.length > 0 ? list(groups.pending, "") : null}
-      </Section>
+      {stuck.length > 0 ? (
+        <Section title="Stuck payments">
+          {groups.safe.length > 0 ? list(groups.safe, "") : null}
+          {groups.pending.length > 0 ? list(groups.pending, "") : null}
+        </Section>
+      ) : null}
       {history.length > 0 ? <Section title="Recoveries">{list(history, "")}</Section> : null}
-      <Section title="Withdraw from the pool">
+      <ErrorNotice error={activity.error} what="activity" onRetry={activity.reload} />
+      <Section title="Withdraw">
         {notes.data ? <PublicExit notes={notes.data} onChanged={reloadAll} /> : notes.loading ? <Loading label="deposits" /> : null}
         <ErrorNotice error={notes.error} what="wallet service" onRetry={notes.reload} />
+      </Section>
+      <Section title="Emergency stop">
+        <EmergencyStop stopped={workspace.workspace.stopped} onChanged={reloadAll} />
+        {live.length > 0 ? <p className="small section-foot">{live.length} payment(s) already sent may still settle.</p> : null}
       </Section>
     </>
   );

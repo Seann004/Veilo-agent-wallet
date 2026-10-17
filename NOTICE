@@ -63,9 +63,11 @@ Direct reused libraries and toolchain sources
   protocol/client, gateway and local test facilitator integration.
 - Original synthetic research fixtures: CC0-1.0 dedication in
   services/gateway/fixtures/research/LICENSE.md. Fictional demo data only.
-- Simple Icons 13.21.0: CC0-1.0; brand marks in apps/dashboard/public/logos,
-  used only to identify each service. The marks remain trademarks of their
-  owners, and showing one does not imply endorsement or a working integration.
+- Brand logos in apps/dashboard/public/logos: SVGs from svgl (MIT,
+  github.com/pheralb/svgl); HubSpot, CoinGecko and Meteora icons are each
+  site's own favicon. Used only to identify each service; the marks remain
+  trademarks of their owners, and showing one does not imply endorsement or a
+  working integration.
 
 Keep upstream copyright/license notices with redistributed dependencies and
 adaptations. Owner review of GPL distribution obligations and the verifier

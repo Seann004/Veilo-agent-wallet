@@ -114,7 +114,7 @@ describe("keyboard operability", () => {
     const ws = workspace();
     render(withRole(<ActivityList activity={{ events: [], purchases: [purchase()] }} workspace={ws} onChanged={vi.fn()} />, "owner", ws));
     await user.tab();
-    const row = screen.getByRole("button", { name: /Shawn · inference-credit-pack/ });
+    const row = screen.getByRole("button", { name: /Shawn · Inference credit pack/ });
     expect(document.activeElement).toBe(row);
     await user.keyboard("{Enter}");
     const dialog = screen.getByRole("dialog");

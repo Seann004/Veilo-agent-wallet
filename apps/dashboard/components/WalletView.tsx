@@ -169,7 +169,7 @@ function OwnerWalletView() {
       <ErrorNotice error={notes.error} what="wallet service" onRetry={notes.reload} />
 
       <Section title="Add funds">
-        <p className="hint flush">Move USDC into your private pool. It can be spent once it reaches “Ready”.</p>
+        <p className="hint flush">Deposit USDC into your private pool.</p>
         <ConnectWalletPrompt purpose="sign the deposit" />
         <form
           className="inline-form"

@@ -159,9 +159,9 @@ describe("custom agent roles and maps", () => {
 
   it("summarizes a custom job's hire proposal without calling it paid", () => {
     const job = { id: "j", kind: "custom", state: "completed", taskId: "t", result: { hire: { proposalId: "p1", state: "pending" }, artifactId: "a1" } } as unknown as Job;
-    expect(summarizeResult(job)).toBe("custom completed · hire proposed (unpaid until you approve it or it matches a pre-approved listing) · result saved to Outputs");
+    expect(summarizeResult(job)).toBe("Done · Wants to hire a specialist (nothing paid until you approve) · Saved to Outputs");
     const refused = { ...job, result: { hire: { code: "POLICY_DENIED" } } } as unknown as Job;
-    expect(summarizeResult(refused)).toBe("custom completed · hire refused (POLICY_DENIED)");
+    expect(summarizeResult(refused)).toBe("Done · Hire refused (POLICY_DENIED)");
   });
 });
 
@@ -283,28 +283,29 @@ describe("custom agent jobs", () => {
     respond = () => ({ status: 202, body: { taskId: "t1", executor: "queued in the durable scheduler" } });
     const onQueued = vi.fn();
     render(<CustomRunForm agent={customAgent()} disabled={false} onQueued={onQueued} />);
-    await user.type(screen.getByLabelText("Job for Scout *"), "Compare three vector databases");
-    await user.type(screen.getByLabelText("Context (optional)"), "Small team");
-    await user.type(screen.getByLabelText("Marketplace search terms (optional)"), "database review");
-    await user.click(screen.getByRole("button", { name: "Start job" }));
+    await user.type(screen.getByLabelText("Message Scout"), "Compare three vector databases");
+    await user.type(screen.getByLabelText("Extra context"), "Small team");
+    await user.type(screen.getByLabelText("Marketplace search words"), "database review");
+    await user.click(screen.getByRole("button", { name: "Send job" }));
     await waitFor(() => expect(onQueued).toHaveBeenCalled());
     expect(calls[0]).toMatchObject({ url: `/api/control/agents/${CUSTOM_ID}/run`, method: "POST" });
     const body = calls[0]!.body as { objective: string; input: unknown };
     expect(body).toEqual({ objective: "Compare three vector databases", input: { context: "Small team", searchQuery: "database review" } });
     expect(runAgentRequestSchema.safeParse(body).success).toBe(true);
     expect(customTaskInputSchema.safeParse(body.input).success).toBe(true);
-    expect(screen.getByRole("status").textContent).toContain("Task t1");
+    // The job shows up in the conversation; the message box is cleared for the next one.
+    expect((screen.getByLabelText("Message Scout") as HTMLTextAreaElement).value).toBe("");
   });
 
   it("sends only the objective when nothing optional is filled and blocks a stopped agent", async () => {
     const user = userEvent.setup();
     const { rerender } = render(<CustomRunForm agent={customAgent()} disabled={false} onQueued={vi.fn()} />);
-    await user.type(screen.getByLabelText("Job for Scout *"), "Find a translator");
-    await user.click(screen.getByRole("button", { name: "Start job" }));
+    await user.type(screen.getByLabelText("Message Scout"), "Find a translator");
+    await user.click(screen.getByRole("button", { name: "Send job" }));
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0]!.body).toEqual({ objective: "Find a translator" });
     rerender(<CustomRunForm agent={customAgent()} disabled onQueued={vi.fn()} />);
-    expect((screen.getByRole("button", { name: "Start job" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Send job" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
@@ -354,8 +355,8 @@ describe("custom agent page", () => {
     const user = userEvent.setup();
     const hiringAgent = customAgent({ activePolicy: { ...customAgent().activePolicy!, permissions: { ...customAgent().activePolicy!.permissions, allowedSkus: [SPECIALIST_SKU] } } });
     render(withRole(<MarketContextProvider value={market()}><CustomAgentPanel agent={hiringAgent} policy={withHiring(policy, true)} canRun terminal={false} onChanged={vi.fn()} /></MarketContextProvider>, "guest"));
-    await user.type(screen.getByLabelText(/^Job for Scout/), "Find a reviewer.");
-    expect((screen.getByRole("button", { name: "Start job" }) as HTMLButtonElement).disabled).toBe(false);
+    await user.type(screen.getByLabelText("Message Scout"), "Find a reviewer.");
+    expect((screen.getByRole("button", { name: "Send job" }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByRole("button", { name: "Save instructions" })).toBeNull();
     expect(screen.queryByRole("button", { name: /Draft a policy/ })).toBeNull();
     expect(screen.queryByText(/Pre-approved listings for Scout/)).toBeNull();
@@ -365,8 +366,8 @@ describe("custom agent page", () => {
   it("keeps every custom agent control disabled for the public viewer", async () => {
     const user = userEvent.setup();
     render(withRole(<MarketContextProvider value={market()}><CustomAgentPanel agent={customAgent()} policy={policy} canRun terminal={false} onChanged={vi.fn()} /></MarketContextProvider>, "viewer"));
-    await user.type(screen.getByLabelText(/^Job for Scout/), "Find a reviewer.");
-    expect((screen.getByRole("button", { name: "Start job" }) as HTMLButtonElement).disabled).toBe(true);
+    await user.type(screen.getByLabelText("Message Scout"), "Find a reviewer.");
+    expect((screen.getByRole("button", { name: "Send job" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText("Sign in to run agents.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Save instructions" })).toBeNull();
     expect(screen.queryByRole("button", { name: /Draft a policy/ })).toBeNull();

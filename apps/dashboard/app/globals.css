@@ -4414,14 +4414,16 @@ h4 {
   }
 }
 
+/* Inline, so the amount sits on the same baseline as the text around it. */
 .amount-usdc {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
+  display: inline;
+  white-space: nowrap;
 }
 
 .usdc-icon {
   flex: none;
+  vertical-align: -0.2em;
+  margin-right: 0.3em;
 }
 
 /* ---------- Marketplace browse ---------- */
@@ -4740,17 +4742,21 @@ ul.cards {
   border: 1px solid var(--line);
 }
 
-.brand-mark {
+.brand-img {
   display: block;
-  width: 56%;
-  height: 56%;
-  mask-size: contain;
-  mask-repeat: no-repeat;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  color: var(--ink);
+  object-fit: contain;
+}
+
+.brand-img-dark {
+  display: none;
+}
+
+:root[data-theme="dark"] .brand-img-light {
+  display: none;
+}
+
+:root[data-theme="dark"] .brand-img-dark {
+  display: block;
 }
 
 .connector-section + .connector-section {
@@ -4815,4 +4821,60 @@ ul.cards {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .brand-img-light {
+    display: none;
+  }
+
+  :root:not([data-theme="light"]) .brand-img-dark {
+    display: block;
+  }
+}
+
+.sku-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.sku-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.bubble-working {
+  color: var(--ink-2);
+  font-style: italic;
+}
+
+.plain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.coming-soon-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.soon-logo {
+  opacity: 0.55;
+  filter: grayscale(0.4);
+}
+
+.chip-toggle .brand-tile,
+.chip-toggle .connector-icon {
+  border: 0;
+  background: none;
 }

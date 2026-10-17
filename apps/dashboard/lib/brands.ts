@@ -1,24 +1,26 @@
-/** Brand marks from Simple Icons (CC0, see NOTICE), drawn in each brand's colour. */
+/** Official full-colour brand marks (sources in NOTICE). `logoDark` is the variant for dark themes. */
 export interface Brand {
   name: string;
   logo: string;
-  color: string;
+  logoDark?: string;
 }
 
 export const BRANDS = {
-  telegram: { name: "Telegram", logo: "/logos/telegram.svg", color: "#26A5E4" },
-  slack: { name: "Slack", logo: "/logos/slack.svg", color: "#E01E5A" },
-  discord: { name: "Discord", logo: "/logos/discord.svg", color: "#5865F2" },
-  gmail: { name: "Gmail", logo: "/logos/gmail.svg", color: "#EA4335" },
-  googledrive: { name: "Google Drive", logo: "/logos/googledrive.svg", color: "#4285F4" },
-  googlecalendar: { name: "Google Calendar", logo: "/logos/googlecalendar.svg", color: "#4285F4" },
-  notion: { name: "Notion", logo: "/logos/notion.svg", color: "currentColor" },
-  github: { name: "GitHub", logo: "/logos/github.svg", color: "currentColor" },
-  linear: { name: "Linear", logo: "/logos/linear.svg", color: "#5E6AD2" },
-  figma: { name: "Figma", logo: "/logos/figma.svg", color: "#F24E1E" },
-  hubspot: { name: "HubSpot", logo: "/logos/hubspot.svg", color: "#FF7A59" },
-  canva: { name: "Canva", logo: "/logos/canva.svg", color: "#00C4CC" },
-  solana: { name: "Solana", logo: "/logos/solana.svg", color: "#9945FF" },
+  telegram: { name: "Telegram", logo: "/logos/telegram.svg" },
+  slack: { name: "Slack", logo: "/logos/slack.svg" },
+  discord: { name: "Discord", logo: "/logos/discord.svg" },
+  gmail: { name: "Gmail", logo: "/logos/gmail.svg" },
+  googledrive: { name: "Google Drive", logo: "/logos/googledrive.svg" },
+  googlecalendar: { name: "Google Calendar", logo: "/logos/googlecalendar.svg" },
+  notion: { name: "Notion", logo: "/logos/notion.svg" },
+  github: { name: "GitHub", logo: "/logos/github-light.svg", logoDark: "/logos/github.svg" },
+  linear: { name: "Linear", logo: "/logos/linear.svg" },
+  figma: { name: "Figma", logo: "/logos/figma.svg" },
+  hubspot: { name: "HubSpot", logo: "/logos/hubspot.png" },
+  canva: { name: "Canva", logo: "/logos/canva.svg" },
+  solana: { name: "Solana", logo: "/logos/solana.svg" },
+  coingecko: { name: "CoinGecko", logo: "/logos/coingecko.png" },
+  meteora: { name: "Meteora", logo: "/logos/meteora.png" },
 } satisfies Record<string, Brand>;
 
 export type BrandId = keyof typeof BRANDS;

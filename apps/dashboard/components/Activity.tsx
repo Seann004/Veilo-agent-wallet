@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../lib/api";
 import { credits, lamports, shortKey, usdc, when } from "../lib/format";
-import { LEG_LABEL, LABEL_CREDITS_NO_CHARGE, legStateLabel, purchaseLabel, reasonGuidance } from "../lib/labels";
+import { LEG_LABEL, LABEL_CREDITS_NO_CHARGE, legStateLabel, purchaseLabel, reasonGuidance, skuLabel } from "../lib/labels";
+import { hostOf } from "../lib/connectors";
 import type { Activity, Agent, AuditEvent, PaymentStates, Purchase, Workspace } from "../lib/types";
 import { useCapability } from "./Shell";
 import { useAction } from "./hooks";
@@ -77,9 +78,7 @@ export function ActivityDrawer({
     <div className="drawer-backdrop" onClick={onClose}>
       <aside ref={drawerRef} className="drawer" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>
         <div className="panel-head">
-          <h2 id={titleId}>
-            {purchase.sku} · {agent?.name ?? "unknown agent"}
-          </h2>
+          <h2 id={titleId}>{skuLabel(purchase.sku)}</h2>
           <button ref={closeRef} type="button" className="btn" onClick={onClose}>
             Close
           </button>
@@ -87,6 +86,19 @@ export function ActivityDrawer({
         <p className="status-line">
           <strong>{purchaseLabel(purchase, { agentStopped: agentStopped(agent, workspace.workspace.stopped) })}</strong>
         </p>
+        <KV
+          rows={[
+            ["Amount", prepaid ? credits(purchase.usage.amount) : usdc(purchase.price.amount)],
+            ["Paid by", agent?.name ?? "unknown agent"],
+            ["Paid to", service ? hostOf(service.origin) : shortKey(purchase.serviceId)],
+            ["Why", purchase.rationale ?? <span className="muted">no reason given</span>],
+            ["When", when(purchase.settledAt ?? purchase.createdAt)],
+            ...(prepaid ? [] : [["Transaction", <TxLink key="tx" signature={merchant?.signature} />] as [string, ReactNode]]),
+          ]}
+        />
+        {prepaid ? null : <p className="small muted">Paid from your private pool. The service saw a fresh one-time wallet, not yours.</p>}
+        <details className="disclosure tech-details">
+          <summary>Technical details</summary>
         <StateStrip purchase={purchase} />
         <h3>Payment legs</h3>
         <ol className="legs">
@@ -101,7 +113,6 @@ export function ActivityDrawer({
         <KV
           rows={[
             ["Payment path", prepaid ? `Prepaid gateway credits — ${LABEL_CREDITS_NO_CHARGE}` : "Private pool → fresh wallet → x402 (USDC)"],
-            ["Rationale", purchase.rationale ?? <span className="muted">none given</span>],
             [
               "Policy result",
               policyEvent
@@ -109,7 +120,6 @@ export function ActivityDrawer({
                 : `authorization ${purchase.states.authorization} (workspace policy v${purchase.policyVersions.workspace}, agent policy v${purchase.policyVersions.agent})`,
             ],
             ["Merchant", service ? `${service.service_key} · ${service.origin}${service.recipient ? ` · recipient ${shortKey(service.recipient)}` : ""}` : shortKey(purchase.serviceId)],
-            ["Price", prepaid ? credits(purchase.usage.amount) : usdc(purchase.price.amount)],
             ["Fee cap (token fees)", usdc(purchase.feeCap.amount)],
             ["Sponsor reservation (SOL)", lamports(purchase.sponsorReservation.amount)],
             ["Reservation", `${purchase.reservation.status}${purchase.reservation.closeReason ? ` (${purchase.reservation.closeReason})` : ""}`],
@@ -133,6 +143,7 @@ export function ActivityDrawer({
             </ul>
           </>
         ) : null}
+        </details>
         <div className="actions">
           {purchase.states.authorization === "awaiting_approval" ? (
             <>
@@ -160,7 +171,7 @@ export function ActivityDrawer({
             disabled={action.busy || !decide.allowed}
             onClick={() => post("reconcile", {})}
           >
-            Reconcile with chain and gateway
+            Check status again
           </button>
         </div>
         <DeniedHint reason={decide.reason} />
@@ -198,12 +209,13 @@ export function ActivityList({ activity, workspace, onChanged, limit }: { activi
                 aria-haspopup="dialog"
               >
                 <span className="activity-main">
-                  <strong>{agent?.name ?? "agent"}</strong> · {p.sku} · {p.paymentPath === "prepaid_credits" ? credits(p.usage.amount) : usdc(p.price.amount)}
+                  <strong>{agent?.name ?? "agent"}</strong> · {skuLabel(p.sku)} · {p.paymentPath === "prepaid_credits" ? credits(p.usage.amount) : usdc(p.price.amount)}
                 </span>
                 <span className="activity-label">{purchaseLabel(p, { agentStopped: agentStopped(agent, workspace.workspace.stopped) })}</span>
                 <span className="muted small">{when(p.createdAt)}</span>
               </button>
-              <StateStrip purchase={p} />
+              {/* A settled, delivered payment needs no detail here; anything else shows where it stands. */}
+              {p.states.fulfilment === "delivered" && p.states.recovery === "none" ? null : <StateStrip purchase={p} />}
             </li>
           );
         })}

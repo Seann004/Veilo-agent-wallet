@@ -1,5 +1,6 @@
 "use client";
 
+import { Icon } from "./Icon";
 import Link from "next/link";
 import { useId, useState } from "react";
 import { SPECIALIST_SKU } from "@veilo/contracts/marketplace";
@@ -195,56 +196,67 @@ function GrantDraftPicker({ grants, onChange }: { grants: GrantDraft[]; onChange
 
 /** Custom agent job: the objective plus optional context and search terms; instructions come from the agent record. */
 export function CustomRunForm({ agent, disabled, onQueued }: { agent: Agent; disabled: boolean; onQueued: () => void | Promise<void> }) {
+  const run = useCapability("run");
   const [objective, setObjective] = useState("");
   const [context, setContext] = useState("");
   const [search, setSearch] = useState("");
-  const [queued, setQueued] = useState<string | null>(null);
   const action = useAction();
   const ids = { objective: useId(), context: useId(), search: useId() };
+  const off = disabled || action.busy;
   return (
     <form
+      className="composer"
       onSubmit={(e) => {
         e.preventDefault();
+        if (off || objective.trim() === "") return;
         void action.run(async () => {
           const input: Record<string, string> = {};
           if (context.trim()) input.context = context.trim();
           if (search.trim()) input.searchQuery = search.trim();
-          const r = await api<{ taskId: string; executor: string }>("control", `/agents/${agent.id}/run`, {
+          await api<{ taskId: string; executor: string }>("control", `/agents/${agent.id}/run`, {
             method: "POST",
             body: { objective: objective.trim(), ...(Object.keys(input).length > 0 ? { input } : {}) },
           });
-          setQueued(`Task ${r.taskId} ${r.executor}.`);
           setObjective("");
           await onQueued();
         });
       }}
     >
-      <div className="field">
-        <label htmlFor={ids.objective}>Job for {agent.name} *</label>
-        <textarea id={ids.objective} required rows={2} maxLength={CUSTOM_OBJECTIVE_MAX} value={objective} onChange={(e) => setObjective(e.target.value)} />
+      <div className="composer-box">
+        <label htmlFor={ids.objective} className="sr-only">
+          Message {agent.name}
+        </label>
+        <textarea
+          id={ids.objective}
+          rows={1}
+          maxLength={CUSTOM_OBJECTIVE_MAX}
+          value={objective}
+          disabled={off}
+          placeholder={!run.allowed ? (run.reason ?? "") : disabled ? `${agent.name} can't take jobs right now` : `Message ${agent.name}…`}
+          onChange={(e) => setObjective(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }
+          }}
+        />
+        <button type="submit" className="send-btn" aria-label="Send job" disabled={off || objective.trim() === ""}>
+          <Icon name="send" />
+        </button>
       </div>
-      <details className="advanced">
+      <details className="composer-more">
         <summary>More options</summary>
         <div className="field">
-          <label htmlFor={ids.context}>Context (optional)</label>
+          <label htmlFor={ids.context}>Extra context</label>
           <textarea id={ids.context} rows={3} maxLength={CUSTOM_CONTEXT_MAX} value={context} onChange={(e) => setContext(e.target.value)} />
         </div>
         <div className="field">
-          <label htmlFor={ids.search}>Marketplace search terms (optional)</label>
-          <input id={ids.search} maxLength={CUSTOM_SEARCH_MAX} value={search} onChange={(e) => setSearch(e.target.value)} aria-describedby={`${ids.search}-h`} />
-          <span id={`${ids.search}-h`} className="hint">
-            Left empty, the agent chooses its own terms. Listing text it reads is untrusted.
-          </span>
+          <label htmlFor={ids.search}>Marketplace search words</label>
+          <input id={ids.search} maxLength={CUSTOM_SEARCH_MAX} value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
       </details>
-      <button type="submit" className="btn btn-primary" disabled={disabled || action.busy || objective.trim() === ""}>
-        Start job
-      </button>
-      {queued ? (
-        <p role="status" className="notice">
-          {queued}
-        </p>
-      ) : null}
+      {!run.allowed ? <DeniedHint reason={run.reason} /> : null}
       <ErrorNotice error={action.error} />
     </form>
   );
@@ -309,14 +321,8 @@ export function CustomAgentPanel({
   const configure = useCapability("configure");
   const editable = !terminal && configure.allowed;
   const hiring = hiringAllowed(agent.activePolicy?.permissions?.allowedSkus);
-  const composer = (
-    <Section title={`New job for ${agent.name}`} id="run">
-      <CustomRunForm agent={agent} disabled={!canRun || !run.allowed} onQueued={onChanged} />
-      {!run.allowed ? <DeniedHint reason={run.reason} /> : null}
-      <p className="small muted">Each job saves its result to <Link href="/outputs">Outputs</Link>.</p>
-    </Section>
-  );
-  if (part === "composer") return <div className="composer composer-custom">{composer}</div>;
+  const composer = <CustomRunForm agent={agent} disabled={!canRun || !run.allowed} onQueued={onChanged} />;
+  if (part === "composer") return composer;
   return (
     <>
       <Section title="Instructions" id="instructions">
@@ -326,7 +332,6 @@ export function CustomAgentPanel({
             ["Instructions", <PlainText key="i" text={agent.instructions ?? "—"} />],
           ]}
         />
-        <p className="small muted">{TEMPLATE_HINT}</p>
         {editable ? <InstructionsEditor agent={agent} onSaved={onChanged} /> : null}
       </Section>
       {part === "all" ? composer : null}

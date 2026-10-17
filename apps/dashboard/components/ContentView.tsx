@@ -38,7 +38,7 @@ export function ContentView() {
       <div className="page-head">
         <h1>Outputs</h1>
       </div>
-      <p className="lede page-lede">Everything your agents made: reports, drafts and plans. You can edit and approve each one. Veilo never posts or sends anything on its own.</p>
+      <p className="lede page-lede">Everything your agents made. Edit, approve or copy it.</p>
       <div className="toolbar">
         <div className="field-inline-select">
           <label htmlFor={ids.agent} className="small muted">

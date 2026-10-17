@@ -6,6 +6,7 @@ import type { AgentRole, Policy, Workspace } from "../lib/types";
 import { Icon } from "./Icon";
 import { Select, type SelectOption } from "./Select";
 import { KV } from "./ui";
+import { HIDDEN_SKUS, skuGroup, skuLabel } from "../lib/labels";
 
 /** Agent policy body accepted by the control service (base-unit decimal strings). */
 export interface AgentPolicyInput {
@@ -118,13 +119,6 @@ function ChipToggle({ label, on, onToggle }: { label: string; on: boolean; onTog
 }
 
 const usdcText = (base: string) => trimFraction(formatBaseUnits(base, 6).replace(/,/g, ""));
-const SKU_NAMES: Record<string, string> = {
-  "swap-usdc-to-sol": "Swap USDC to SOL",
-  "inference-credit-pack": "AI credit pack",
-  "specialist-job": "Hire a specialist",
-  "external-x402-batch": "External paid API",
-};
-const skuLabel = (sku: string) => SKU_NAMES[sku] ?? sku.charAt(0).toUpperCase() + sku.slice(1).replace(/-/g, " ");
 
 export const TIER_OPTIONS: Array<SelectOption<AgentPolicyInput["tier"]>> = [
   { value: "bounded_automatic", label: "Automatically, within limits", hint: "Buys what a task needs, up to your limits" },
@@ -156,7 +150,9 @@ export function PolicyForm({ initial, workspace, onChange }: { initial: AgentPol
   const [skus, setSkus] = useState<string[]>(initial.allowedSkus);
   const paths = initial.allowedPaymentPaths;
   const [browse, setBrowse] = useState(initial.allowBrowsing === true);
-  const allSkus = [...new Set(workspace.services.flatMap((s) => s.skus.map((k) => k.sku)))].sort();
+  const allSkus = [...new Set(workspace.services.flatMap((s) => s.skus.map((k) => k.sku)))].filter((k) => !HIDDEN_SKUS.has(k)).sort();
+  const [pickSkus, setPickSkus] = useState(() => !allSkus.every((k) => initial.allowedSkus.includes(k)));
+  const groups = [...new Set(allSkus.map(skuGroup))];
   const tierId = useId();
   const browseId = useId();
 
@@ -210,10 +206,35 @@ export function PolicyForm({ initial, workspace, onChange }: { initial: AgentPol
       <div className="field">
         <span className="field-label">What it can buy</span>
         <div className="chips" role="group" aria-label="What it can buy">
-          {allSkus.map((sku) => (
-            <ChipToggle key={sku} label={skuLabel(sku)} on={skus.includes(sku)} onToggle={() => toggleSku(sku)} />
-          ))}
+          <ChipToggle
+            label="Anything approved"
+            on={!pickSkus}
+            onToggle={() => {
+              setPickSkus(false);
+              setSkus(allSkus);
+              emit({}, tier, allSkus);
+            }}
+          />
+          <ChipToggle label="Only what I pick" on={pickSkus} onToggle={() => setPickSkus(true)} />
         </div>
+        {pickSkus ? (
+          <div className="sku-groups">
+            {groups.map((g) => (
+              <div key={g} className="sku-group">
+                <span className="small muted">{g}</span>
+                <div className="chips" role="group" aria-label={g}>
+                  {allSkus
+                    .filter((k) => skuGroup(k) === g)
+                    .map((sku) => (
+                      <ChipToggle key={sku} label={skuLabel(sku)} on={skus.includes(sku)} onToggle={() => toggleSku(sku)} />
+                    ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <span className="hint">{groups.join(", ")}: everything approved in this workspace today.</span>
+        )}
       </div>
       <div className="field inline">
         <input
@@ -226,7 +247,7 @@ export function PolicyForm({ initial, workspace, onChange }: { initial: AgentPol
           }}
         />
         <label htmlFor={browseId}>
-          Can browse the web <span className="muted">(read-only: opens and reads up to 3 public pages per task; no logins, forms or purchases)</span>
+          Can read web pages <span className="muted">(up to 3 per task, read-only)</span>
         </label>
       </div>
     </div>

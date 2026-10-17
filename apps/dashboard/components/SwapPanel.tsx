@@ -26,8 +26,7 @@ export function SwapPanel() {
   return (
     <Section title="Agent swaps">
       <p className="hint flush">
-        Let an agent swap USDC for SOL on Orca (Solana devnet). Each swap is funded privately from your pool by a fresh wallet, and the SOL is sent to your
-        address. Agents can only use it once you add “Swap USDC to SOL” to what they can buy.
+        Agents can swap USDC for SOL on Orca, paid privately from your pool. The SOL goes to your wallet.
       </p>
       {current ? (
         <p className="small">
@@ -57,7 +56,7 @@ export function SwapPanel() {
           {current ? "Update" : "Approve swaps"}
         </button>
       </form>
-      {svc.data ? <p className="hint">Up to {usdc(svc.data.maxAmount.amount)} per swap. The devnet pool is shallow and its price is not a real market price.</p> : null}
+      {svc.data ? <p className="hint">Up to {usdc(svc.data.maxAmount.amount)} per swap. Devnet prices aren&apos;t real market prices.</p> : null}
       <ErrorNotice error={svc.error ?? action.error} what="agent swaps" />
     </Section>
   );

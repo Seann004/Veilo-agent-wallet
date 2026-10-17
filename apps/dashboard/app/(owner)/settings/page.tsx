@@ -1,4 +1,5 @@
 import { AiProviderSettings } from "../../../components/AiProviderSettings";
+import { PrivacyPanel } from "../../../components/PrivacyPanel";
 
 export default function Settings() {
   return (
@@ -7,6 +8,7 @@ export default function Settings() {
         <h1>Settings</h1>
       </div>
       <AiProviderSettings />
+      <PrivacyPanel />
     </>
   );
 }

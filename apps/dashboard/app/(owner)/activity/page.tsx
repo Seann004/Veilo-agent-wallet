@@ -1,5 +1,5 @@
-import { ActivityPage } from "../../../components/ActivityPage";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <ActivityPage />;
+  redirect("/wallet");
 }

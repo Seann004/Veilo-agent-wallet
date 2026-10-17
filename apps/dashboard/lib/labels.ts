@@ -195,3 +195,32 @@ export function runBlockedReason(status: AgentStatus, workspaceStopped: boolean)
       return null;
   }
 }
+
+export type SkuGroup = "Data" | "AI work" | "Swaps" | "Hiring" | "Other";
+
+const SKU_INFO: Record<string, { label: string; group: SkuGroup }> = {
+  "research-basic": { label: "Research data", group: "Data" },
+  "research-expanded": { label: "Research data (more sources)", group: "Data" },
+  "external-x402-batch": { label: "Paid APIs", group: "Data" },
+  summarize: { label: "Summaries", group: "AI work" },
+  analyze: { label: "Analysis", group: "AI work" },
+  "content-package": { label: "Content drafts", group: "AI work" },
+  "swap-usdc-to-sol": { label: "Swap USDC to SOL", group: "Swaps" },
+  "specialist-job": { label: "Hire a specialist", group: "Hiring" },
+};
+
+/** Plain names for what an agent can buy; unknown SKUs fall back to their own name. */
+export const skuLabel = (sku: string): string => SKU_INFO[sku]?.label ?? sku.charAt(0).toUpperCase() + sku.slice(1).replace(/-/g, " ");
+export const skuGroup = (sku: string): SkuGroup => SKU_INFO[sku]?.group ?? "Other";
+/** Retired: AI now runs on the owner's own key, so credit packs are never offered. */
+export const HIDDEN_SKUS = new Set(["inference-credit-pack"]);
+
+const TASK_STATE: Record<string, string> = {
+  queued: "Waiting",
+  running: "Working",
+  completed: "Done",
+  incomplete: "Stopped part-way",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
+export const taskStateLabel = (state: string): string => TASK_STATE[state] ?? state.replace(/_/g, " ");

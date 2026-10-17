@@ -5,7 +5,6 @@ import type { Activity } from "../lib/types";
 import { ActivityList, EventLog } from "./Activity";
 import { useOwner } from "./Shell";
 import { useResource } from "./hooks";
-import { WalletTabs } from "./WalletTabs";
 import { ErrorNotice, Loading, Section } from "./ui";
 
 export function ActivityPage() {
@@ -16,18 +15,12 @@ export function ActivityPage() {
   };
   return (
     <>
-      <WalletTabs />
-      <div className="actions">
-        <button type="button" className="btn btn-small" onClick={() => void reload()}>
-          Refresh
-        </button>
-      </div>
       <ErrorNotice error={activity.error} what="activity" onRetry={activity.reload} />
       <Section title="Payments">
         {activity.data ? <ActivityList activity={activity.data} workspace={workspace} onChanged={reload} /> : <Loading label="payments" />}
       </Section>
       <details className="panel disclosure">
-        <summary>Audit log{activity.data ? ` (${activity.data.events.length})` : ""}</summary>
+        <summary>Full history{activity.data ? ` (${activity.data.events.length})` : ""}</summary>
         {activity.data ? <EventLog events={activity.data.events} /> : <Loading label="audit log" />}
       </details>
     </>

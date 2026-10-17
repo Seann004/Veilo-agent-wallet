@@ -187,7 +187,7 @@ function Discover({ connectors, query, map, canEdit, onOpen, onAttach }: { conne
       <h2 id="agent-tools" className="section-title">
         Tools your agents can use
       </h2>
-      <p className="small muted">Read-only MCP tools reviewed by the operator. They need no key.</p>
+      <p className="small muted">Read-only. No key needed.</p>
       <ApprovedTools connectors={connectors} query={query} map={map} canEdit={canEdit} onOpen={onOpen} onAttach={onAttach} />
     </section>
   );
@@ -346,7 +346,7 @@ export function ConnectorsPage() {
         <h1>Connectors</h1>
         <AddMenu disabled={!edit.allowed} reason={edit.reason} onCustom={() => setAdding(true)} />
       </div>
-      <p className="page-lede small muted">Apps your agents can use, and where their results are sent.</p>
+      <p className="page-lede small muted">Tools your agents use, and where their results go.</p>
       <DeniedHint reason={edit.reason} />
       <div className="connector-toolbar">
         <Tabs tab={tab} onChange={setTab} ids={ids} />

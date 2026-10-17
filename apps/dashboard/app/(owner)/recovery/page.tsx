@@ -1,11 +1,5 @@
-import { RecoveryCenter } from "../../../components/RecoveryCenter";
-import { WalletTabs } from "../../../components/WalletTabs";
+import { redirect } from "next/navigation";
 
-export default function RecoveryPage() {
-  return (
-    <>
-      <WalletTabs />
-      <RecoveryCenter />
-    </>
-  );
+export default function Page() {
+  redirect("/wallet");
 }

@@ -110,7 +110,7 @@ describe("Discover", () => {
     const soon = screen.getByRole("list", { name: "Apps that are not available yet" });
     for (const name of ["Gmail", "Google Drive", "Notion"]) expect(within(soon).getByText(name)).toBeTruthy();
     expect(within(soon).queryAllByRole("button")).toHaveLength(0);
-    expect(within(soon).getAllByText("Not available yet").length).toBeGreaterThanOrEqual(3);
+    expect(within(soon).getAllByText("Soon").length).toBeGreaterThanOrEqual(3);
     expect(screen.queryByRole("list", { name: "Approved connectors" })).toBeNull();
   });
 
@@ -130,7 +130,9 @@ describe("Discover", () => {
     const drawer = await screen.findByRole("dialog");
     expect(within(drawer).getByText("https://evil.example/mcp?<b>x</b>")).toBeTruthy();
     for (const root of [container, document.body]) {
-      expect(root.querySelector("img, script, b")).toBeNull();
+      // Our own brand logos are the only images; nothing from connector text becomes markup.
+      expect([...root.querySelectorAll("img")].every((img) => img.classList.contains("brand-img") && img.getAttribute("src")!.startsWith("/logos/"))).toBe(true);
+      expect(root.querySelector("script, b")).toBeNull();
       expect(root.querySelector('a[href^="javascript:"], a[href*="phish"]')).toBeNull();
     }
     expect((globalThis as { pwned?: number }).pwned).toBeUndefined();

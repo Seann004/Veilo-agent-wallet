@@ -69,11 +69,13 @@ export function ConnectorIcon({ connector, size = 40 }: { connector: Pick<Connec
   );
 }
 
-/** A brand mark on a neutral tile, tinted with the brand colour through a mask. */
+/** A brand's own logo on a neutral tile; the dark variant shows only in dark mode. */
 export function BrandLogo({ brand, size = 40 }: { brand: Brand; size?: number }) {
+  const inner = Math.round(size * 0.6);
   return (
     <span className="brand-tile" style={{ width: size, height: size }} aria-hidden="true">
-      <span className="brand-mark" style={{ backgroundColor: brand.color, maskImage: `url(${brand.logo})`, WebkitMaskImage: `url(${brand.logo})` }} />
+      <img className={brand.logoDark ? "brand-img brand-img-light" : "brand-img"} src={brand.logo} alt="" width={inner} height={inner} />
+      {brand.logoDark ? <img className="brand-img brand-img-dark" src={brand.logoDark} alt="" width={inner} height={inner} /> : null}
     </span>
   );
 }

@@ -96,8 +96,7 @@ export function AiProviderSettings() {
   return (
     <Section title="AI model" id="ai-model">
       <p className="hint flush">
-        Your agents think and write with your own model key. You pay your provider directly; Veilo never resells AI and agents never see the key. USDC from your
-        private pool is only spent on paid data, tools, swaps and marketplace hires.
+        Agents use your own AI key. You pay your provider directly; agents never see the key.
       </p>
       {view ? (
         <div className="notice notice-row" role="status">

@@ -23,26 +23,26 @@ export interface Channel {
 }
 
 const KINDS: Array<{ kind: ChannelKind; summary: string }> = [
-  { kind: "telegram", summary: "Your agents message you through your own bot" },
-  { kind: "slack", summary: "Post finished results to a channel" },
-  { kind: "discord", summary: "Post finished results to a channel" },
+  { kind: "telegram", summary: "Message you from your own bot" },
+  { kind: "slack", summary: "Post to a channel" },
+  { kind: "discord", summary: "Post to a channel" },
 ];
 
 export function useChannels(enabled = true) {
   return useResource(() => (enabled ? api<{ channels: Channel[] }>("control", "/channels") : Promise.resolve({ channels: [] as Channel[] })), `channels-${enabled}`);
 }
 
-function AppCard({ kind, title, summary, by, status, onAdd, disabled }: { kind: keyof typeof BRANDS; title: string; summary: string; by: string; status: "added" | "add" | "soon"; onAdd?: () => void; disabled?: boolean }) {
+function AppCard({ kind, title, summary, by, status, onAdd, disabled }: { kind: keyof typeof BRANDS; title: string; summary: string; by?: string; status: "added" | "add" | "soon"; onAdd?: () => void; disabled?: boolean }) {
   return (
     <li className={`app-card${status === "soon" ? " app-card-soon" : ""}`}>
       <BrandLogo brand={BRANDS[kind]} size={44} />
       <span className="app-card-text">
         <strong>{title}</strong>
         <span className="small">{summary}</span>
-        <span className="small muted">{by}</span>
+        {by ? <span className="small muted">{by}</span> : null}
       </span>
       {status === "soon" ? (
-        <span className="pill pill-muted">Not available yet</span>
+        <span className="pill pill-muted">Soon</span>
       ) : status === "added" ? (
         <button type="button" className="icon-btn app-card-state" aria-label={`Add another ${title} destination`} disabled={disabled} onClick={onAdd} title="Connected · add another">
           <Icon name="check" size={18} />
@@ -64,7 +64,7 @@ export function SendResultsTo({ channels, canEdit, onChanged }: { channels: Chan
       <h2 id="send-results" className="section-title">
         Send results to
       </h2>
-      <p className="small muted">When an agent finishes a job, Veilo sends you its result. You choose the destination per agent on its page. Agents never see these keys.</p>
+      <p className="small muted">Get each finished job in your chat.</p>
       <ul className="app-grid" aria-label="Result destinations">
         {KINDS.map((k) => (
           <AppCard
@@ -72,7 +72,7 @@ export function SendResultsTo({ channels, canEdit, onChanged }: { channels: Chan
             kind={k.kind}
             title={BRANDS[k.kind].name}
             summary={k.summary}
-            by={k.kind === "telegram" ? "Bot API · your own bot" : "Incoming webhook"}
+
             status={channels.some((c) => c.kind === k.kind) ? "added" : "add"}
             disabled={!canEdit}
             onAdd={() => setAdding(k.kind)}
@@ -100,10 +100,10 @@ export function ComingSoonApps() {
       <h2 id="coming-soon" className="section-title">
         Coming soon
       </h2>
-      <p className="small muted">These need you to sign in to your account (OAuth), which Veilo doesn&apos;t support yet. None of them is connected or reachable by your agents.</p>
+
       <ul className="app-grid" aria-label="Apps that are not available yet">
         {NEEDS_SIGN_IN.map((a) => (
-          <AppCard key={a.id} kind={a.id} title={BRANDS[a.id].name} summary={a.summary} by="Needs account sign-in" status="soon" />
+          <AppCard key={a.id} kind={a.id} title={BRANDS[a.id].name} summary={a.summary} status="soon" />
         ))}
       </ul>
     </section>

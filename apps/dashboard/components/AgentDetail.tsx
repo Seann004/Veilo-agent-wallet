@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useId, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { api } from "../lib/api";
 import { useAgentAvatar, setAgentAvatar } from "../lib/avatars";
 import { credits, parseUsdcInput, usdc, when } from "../lib/format";
-import { REVIEW_LABEL, ROLE_LABEL, agentStateLabel, purchaseLabel, runBlockedReason } from "../lib/labels";
+import { REVIEW_LABEL, ROLE_LABEL, agentStateLabel, purchaseLabel, runBlockedReason, skuLabel, taskStateLabel } from "../lib/labels";
 import type { Activity, Agent, Balances, ContentItem, Handoff, Job, LimitUsage, Purchase, Task } from "../lib/types";
 import { ActivityDrawer } from "./Activity";
 import { summarizeResult } from "../lib/results";
@@ -363,7 +363,7 @@ function buildThread(
         <li className="bubble bubble-owner">
           {t.objective}
           <span className="bubble-meta">
-            Task {t.state.replace(/_/g, " ")} · budget {usdc(t.limits.taskUsdc)} · {when(t.createdAt)}
+            {taskStateLabel(t.state)} · {when(t.createdAt)}
           </span>
         </li>
       ),
@@ -376,9 +376,7 @@ function buildThread(
       node: (
         <li className="bubble bubble-agent">
           <ResultText text={summarizeResult(j, tasks.find((t) => t.id === j.taskId))} />
-          <span className="bubble-meta">
-            {j.kind.replace(/_/g, " ")} · {when(j.updatedAt)}
-          </span>
+          <span className="bubble-meta">{when(j.updatedAt)}</span>
         </li>
       ),
     });
@@ -395,7 +393,7 @@ function buildThread(
             </span>
             <span className="attachment-text">
               <strong>
-                {p.sku} · {p.paymentPath === "prepaid_credits" ? credits(p.usage.amount) : usdc(p.price.amount)}
+                {skuLabel(p.sku)} · {p.paymentPath === "prepaid_credits" ? credits(p.usage.amount) : usdc(p.price.amount)}
               </strong>
               <span>{purchaseLabel(p, { agentStopped })}</span>
             </span>
@@ -417,9 +415,7 @@ function buildThread(
             </span>
             <span className="attachment-text">
               <strong>{c.title}</strong>
-              <span>
-                {c.kind.replace(/_/g, " ")} · revision {c.revision} · {REVIEW_LABEL[c.reviewState] ?? c.reviewState}
-              </span>
+              <span>{REVIEW_LABEL[c.reviewState] ?? c.reviewState}</span>
             </span>
             <Icon name="arrow" size={16} />
           </Link>
@@ -428,28 +424,6 @@ function buildThread(
     });
   }
   return out.sort((a, b) => a.at.localeCompare(b.at));
-}
-
-function Routines({ agent, stopped }: { agent: Agent; stopped: boolean }) {
-  const t = agent.trigger as { type?: string; pollSeconds?: number };
-  const running = agent.status === "active" && !stopped;
-  const rows: Array<[string, string]> =
-    t.type === "low_credit_balance"
-      ? [[`Credit check every ${t.pollSeconds ?? 60} s`, running ? "Scheduled" : "Paused until the agent is active"]]
-      : [["Runs when you send a task", running ? "Ready" : "Not accepting tasks"]];
-  return (
-    <ul className="routines">
-      {rows.map(([title, sub]) => (
-        <li key={title} className={running ? "" : "paused"}>
-          <Icon name={running ? "clock" : "pause"} />
-          <div>
-            {title}
-            <span>{sub}</span>
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
 }
 
 /** Share of a limit already used, for the bar only; the text shows the exact amounts. */
@@ -514,6 +488,13 @@ export function AgentDetail({ agentId }: { agentId: string }) {
   const configure = useCapability("configure");
   const [checkResult, setCheckResult] = useState<string | null>(null);
   const avatar = useAgentAvatar(agentId, agent?.role ?? "research");
+  const threadRef = useRef<HTMLOListElement>(null);
+  const threadSize = (tasks.data?.tasks.length ?? 0) + (tasks.data?.jobs.length ?? 0) + (content.data?.items.length ?? 0) + (activity.data?.purchases.length ?? 0);
+  // Like a chat: open at, and follow, the newest message.
+  useEffect(() => {
+    const el = threadRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [threadSize, agentId]);
 
   const reloadAll = async () => {
     // Read the job state first so its final artifacts cannot be missed when polling stops.
@@ -536,7 +517,6 @@ export function AgentDetail({ agentId }: { agentId: string }) {
   const drafts = workspace.policies.filter((p) => p.scope === "agent" && p.agentId === agent.id && p.status === "draft");
   const budget = balances.data?.agents.find((b) => b.agentId === agent.id);
   const cash = balances.data?.cash?.byAgent.find((c) => c.agentId === agent.id);
-  const usage = balances.data?.usageByAgent?.find((u) => u.agentId === agent.id);
   const purchases = activity.data?.purchases.filter((p) => p.agentId === agent.id) ?? [];
   const openPurchase = purchases.find((p) => p.id === openPurchaseId);
   const current = policyInputOf(agent);
@@ -558,6 +538,13 @@ export function AgentDetail({ agentId }: { agentId: string }) {
       lastDay = day;
     }
     threadNodes.push(<Fragment key={e.key}>{e.node}</Fragment>);
+  }
+  if (activeJob) {
+    threadNodes.push(
+      <li key="working" className="bubble bubble-agent bubble-working" role="status">
+        {agent.name} is working…
+      </li>,
+    );
   }
 
   return (
@@ -587,7 +574,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
             ) : null}
           </div>
         ) : null}
-        <ol className="thread" aria-label="Tasks, results and payments">
+        <ol className="thread" aria-label="Tasks, results and payments" ref={threadRef}>
           {!loaded ? (
             <li className="thread-empty">
               <Loading label="thread" />
@@ -597,8 +584,8 @@ export function AgentDetail({ agentId }: { agentId: string }) {
               {agent.role === "credit_manager"
                 ? `No credit checks recorded yet. ${agent.name} checks on schedule once its policy is active, or use Check now.`
                 : canRun
-                  ? `No tasks yet. Send ${agent.name} a task below.`
-                  : `No tasks yet. ${agent.name} can take tasks once its policy is active and it is not stopped.`}
+                  ? `Send ${agent.name} a message to start a job.`
+                  : `${agent.name} isn't on yet.`}
             </li>
           ) : (
             threadNodes
@@ -632,7 +619,6 @@ export function AgentDetail({ agentId }: { agentId: string }) {
         {agent.role === "research" ? <ResearchForm agent={agent} disabled={!canRun} onQueued={reloadAll} /> : null}
         {agent.role === "content" ? <CampaignForm agent={agent} disabled={!canRun} handoffs={handoffs.data?.items ?? []} onQueued={reloadAll} /> : null}
         {agent.role === "custom" ? <CustomAgentPanel part="composer" agent={agent} policy={current} canRun={canRun} terminal={terminal} onChanged={reloadAll} /> : null}
-        {configure.allowed ? <AgentWorkflows agentId={agentId} /> : null}
       </section>
 
       <aside className="details-panel" aria-label={`${agent.name} details`}>
@@ -648,31 +634,17 @@ export function AgentDetail({ agentId }: { agentId: string }) {
         {agent.role === "custom" ? <CustomAgentPanel part="details" agent={agent} policy={current} canRun={canRun} terminal={terminal} onChanged={reloadAll} /> : null}
 
         <div className="panel">
-          <h2 className="section-title">Status</h2>
-          <Routines agent={agent} stopped={stopped} />
-          <p className="small muted flush routines-foot">
-            {activeJob ? `${activeJob.kind.replace(/_/g, " ")} ${activeJob.state} · attempt ${activeJob.attempts}` : "No job running"}
-          </p>
-        </div>
-
-        <div className="panel">
           <h2 className="section-title">Spending</h2>
-          <LimitBar label="Lifetime" u={budget?.lifetime} />
-          <LimitBar label="Last 24 h" u={budget?.rolling24h} />
-          <KV
-            rows={[
-              ["Spent", cash ? usdc(cash.spent) : "—"],
-              ["Reserved", cash ? usdc(cash.reserved) : "—"],
-              ["Credits used", usage ? credits(usage.consumedUnits) : "—"],
-              ...(usage && usage.packsPurchased > 0 ? [["Credit packs", `${usage.packsPurchased} (${usdc(usage.packCashSpent)}, in spent)`] as [string, string]] : []),
-            ]}
-          />
+          <LimitBar label="Total" u={budget?.lifetime} />
+          <LimitBar label="Today" u={budget?.rolling24h} />
           <p className="small muted section-foot">
-            {purchases.length} purchase{purchases.length === 1 ? "" : "s"} · <Link href="/activity">Activity</Link>
+            {cash ? `${usdc(cash.spent)} spent` : "Nothing spent"} · <Link href="/wallet">Payments</Link>
           </p>
         </div>
 
         <AgentConnectors agent={agent} />
+
+        {configure.allowed ? <AgentWorkflows agentId={agentId} /> : null}
 
         {configure.allowed ? (
           <div className="panel">
@@ -689,7 +661,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
         ) : null}
 
         <details className="panel disclosure" id="settings" open={agent.status === "draft" || undefined}>
-          <summary>Policy and settings</summary>
+          <summary>Settings and limits</summary>
           <KV
             rows={[
               ["Job", agent.description ?? "—"],

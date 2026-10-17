@@ -30,7 +30,7 @@ describe("live agent tasks", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
     expect(screen.getByText("Done: Research is ready")).toBeTruthy();
     expect(screen.getByText("Fresh research brief")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /inference-credit-pack/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Inference credit pack/ })).toBeTruthy();
     for (const path of ["/tasks?", "/balances", "/activity", "/content?", "/handoffs"]) {
       expect(rec.calls.filter((call) => call.url.includes(path))).toHaveLength(2);
     }
