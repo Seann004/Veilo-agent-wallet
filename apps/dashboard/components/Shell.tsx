@@ -51,6 +51,7 @@ const MARKET_NAV: Array<[string, string]> = [
   ["/marketplace/jobs", "Jobs"],
   ["/marketplace/seller", "Seller"],
   ["/marketplace/agents", "Agents"],
+  ["/marketplace/approvals", "Local approval"],
 ];
 
 /** Marketplace pages carry their own sign-in and never need the local owner session to render. */

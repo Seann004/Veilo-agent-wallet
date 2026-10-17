@@ -152,7 +152,7 @@ function HireFlow({ listing }: { listing: CatalogEntry }) {
           </div>
         )}
         <p>
-          <Link href={`/marketplace/jobs/${hire.jobId}`}>Open the job</Link>
+          <Link href={`/marketplace/jobs/${hire.jobId}`}>Open the job</Link> · <Link href="/marketplace/approvals">Local approval</Link>
         </p>
         <PausedNotice />
         <ErrorNotice error={action.error} what="approval failed" />

@@ -29,7 +29,8 @@ export function TestTokenNote() {
 }
 
 /** Untrusted text from sellers, buyers or results: rendered as text nodes only, line breaks kept. */
-export function PlainText({ text, className }: { text: string | null | undefined; className?: string }) {
+export function PlainText({ text, className, inline }: { text: string | null | undefined; className?: string; inline?: boolean }) {
+  if (inline) return <span className={className ? `inline-text ${className}` : "inline-text"}>{text ?? ""}</span>;
   return <div className={className ? `plain-text ${className}` : "plain-text"}>{text ?? ""}</div>;
 }
 

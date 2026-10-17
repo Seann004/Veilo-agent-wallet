@@ -380,3 +380,80 @@ describe("untrusted content", () => {
     expect(screen.getByText(/Actions are paused/)).toBeTruthy();
   });
 });
+
+describe("local marketplace controls", () => {
+  it("lets exactly the owner marketplace routes through the proxy", async () => {
+    const { matchRoute } = await import("../lib/server/proxy");
+    const A = "22222222-2222-4222-8222-222222222222";
+    expect(matchRoute("control", "GET", "/marketplace/controller")).toBeTruthy();
+    expect(matchRoute("control", "POST", "/marketplace/controller/registration")).toBeTruthy();
+    expect(matchRoute("control", "GET", "/marketplace/hires")).toBeTruthy();
+    expect(matchRoute("control", "POST", `/marketplace/hires/mkt_${A}/approve`)).toBeTruthy();
+    expect(matchRoute("control", "POST", `/marketplace/hires/mkt_${A}/reject`)).toBeTruthy();
+    expect(matchRoute("control", "GET", `/agents/${A}/marketplace-allowlist`)).toBeTruthy();
+    expect(matchRoute("control", "PUT", `/agents/${A}/marketplace-allowlist`)).toBeTruthy();
+    expect(matchRoute("control", "GET", "/worker/marketplace/search")).toBeUndefined();
+    expect(matchRoute("control", "POST", "/worker/hires")).toBeUndefined();
+    expect(matchRoute("control", "POST", `/marketplace/hires/mkt_${A}/pay`)).toBeUndefined();
+    expect(matchRoute("control", "PUT", "/workspace/policy")).toBeUndefined();
+  });
+
+  it("approves locally with the stored quote fields verbatim and the chosen agent", async () => {
+    const user = userEvent.setup();
+    document.cookie = "veilo_csrf=csrf-market";
+    const { LocalApproval } = await import("../components/market/LocalApproval");
+    const { workspace } = await import("./fixtures");
+    const ws = workspace();
+    const agentId = ws.agents.find((a) => a.status === "active")!.id;
+    const hire = {
+      operationId: `mkt_${JOB}`,
+      jobId: JOB,
+      state: "awaiting_approval",
+      listing: { listingId: LISTING, slug: "research-desk", title: HOSTILE, sellerName: "Desk", untrusted: true },
+      requestedBy: { kind: "owner", claimedAgentId: null },
+      quote: {
+        quoteDigest: "d".repeat(64),
+        listingVersionId: VERSION,
+        recipient: RECIPIENT,
+        recipientAta: RECIPIENT,
+        sellerOrigin: "https://seller.example.com",
+        sellerIdentity: "veilo-seller-host-devnet",
+        network: NETWORK,
+        mint: MINT,
+        baseUnits: "1500000",
+        feeUnits: "0",
+        totalUnits: "1500000",
+        expiresAt: new Date(Date.now() + 300_000).toISOString(),
+        label: SERVER_TEST_TOKEN_LABEL,
+      },
+      brief: HOSTILE,
+      basis: null,
+      agentId: null,
+      approval: null,
+      purchaseId: null,
+      rejected: null,
+      evidenceSignature: null,
+      createdAt: "2026-10-17T00:00:00Z",
+      updatedAt: "2026-10-17T00:00:00Z",
+    };
+    const posts: Array<{ url: string; body: unknown; csrf: string | null }> = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" || init?.method === "PUT") posts.push({ url, body: JSON.parse(String(init.body)), csrf: new Headers(init.headers).get("x-csrf-token") });
+      if (url === "/api/control/workspace") return Response.json(ws);
+      if (url.startsWith("/api/control/marketplace/hires")) return Response.json({ items: [hire] });
+      if (url.includes("/marketplace-allowlist")) return Response.json({ grants: [] });
+      if (url.includes("/marketplace/listings")) return Response.json({ listings: [] });
+      return Response.json({});
+    });
+    const { container } = render(withMarket(marketValue(vi.fn() as unknown as MarketContextValue["call"]), <LocalApproval />));
+    await user.click(await screen.findByRole("button", { name: "Approve payment" }));
+    await user.click(screen.getByRole("button", { name: "Confirm local payment approval" }));
+    await vi.waitFor(() => expect(posts.some((p) => p.url.endsWith("/approve"))).toBe(true));
+    const approve = posts.find((p) => p.url.endsWith("/approve"))!;
+    expect(approve.url).toBe(`/api/control/marketplace/hires/mkt_${JOB}/approve`);
+    expect(approve.body).toEqual({ quoteDigest: "d".repeat(64), recipient: RECIPIENT, totalUnits: "1500000", agentId });
+    expect(approve.csrf).toBe("csrf-market");
+    expect(container.querySelectorAll("script, img, b")).toHaveLength(0);
+  });
+});

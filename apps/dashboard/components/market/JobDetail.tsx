@@ -138,7 +138,8 @@ function QuotePanel({ d, isBuyer, onChanged }: { d: JobDetailData; isBuyer: bool
       />
       {d.job.state === "awaiting_payment" ? (
         <p className="notice small" role="note">
-          Your local controller must still authorize and pay this quote. Marketplace sign-in cannot.
+          Your local controller must still authorize and pay this quote. Marketplace sign-in cannot.{" "}
+          <Link href="/marketplace/approvals">Open local approval</Link>
         </p>
       ) : null}
       {isBuyer && d.job.state === "awaiting_approval" ? (

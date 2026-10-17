@@ -977,3 +977,11 @@ h4 {
     justify-content: center;
   }
 }
+
+.local-approval {
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.75rem;
+  background: #f5f6ff;
+}

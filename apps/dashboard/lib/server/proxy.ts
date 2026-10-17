@@ -5,7 +5,7 @@ export const SESSION_COOKIE = "veilo_session";
 export const CSRF_COOKIE = "veilo_csrf";
 export const CSRF_HEADER = "x-csrf-token";
 
-type Method = "GET" | "POST" | "PATCH";
+type Method = "GET" | "POST" | "PATCH" | "PUT";
 interface Route {
   method: Method;
   path: RegExp;
@@ -42,8 +42,12 @@ export const ROUTES: Record<UpstreamService, Route[]> = {
     r("GET", "/calendar"),
     r("GET", "/handoffs"),
     r("POST", `/handoffs/${ID}/decision`),
-    // Placeholder until the local route ships; see lib/market/controller-registration.ts.
+    r("GET", "/marketplace/controller"),
     r("POST", "/marketplace/controller/registration"),
+    r("GET", "/marketplace/hires"),
+    r("POST", "/marketplace/hires/[A-Za-z0-9._-]{1,128}/(approve|reject)"),
+    r("GET", `/agents/${ID}/marketplace-allowlist`),
+    r("PUT", `/agents/${ID}/marketplace-allowlist`),
   ],
   wallet: [
     r("POST", "/deposits/(prepare|register)"),

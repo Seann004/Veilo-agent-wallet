@@ -6,14 +6,20 @@ export interface ControllerRegistration {
   proof: string;
 }
 
-/**
- * Control-service path that returns the controller's signed registration proof.
- *
- * PLACEHOLDER: the local control route is still being built. This path and request body are
- * assumptions; when the route lands, update them here and the matching entry in
- * lib/server/proxy.ts ROUTES. Nothing else in the dashboard depends on the route's shape.
- */
-export const CONTROLLER_REGISTRATION_PATH = "/marketplace/controller/registration";
+export type LocalControllerStatus =
+  | { configured: false }
+  | {
+      configured: true;
+      marketplaceUrl: string;
+      controllerKey: string;
+      keyId: string;
+      registration: { cloudWorkspaceId: string; cloudUserId: string } | null;
+    };
+
+/** What the local control service knows about its marketplace link (owner session required). */
+export function localControllerStatus(): Promise<LocalControllerStatus> {
+  return api<LocalControllerStatus>("control", "/marketplace/controller");
+}
 
 /**
  * Asks the local controller (through the owner's same-origin control session) to sign the
@@ -21,7 +27,7 @@ export const CONTROLLER_REGISTRATION_PATH = "/marketplace/controller/registratio
  * never leaves the control service; only its public key, key id and proof are returned.
  */
 export async function requestControllerRegistration(workspaceId: string, userId: string): Promise<ControllerRegistration> {
-  const r = await api<Partial<ControllerRegistration>>("control", CONTROLLER_REGISTRATION_PATH, { method: "POST", body: { workspaceId, userId } });
+  const r = await api<Partial<ControllerRegistration>>("control", "/marketplace/controller/registration", { method: "POST", body: { workspaceId, userId } });
   if (typeof r.controllerKey !== "string" || typeof r.keyId !== "string" || typeof r.proof !== "string") {
     throw new Error("the local controller returned an incomplete registration");
   }

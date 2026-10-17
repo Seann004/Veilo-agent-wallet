@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { when } from "../../lib/format";
-import { requestControllerRegistration } from "../../lib/market/controller-registration";
-import { useAction } from "../hooks";
+import { localControllerStatus, requestControllerRegistration } from "../../lib/market/controller-registration";
+import { useAction, useResource } from "../hooks";
 import { ErrorNotice, KV, Section } from "../ui";
 import { useMarket } from "./MarketContext";
 import { FullValue } from "./parts";
@@ -17,7 +17,10 @@ export function ControllerPanel() {
   const action = useAction();
   const ws = m.me?.workspace ?? null;
   const linked = Boolean(ws?.controller_key_id);
-  const ownerSignedOut = action.error?.status === 401;
+  const local = useResource(localControllerStatus, "local-controller");
+  const ownerSignedOut = action.error?.status === 401 || local.error?.status === 401;
+  const l = local.data;
+  const localMatches = l?.configured === true && l.registration?.cloudWorkspaceId === ws?.id && l.controllerKey === ws?.controller_key;
   return (
     <Section title="Local controller" actions={<span className={linked ? "pill pill-ok" : "pill pill-warn"}>{linked ? "Linked" : "Not linked"}</span>}>
       <p className="small">
@@ -38,6 +41,32 @@ export function ControllerPanel() {
       ) : (
         <p className="muted">No marketplace workspace yet; it is created when you sign in.</p>
       )}
+      <h3>This computer&apos;s local controller</h3>
+      {local.loading && !l ? (
+        <p role="status" className="muted">
+          Checking the local controller…
+        </p>
+      ) : l?.configured === false ? (
+        <p className="notice notice-warn small">The local control service is running without a marketplace connection (MARKETPLACE_URL is not set).</p>
+      ) : l?.configured ? (
+        <>
+          <KV
+            rows={[
+              ["Key id", l.keyId],
+              ["Public key", <FullValue key="k" value={l.controllerKey} />],
+              ["Marketplace", <FullValue key="u" value={l.marketplaceUrl} />],
+              ["Registered for workspace", <FullValue key="r" value={l.registration?.cloudWorkspaceId ?? "not registered"} />],
+            ]}
+          />
+          {linked && !localMatches ? (
+            <p className="notice notice-warn small" role="status">
+              The controller linked to this marketplace workspace is not this computer&apos;s controller. Re-link to use this one.
+            </p>
+          ) : null}
+        </>
+      ) : local.error && local.error.status !== 401 ? (
+        <ErrorNotice error={local.error} what="local controller status" onRetry={local.reload} />
+      ) : null}
       <p className="small">This step uses both sign-ins: your local owner session asks the controller for a signed proof, and your marketplace session submits it.</p>
       <div className="actions">
         <button
@@ -50,6 +79,7 @@ export function ControllerPanel() {
               const reg = await requestControllerRegistration(ws.id, m.me.userId);
               await m.call("/me/controller", { method: "POST", body: reg });
               await m.reloadMe();
+              await local.reload();
             })
           }
         >
