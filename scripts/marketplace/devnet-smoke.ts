@@ -193,6 +193,8 @@ async function main(): Promise<void> {
         SELLER_HOST_RECIPIENTS: seller.address,
         MARKETPLACE_URL: market,
         MARKETPLACE_SELLER_HOST_TOKEN: hostToken,
+        // This run's in-memory credential replaces any configured token file.
+        MARKETPLACE_SELLER_HOST_TOKEN_PATH: "",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
