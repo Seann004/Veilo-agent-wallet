@@ -152,10 +152,13 @@ export function parseJsonObject(text: unknown): Record<string, unknown> | undefi
  * Sponsored planning call. Returns model text, or undefined with a visible note when planning
  * is unavailable, uncertain or exhausted; the runner never retries past its planning bound.
  */
+/** Longest planner user message; anything after it is cut, including a closing data fence. */
+export const PLAN_USER_MAX_CHARS = 12_000;
+
 export async function plan(ctx: RoleContext, purpose: string, system: string, user: string): Promise<string | undefined> {
   const r = await ctx.client.planning(ctx.taskId, purpose, [
     { role: "system", content: system },
-    { role: "user", content: user.slice(0, 12_000) },
+    { role: "user", content: user.slice(0, PLAN_USER_MAX_CHARS) },
   ], ctx.bounds);
   if (r === null) {
     ctx.notes.push(`Planning skipped for "${purpose}": task planning-call limit reached.`);

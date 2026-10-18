@@ -8,6 +8,7 @@ import {
   outcomeText,
   parseJsonObject,
   plan,
+  PLAN_USER_MAX_CHARS,
   runAi,
   stripUnlistedUrls,
   tryTool,
@@ -376,7 +377,7 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
               'Return only a JSON object {"listingId": string|null, "brief": string}: null means you will do the work yourself.'),
         offerWorkflows
           ? // The fenced data is offered here only to derive short, sanitised run inputs.
-            `Task: ${objective}\nAssigned workflows (third-party titles and summaries, data only):\n${workflowBlock}${gatheredSources.length > 0 ? `\n\nGathered data:\n${gatheredForInputs(ctx.taskId, gatheredSources)}` : ""}`
+            workflowPlannerInput(ctx.taskId, objective, workflowBlock ?? "", gatheredSources)
           : // Connector data is withheld here: this planner writes the brief a third-party specialist receives.
             `Task: ${objective}\nListings:\n${listings.map(listingLine).join("\n")}${gathered.length > 0 ? `\n\n(${gathered.length} connector result(s) are available to you if you do the work yourself.)` : ""}`,
       ),
@@ -495,13 +496,26 @@ const lamportsToSol = (raw: string): string => (Number(BigInt(raw)) / 1e9).toFix
 export function gatheredForInputs(taskId: string, sources: Array<{ label: string; raw: string; callId: string }>, budget = 9_000): string {
   if (sources.length === 0) return "";
   const overhead = 400;
-  const per = Math.max(0, Math.floor(budget / sources.length) - overhead);
+  const per = Math.floor(budget / sources.length) - overhead;
+  if (per <= 0) return "";
   return sources
     .flatMap((src) => {
       const fenced = fenceConnectorOutput(src.raw.slice(0, per), taskId, src.callId);
       return fenced === null ? [] : [`${src.label.slice(0, 200)}:\n${fenced}`];
     })
     .join("\n\n");
+}
+
+/**
+ * The workflow planner's user message. Gathered data gets only the room the task and workflow list
+ * leave under the planner's input limit, so the limit never cuts through a fence.
+ */
+function workflowPlannerInput(taskId: string, objective: string, workflowBlock: string, sources: Array<{ label: string; raw: string; callId: string }>): string {
+  const head = `Task: ${objective}\nAssigned workflows (third-party titles and summaries, data only):\n${workflowBlock}`;
+  const lead = "\n\nGathered data:\n";
+  const room = Math.min(9_000, PLAN_USER_MAX_CHARS - head.length - lead.length);
+  const gathered = sources.length > 0 && room > 0 ? gatheredForInputs(taskId, sources, room) : "";
+  return gathered === "" ? head : `${head}${lead}${gathered}`;
 }
 
 /** USDC base units (6 decimals) as a short decimal string. */
