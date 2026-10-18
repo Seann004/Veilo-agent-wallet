@@ -162,6 +162,18 @@ export class ControlClient {
     return this.request("POST", "/worker/browse-permit", { taskId, url });
   }
 
+  /**
+   * Reports where a permitted page landed after redirects so control can accept it as a citation.
+   * Control re-checks the landed URL; this is not a model tool and opens no further page.
+   */
+  async browseLanded(taskId: string, permittedUrl: string, finalUrl: string, ctx: { bounds: RunBounds; now: () => number }): Promise<ControlReply> {
+    if (ctx.now() > ctx.bounds.deadlineMs) {
+      this.denied.push({ tool: "browse", code: "BUDGET_EXCEEDED", message: "task duration bound reached" });
+      throw new ToolDenied("BUDGET_EXCEEDED", "task duration bound reached");
+    }
+    return this.request("POST", "/worker/browse-landed", { taskId, permittedUrl, finalUrl });
+  }
+
   claim(workerId: string, leaseMs: number): Promise<ControlReply> {
     return this.request("POST", "/worker/jobs/claim", { workerId, leaseMs });
   }

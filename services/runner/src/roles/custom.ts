@@ -107,11 +107,26 @@ async function readPage(ctx: RoleContext, url: unknown, index: number): Promise<
       ctx.notes.push(`Page ${page.url} contained the data fence and was discarded.`);
       return undefined;
     }
-    // The permitted URL is what control will accept as a citation, even if the page redirected.
-    return { url: permitted, title: clean(page.title, 120) || permitted, fenced, raw: body, callId: `web:${index}` };
+    const url = await landedUrl(ctx, permitted, page.url);
+    return { url, title: clean(page.title, 120) || hostOf(url), fenced, raw: body, callId: `web:${index}` };
   } catch (error) {
     ctx.notes.push(`Page ${url} could not be read (${(error as Error).name}).`);
     return undefined;
+  }
+}
+
+/**
+ * The URL to cite for a page: where it landed when control accepts that as evidence for this task,
+ * otherwise the permitted URL, which control always accepts.
+ */
+async function landedUrl(ctx: RoleContext, permitted: string, final: string): Promise<string> {
+  if (final === permitted || final === "") return permitted;
+  try {
+    const r = await ctx.client.browseLanded(ctx.taskId, permitted, final, ctx);
+    return r.status === 200 && typeof r.body?.url === "string" ? r.body.url : permitted;
+  } catch (error) {
+    if (error instanceof ToolDenied) return permitted;
+    throw error;
   }
 }
 
@@ -504,13 +519,17 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
     `${planningSummary(ctx.client)}.`,
   ];
   await step(ctx, "Saving the result");
+  // Control refuses a brief naming any link it did not clear for this task, so only read pages stay linked.
+  const content = stripUnlistedUrls(lines.join("\n"), new Set(pages.map((p) => p.url))).text;
   const saved = await tryTool(ctx, "save_artifact", {
     kind: "research_brief",
     title: clean(objective, 150).slice(0, 200),
-    content: lines.join("\n"),
+    content,
     ...(gathered.length > 0 ? { citations: gathered.map((g) => ({ url: g.citation, title: `${g.connectorId}/${g.tool} (read-only connector)` })) } : {}),
   });
   const ok = saved.status === 201;
+  const saveFailure = ok ? null : saveFailureText(saved);
+  if (saveFailure) ctx.notes.push(`The answer was not saved (${saved.body?.error?.code ?? `HTTP ${saved.status}`}: ${clean(saved.body?.error?.message, 200) || "no detail"}).`);
   // A job counts as done only if the agent produced something; a search alone is not an answer.
   const progressed = work !== undefined || hire?.proposalId !== undefined || workflowRun?.runId !== undefined || swap?.ok === true;
   return {
@@ -520,7 +539,8 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
       results: listings.length,
       hire,
       workflowRun: workflowRun ? { runId: workflowRun.runId ?? null, status: workflowRun.status ?? null, code: workflowRun.code ?? null, versionId: workflowRun.versionId, title: workflowRun.title, total: workflowRun.total ?? null, steps: workflowRun.steps ?? null } : null,
-      didWork: work !== undefined, referenceStyle: style !== undefined, swap: swap?.outcome ?? null, connectorCalls: gathered.length, pagesRead: pages.length, artifactId: saved.body?.id ?? null, notes: ctx.notes },
+      didWork: work !== undefined, referenceStyle: style !== undefined, swap: swap?.outcome ?? null, connectorCalls: gathered.length, pagesRead: pages.length, artifactId: saved.body?.id ?? null, notes: ctx.notes,
+      ...(saveFailure ?? failure ? { failure: saveFailure ?? failure } : {}) },
   };
 }
 
@@ -565,6 +585,14 @@ function usdc(raw: string): string {
   const whole = n / 1_000_000n;
   const frac = (n % 1_000_000n).toString().padStart(6, "0").replace(/0+$/, "");
   return frac === "" ? whole.toString() : `${whole}.${frac.length < 2 ? frac.padEnd(2, "0") : frac}`;
+}
+
+/** Why saving the answer failed, in the owner's terms. */
+export function saveFailureText(r: { status: number; body?: { error?: { code?: unknown; message?: unknown } } }): string {
+  const message = String(r.body?.error?.message ?? "");
+  if (/not purchased evidence|permitted page/.test(message)) return "Couldn't save the answer: it cited a page the agent wasn't cleared to read.";
+  if (r.body?.error?.code === "BUDGET_EXCEEDED") return "Couldn't save the answer: this job reached its step limit first.";
+  return `Couldn't save the answer (${String(r.body?.error?.code ?? `HTTP ${r.status}`)}).`;
 }
 
 /** Why a job produced nothing, in the owner's terms; the raw notes stay in the details. */
