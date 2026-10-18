@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ActivityDrawer } from "../components/Activity";
 import { AgentControls } from "../components/AgentControls";
@@ -92,6 +92,7 @@ describe.each<[AccessRole, { stop: boolean; run: boolean; budget: boolean; decid
 
   it("gates content review and keeps text read-only for non-owners", () => {
     render(withRole(<ContentEditor item={draft()} onSaved={vi.fn()} />, role));
+    fireEvent.click(screen.getByRole("button", { name: allowed.review ? "Edit" : "View text" }));
     const body = screen.getByLabelText("Draft text") as HTMLTextAreaElement;
     expect(body.readOnly).toBe(!allowed.review);
     for (const b of screen.getAllByRole("button", { name: /^Mark / }) as HTMLButtonElement[]) expect(b.disabled).toBe(!allowed.review);

@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ContentCalendar, ContentEditor } from "../components/Content";
+import { ContentCalendar, ContentEditor, shortTitle, splitOutput } from "../components/Content";
 import type { CalendarEntry, ContentItem } from "../lib/types";
 import { withRole } from "./access-fixtures";
 import { draft, recordingFetch } from "./fixtures";
@@ -31,6 +31,7 @@ describe("CNT-02 content edits and approval cause no charge", () => {
     render(withRole(<ContentEditor item={draft()} onSaved={onSaved} />));
     expect(screen.getByText(/Editing is free: it uses no AI, buys nothing and publishes nothing/)).toBeTruthy();
 
+    await user.click(screen.getByRole("button", { name: "Edit" }));
     const text = screen.getByLabelText("Draft text");
     await user.clear(text);
     await user.type(text, "Owner revision");
@@ -63,5 +64,52 @@ describe("CNT-02 content edits and approval cause no charge", () => {
     expect(rec.calls[0]!.url).toBe(`/api/control/content/${cal.id}`);
     const sent = (rec.calls[0]!.body as { calendar: CalendarEntry[] }).calendar;
     expect(sent.find((e) => e.day === 3)!.action).toBe("Repost brief");
+  });
+});
+
+describe("Outputs cards lead with the formatted answer", () => {
+  const QUESTION = "explain thetanuts and find out whats the current price of tnuts, in 3 sentences, and also list where you found it please";
+  const answer = (extra = "") => `**Thetanuts** is an options protocol.${extra}\n\n— Details —\nTask: ${QUESTION}\nMade with: Your model provider (m), no USDC spent.`;
+
+  it("shows the formatted answer and a short title, with editing and details on request", async () => {
+    const user = userEvent.setup();
+    render(withRole(<ContentEditor item={draft({ kind: "research_brief", title: QUESTION, content: answer() })} onSaved={vi.fn()} kindLabel="Report" />));
+    expect(screen.getByText("Thetanuts").tagName).toBe("STRONG");
+    const heading = screen.getByRole("heading", { level: 3 });
+    expect(heading.textContent!.length).toBeLessThanOrEqual(81);
+    expect(heading.textContent).toMatch(/…$/);
+    expect(screen.queryByLabelText("Draft text")).toBeNull();
+    expect(screen.queryByLabelText("Title")).toBeNull();
+    const how = screen.getByText("How it was made").closest("details")!;
+    expect(how.open).toBe(false);
+    expect(how.textContent).toContain("Made with: Your model provider");
+    expect(screen.getByText("Report")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe(QUESTION);
+    expect((screen.getByLabelText("Draft text") as HTMLTextAreaElement).value).toContain("— Details —");
+    expect(screen.getByRole("button", { name: "Mark approved for export" })).toBeTruthy();
+    expect(rec.calls).toHaveLength(0);
+  });
+
+  it("collapses a long answer behind Show more and copies only the answer", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn(async (_text: string) => {});
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    const long = answer(`\n\n${"More detail about the protocol and its vaults. ".repeat(60)}\n\nFINAL LINE`);
+    render(withRole(<ContentEditor item={draft({ kind: "research_brief", content: long })} onSaved={vi.fn()} />));
+    expect(screen.queryByText(/FINAL LINE/)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Show more" }));
+    expect(screen.getByText(/FINAL LINE/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Copy" }));
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText.mock.calls[0]![0]).toContain("FINAL LINE");
+    expect(writeText.mock.calls[0]![0]).not.toContain("— Details —");
+    expect(screen.getByRole("button", { name: "Copied" })).toBeTruthy();
+  });
+
+  it("prefers the answer's first heading as the title", () => {
+    expect(shortTitle(QUESTION, "## Thetanuts in brief\n\nText")).toBe("Thetanuts in brief");
+    expect(shortTitle("Short title", "No heading")).toBe("Short title");
+    expect(splitOutput("Only an answer")).toEqual({ answer: "Only an answer", details: [] });
   });
 });

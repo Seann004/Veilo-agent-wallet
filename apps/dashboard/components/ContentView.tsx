@@ -65,10 +65,7 @@ export function ContentView() {
       <ul className="output-list">
         {items.map((i) => (
           <li key={`${i.id}-${i.revision}`} className="output-item">
-            <p className="output-meta small muted">
-              <span className="pill pill-muted">{KIND_LABEL[i.kind]}</span> {i.agent.name}
-            </p>
-            <ContentEditor item={i} onSaved={saved} />
+            <ContentEditor item={i} onSaved={saved} kindLabel={KIND_LABEL[i.kind]} />
             {i.kind === "content_calendar" ? <ContentCalendar key={`${i.id}-${i.revision}`} item={i} drafts={drafts} onSaved={saved} /> : null}
           </li>
         ))}

@@ -5337,3 +5337,71 @@ ul.cards {
   color: var(--on-ink);
   cursor: pointer;
 }
+
+/* Outputs: the formatted answer leads; editing and details open on request. */
+.output-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem 1.1rem;
+  margin-bottom: 0;
+}
+
+.output-card-head h3 {
+  margin: 0;
+  font-size: 1.02rem;
+  line-height: 1.35;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.output-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.output-answer {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.output-answer .md pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.output-more {
+  margin-top: 0.35rem;
+}
+
+.output-details ul {
+  margin: 0.4rem 0 0;
+}
+
+.output-editor {
+  border-top: 1px solid var(--line);
+  padding-top: 0.75rem;
+}
+
+.output-editor textarea {
+  width: 100%;
+  font-family: inherit;
+}
+
+.output-actions {
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+@media (max-width: 760px) {
+  .output-card {
+    padding: 0.85rem;
+  }
+
+  .output-actions .btn {
+    flex: 1 1 auto;
+  }
+}
