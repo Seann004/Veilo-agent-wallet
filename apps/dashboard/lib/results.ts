@@ -38,3 +38,32 @@ export function workflowRunOf(job: Job | undefined): ProposedWorkflowRun | null 
   if (!w || typeof w.runId !== "string" || !RUN_ID.test(w.runId)) return null;
   return { runId: w.runId, status: typeof w.status === "string" ? w.status : "unknown", title: typeof w.title === "string" && w.title.trim() !== "" ? w.title.slice(0, 120) : "workflow" };
 }
+
+/** Terminal run states; a run in any other state may still change. */
+export const RUN_SETTLED = new Set(["completed", "failed", "halted", "rejected"]);
+
+/** One short live line for a proposed run, from the controller's run view. */
+export function runStatusLine(run: { status: string; steps: Array<{ execution: string }>; waiting?: { reason: string | null } | null }): string {
+  const total = run.steps.length;
+  switch (run.status) {
+    case "awaiting_approval":
+      return "Waiting for your approval";
+    case "approved":
+      return "Approved, starting";
+    case "running": {
+      const done = run.steps.filter((s) => s.execution === "delivered").length;
+      const line = total > 0 ? `Running step ${Math.min(done + 1, total)} of ${total}` : "Running";
+      return run.waiting ? `${line} (waiting${run.waiting.reason ? `: ${run.waiting.reason.slice(0, 80)}` : ""})` : line;
+    }
+    case "completed":
+      return "Done";
+    case "rejected":
+      return "Rejected";
+    case "halted":
+      return "Stopped";
+    case "failed":
+      return "Failed";
+    default:
+      return run.status;
+  }
+}

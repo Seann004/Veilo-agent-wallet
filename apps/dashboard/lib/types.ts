@@ -170,8 +170,11 @@ export interface Task {
   deadline: string | null;
   limits: { taskUsdc: string; taskUsageUnits: string; maxToolCalls: number; maxPaidPurchases: number; maxPlanningCalls: number };
   used: { toolCalls: number; paidPurchases: number; planningCalls: number };
+  startedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Steps the runner reported while working, oldest first (at most 20). */
+  progress?: Array<{ label: string; at: string }>;
 }
 
 export interface Job {

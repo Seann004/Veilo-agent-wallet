@@ -8,7 +8,9 @@ import { parseUsdcInput, usdc, when } from "../lib/format";
 import { REVIEW_LABEL, ROLE_LABEL, agentStateLabel, purchaseLabel, runBlockedReason, skuLabel, taskStateLabel } from "../lib/labels";
 import type { Activity, Agent, Balances, ContentItem, Handoff, Job, LimitUsage, Purchase, Task } from "../lib/types";
 import { ActivityDrawer } from "./Activity";
-import { summarizeResult, workflowRunOf } from "../lib/results";
+import { RUN_SETTLED, runStatusLine, summarizeResult, workflowRunOf, type ProposedWorkflowRun } from "../lib/results";
+import type { LocalRun } from "../lib/market/workflows";
+import { AgentThinking, type ThinkingKind } from "./ThinkingOrb";
 import { AgentControls } from "./AgentControls";
 import { AgentConnectors } from "./AgentConnectors";
 import { AgentDelivery } from "./Channels";
@@ -438,12 +440,7 @@ function buildThread(
         <li className="bubble bubble-agent bubble-answer">
           <strong className="bubble-title">{c.title}</strong>
           {answer ? <span className="plain-text">{answer}</span> : null}
-          {proposed ? (
-            <span className="bubble-line">
-              {proposed.status === "awaiting_approval" ? "Workflow run waiting for your approval · " : "Workflow run started under your assignment · "}
-              <Link href={`/marketplace/runs/${proposed.runId}`}>{proposed.status === "awaiting_approval" ? "Review and approve" : "View run"}</Link>
-            </span>
-          ) : null}
+          {proposed ? <ProposedRunStatus proposed={proposed} /> : null}
           {steps.length > 0 ? (
             <details className="advanced bubble-steps">
               <summary>How I did it</summary>
@@ -507,6 +504,74 @@ function AvatarSettings({ agent }: { agent: Agent }) {
         </div>
       ) : null}
     </>
+  );
+}
+
+/** Which orb animation fits a reported step. */
+function orbFor(label: string): ThinkingKind {
+  if (/^Searching/.test(label)) return "searching";
+  if (/^(Planning|Choosing|Deciding)/.test(label)) return "planning";
+  if (/^(Calling connector|Reading)/.test(label)) return "connecting";
+  if (/^(Saving|Writing|Working on|Analyzing)/.test(label)) return "composing";
+  return "working";
+}
+
+function elapsedText(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+}
+
+/** Live view of a running job: the steps the runner reported, the current one animated, and elapsed time. */
+export function WorkingSteps({ name, task, queued }: { name: string; task: Task | undefined; queued: boolean }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const steps = task?.progress ?? [];
+  const since = task?.startedAt ? Date.parse(task.startedAt) : NaN;
+  const current = steps.at(-1);
+  return (
+    <li className="bubble bubble-agent bubble-working" role="status" aria-live="polite">
+      <span className="working-head">
+        <AgentThinking state={current ? orbFor(current.label) : queued ? "waiting" : "working"} decorative />
+        <span>{queued && steps.length === 0 ? `${name} is about to start…` : `${name} is working…`}</span>
+        {Number.isFinite(since) ? <span className="working-elapsed">{elapsedText(now - since)}</span> : null}
+      </span>
+      {steps.length > 0 ? (
+        <ol className="working-steps" aria-label="Steps so far">
+          {steps.map((step, i) => {
+            const isCurrent = i === steps.length - 1;
+            return (
+              <li key={`${step.at}-${i}`} className={isCurrent ? "is-current" : "is-done"} aria-current={isCurrent ? "step" : undefined}>
+                {isCurrent ? <span className="working-dot" aria-hidden="true" /> : <Icon name="check" size={14} />}
+                <span>{step.label}</span>
+              </li>
+            );
+          })}
+        </ol>
+      ) : null}
+    </li>
+  );
+}
+
+/**
+ * A proposed workflow run's live status from the run view. When the run cannot be read (for example
+ * by a guest), it falls back to the state recorded when the job finished.
+ */
+export function ProposedRunStatus({ proposed }: { proposed: ProposedWorkflowRun }) {
+  const view = useResource(() => api<{ run: LocalRun }>("control", `/workflows/runs/${proposed.runId}`), `workflow-run:${proposed.runId}`);
+  const run = view.data?.run && Array.isArray(view.data.run.steps) ? view.data.run : undefined;
+  usePolling(view.reload, `workflow-run:${proposed.runId}`, run !== undefined && !RUN_SETTLED.has(run.status));
+  const status = run?.status ?? proposed.status;
+  const awaiting = status === "awaiting_approval";
+  const line = run ? runStatusLine(run) : awaiting ? "Workflow run waiting for your approval" : "Workflow run started under your assignment";
+  return (
+    <span className="bubble-line run-status" role="status">
+      {run && !RUN_SETTLED.has(run.status) && !awaiting ? <AgentThinking state="working" decorative /> : null}
+      {run ? `Workflow run: ${line} · ` : `${line} · `}
+      <Link href={`/marketplace/runs/${proposed.runId}`}>{awaiting ? "Review and approve" : "View run"}</Link>
+    </span>
   );
 }
 
@@ -584,11 +649,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
     threadNodes.push(<Fragment key={e.key}>{e.node}</Fragment>);
   }
   if (activeJob) {
-    threadNodes.push(
-      <li key="working" className="bubble bubble-agent bubble-working" role="status">
-        {agent.name} is working…
-      </li>,
-    );
+    threadNodes.push(<WorkingSteps key="working" name={agent.name} queued={activeJob.state === "queued"} task={tasks.data?.tasks.find((t) => t.id === activeJob.taskId)} />);
   }
 
   return (
