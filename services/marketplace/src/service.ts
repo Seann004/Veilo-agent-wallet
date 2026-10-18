@@ -36,6 +36,7 @@ interface CatalogRow {
 
 interface VersionRow {
   id: string;
+  seller_id: string;
   price_base_units: string | number;
   network: string;
   mint: string;
@@ -51,13 +52,21 @@ export function sellerOriginAllowed(config: MarketplaceConfig, origin: string): 
   return remoteOriginProblem(origin) === null || config.devSellerOrigins.includes(origin.replace(/\/$/, ""));
 }
 
+/**
+ * One remote seller host serves every listing of its seller under one credential, so the quoted
+ * identity names the seller, not the listing; the host must run with this SELLER_HOST_IDENTITY.
+ */
+export function remoteSellerIdentity(sellerId: string): string {
+  return `veilo-remote-${sellerId}`;
+}
+
 export function sellerEndpoint(config: MarketplaceConfig, c: CatalogRow, v: VersionRow): { origin: string; identity: string } {
   if (c.runtime_kind === "managed_template") {
     if (!config.managedSellerOrigin) throw new MarketError("NOT_READY", "managed seller host is not configured");
     return { origin: config.managedSellerOrigin, identity: config.managedSellerIdentity };
   }
   if (!v.remote_origin || !sellerOriginAllowed(config, v.remote_origin)) throw new MarketError("SERVICE_NOT_ALLOWED", "seller origin is not allowed");
-  return { origin: v.remote_origin.replace(/\/$/, ""), identity: `veilo-remote-${c.slug}` };
+  return { origin: v.remote_origin.replace(/\/$/, ""), identity: remoteSellerIdentity(v.seller_id) };
 }
 
 /**
@@ -91,7 +100,7 @@ export async function createHire(
   const version = must(
     await db.admin
       .from("listing_versions")
-      .select("id, price_base_units, network, mint, decimals, remote_origin, runtime_version_id, terms_version, payout_version_id")
+      .select("id, seller_id, price_base_units, network, mint, decimals, remote_origin, runtime_version_id, terms_version, payout_version_id")
       .eq("id", catalog.listing_version_id)
       .single(),
   ) as VersionRow;

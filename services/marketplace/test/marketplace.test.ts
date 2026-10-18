@@ -10,7 +10,7 @@ import { authenticateController, walletAddressOf } from "../src/auth";
 import { checkTransfer, type ParsedTransaction } from "../src/chain";
 import type { MarketplaceConfig } from "../src/config";
 import type { Db } from "../src/db";
-import { sellerOriginAllowed } from "../src/service";
+import { sellerEndpoint, sellerOriginAllowed } from "../src/service";
 
 const MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
 const SELLER = "49TED53TmAC4EsScoN3zn6iTHZXAcz6J5w9trmnyAVWX";
@@ -159,6 +159,19 @@ describe("seller origin policy", () => {
     expect(sellerOriginAllowed(config, "http://127.0.0.1:6150")).toBe(true);
     expect(sellerOriginAllowed(config, "http://127.0.0.1:6151")).toBe(false);
     expect(sellerOriginAllowed(config, "http://169.254.169.254")).toBe(false);
+  });
+
+  it("quotes every remote listing of one seller under that seller's host identity", () => {
+    type Args = Parameters<typeof sellerEndpoint>;
+    const version = (sellerId: string) => ({ seller_id: sellerId, remote_origin: "http://127.0.0.1:6150/" }) as unknown as Args[2];
+    const listing = (slug: string) => ({ slug, runtime_kind: "remote_endpoint" }) as unknown as Args[1];
+    const images = sellerEndpoint(config, listing("carousel-images"), version("c58b87c7-23d3-4806-acb1-38f421de532a"));
+    const draft = sellerEndpoint(config, listing("carousel-draft"), version("c58b87c7-23d3-4806-acb1-38f421de532a"));
+    const other = sellerEndpoint(config, listing("carousel-draft"), version("d611c08f-3008-4be4-ba01-f911fa4b5252"));
+    expect(images).toEqual({ origin: "http://127.0.0.1:6150", identity: "veilo-remote-c58b87c7-23d3-4806-acb1-38f421de532a" });
+    expect(draft.identity).toBe(images.identity);
+    expect(other.identity).not.toBe(images.identity);
+    expect(images.identity).toMatch(/^[a-z0-9-]{3,64}$/);
   });
 });
 
