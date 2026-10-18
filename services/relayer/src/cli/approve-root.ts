@@ -2,7 +2,7 @@
 // pool state, writes the ordered approved-label list, and (only with --key <path> --confirm)
 // signs update_approved_root with the approval authority. Without --confirm it changes nothing
 // on chain. Key contents are never printed.
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { address, isAddress } from "@solana/kit";
 import { VeiloConfigError, findRepoRoot, loadConfig, loadDotEnv } from "@veilo/contracts";
@@ -65,7 +65,10 @@ async function main(): Promise<void> {
     console.log("dry run: rerun with --key <approval-authority-keypair> --confirm to publish the list and update the on-chain root");
     return;
   }
-  const key = await loadSponsorKey(arg("--key"));
+  // pnpm runs this from services/relayer; a relative --key is meant from the repository root, like APPROVED_LABELS_PATH.
+  const keyPath = arg("--key") !== undefined ? resolve(rootDir, arg("--key")!) : undefined;
+  if (keyPath !== undefined && !existsSync(keyPath)) throw new VeiloConfigError("INVALID_CONFIG", "--key file is missing");
+  const key = await loadSponsorKey(keyPath);
   if (!key || key.address !== m.authorities.approvalAuthority) throw new VeiloConfigError("INVALID_CONFIG", "--key must be the manifest approval authority keypair");
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, `${JSON.stringify(file, null, 2)}\n`);
