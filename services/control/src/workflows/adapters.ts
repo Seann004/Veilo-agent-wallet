@@ -14,6 +14,11 @@ import type { ExternalPort, ExternalToolFacts, HirePort, StepToolFacts, Workflow
 
 function ok<T>(r: { status: number; body: unknown }, what: string): T {
   if (r.status >= 200 && r.status < 300) return r.body as T;
+  // The marketplace refusing this controller is not the owner's session failing; passing its
+  // 401 through would end the owner's dashboard session.
+  if (r.status === 401 || r.status === 403) {
+    throw new ControlError("NOT_READY", `${what}: this computer's controller is not linked to your marketplace account; link it under Marketplace → Agents`);
+  }
   const err = (r.body as { error?: { code?: string; message?: string } } | undefined)?.error;
   const code = (err?.code ?? (r.status >= 500 ? "NOT_READY" : "SERVICE_NOT_ALLOWED")) as ConstructorParameters<typeof ControlError>[0];
   throw new ControlError(code, `${what}: ${err?.message ?? `HTTP ${r.status}`}`);
