@@ -325,6 +325,33 @@ describe("workflow runner (§26.7)", () => {
     expect(() => env.db.prepare(`UPDATE workflow_run SET task_id = NULL WHERE id = ?`).run(run.id)).toThrow(/immutable/);
   });
 
+  it("refuses a run from a task it cannot fit, before any step pays", async () => {
+    const prince = env.agents.Prince.id;
+    await runner.assign({ agentId: prince, versionId: V1, budgetUsdc: 1_000_000n, ownerPubkey: OWNER });
+    const proposeFrom = async (key: string, edit: string) => {
+      const taskId = intentTask(env, prince, key);
+      env.db.prepare(`UPDATE task SET ${edit} WHERE id = ?`).run(taskId);
+      return runner.propose({ agentId: prince, versionId: V1, runInputs: { mint: key }, taskId });
+    };
+    await expect(proposeFrom("few-left", "purchase_count = max_purchases - 1")).rejects.toMatchObject({ code: "BUDGET_EXCEEDED", message: expect.stringMatching(/remaining purchases/) });
+    await expect(proposeFrom("small-budget", "limit_usdc = 1")).rejects.toMatchObject({ code: "BUDGET_EXCEEDED", message: expect.stringMatching(/remaining budget/) });
+    await expect(proposeFrom("late", `deadline_at_ms = ${env.ledger.now()}`)).rejects.toMatchObject({ code: "POLICY_DENIED" });
+    expect(env.db.prepare(`SELECT group_concat(status) FROM workflow_run`).pluck().get()).toBe("rejected,rejected,rejected");
+    expect(external.calls).toEqual([]);
+    expect(hires.hires).toEqual([]);
+  });
+
+  it("owner approval of a task's run rechecks the task's deadline", async () => {
+    const prince = env.agents.Prince.id;
+    const taskId = intentTask(env, prince, "late-approval");
+    env.db.prepare(`UPDATE task SET deadline_at_ms = ? WHERE id = ?`).run(env.ledger.now() + 1_000, taskId);
+    const run = await runner.propose({ agentId: prince, versionId: V1, runInputs: { mint: "m" }, taskId });
+    expect(run.status).toBe("awaiting_approval");
+    env.clock.t += 1_000;
+    await expect(runner.approve(run.id, OWNER, run.approval_digest)).rejects.toMatchObject({ code: "POLICY_DENIED" });
+    expect(runner.run(run.id)?.status).toBe("awaiting_approval");
+  });
+
   it("refuses to release an assignment-approved step's funding once the assignment is revoked", async () => {
     external.payment = "pending";
     const prince = env.agents.Prince.id;

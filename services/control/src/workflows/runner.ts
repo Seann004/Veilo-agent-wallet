@@ -14,6 +14,7 @@ import {
 import { immediate } from "@veilo/db";
 import { big, num, type Ledger } from "../context";
 import { ControlError } from "../errors";
+import { fits, lifetimeUsage } from "../ledger/accounting";
 import { writeAudit } from "../ledger/events";
 import { getAgent, requireWorkspace } from "../ledger/workspace";
 
@@ -318,6 +319,8 @@ export class WorkflowRunner {
     if (run.approval_digest !== digest) throw new ControlError("PRICE_CHANGED", "approval does not match the run's terms");
     if (run.status === "halted") return this.#resume(run, ownerPubkey);
     if (run.status !== "awaiting_approval") return run;
+    const unfit = this.#taskProblem(run);
+    if (unfit) throw new ControlError(unfit.code, unfit.reason);
     this.#setStatus(run, "approved", { approved_by: ownerPubkey, approved_at_ms: this.ledger.now() });
     return this.#ensureCloudRun(this.run(runId) as RunRow);
   }
@@ -368,6 +371,11 @@ export class WorkflowRunner {
    */
   async propose(r: { agentId: string; versionId: string; runInputs: Record<string, string>; taskId?: string }): Promise<RunRow> {
     const run = await this.prepare({ ...r, isTest: false, requestedBy: "agent" });
+    const unfit = this.#taskProblem(run);
+    if (unfit) {
+      this.#setStatus(run, "rejected", { stop_code: unfit.code, stop_reason: unfit.reason });
+      throw new ControlError(unfit.code, unfit.reason);
+    }
     const auto = immediate(this.ledger.db, () => {
       const a = this.ledger.db
         .prepare(`SELECT * FROM workflow_assignment WHERE agent_id = ? AND workflow_id = ? AND status = 'active'`)
@@ -384,6 +392,26 @@ export class WorkflowRunner {
     if (!auto) return this.run(run.id) as RunRow;
     this.#setStatus(this.run(run.id) as RunRow, "approved", { approved_by: `assignment:${auto.id}`, approved_at_ms: this.ledger.now() });
     return this.#ensureCloudRun(this.run(run.id) as RunRow);
+  }
+
+  /**
+   * Every step of a run proposed from a task spends from that task, so the whole run must fit the
+   * task's deadline, remaining purchase count and remaining budget before any step pays; otherwise
+   * early steps could pay and a later one be refused with no deliverable.
+   */
+  #taskProblem(run: RunRow): { code: "POLICY_DENIED" | "BUDGET_EXCEEDED"; reason: string } | null {
+    if (run.task_id === null) return null;
+    const task = this.ledger.db.prepare(`SELECT id, deadline_at_ms, purchase_count, max_purchases, limit_usdc FROM task WHERE id = ?`).get(run.task_id) as
+      | { id: string; deadline_at_ms: bigint | null; purchase_count: bigint; max_purchases: bigint; limit_usdc: bigint }
+      | undefined;
+    if (!task) return { code: "POLICY_DENIED", reason: "the proposing task no longer exists" };
+    if (task.deadline_at_ms !== null && num(task.deadline_at_ms) <= this.ledger.now()) return { code: "POLICY_DENIED", reason: "the proposing task's deadline has passed" };
+    const steps = big(this.ledger.db.prepare(`SELECT count(*) FROM workflow_run_step WHERE run_id = ?`).pluck().get(run.id) as bigint);
+    if (big(task.purchase_count) + steps > big(task.max_purchases)) return { code: "BUDGET_EXCEEDED", reason: `the run's ${steps} paid steps exceed the task's remaining purchases` };
+    if (!fits(lifetimeUsage(this.ledger, { kind: "task", id: task.id }, "usdc", big(task.limit_usdc)), big(run.total_max_usdc))) {
+      return { code: "BUDGET_EXCEEDED", reason: "the run's total exceeds the task's remaining budget" };
+    }
+    return null;
   }
 
   async #ensureCloudRun(run: RunRow): Promise<RunRow> {
