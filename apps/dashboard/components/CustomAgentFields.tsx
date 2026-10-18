@@ -11,7 +11,8 @@ import { DECIMALS_UNVERIFIED, OFFER_DRAFT_KEY } from "../lib/market/messages";
 import type { CatalogEntry } from "../lib/market/types";
 import { AGENT_TEMPLATES, type Agent, type AgentTemplate } from "../lib/types";
 import type { AgentPolicyInput } from "./Policy";
-import { useCapability } from "./Shell";
+import { downscaleReferenceImage, REFERENCE_IMAGE_TYPES, referenceFileProblem } from "../lib/reference-image";
+import { useAccess, useCapability } from "./Shell";
 import { useAction, useResource } from "./hooks";
 import { AgentGrants } from "./market/LocalApproval";
 import { EnsureMarket, useMarket } from "./market/MarketContext";
@@ -214,11 +215,21 @@ export function CustomRunForm({ agent, disabled, onQueued }: { agent: Agent; dis
   const [context, setContext] = useState("");
   const [search, setSearch] = useState("");
   const [style, setStyle] = useState<string>("default");
+  const [image, setImage] = useState<string | null>(null);
+  const [imageNote, setImageNote] = useState<string | null>(null);
+  const [imageBusy, setImageBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  // Guests cannot attach images (control refuses them), so the field is not offered.
+  const canAttach = useAccess().role !== "guest";
   const objectiveRef = useRef<HTMLTextAreaElement>(null);
   useAutoGrow(objectiveRef, objective, 10);
   const action = useAction();
-  const ids = { objective: useId(), context: useId(), search: useId(), style: useId() };
-  const off = disabled || action.busy;
+  const ids = { objective: useId(), context: useId(), search: useId(), style: useId(), image: useId() };
+  const off = disabled || action.busy || imageBusy;
+  const clearImage = () => {
+    setImage(null);
+    if (fileRef.current) fileRef.current.value = "";
+  };
   return (
     <form
       className="composer"
@@ -233,11 +244,13 @@ export function CustomRunForm({ agent, disabled, onQueued }: { agent: Agent; dis
           const words = search.replace(/`/g, "").trim();
           if (fullContext) input.context = fullContext;
           if (words) input.searchQuery = words;
+          if (image) input.referenceImage = image;
           await api<{ taskId: string; executor: string }>("control", `/agents/${agent.id}/run`, {
             method: "POST",
             body: { objective: objective.trim(), ...(Object.keys(input).length > 0 ? { input } : {}) },
           });
           setObjective("");
+          clearImage();
           await onQueued();
         });
       }}
@@ -281,6 +294,49 @@ export function CustomRunForm({ agent, disabled, onQueued }: { agent: Agent; dis
           <label htmlFor={ids.style}>Style</label>
           <Select id={ids.style} label="Style" value={style} options={STYLE_PRESETS.map((p) => ({ value: p.value, label: p.label }))} onChange={setStyle} />
         </div>
+        {canAttach ? (
+          <div className="field">
+            <label htmlFor={ids.image}>Reference image (optional)</label>
+            {image ? (
+              <div className="ref-thumb">
+                <img src={image} alt="Reference image preview" />
+                <button type="button" className="ref-thumb-remove" aria-label="Remove reference image" onClick={clearImage}>
+                  <Icon name="close" size={12} />
+                </button>
+              </div>
+            ) : null}
+            <input
+              id={ids.image}
+              ref={fileRef}
+              type="file"
+              accept={REFERENCE_IMAGE_TYPES.join(",")}
+              disabled={off}
+              hidden={image !== null}
+              aria-describedby={`${ids.image}-h`}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                setImageNote(null);
+                if (!file) return;
+                const problem = referenceFileProblem(file);
+                if (problem) {
+                  setImageNote(problem);
+                  e.target.value = "";
+                  return;
+                }
+                setImageBusy(true);
+                downscaleReferenceImage(file)
+                  .then(setImage, (err: unknown) => {
+                    setImageNote(err instanceof Error ? err.message : "That image could not be read.");
+                    clearImage();
+                  })
+                  .finally(() => setImageBusy(false));
+              }}
+            />
+            <span id={`${ids.image}-h`} className={imageNote ? "hint field-error" : "hint"} role={imageNote ? "alert" : undefined}>
+              {imageNote ?? "PNG, JPEG or WebP, up to 2 MB. Your AI model reads it to match the style. It stays on this computer."}
+            </span>
+          </div>
+        ) : null}
       </details>
       {!run.allowed ? <DeniedHint reason={run.reason} /> : null}
       <ErrorNotice error={action.error} />
