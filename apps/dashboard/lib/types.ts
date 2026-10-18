@@ -237,6 +237,8 @@ export interface WalletNote {
   depositStages?: Record<string, boolean>;
   depositTransaction?: string | null;
   refundAuthority: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface NoteStatus {

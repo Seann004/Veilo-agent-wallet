@@ -282,5 +282,7 @@ function noteView(n: NoteRecord, depositState: string | null, depositId: string 
       ? { depositStages: Object.fromEntries(DEPOSIT_STAGES.map((s, i) => [s, reached >= 0 ? i <= reached : n.state === "reserved" || n.state === "spent" || n.state === "exit_prepared" || n.state === "exited"])), depositTransaction: depositState }
       : {}),
     refundAuthority: n.refundAuthority === null ? null : address(n.refundAuthority),
+    createdAt: n.createdAtMs === undefined ? null : new Date(n.createdAtMs).toISOString(),
+    updatedAt: n.updatedAtMs === undefined ? null : new Date(n.updatedAtMs).toISOString(),
   };
 }

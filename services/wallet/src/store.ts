@@ -41,6 +41,9 @@ export interface NoteRecord {
   queueSeq: bigint | null;
   controlRegistered: boolean;
   spendPurchaseId: string | null;
+  /** When the note was stored and when its state last changed; absent on records built in memory. */
+  createdAtMs?: number;
+  updatedAtMs?: number;
 }
 
 interface NoteSecretPayload {
@@ -299,10 +302,12 @@ export class WalletStore {
       queueSeq: row.queue_seq === null ? null : (row.queue_seq as bigint),
       controlRegistered: num(row.control_registered) === 1,
       spendPurchaseId: (row.spend_purchase_id as string | null) ?? null,
+      ...(row.created_at_ms !== undefined && row.created_at_ms !== null ? { createdAtMs: num(row.created_at_ms) } : {}),
+      ...(row.status_updated_at_ms !== undefined && row.status_updated_at_ms !== null ? { updatedAtMs: num(row.status_updated_at_ms) } : {}),
     };
   }
 
-  private static NOTE_SELECT = `SELECT n.*, s.state, s.leaf_index, s.queue_seq, s.control_registered, s.spend_purchase_id
+  private static NOTE_SELECT = `SELECT n.*, s.state, s.leaf_index, s.queue_seq, s.control_registered, s.spend_purchase_id, s.updated_at_ms AS status_updated_at_ms
     FROM wallet_note n JOIN wallet_note_status s ON s.note_id = n.id`;
 
   note(id: string): NoteRecord | undefined {

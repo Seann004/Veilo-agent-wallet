@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../lib/api";
-import { parseUsdcInput, usdc } from "../lib/format";
+import { parseUsdcInput, usdc, when } from "../lib/format";
 import type { NoteStatus, WalletNote } from "../lib/types";
 import { connect, lastWallet, listWallets, onWalletsChanged, rememberWallet, signAndSend, type OwnerWallet } from "../lib/wallet";
 import { useCapability, useOwner, type ConnectedWallet } from "./Shell";
@@ -103,6 +103,11 @@ export function DepositStages({ note }: { note: WalletNote }) {
   );
 }
 
+/** Newest first; notes from a wallet service without timestamps keep their order at the end. */
+function newestFirst(notes: WalletNote[]): WalletNote[] {
+  return [...notes].sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+}
+
 export function NotesTable({ status }: { status: NoteStatus }) {
   if (status.notes.length === 0) return <p className="muted flush">No deposits yet. Add funds below to get started.</p>;
   return (
@@ -111,6 +116,7 @@ export function NotesTable({ status }: { status: NoteStatus }) {
         <caption className="sr-only">Deposits</caption>
         <thead>
           <tr>
+            <th scope="col">Added</th>
             <th scope="col">Source</th>
             <th scope="col">Amount</th>
             <th scope="col">Ready to spend</th>
@@ -118,15 +124,15 @@ export function NotesTable({ status }: { status: NoteStatus }) {
           </tr>
         </thead>
         <tbody>
-          {status.notes.map((n) => (
+          {newestFirst(status.notes).map((n) => (
             <tr key={n.id}>
+              <td title={n.updatedAt ? `Last change ${when(n.updatedAt)}` : undefined}>{n.createdAt ? when(n.createdAt) : "—"}</td>
               <td>{n.origin === "deposit" ? "Deposit" : "Change"}</td>
               <td>{usdc(n.value.amount)}</td>
               <td>{n.available ? "Yes" : "No"}</td>
               <td>{n.origin === "deposit" ? <DepositStages note={n} /> : n.state.replace(/_/g, " ")}</td>
             </tr>
           ))}
-              <td title={n.updatedAt ? `Last change ${when(n.updatedAt)}` : undefined}>{n.createdAt ? when(n.createdAt) : "—"}</td>
         </tbody>
       </table>
     </div>
