@@ -72,9 +72,11 @@ describe("custom agent doing the work itself", () => {
     activatePolicyVersion(st.env.ledger, st.env.ws.id, nova.id, 1, { type: "owner", id: "owner" });
 
     const analyzeInputs: string[] = [];
+    const plannerPrompts: string[] = [];
     st.provider.responder = (req) => {
       const sys = req.messages[0]?.content ?? "";
       if (sys.startsWith("You are an agent working for a workspace owner") && sys.includes("Connector tools")) {
+        plannerPrompts.push(sys);
         return JSON.stringify({ connectorCalls: [{ connectorId: "solana-developer-docs", tool: DOCS_TOOL.name, args: { query: "account state" } }], searchQuery: null });
       }
       if (!sys.startsWith("You are an agent")) analyzeInputs.push(req.messages.map((m) => m.content).join("\n"));
@@ -94,6 +96,9 @@ describe("custom agent doing the work itself", () => {
     expect(done!.outcome.taskState).toBe("completed");
     expect(done!.outcome.summary).toMatchObject({ didWork: true, connectorCalls: 1, hire: null });
     expect(fake.calls).toEqual([{ query: "account state" }]);
+
+    // The connector's own tool description reached the planner only inside a data fence.
+    expect(plannerPrompts[0]).toMatch(new RegExp(`<<<CONNECTOR_OUTPUT_[0-9a-f]{24}\\n- connectorId=solana-developer-docs tool=${DOCS_TOOL.name}: ${DOCS_TOOL.description}`));
 
     // The analysis read the connector text only inside its data fence, with the link removed.
     const analysis = analyzeInputs.find((t) => t.includes("Accounts hold lamports"));
