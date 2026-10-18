@@ -362,10 +362,11 @@ const lamportsToSol = (raw: string): string => (Number(BigInt(raw)) / 1e9).toFix
 /** Why a job produced nothing, in the owner's terms; the raw notes stay in the details. */
 export function plainFailure(notes: string[]): string {
   const all = notes.join(" ");
+  if (/NOTE_PENDING|no approved spendable pool note/.test(all)) return "I couldn't finish: your private pool has no spendable USDC right now. Add funds in Wallet, or add your AI key in Settings so thinking costs no USDC.";
   if (/BUDGET_EXCEEDED|allocation would be exceeded/.test(all)) return "I couldn't finish: I've reached my spending limit. Raise my limits, or add your AI key in Settings so thinking costs no USDC.";
   if (/still settling/.test(all)) return "Still working: a payment is settling, and the result will follow under Activity.";
   if (/do(es)? not allow the Analyze service|SERVICE_NOT_ALLOWED/.test(all)) return "I couldn't finish: I'm not allowed to buy the AI work this needs. Add your AI key in Settings, or let me buy Analysis.";
   if (/tool-call allowance/.test(all)) return "I couldn't finish within this job's step limit.";
-  if (/The swap did not go through/.test(all)) return "The swap didn't go through. The details below say why.";
-  return "I couldn't finish this job. The details below say why.";
+  if (/The swap did not go through/.test(all)) return "The swap didn't go through. Open it in Outputs for the details.";
+  return "I couldn't finish this job. Open it in Outputs for the details.";
 }

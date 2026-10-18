@@ -7,6 +7,7 @@ describe("plain failure reasons", () => {
     expect(plainFailure(["The analysis did not return a result (not purchased (BUDGET_EXCEEDED: agent lifetime allocation would be exceeded))."])).toMatch(/spending limit/);
     expect(plainFailure(["Purchase p1 was still settling when the task stopped waiting; control keeps reconciling it."])).toMatch(/Still working/);
     expect(plainFailure(["The swap did not go through (Rejected)."])).toMatch(/swap didn't go through/);
+    expect(plainFailure(["The analysis did not return a result (not purchased (NOTE_PENDING: no approved spendable pool note covers this purchase))."])).toMatch(/Add funds in Wallet/);
     // A note that merely mentions a budget is not read as running out of money.
     expect(plainFailure(["Owner asked about the marketing budget."])).toMatch(/couldn't finish this job/);
   });
