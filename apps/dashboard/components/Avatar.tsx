@@ -118,13 +118,12 @@ export function BotMark({ bot, size = 64, animated = false }: { bot: BotSpec; si
   );
 }
 
-/** A row of bots; only the first `animate` move, so the page never runs many loops at once. */
-export function BotRow({ bots, size = 72, animate = 3 }: { bots: BotSpec[]; size?: number; animate?: number }) {
+export function BotRow({ bots, size = 72 }: { bots: BotSpec[]; size?: number }) {
   return (
     <ul className="bot-row" aria-label="Example agents">
-      {bots.map((bot, i) => (
+      {bots.map((bot) => (
         <li key={bot.type} title={bot.label}>
-          <BotMark bot={bot} size={size} animated={i < Math.min(animate, 3)} />
+          <BotMark bot={bot} size={size} animated />
         </li>
       ))}
     </ul>
