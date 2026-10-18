@@ -8,6 +8,7 @@
  * creates a post or draft.
  */
 import { findRepoRoot, loadDotEnv } from "@veilo/contracts";
+import { CAROUSEL_SLIDES } from "@veilo/contracts/marketplace";
 
 const rootDir = findRepoRoot();
 loadDotEnv({ rootDir });
@@ -24,7 +25,7 @@ async function zernio(path: string, key: string): Promise<{ status: number; body
 
 async function main(): Promise<void> {
   const hf = Boolean(env("HIGGSFIELD_API_KEY_ID") && env("HIGGSFIELD_API_KEY_SECRET"));
-  const cap = Math.min(4, Math.max(2, Number(env("HIGGSFIELD_MAX_IMAGES") ?? 4) || 4));
+  const cap = Math.min(CAROUSEL_SLIDES.max, Math.max(2, Math.trunc(Number(env("HIGGSFIELD_MAX_IMAGES") ?? CAROUSEL_SLIDES.max) || CAROUSEL_SLIDES.max)));
   add("Higgsfield key", hf, hf ? `set; at most ${cap} images per run (HIGGSFIELD_MAX_IMAGES)` : "HIGGSFIELD_API_KEY_ID / HIGGSFIELD_API_KEY_SECRET missing: the image step shows \"Provider not configured\" and is never quoted or paid");
 
   const key = env("ZERNIO_API_KEY");

@@ -18,7 +18,7 @@ import { join } from "node:path";
 import { address, createKeyPairSignerFromBytes, createKeyPairSignerFromPrivateKeyBytes, getBase58Decoder, signBytes, type KeyPairSigner } from "@solana/kit";
 import { createClient } from "@supabase/supabase-js";
 import { findRepoRoot, loadConfig, loadDotEnv, verifyChainIdentity } from "@veilo/contracts";
-import { mcpToolDigest, MARKETPLACE_LIMITS, PROVIDER_MANIFESTS, TEST_TOKEN_LABEL, type ToolIo, type ToolProvider, type WorkflowVersionInput } from "@veilo/contracts/marketplace";
+import { CAROUSEL_SLIDE_COUNT_RULE, CAROUSEL_SLIDES, mcpToolDigest, MARKETPLACE_LIMITS, PROVIDER_MANIFESTS, TEST_TOKEN_LABEL, type ToolIo, type ToolProvider, type WorkflowVersionInput } from "@veilo/contracts/marketplace";
 import { createApp } from "../../services/marketplace/src/app";
 import { createRpcChain } from "../../services/marketplace/src/chain";
 import type { MarketplaceConfig } from "../../services/marketplace/src/config";
@@ -116,8 +116,11 @@ interface ManagedTool {
   sellerInstructions?: string;
   /** Named inputs, each passed to the template as its own brief section; one "brief" input when omitted. */
   io?: ToolIo;
+  /** Set when the published text changed: a seeded listing gets a new version under listing.<slug>.v<revision>. */
+  revision?: number;
 }
-const NUMBERED_SLIDES = "N is the number in the slides section; use 6 when it is not 5, 6 or 7.";
+const NUMBERED_SLIDES = CAROUSEL_SLIDE_COUNT_RULE;
+const SLIDE_RANGE = `${CAROUSEL_SLIDES.min} to ${CAROUSEL_SLIDES.max}`;
 const MANAGED: ManagedTool[] = [
   { creator: "ledger-lab", slug: "demo-onchain-brief-writer", title: "On-chain brief writer (demo)", summary: "Writes a cited brief from purchased on-chain data with DeepSeek V4 Flash.", template: "research-summary", price: "20000", sections: ["Summary", "Key points", "Sources"] },
   { creator: "ledger-lab", slug: "demo-wallet-analyst", title: "Wallet activity analyst (demo)", summary: "Turns wallet balance and recent signatures into a structured analysis.", template: "structured-analysis", price: "20000", sections: ["Findings", "Risks"] },
@@ -155,15 +158,16 @@ const MANAGED: ManagedTool[] = [
     creator: "studio-north",
     slug: "tiktok-carousel-planner-styled",
     title: "TikTok carousel planner (style and slide count)",
-    summary: "Turns a topic, a visual style and a slide count (5 to 7) into image prompts and a caption for a TikTok photo carousel.",
+    summary: `Turns a topic, a visual style and a slide count (${SLIDE_RANGE}) into image prompts and a caption for a TikTok photo carousel.`,
     template: "content-package",
     price: "20000",
+    revision: 2,
     sections: ["Slides", "Caption"],
     io: {
       inputs: [
         { name: "topic", kind: "text", required: true, maxChars: 500 },
         { name: "style", kind: "text", required: true, maxChars: 200 },
-        { name: "slides", kind: "text", required: true, maxChars: 1 },
+        { name: "slides", kind: "text", required: true, maxChars: String(CAROUSEL_SLIDES.max).length },
       ],
       output: { kind: "markdown" },
     },
@@ -181,14 +185,15 @@ const MANAGED: ManagedTool[] = [
     creator: "studio-north",
     slug: "tiktok-slide-planner",
     title: "TikTok slide planner (designed slides)",
-    summary: "Turns a topic and a slide count (5 to 7) into headline, accent and supporting text for each designed TikTok slide, plus a caption.",
+    summary: `Turns a topic and a slide count (${SLIDE_RANGE}) into headline, accent and supporting text for each designed TikTok slide, plus a caption.`,
     template: "content-package",
     price: "20000",
+    revision: 2,
     sections: ["Slides", "Caption"],
     io: {
       inputs: [
         { name: "topic", kind: "text", required: true, maxChars: 500 },
-        { name: "slides", kind: "text", required: true, maxChars: 1 },
+        { name: "slides", kind: "text", required: true, maxChars: String(CAROUSEL_SLIDES.max).length },
       ],
       output: { kind: "markdown" },
     },
@@ -217,6 +222,8 @@ interface ProviderTool {
   toolName?: string;
   /** The seller host that runs it; the placeholder host when it is not configured. */
   origin?: string;
+  /** Set when the published text changed: a seeded listing gets a new version under listing.<slug>.v<revision>. */
+  revision?: number;
 }
 // The carousel tools run on the content creator's own seller host, which holds its Higgsfield and Zernio keys.
 const CAROUSEL_HOST = process.env.CAROUSEL_SELLER_ORIGIN?.trim() || PLACEHOLDER_PROVIDER_HOST;
@@ -228,11 +235,12 @@ const PROVIDERS: ProviderTool[] = [
     creator: "studio-north",
     slug: "higgsfield-carousel-images",
     title: "Higgsfield carousel images",
-    summary: "Generates two to four vertical images from \"Slide N:\" prompts with Higgsfield Soul. Workflow step only.",
+    summary: "Generates two to eight vertical images from \"Slide N:\" prompts with Higgsfield Soul, up to the seller's image cap. Workflow step only.",
     provider: "higgsfield",
     toolName: "generate_carousel_images",
     price: "200000",
     origin: CAROUSEL_HOST,
+    revision: 2,
   },
   {
     creator: "studio-north",
@@ -258,11 +266,12 @@ const PROVIDERS: ProviderTool[] = [
     creator: "studio-north",
     slug: "tiktok-slide-designer",
     title: "TikTok slide designer",
-    summary: "Renders 2 to 7 designed 1080x1920 slides (dark panel, terracotta accent, optional repo card) from a JSON slide plan and hosts them for posting. Workflow step only.",
+    summary: `Renders ${SLIDE_RANGE} designed 1080x1920 slides (dark panel, terracotta accent, optional repo card) from a JSON slide plan and hosts them for posting. Workflow step only.`,
     provider: "slides",
     toolName: "render_carousel_slides",
     price: "10000",
     origin: CAROUSEL_HOST,
+    revision: 2,
   },
   {
     creator: "studio-north",
@@ -299,7 +308,7 @@ async function main(): Promise<void> {
         managedTools: MANAGED.length,
         providerTools: PROVIDERS.length,
         externalTools: 2,
-        workflows: "8, plus a second version of tiktok-carousel-from-topic",
+        workflows: "8; 3 to 8 slide versions of tiktok-carousel-from-topic and both designed carousels",
       },
       null,
       2,
@@ -388,16 +397,28 @@ async function main(): Promise<void> {
 
     // 4. Tools: managed templates, provider adapters, and the real QuickNode x402 resource.
     const tool = new Map<string, { toolKind: "listing" | "external"; toolId: string; price: string }>();
-    const listing = async (slug: string, creator: string, body: Record<string, unknown>, profile: Record<string, unknown> | null) => {
-      const prior = done<{ versionId: string }>(`listing.${slug}`);
-      if (prior) return prior.versionId;
+    // A revision adds a reviewed version to a listing seeded earlier; the earlier steps are left as recorded.
+    const listing = async (slug: string, creator: string, body: Record<string, unknown>, profile: Record<string, unknown> | null, revision?: number) => {
+      const key = revision ? `listing.${slug}.v${revision}` : `listing.${slug}`;
+      const recorded = done<{ versionId: string }>(key);
+      if (recorded) return recorded.versionId;
       const s = sessions.get(creator)!;
-      const l = await call<{ listingId: string }>("POST", "/seller/listings", s.token, { slug });
-      const v = await call<{ versionId: string }>("POST", `/seller/listings/${l.listingId}/versions`, s.token, { ...body, payoutVersionId: s.payoutVersionId });
+      const prior = done<{ versionId: string }>(`listing.${slug}`);
+      let listingId: string;
+      if (prior) {
+        const mine = await call<{ versions: Array<{ id: string; listing_id: string }> }>("GET", "/seller/dashboard", s.token);
+        const found = mine.versions.find((x) => x.id === prior.versionId);
+        if (!found) throw new Error(`${key}: seeded version of ${slug} not found for ${creator}`);
+        listingId = found.listing_id;
+      } else {
+        listingId = (await call<{ listingId: string }>("POST", "/seller/listings", s.token, { slug })).listingId;
+      }
+      const v = await call<{ versionId: string }>("POST", `/seller/listings/${listingId}/versions`, s.token, { ...body, payoutVersionId: s.payoutVersionId });
       if (profile) await call("POST", `/seller/versions/${v.versionId}/tool-profile`, s.token, profile);
       await call("POST", `/seller/versions/${v.versionId}/submit`, s.token);
       await call("POST", `/operator/versions/${v.versionId}/review`, operatorToken, { approve: true, note: "demo seed" });
-      return step(`listing.${slug}`, { versionId: v.versionId }).versionId;
+      if (!prior) step(`listing.${slug}`, { versionId: v.versionId });
+      return key === `listing.${slug}` ? v.versionId : step(key, { versionId: v.versionId }).versionId;
     };
     const common = { refundTerms: "Seller-funded refund if nothing is delivered (demo).", dataHandling: "Inputs are sent to the named tool provider; demo listing.", termsVersion: "2026-10-17", turnaroundMinutes: 15 };
     for (const t of MANAGED) {
@@ -413,7 +434,7 @@ async function main(): Promise<void> {
         inputSchema: { briefHint: "Topic or purchased data to work from", maxBriefChars: MARKETPLACE_LIMITS.maxBriefChars },
         outputSchema: { format: "markdown", sections: t.sections },
         priceBaseUnits: t.price,
-      }, t.io ? { toolKind: "managed_template", provider: null, toolName: null, effect: "read_only", io: t.io } : null);
+      }, t.io ? { toolKind: "managed_template", provider: null, toolName: null, effect: "read_only", io: t.io } : null, t.revision);
       tool.set(t.slug, { toolKind: "listing", toolId: id, price: t.price });
     }
     for (const t of PROVIDERS) {
@@ -439,6 +460,7 @@ async function main(): Promise<void> {
           priceBaseUnits: t.price,
         },
         { toolKind: "provider_adapter", provider: t.provider, toolName: m.name, effect: m.effect, io: m.io },
+        t.revision,
       );
       tool.set(t.slug, { toolKind: "listing", toolId: id, price: t.price });
     }
@@ -508,25 +530,21 @@ async function main(): Promise<void> {
       const t = tool.get(key)!;
       return { toolKind: t.toolKind, toolId: t.toolId, maxBaseUnits: t.price, inputs };
     };
-    const workflow = async (creator: string, slug: string, v: Omit<WorkflowVersionInput, "payoutVersionId" | "totalMaxBaseUnits">) => {
-      if (done(`workflow.${slug}`)) return;
-      const s = sessions.get(creator)!;
-      const total = v.steps.reduce((n, x) => n + BigInt(x.maxBaseUnits), 0n).toString();
-      const w = await call<{ workflowId: string }>("POST", "/creator/workflows", s.token, { slug, category: v.category });
-      const ver = await call<{ versionId: string; decision: string }>("POST", `/creator/workflows/${w.workflowId}/versions`, s.token, { ...v, totalMaxBaseUnits: total, payoutVersionId: s.payoutVersionId });
-      const pub = await call<{ status: string }>("POST", `/creator/versions/${ver.versionId}/publish`, s.token);
-      step(`workflow.${slug}`, { workflowId: w.workflowId, versionId: ver.versionId, status: pub.status });
-    };
-    /** A later version of a seeded workflow, recorded under its own state key. */
-    const workflowVersion = async (creator: string, slug: string, key: string, v: Omit<WorkflowVersionInput, "payoutVersionId" | "totalMaxBaseUnits">) => {
+    /**
+     * Creates a workflow, or, when `key` names a later version of one seeded earlier, publishes that
+     * version on it. Each version is recorded under its own state key.
+     */
+    const workflow = async (creator: string, slug: string, v: Omit<WorkflowVersionInput, "payoutVersionId" | "totalMaxBaseUnits">, key = `workflow.${slug}`) => {
       if (done(key)) return;
       const s = sessions.get(creator)!;
-      const prior = done<{ workflowId: string }>(`workflow.${slug}`);
-      if (!prior) throw new Error(`${key}: workflow ${slug} has not been seeded`);
       const total = v.steps.reduce((n, x) => n + BigInt(x.maxBaseUnits), 0n).toString();
-      const ver = await call<{ versionId: string }>("POST", `/creator/workflows/${prior.workflowId}/versions`, s.token, { ...v, totalMaxBaseUnits: total, payoutVersionId: s.payoutVersionId });
+      const prior = done<{ workflowId: string }>(`workflow.${slug}`);
+      const workflowId = prior?.workflowId ?? (await call<{ workflowId: string }>("POST", "/creator/workflows", s.token, { slug, category: v.category })).workflowId;
+      const ver = await call<{ versionId: string; decision: string }>("POST", `/creator/workflows/${workflowId}/versions`, s.token, { ...v, totalMaxBaseUnits: total, payoutVersionId: s.payoutVersionId });
       const pub = await call<{ status: string }>("POST", `/creator/versions/${ver.versionId}/publish`, s.token);
-      step(key, { workflowId: prior.workflowId, versionId: ver.versionId, status: pub.status });
+      const row = { workflowId, versionId: ver.versionId, status: pub.status };
+      if (!prior) step(`workflow.${slug}`, row);
+      if (key !== `workflow.${slug}`) step(key, row);
     };
     await workflow("ledger-lab", "token-supply-brief", {
       category: "research",
@@ -573,17 +591,18 @@ async function main(): Promise<void> {
       ],
       sampleOutput: null,
     });
-    await workflowVersion("studio-north", "tiktok-carousel-from-topic", "workflow.tiktok-carousel-from-topic.v2", {
+    // State key v2 recorded the earlier 5 to 7 slide version; v3 replaces it with 3 to 8.
+    await workflow("studio-north", "tiktok-carousel-from-topic", {
       category: "social",
       title: "TikTok carousel from a topic",
-      summary: "DeepSeek plans 5 to 7 slides in your visual style, Higgsfield makes the images, Zernio puts a photo draft in your TikTok inbox.",
+      summary: `DeepSeek plans ${SLIDE_RANGE} slides in your visual style, Higgsfield makes the images, Zernio puts a photo draft in your TikTok inbox.`,
       description:
-        "Step 1 writes one image prompt per slide (5 to 7, in the style you give) and a caption with DeepSeek V4 Flash. Step 2 generates the vertical images with Higgsfield Soul on the seller's key, up to the seller's image cap. Step 3 sends them to the seller's TikTok inbox as a private draft through Zernio; a person publishes it in the TikTok app.",
+        `Step 1 writes one image prompt per slide (${SLIDE_RANGE}, in the style you give) and a caption with DeepSeek V4 Flash. Step 2 generates the vertical images with Higgsfield Soul on the seller's key, up to the seller's image cap. Step 3 sends them to the seller's TikTok inbox as a private draft through Zernio; a person publishes it in the TikTok app.`,
       safetyPromise: "Draft only: the carousel lands in a TikTok inbox as a private draft and is never published by this workflow.",
       runInputs: [
         { name: "topic", label: "Topic", maxChars: 500 },
         { name: "style", label: "Visual style (or \"default\")", maxChars: 200 },
-        { name: "slides", label: "Number of slides (5, 6 or 7)", maxChars: 1 },
+        { name: "slides", label: `Number of slides (${SLIDE_RANGE})`, maxChars: String(CAROUSEL_SLIDES.max).length },
       ],
       steps: [
         step_("tiktok-carousel-planner-styled", { topic: { from: "run_input", name: "topic" }, style: { from: "run_input", name: "style" }, slides: { from: "run_input", name: "slides" } }),
@@ -591,17 +610,17 @@ async function main(): Promise<void> {
         step_("zernio-tiktok-carousel-draft", { carousel: { from: "step", step: 1 } }),
       ],
       sampleOutput: null,
-    });
+    }, "workflow.tiktok-carousel-from-topic.v3");
     await workflow("studio-north", "tiktok-carousel-designed", {
       category: "social",
       title: "TikTok carousel (designed slides)",
-      summary: "DeepSeek writes 5 to 7 slides, the slide designer renders them in Studio North's style, Zernio puts a photo draft in your TikTok inbox.",
+      summary: `DeepSeek writes ${SLIDE_RANGE} slides, the slide designer renders them in Studio North's style, Zernio puts a photo draft in your TikTok inbox.`,
       description:
         "Step 1 writes each slide's label, headline, accent word and supporting line (plus a repo card for a GitHub repository named in your topic) and a caption with DeepSeek V4 Flash. Step 2 renders 1080x1920 slides from a fixed template on the seller's host, so the text is exact, and hosts them through Zernio media. Step 3 sends them to the seller's TikTok inbox as a private draft; a person publishes it in the TikTok app.",
       safetyPromise: "Draft only: the slides land in a TikTok inbox as a private draft and are never published by this workflow.",
       runInputs: [
         { name: "topic", label: "Topic", maxChars: 500 },
-        { name: "slides", label: "Number of slides (5, 6 or 7)", maxChars: 1 },
+        { name: "slides", label: `Number of slides (${SLIDE_RANGE})`, maxChars: String(CAROUSEL_SLIDES.max).length },
       ],
       steps: [
         step_("tiktok-slide-planner", { topic: { from: "run_input", name: "topic" }, slides: { from: "run_input", name: "slides" } }),
@@ -609,17 +628,17 @@ async function main(): Promise<void> {
         step_("zernio-tiktok-carousel-draft", { carousel: { from: "step", step: 1 } }),
       ],
       sampleOutput: null,
-    });
+    }, "workflow.tiktok-carousel-designed.v2");
     await workflow("studio-north", "tiktok-carousel-designed-publish", {
       category: "social",
       title: "TikTok carousel (designed, posts publicly)",
-      summary: "DeepSeek writes 5 to 7 slides, the slide designer renders them, and Zernio publishes the carousel publicly on the creator's TikTok at once.",
+      summary: `DeepSeek writes ${SLIDE_RANGE} slides, the slide designer renders them, and Zernio publishes the carousel publicly on the creator's TikTok at once.`,
       description:
         "Step 1 writes each slide's text and a caption with DeepSeek V4 Flash. Step 2 renders 1080x1920 slides from a fixed template on the seller's host and hosts them through Zernio media. Step 3 publishes them publicly to the seller's TikTok account through Zernio straight away: there is no draft and no review after you approve the run. The seller host refuses to publish unless its owner turned public posting on, and posts only slides it rendered itself.",
       safetyPromise: "Publishes publicly to the creator's TikTok at once after you approve the run; there is no draft or review step.",
       runInputs: [
         { name: "topic", label: "Topic", maxChars: 500 },
-        { name: "slides", label: "Number of slides (5, 6 or 7)", maxChars: 1 },
+        { name: "slides", label: `Number of slides (${SLIDE_RANGE})`, maxChars: String(CAROUSEL_SLIDES.max).length },
       ],
       steps: [
         step_("tiktok-slide-planner", { topic: { from: "run_input", name: "topic" }, slides: { from: "run_input", name: "slides" } }),
@@ -627,7 +646,7 @@ async function main(): Promise<void> {
         step_("zernio-tiktok-carousel-publish", { carousel: { from: "step", step: 1 } }),
       ],
       sampleOutput: null,
-    });
+    }, "workflow.tiktok-carousel-designed-publish.v2");
     await workflow("studio-north", "tiktok-ad-from-photo", {
       category: "social",
       title: "TikTok ad from your product photo",
