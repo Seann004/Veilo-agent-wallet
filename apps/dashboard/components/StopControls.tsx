@@ -5,7 +5,7 @@ import { useCapability } from "./Shell";
 import { useAction } from "./hooks";
 import { ConfirmButton, DeniedHint, ErrorNotice } from "./ui";
 
-export const STOP_KEEPS_RECOVERY = "Stops all new spending at once. Payments already sent stay visible, and you can still recover or withdraw funds.";
+export const STOP_KEEPS_RECOVERY = "Stops all agent spending at once. You can still withdraw.";
 
 /** Global emergency stop. It never disables recovery or public exit. */
 export function EmergencyStop({ stopped, onChanged }: { stopped: boolean; onChanged: () => void | Promise<void> }) {

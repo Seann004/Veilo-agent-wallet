@@ -251,6 +251,48 @@ describe("policy tiers", () => {
   });
 });
 
+describe("policy expiry after authorization", () => {
+  const expiresAt = new Date(T0 + 60_000).toISOString();
+
+  it("approval after the agent policy expires is denied and frees the reservation", () => {
+    env = createEnv();
+    activateDefaults(env, { agents: { Mira: { tier: "approval_required", approvalThresholdTestUsdc: "50000", expiresAt } } });
+    const svc = addService(env, [{ sku: "analyze", paymentPath: "private_x402", price: 100_000n }]);
+    addNotes(env, [1_000_000n]);
+    const p = authorize(env, "Mira", "late", svc, { sku: "analyze" }).purchase;
+    expect(p.authorization_state).toBe("awaiting_approval");
+
+    env.clock.t = T0 + 60_000;
+    expectDenied(() => decidePurchase(env.ledger, p.id, "approve", "owner"), "POLICY_DENIED", /agent policy expired/);
+    expect(getPurchaseRow(env.ledger, p.id)).toMatchObject({ authorization_state: "rejected", funding_state: "abandoned" });
+    expect(count(env.ledger, "SELECT count(*) FROM reservation WHERE purchase_id = ? AND status = 'released'", p.id)).toBe(1);
+    expect(count(env.ledger, "SELECT count(*) FROM note WHERE state = 'approved'")).toBe(1);
+  });
+
+  it("proof release after the workspace policy expires is denied", () => {
+    env = createEnv();
+    activateDefaults(env, { workspace: { expiresAt } });
+    const svc = addService(env, [{ sku: "research-basic", paymentPath: "private_x402", price: 100_000n }]);
+    addNotes(env, [1_000_000n]);
+    const p = authorize(env, "Prince", "prep", svc).purchase;
+    advanceAuthority(env.ledger, p.id, "prepare_proof");
+
+    env.clock.t = T0 + 60_001;
+    expectDenied(() => advanceAuthority(env.ledger, p.id, "release_proof"), "POLICY_DENIED", /workspace policy expired/);
+    expect(getPurchaseRow(env.ledger, p.id)).toMatchObject({ authorization_state: "rejected", funding_state: "abandoned" });
+  });
+
+  it("approval before expiry still proceeds", () => {
+    env = createEnv();
+    activateDefaults(env, { agents: { Mira: { tier: "approval_required", approvalThresholdTestUsdc: "50000", expiresAt } } });
+    const svc = addService(env, [{ sku: "analyze", paymentPath: "private_x402", price: 100_000n }]);
+    addNotes(env, [1_000_000n]);
+    const p = authorize(env, "Mira", "early", svc, { sku: "analyze" }).purchase;
+    env.clock.t = T0 + 59_999;
+    expect(decidePurchase(env.ledger, p.id, "approve", "owner").authorization_state).toBe("reserved");
+  });
+});
+
 const defaultsFor = (name: Name) => DEFAULT_AGENTS.find((a) => a.name === name)!.policy;
 
 describe("CAP-03 uncertain payment crossing the rolling window", () => {

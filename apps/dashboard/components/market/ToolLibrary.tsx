@@ -4,11 +4,12 @@ import { useId, useState } from "react";
 import type { ToolManifest } from "@veilo/contracts/marketplace";
 import { marketApi } from "../../lib/market/client";
 import type { SellerDashboard } from "../../lib/market/types";
-import { BADGE_CLASS, BADGE_LABEL, kindGlyph, type ToolEntry } from "../../lib/market/workflows";
+import { BADGE_CLASS, BADGE_LABEL, effectLabel, effectPillClass, kindGlyph, type ToolEntry } from "../../lib/market/workflows";
 import { useAction, useResource } from "../hooks";
 import { EmptyState, ErrorNotice, Loading, Section } from "../ui";
 import { useMarket } from "./MarketContext";
-import { Address, Money, PlainText, RequireMarketSession, TestTokenNote } from "./parts";
+import { Address, Money, PlainText, RequireMarketSession } from "./parts";
+import { Select } from "../Select";
 
 interface Connector {
   id: string;
@@ -33,7 +34,6 @@ export function ToolLibrary() {
         Tools are published listings and operator-approved external x402 resources. A workflow built only from approved tools goes live after automated checks; a new tool waits for
         review.
       </p>
-      <TestTokenNote />
       {res.loading && !res.data ? <Loading label="tools" /> : null}
       <ErrorNotice error={res.error} what="the tool library could not be loaded" onRetry={res.reload} />
       {res.data && res.data.tools.length === 0 ? <EmptyState>No tools are published yet.</EmptyState> : null}
@@ -46,7 +46,7 @@ export function ToolLibrary() {
                   {kindGlyph(t.kind, t.provider)}
                 </span>{" "}
                 <PlainText text={t.title} inline /> <span className={BADGE_CLASS[t.badge]}>{BADGE_LABEL[t.badge]}</span>
-                {t.effect === "draft_external" ? <span className="pill pill-warn"> drafts only</span> : null}
+                {t.effect !== "read_only" ? <span className={effectPillClass(t.effect)}>{effectLabel(t.effect, t.provider)}</span> : null}
               </p>
               <p className="role">
                 by <PlainText text={t.by} inline />
@@ -85,7 +85,7 @@ function Connectors() {
       <ul>
         {(res.data?.connectors ?? []).map((c) => (
           <li key={c.id}>
-            <PlainText text={c.title} inline /> — <span className="mono">{c.endpoint}</span>: {c.tools.map((t) => t.name).join(", ")}
+            <PlainText text={c.title} inline /> · <span className="mono">{c.endpoint}</span>: {c.tools.map((t) => t.name).join(", ")}
           </li>
         ))}
       </ul>
@@ -153,25 +153,25 @@ function McpToolForm() {
         <>
           <div className="field">
             <label htmlFor={`${id}-v`}>Pending remote listing version</label>
-            <select id={`${id}-v`} required value={versionId} onChange={(e) => setVersionId(e.target.value)}>
-              <option value="">Choose a version</option>
-              {pending.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.title} (v{v.version_no})
-                </option>
-              ))}
-            </select>
+            <Select
+              id={`${id}-v`}
+              label="Pending remote listing version"
+              required
+              value={versionId}
+              options={[{ value: "", label: "Choose a version" }, ...pending.map((v) => ({ value: v.id, label: `${v.title} (v${v.version_no})` }))]}
+              onChange={setVersionId}
+            />
           </div>
           <div className="field">
             <label htmlFor={`${id}-t`}>Connector tool</label>
-            <select id={`${id}-t`} required value={choice} onChange={(e) => setChoice(e.target.value)}>
-              <option value="">Choose a tool</option>
-              {options.map((o) => (
-                <option key={o.key} value={o.key}>
-                  {o.connectorId}: {o.toolName}
-                </option>
-              ))}
-            </select>
+            <Select
+              id={`${id}-t`}
+              label="Connector tool"
+              required
+              value={choice}
+              options={[{ value: "", label: "Choose a tool" }, ...options.map((o) => ({ value: o.key, label: `${o.connectorId}: ${o.toolName}` }))]}
+              onChange={setChoice}
+            />
           </div>
           <div className="field">
             <label htmlFor={`${id}-a`}>Arguments (JSON; use "{"{{input}}"}" for the step input)</label>
@@ -280,25 +280,28 @@ function ProviderToolForm({ providers }: { providers: ToolsResponse["providers"]
         <>
           <div className="field">
             <label htmlFor={`${id}-v`}>Pending remote listing version</label>
-            <select id={`${id}-v`} required value={versionId} onChange={(e) => setVersionId(e.target.value)}>
-              <option value="">Choose a version</option>
-              {pending.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.title} (v{v.version_no})
-                </option>
-              ))}
-            </select>
+            <Select
+              id={`${id}-v`}
+              label="Pending remote listing version"
+              required
+              value={versionId}
+              options={[{ value: "", label: "Choose a version" }, ...pending.map((v) => ({ value: v.id, label: `${v.title} (v${v.version_no})` }))]}
+              onChange={setVersionId}
+            />
           </div>
           <div className="field">
             <label htmlFor={`${id}-t`}>Provider tool</label>
-            <select id={`${id}-t`} required value={choice} onChange={(e) => setChoice(e.target.value)}>
-              <option value="">Choose a tool</option>
-              {options.map((o) => (
-                <option key={o.key} value={o.key}>
-                  {o.provider}: {o.tool.name} ({o.tool.effect === "draft_external" ? "drafts only" : "read-only"})
-                </option>
-              ))}
-            </select>
+            <Select
+              id={`${id}-t`}
+              label="Provider tool"
+              required
+              value={choice}
+              options={[
+                { value: "", label: "Choose a tool" },
+                ...options.map((o) => ({ value: o.key, label: `${o.provider}: ${o.tool.name} (${effectLabel(o.tool.effect, o.provider).toLowerCase()})` })),
+              ]}
+              onChange={setChoice}
+            />
           </div>
           <button type="submit" className="btn" disabled={act.busy || versionId === "" || choice === ""}>
             Pin provider tool

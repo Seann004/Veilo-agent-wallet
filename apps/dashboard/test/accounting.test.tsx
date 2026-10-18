@@ -8,20 +8,16 @@ import { balancesAfterTopUpAndConsumption, workspace } from "./fixtures";
 afterEach(cleanup);
 
 describe("CRE-05 treasury accounting display", () => {
-  it("counts a credit-pack purchase once as cash and shows later consumption only in microcredits", () => {
+  it("counts cash once and shows no AI credit balance now that AI runs on the owner's key", () => {
     const b = balancesAfterTopUpAndConsumption();
     const { container } = render(<TreasurySummary balances={b} agents={workspace().agents} />);
     expect(screen.getByTestId("cash-spent").textContent).toBe("1.00 USDC");
     const text = container.textContent ?? "";
-    // Purchase (1.00 USDC) plus consumption (300,000 microcredits) must never appear as 1.30 USDC.
     expect(text).not.toContain("1.30 USDC");
-    expect(text).toContain("Credits purchased1,000,000 microcredits");
-    expect(text).toContain("Credits consumed300,000 microcredits");
-    expect(text).toContain("Credits available700,000 microcredits");
-    expect(text).toContain("Credits purchased; no extra on-chain charge for this call");
-    expect(text).toContain("Demo inference credits — backed by the operator's OpenRouter account");
-    expect(text).toContain("(already in cash spent)");
-    expect(text).toContain("operator-sponsored planning");
+    expect(text).not.toContain("microcredits");
+    expect(text).not.toContain("AI credits");
+    expect(text).toContain("Trial AI calls");
+    expect(text).toContain("AI runs on your own model key");
   });
 
   it("shows per-agent and global remaining together and caps effective remaining by the workspace", () => {
@@ -34,15 +30,21 @@ describe("CRE-05 treasury accounting display", () => {
     expect(princeRow.textContent).toContain("2.00 USDC of 2.00 USDC");
     // Effective remaining is the workspace's 0.2 USDC, not Prince's 2.0 or the 4.0 pool value.
     expect(princeRow.querySelector("td strong")!.textContent).toBe("0.20 USDC");
-    expect(screen.getByText(/no agent can spend the whole pool/)).toBeTruthy();
+    expect(screen.getByText(/No agent can spend the whole pool/)).toBeTruthy();
   });
 
-  it("reports unavailable gateway credits honestly instead of inventing a balance", () => {
+  it("leads with a short stat row holding the key numbers", () => {
     const b = balancesAfterTopUpAndConsumption();
-    b.gatewayCredits = { available: false, code: "NOT_READY", message: "gateway balance unavailable" };
     const { container } = render(<TreasurySummary balances={b} agents={workspace().agents} />);
-    expect(container.textContent).toContain("Not ready: gateway balance unavailable (NOT_READY)");
-    expect(container.textContent).not.toContain("Credits available");
+    const stats = container.querySelector(".stats")!.textContent ?? "";
+    expect(stats).toContain("Ready to spend in pool");
+    expect(stats).toContain("4.00 USDC");
+    expect(stats).toContain("Spent today");
+    expect(stats).toContain("1.00 USDC");
+    expect(stats).toContain("of 5.00 USDC per 24 h");
+    expect(stats).toContain("Lifetime used");
+    expect(stats).toContain("of 10.00 USDC cap");
+    expect(container.querySelector("details summary")!.textContent).toBe("How limits work");
   });
 
   it("formats and parses amounts with integer arithmetic", () => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { brandForConnector, type Brand } from "../lib/brands";
 import { useEffect, useId, useRef, useState } from "react";
 import type { ApiError } from "../lib/api";
 import {
@@ -58,10 +59,23 @@ export function usersOf(connectorId: string, agents: Agent[], map: AttachmentMap
   });
 }
 
-export function ConnectorIcon({ connector, size = 40 }: { connector: Pick<Connector, "title" | "id">; size?: number }) {
+export function ConnectorIcon({ connector, size = 40 }: { connector: Pick<Connector, "title" | "id"> & { endpoint?: string }; size?: number }) {
+  const brand = brandForConnector(connector);
+  if (brand) return <BrandLogo brand={brand} size={size} />;
   return (
     <span className="connector-icon" style={{ width: size, height: size }} aria-hidden="true">
       {monogram(connector.title, connector.id)}
+    </span>
+  );
+}
+
+/** A brand's own logo on a neutral tile; the dark variant shows only in dark mode. */
+export function BrandLogo({ brand, size = 40 }: { brand: Brand; size?: number }) {
+  const inner = Math.round(size * 0.6);
+  return (
+    <span className="brand-tile" style={{ width: size, height: size }} aria-hidden="true">
+      <img className={brand.logoDark ? "brand-img brand-img-light" : "brand-img"} src={brand.logo} alt="" width={inner} height={inner} />
+      {brand.logoDark ? <img className="brand-img brand-img-dark" src={brand.logoDark} alt="" width={inner} height={inner} /> : null}
     </span>
   );
 }
@@ -228,6 +242,11 @@ export function ConnectorDrawer({
           <li key={t.name}>
             <p className="mono tool-name flush">{t.name}</p>
             <p className="small plain-text flush">{t.description || "No description."}</p>
+            {t.template ? (
+              <p className="small muted flush">
+                Fixed Veilo query run through the server&apos;s <span className="mono">{t.template.upstream}</span> tool. Agents fill in only the inputs below, never code.
+              </p>
+            ) : null}
             <SchemaView schema={t.inputSchema} />
           </li>
         ))}

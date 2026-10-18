@@ -5,8 +5,8 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { address, getAddressDecoder, getBase58Decoder, getCompiledTransactionMessageDecoder, SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR, SolanaError, type Address } from "@solana/kit";
-import { createServiceHealth, DEMO_TOKEN_MINT, DEVNET_CAIP2, DEVNET_GENESIS_HASH, loadConfig, type FundingBinding } from "@veilo/contracts";
-import { PROTOTYPE_APPROVAL_RULE, withdrawalRequestWire, type PublicStateWire, type RecoveryRequestWire, type RecoveryViewWire, type WithdrawalRequestWire, type WithdrawalViewWire } from "@veilo/contracts/relayer";
+import { createServiceHealth, DEFAULT_AGENTS, DEMO_TOKEN_MINT, DEVNET_CAIP2, DEVNET_GENESIS_HASH, loadConfig, type FundingBinding } from "@veilo/contracts";
+import { PROTOTYPE_APPROVAL_RULE, swapRequestWire, withdrawalRequestWire, type PublicStateWire, type RecoveryRequestWire, type RecoveryViewWire, type SwapRequestWire, type SwapViewWire, type WithdrawalRequestWire, type WithdrawalViewWire } from "@veilo/contracts/relayer";
 import { openSecretsDatabase } from "@veilo/db";
 import {
   accountDiscriminator,
@@ -32,6 +32,7 @@ import { ServiceCredentials } from "@veilo/control/src/auth/credentials";
 import { authorizePurchase } from "@veilo/control/src/ledger/authorize";
 import { reservedNoteFor } from "@veilo/control/src/ledger/notes";
 import { getPurchaseRow } from "@veilo/control/src/ledger/purchases";
+import { SWAP_SKU } from "@veilo/control/src/swap/service";
 import { activateDefaults, addService, createEnv, digest, type TestEnv } from "@veilo/control/test/helpers";
 import { HttpControlPort, ServiceCallError } from "../src/adapters";
 import type { MerchantSigner, WalletDeps } from "../src/deps";
@@ -237,7 +238,7 @@ export class FakePool {
 }
 
 /** "error_unrecorded": the relayer fails (HTTP 5xx) before it persists anything. */
-export type RelayerMode = "land" | "hold" | "lose_response" | "down" | "error_unrecorded";
+export type RelayerMode = "land" | "hold" | "lose_response" | "down" | "error_unrecorded" | "refuse_swap";
 
 /** Relayer double. Enforces the strict wire schema and keeps every request body for inspection. */
 export class FakeRelayer implements RelayerPort {
@@ -245,6 +246,9 @@ export class FakeRelayer implements RelayerPort {
   received: string[] = [];
   withdrawals = new Map<string, WithdrawalViewWire>();
   recoveries = new Map<string, { req: RecoveryRequestWire; view: RecoveryViewWire }>();
+  swaps = new Map<string, { req: SwapRequestWire; view: SwapViewWire }>();
+  /** Outcome the next submitted swap reaches immediately. */
+  swapOutcome: SwapViewWire["state"] = "finalized";
 
   constructor(
     readonly pool: FakePool,
@@ -296,6 +300,30 @@ export class FakeRelayer implements RelayerPort {
   async withdrawal(id: string) {
     if (this.mode === "down") throw new PortUnavailableError("relayer unreachable (test)");
     return this.withdrawals.get(id) ?? null;
+  }
+  async submitSwap(req: SwapRequestWire): Promise<SwapViewWire> {
+    if (this.mode === "down") throw new PortUnavailableError("relayer unreachable (test)");
+    const parsed = swapRequestWire.parse(JSON.parse(JSON.stringify(req)));
+    this.received.push(JSON.stringify(req));
+    if (this.mode === "refuse_swap") throw new ServiceCallError(403, "BUDGET_EXCEEDED", "relayer: sponsor lamport allowance exhausted (test)");
+    const existing = this.swaps.get(parsed.swapId);
+    if (existing) return existing.view;
+    const view: SwapViewWire = {
+      swapId: parsed.swapId,
+      state: this.swapOutcome,
+      signature: randomSignature(),
+      lastValidBlockHeight: parsed.lastValidBlockHeight,
+      sponsorFeeLamports: "10000",
+      sponsorRentLamports: "2039280",
+      rentRecoveredLamports: this.swapOutcome === "finalized" ? "2039280" : "0",
+      error: this.swapOutcome === "failed" ? "swap transaction failed on-chain" : null,
+    };
+    this.swaps.set(parsed.swapId, { req: parsed, view });
+    return view;
+  }
+  async swap(id: string): Promise<SwapViewWire | null> {
+    if (this.mode === "down") throw new PortUnavailableError("relayer unreachable (test)");
+    return this.swaps.get(id)?.view ?? null;
   }
   async submitRecovery(req: RecoveryRequestWire): Promise<RecoveryViewWire> {
     this.received.push(JSON.stringify(req));
@@ -361,7 +389,8 @@ export interface ControlHarness {
 
 export async function startControl(): Promise<ControlHarness> {
   const env = createEnv();
-  activateDefaults(env);
+  const prince = DEFAULT_AGENTS.find((a) => a.name === "Prince")!;
+  activateDefaults(env, { agents: { Prince: { allowedSkus: [...prince.policy.allowedSkus, SWAP_SKU] } } });
   const serviceId = addService(env, [{ sku: "research-basic", paymentPath: "private_x402", price: 100_000n, lamports: 3_000_000n }]);
   const config = loadConfig({ DEVNET_RPC_URL: "https://rpc.test.invalid", EXPECTED_DEVNET_GENESIS_HASH: DEVNET_GENESIS_HASH, DEMO_TOKEN_MINT, FACILITATOR_URL: "https://facilitator.payai.network" });
   const app = createControlApp(createServiceHealth("control", config, false), {

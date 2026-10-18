@@ -5,13 +5,13 @@ import { useEffect, useId, useState } from "react";
 import { api } from "../lib/api";
 import { ROLE_AVATAR, avatarById, setAgentAvatar } from "../lib/avatars";
 import { resolveAvatar } from "../lib/avatar-customization";
-import { ROLE_LABEL } from "../lib/labels";
+import { HIDDEN_SKUS, ROLE_LABEL, skuGroup } from "../lib/labels";
 import { ROLE_TAGLINE } from "../lib/roles";
 import type { Agent, AgentRole } from "../lib/types";
 import type { AttachOutcome, Connector } from "../lib/connectors";
 import { draftPolicyFromText, type PolicyDraftResult } from "../lib/policy-draft";
 import { CustomAgentFields, EMPTY_CUSTOM, RunnerCredentialNote, grantBody, withHiring, type CustomDraft } from "./CustomAgentFields";
-import { PolicyForm, PolicyReview, ROLE_TEMPLATES, type AgentPolicyInput } from "./Policy";
+import { PolicyForm, PolicyReviewGroups, ROLE_TEMPLATES, type AgentPolicyInput } from "./Policy";
 import { AvatarImage, AvatarPicker } from "./Avatar";
 import { CreateConnectorsStep, CreatedConnectors, attachPicked } from "./AgentConnectors";
 import { useCapability, useOwner } from "./Shell";
@@ -72,11 +72,15 @@ function CreateAgentForm() {
   const modelId = useId();
   const pollId = useId();
   const wsPolicy = workspace.policies.find((p) => p.scope === "workspace" && p.status === "active");
+  // A new custom agent starts with approved data and AI work only; swaps and hiring move funds
+  // differently, so the owner turns those on explicitly.
+  const approvedSkus = [...new Set(workspace.services.flatMap((sv) => sv.skus.map((k) => k.sku)))].filter((k) => !HIDDEN_SKUS.has(k) && (skuGroup(k) === "Data" || skuGroup(k) === "AI work")).sort();
+  const templateFor = (r: AgentRole): AgentPolicyInput => (r === "custom" && ROLE_TEMPLATES[r].policy.allowedSkus.length === 0 ? { ...ROLE_TEMPLATES[r].policy, allowedSkus: approvedSkus } : ROLE_TEMPLATES[r].policy);
   const chooseRole = (r: AgentRole) => {
     setRole(r);
     setJob(ROLE_TEMPLATES[r].description);
-    setPolicy(ROLE_TEMPLATES[r].policy);
-    setBase(ROLE_TEMPLATES[r].policy);
+    setPolicy(templateFor(r));
+    setBase(templateFor(r));
     setDrafted(null);
     if (!avatarChosen) setAvatarId(ROLE_AVATAR[r]);
   };
@@ -182,17 +186,20 @@ function CreateAgentForm() {
       <section className="panel" aria-label="Role and avatar">
         <div className="avatar-hero">
           {preview ? <AvatarImage avatar={preview} size={96} /> : null}
-          <AvatarPicker
-            value={avatarId}
-            onChange={(id) => {
-              setAvatarId(id);
-              setAvatarChosen(true);
-            }}
-          />
+          <div className="avatar-picker-open">
+            <AvatarPicker
+              value={avatarId}
+              onChange={(id) => {
+                setAvatarId(id);
+                setAvatarChosen(true);
+              }}
+            />
+          </div>
         </div>
         <h2 className="section-title">Role</h2>
         <div className="suggestions">
-          {(Object.keys(ROLE_LABEL) as AgentRole[]).map((r) => {
+          {/* Model work runs on the owner's own key, so there is no credit manager to create. */}
+          {(Object.keys(ROLE_LABEL) as AgentRole[]).filter((r) => r !== "credit_manager").map((r) => {
             const a = avatarById(ROLE_AVATAR[r]);
             return (
               <button key={r} type="button" className="suggestion" aria-pressed={role === r} disabled={step === "review"} onClick={() => chooseRole(r)}>
@@ -221,7 +228,7 @@ function CreateAgentForm() {
                 body: {
                   name,
                   role,
-                  description: job,
+                  description: isCustom ? (custom.instructions.trim().split("\n")[0]!.slice(0, 500) || job) : job,
                   trigger,
                   modelProfile,
                   ...(isCustom ? { template: custom.template, instructions: custom.instructions.trim() } : {}),
@@ -258,13 +265,15 @@ function CreateAgentForm() {
                     </span>
                   </div>
                 ) : (
-                  <p className="small muted field-note">Starts work when you send it a task{role === "content" ? " or approve research for it" : ""}.</p>
+                  <span />
                 )}
               </div>
-              <div className="field">
-                <label htmlFor={jobId}>Job</label>
-                <textarea id={jobId} required rows={2} maxLength={500} value={job} onChange={(e) => setJob(e.target.value)} />
-              </div>
+              {isCustom ? null : (
+                <div className="field">
+                  <label htmlFor={jobId}>Job</label>
+                  <textarea id={jobId} required rows={2} maxLength={500} value={job} onChange={(e) => setJob(e.target.value)} />
+                </div>
+              )}
               <details className="advanced">
                 <summary>Advanced</summary>
                 <div className="field">
@@ -281,8 +290,11 @@ function CreateAgentForm() {
 
             <section className="panel">
               <h2 className="panel-title">Spending limits</h2>
-              <div className="field">
-                <label htmlFor={wordsId}>Describe them in your own words (optional)</label>
+              <PolicyForm key={`${role}-${seed}`} initial={base} workspace={workspace} onChange={setPolicy} />
+              <details className="advanced">
+                <summary>Describe limits in words</summary>
+                <div className="field">
+                <label htmlFor={wordsId} className="sr-only">Describe limits in words</label>
                 <div className="inline-input">
                   <input id={wordsId} value={words} onChange={(e) => setWords(e.target.value)} placeholder="Up to 2 USDC total, 0.5 per purchase, 1 per task" />
                   <button
@@ -306,18 +318,17 @@ function CreateAgentForm() {
                     {drafted.ignored.length > 0 ? ` Skipped: ${drafted.ignored.join("; ")}.` : ""} Check the fields below.
                   </p>
                 ) : null}
-              </div>
-              <PolicyForm key={`${role}-${seed}`} initial={base} workspace={workspace} onChange={setPolicy} />
+                </div>
+              </details>
             </section>
             <CreateConnectorsStep picked={connectors} onChange={setConnectors} />
           </>
         ) : effective ? (
           <section className="panel">
             <h2 className="panel-title">Review</h2>
-            {isCustom ? <p className="small">Marketplace hiring: {custom.hiring ? `allowed, ${custom.grants.length} pre-approved listing(s)` : "off"}.</p> : null}
-            <PolicyReview policy={effective} workspacePolicy={wsPolicy} title={name} />
-            <p className="small muted">The agent starts switched off. You can activate it on the next screen.</p>
+            <PolicyReviewGroups policy={effective} workspacePolicy={wsPolicy} title={name} hiring={isCustom ? { allowed: custom.hiring, grants: custom.grants.length } : null} />
             <CreateConnectorsStep picked={connectors} onChange={setConnectors} readOnly />
+            <p className="small muted">Starts switched off. Turn it on on the next screen. Connectors can be added later.</p>
           </section>
         ) : null}
         <div className="form-footer">

@@ -1,5 +1,6 @@
 import {
   argsTemplateProblem,
+  codeExecutionToolProblem,
   connectorProposalSchema,
   mcpManifestDigest,
   mcpToolDigest,
@@ -513,7 +514,7 @@ export function registerWorkflowRoutes(app: Express, deps: Deps, h: WorkflowRout
       return {
         connectors: ((data ?? []) as Array<{ tools: McpToolPin[] } & Record<string, unknown>>).map((c) => ({
           ...c,
-          tools: c.tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema, sha256: mcpToolDigest(t) })),
+          tools: c.tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema, ...(t.template ? { template: t.template } : {}), sha256: mcpToolDigest(t) })),
         })),
       };
     }),
@@ -542,7 +543,7 @@ export function registerWorkflowRoutes(app: Express, deps: Deps, h: WorkflowRout
           endpoint: c.endpoint,
           reviewStatus: c.review_status,
           reviewNote: c.review_note,
-          tools: c.tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema, sha256: mcpToolDigest(t) })),
+          tools: c.tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema, ...(t.template ? { template: t.template } : {}), sha256: mcpToolDigest(t) })),
         })),
       };
     }),
@@ -556,6 +557,10 @@ export function registerWorkflowRoutes(app: Express, deps: Deps, h: WorkflowRout
       if (!c || c.review_status !== "approved" || c.risk !== "read_only") throw new MarketError("SERVICE_NOT_ALLOWED", "connector is not approved and read-only");
       const pinned = c.tools.find((t) => t.name === b.toolName);
       if (!pinned) throw new MarketError("INVALID_REQUEST", "tool is not in the approved connector");
+      // A seller host calls the named tool itself, so templates (and the code tool behind them) stay agent-only.
+      if (pinned.template) throw new MarketError("SERVICE_NOT_ALLOWED", "templated tools can only be attached to agents, not sold as listings");
+      const codeTool = codeExecutionToolProblem(pinned);
+      if (codeTool) throw new MarketError("SERVICE_NOT_ALLOWED", codeTool);
       const problem = argsTemplateProblem(b.argsTemplate, pinned.inputSchema);
       if (problem) throw new MarketError("INVALID_REQUEST", problem);
       const toolSha256 = mcpToolDigest(pinned);

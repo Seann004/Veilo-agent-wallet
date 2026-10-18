@@ -33,6 +33,7 @@ export function PrivacyPanel() {
   const verified = ps.data ? ps.data.consistent && ps.data.approved.consistent : false;
   return (
     <>
+      <h2 className="section-title privacy-title">Privacy</h2>
       <p className="lede page-lede">Agents pay from a shared private pool. Here&apos;s what that hides, and what it doesn&apos;t.</p>
       <div className="grid-2 privacy-cards">
         <section className="panel">
@@ -67,6 +68,7 @@ export function PrivacyPanel() {
         <ErrorNotice error={ps.error} what="public pool state from the relayer" onRetry={ps.reload} />
         {ps.data && m ? (
           <>
+            <p className="small muted flush">Demo depositors are test accounts, not real people. Approved deposits: {m.approvedLabels}.</p>
             {!verified ? (
               <p className="notice notice-warn" role="alert">
                 Can&apos;t verify the pool right now, so these numbers may be incomplete. The operator needs to publish the approved-deposit list (APPROVED_LABELS_PATH).
@@ -74,7 +76,7 @@ export function PrivacyPanel() {
             ) : null}
             {m.weak && verified ? (
               <p className="notice notice-warn" role="alert">
-                Weak privacy: only {m.participants} different depositor(s). A purchase can likely be traced back to you.
+                Weak privacy: only {m.participants} depositor{m.participants === 1 ? "" : "s"}, so a purchase can likely be traced to you.
               </p>
             ) : null}
             {m.repeatedAmounts === 0 && m.deposits > 0 ? <p className="notice notice-warn">Every deposit amount is different, which makes them easier to match.</p> : null}
@@ -98,7 +100,6 @@ export function PrivacyPanel() {
                 <span className="stat-value">{usdc(ps.data.pool.liability)}</span>
               </div>
             </div>
-            <p className="small muted flush">Demo depositors are test accounts, not real people. Approved deposits: {m.approvedLabels}.</p>
           </>
         ) : null}
       </Section>

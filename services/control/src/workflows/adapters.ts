@@ -15,6 +15,13 @@ import type { ExternalPort, ExternalToolFacts, HirePort, StepToolFacts, Workflow
 function ok<T>(r: { status: number; body: unknown }, what: string): T {
   if (r.status >= 200 && r.status < 300) return r.body as T;
   const err = (r.body as { error?: { code?: string; message?: string } } | undefined)?.error;
+  // The marketplace not recognising this controller is not the owner's session failing; passing
+  // its 401 through would read as an expired owner session.
+  if (r.status === 401) {
+    throw new ControlError("NOT_READY", `${what}: this computer's controller is not linked to your marketplace account; link it under Marketplace → Agents`);
+  }
+  // Any other refusal keeps the marketplace's own reason; an auth-flavoured code becomes a plain refusal.
+  if (r.status === 403) throw new ControlError(err?.code === "UNAUTHENTICATED" || !err?.code ? "SERVICE_NOT_ALLOWED" : (err.code as ConstructorParameters<typeof ControlError>[0]), `${what}: ${err?.message ?? "refused by the marketplace"}`);
   const code = (err?.code ?? (r.status >= 500 ? "NOT_READY" : "SERVICE_NOT_ALLOWED")) as ConstructorParameters<typeof ControlError>[0];
   throw new ControlError(code, `${what}: ${err?.message ?? `HTTP ${r.status}`}`);
 }
@@ -30,6 +37,23 @@ interface ExternalRow {
   fee_payers: string[];
   rpc_methods: string[] | null;
   call_template: ExternalToolFacts["callTemplate"];
+}
+
+/**
+ * Public catalogue text reduced to one plain line: control and bidi characters, markup brackets,
+ * data-fence markers and links are removed, then it is clipped. It is still third-party text.
+ */
+export function catalogText(v: unknown, max: number): string {
+  if (typeof v !== "string") return "";
+  return v
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g, " ")
+    .replace(/(?:CONNECTOR|STEP)_OUTPUT_[A-Za-z0-9]*/g, " ")
+    .replace(/\b(?:https?|file|ftp|data|javascript):\S*/gi, " ")
+    .replace(/[<>{}`[\]]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
 }
 
 /** Signed controller calls to the hosted marketplace. */
@@ -108,6 +132,16 @@ export class MarketplaceWorkflowPort implements WorkflowMarketPort {
 
   async bindPayer(cloudRunId: string, index: number, payer: string, payerProof: string): Promise<void> {
     ok(await this.client.signed("POST", `/controller/workflow-runs/${cloudRunId}/steps/${index}/payer`, { payer, payerProof }), "payer binding refused");
+  }
+
+  async catalogEntry(versionId: string): Promise<{ title: string; summary: string } | null> {
+    const r = await this.client.publicGet("/marketplace/workflows?limit=100");
+    if (r.status !== 200) return null;
+    const list = (r.body as { workflows?: unknown } | undefined)?.workflows;
+    const hit = Array.isArray(list) ? (list as Array<Record<string, unknown>>).find((w) => w.version_id === versionId) : undefined;
+    if (!hit || typeof hit.title !== "string") return null;
+    const title = catalogText(hit.title, 120);
+    return title === "" ? null : { title, summary: catalogText(hit.summary, 300) };
   }
 }
 
@@ -223,6 +257,8 @@ export class LocalExternalPort implements ExternalPort {
       sku: EXTERNAL_BATCH_SKU,
       paymentPath: "private_x402",
       requestDigest: computeRequestDigest(EXTERNAL_BATCH_SKU, input),
+      taskId: r.taskId,
+      proposedByTask: r.taskId !== undefined,
       rationale: "workflow step",
     });
     this.orchestrator.storeInput(purchase, input);

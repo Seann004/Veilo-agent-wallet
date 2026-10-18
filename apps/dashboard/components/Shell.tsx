@@ -5,16 +5,17 @@ import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Wallet, WalletAccount } from "@wallet-standard/base";
 import { NO_ACCESS, ROLE_TITLE, can, deniedReason, type Access, type Capability, type SessionInfo } from "../lib/access";
-import { api, health as fetchHealth } from "../lib/api";
+import { api, csrfToken, health as fetchHealth } from "../lib/api";
 import { shortKey } from "../lib/format";
-import { GATEWAY_CREDIT_LABEL, OPERATOR_INFERENCE_LABEL, ROLE_LABEL, agentStateLabel } from "../lib/labels";
+import { ROLE_LABEL, agentStateLabel } from "../lib/labels";
 import type { Agent, Health, Workspace } from "../lib/types";
 import { AgentAvatar } from "./Avatar";
 import { ConnectScreen } from "./ConnectScreen";
-import { DevnetBadge } from "./DevnetBadge";
+import { NetworkStatus } from "./NetworkStatus";
 import { Icon, type IconName } from "./Icon";
-import { useResource } from "./hooks";
+import { clearResourceCache, useResource } from "./hooks";
 import { setPref, usePref, useTheme } from "../lib/prefs";
+import { rememberWallet } from "../lib/wallet";
 import { ErrorNotice, Loading } from "./ui";
 
 export interface ConnectedWallet {
@@ -57,35 +58,64 @@ export function OwnerProvider({ value, children }: { value: OwnerContextValue; c
 /** Sidebar entries; the last column lists other paths that count as the same section. */
 const NAV: Array<[string, string, IconName, string[]]> = [
   ["/workspace", "Workspace", "home", []],
-  ["/market", "Marketplace", "store", []],
+  ["/marketplace", "Marketplace", "store", []],
   ["/connectors", "Connectors", "plug", []],
-  ["/activity", "Activity", "activity", []],
-  ["/content", "Content", "content", []],
-  ["/wallet", "Wallet", "wallet", ["/recovery", "/privacy"]],
+  ["/outputs", "Outputs", "content", []],
+  ["/wallet", "Wallet", "wallet", []],
+  ["/settings", "Settings", "settings", []],
 ];
 
 const inSection = (pathname: string | null, href: string, also: string[]) => [href, ...also].some((h) => pathname?.startsWith(h));
 
-const MARKET_NAV: Array<[string, string]> = [
-  ["/marketplace", "Workflows"],
-  ["/marketplace/create", "Create"],
-  ["/marketplace/tools", "Tools"],
-  ["/marketplace/runs", "Runs"],
-  ["/marketplace/specialists", "Specialists"],
-  ["/marketplace/jobs", "Jobs"],
-  ["/marketplace/seller", "Seller"],
-  ["/marketplace/agents", "Agents"],
-  ["/marketplace/approvals", "Local approval"],
+/** Marketplace sections in the sidebar; each page shows its section's tabs. Browse is the default. */
+const MARKET_GROUPS: Array<{ label: string; tabs: Array<[string, string]> }> = [
+  { label: "Browse", tabs: [["/marketplace", "Browse"]] },
+  { label: "Your activity", tabs: [["/marketplace/runs", "Runs"], ["/marketplace/jobs", "Jobs"], ["/marketplace/agents", "Hiring agents"]] },
+  { label: "Sell", tabs: [["/marketplace/seller", "Seller"], ["/marketplace/create", "Create a workflow"], ["/marketplace/tools", "Tools"]] },
+  { label: "Approvals", tabs: [["/marketplace/approvals", "Approvals"]] },
 ];
+
+const underPath = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
+
+function marketGroup(pathname: string | null): (typeof MARKET_GROUPS)[number] | null {
+  if (!isMarketplacePath(pathname)) return null;
+  return MARKET_GROUPS.find((g) => g.tabs.some(([h]) => h !== "/marketplace" && underPath(pathname!, h))) ?? MARKET_GROUPS[0]!;
+}
+
+function marketTabCurrent(pathname: string, href: string): boolean {
+  if (href !== "/marketplace") return underPath(pathname, href);
+  return !MARKET_GROUPS.flatMap((g) => g.tabs).some(([h]) => h !== "/marketplace" && underPath(pathname, h));
+}
+
+/** Marketplace sections as tabs, and the open section's pages as a second row. */
+function MarketTabs({ pathname }: { pathname: string | null }) {
+  const group = marketGroup(pathname);
+  if (!group) return null;
+  return (
+    <div className="market-nav">
+      <nav className="tabs" aria-label="Marketplace sections">
+        {MARKET_GROUPS.map((g) => (
+          <Link key={g.label} href={g.tabs[0]![0]} scroll={false} aria-current={g === group ? "page" : undefined}>
+            {g.label}
+          </Link>
+        ))}
+      </nav>
+      {group.tabs.length > 1 ? (
+        <nav className="subtabs" aria-label={`${group.label} pages`}>
+          {group.tabs.map(([href, label]) => (
+            <Link key={href} href={href} scroll={false} aria-current={marketTabCurrent(pathname!, href) ? "page" : undefined}>
+              {label}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
+    </div>
+  );
+}
 
 /** Marketplace pages carry their own sign-in and never need the local owner session to render. */
 export const isMarketplacePath = (pathname: string | null): boolean => pathname === "/marketplace" || (pathname?.startsWith("/marketplace/") ?? false);
 
-function marketCurrent(pathname: string | null, href: string): boolean {
-  if (!pathname) return false;
-  if (href === "/marketplace") return isMarketplacePath(pathname) && !MARKET_NAV.slice(1).some(([h]) => pathname === h || pathname.startsWith(`${h}/`));
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
 
 function AgentList({ agents, stopped, query, pathname }: { agents: Agent[]; stopped: boolean; query: string; pathname: string | null }) {
   const q = query.trim().toLowerCase();
@@ -137,6 +167,25 @@ export function Shell({ children }: { children: ReactNode }) {
   const reloadAccess = async () => {
     await Promise.all([session.reload(), ws.reload()]);
   };
+  // A session whose anti-CSRF cookie is gone can read but every action fails; end it cleanly (once
+  // per page load) so the owner signs in again instead of hitting "missing anti-CSRF token".
+  const healing = useRef(false);
+  useEffect(() => {
+    if (!signedIn || healing.current || csrfToken() !== undefined) return;
+    healing.current = true;
+    void (async () => {
+      try {
+        await api("control", "/session/logout", { method: "POST" });
+      } catch {
+        // Already ended upstream; reloading access shows the sign-in screen either way.
+      } finally {
+        clearResourceCache();
+        rememberWallet(null);
+        setConnected(null);
+        await reloadAccess();
+      }
+    })();
+  });
   useEffect(() => setNavOpen(false), [pathname]);
   useEffect(() => {
     const media = window.matchMedia("(max-width: 900px)");
@@ -159,12 +208,7 @@ export function Shell({ children }: { children: ReactNode }) {
     menuButton.current?.focus();
   };
 
-  const badge = <DevnetBadge health={health.data} healthError={health.error} workspace={ws.data?.workspace} />;
-  const inferenceLabel = (
-    <span className="inference-label" role="note" title={OPERATOR_INFERENCE_LABEL}>
-      {GATEWAY_CREDIT_LABEL}
-    </span>
-  );
+  const network = <NetworkStatus health={health.data} healthError={health.error} workspace={ws.data?.workspace} />;
 
   const market = isMarketplacePath(pathname);
   const waiting = (ws.loading && ws.data === undefined) || (session.loading && session.data === undefined);
@@ -176,6 +220,8 @@ export function Shell({ children }: { children: ReactNode }) {
       body = (
         <ConnectScreen
           onSignedIn={async (c) => {
+            clearResourceCache();
+            rememberWallet(c.wallet.name);
             setConnected(c);
             setSigningIn(false);
             await reloadAccess();
@@ -190,14 +236,11 @@ export function Shell({ children }: { children: ReactNode }) {
             <span className="logo" aria-hidden="true" />
             Veilo
           </Link>
-          <span className="top-pills">
-            {badge}
-            {inferenceLabel}
-          </span>
         </header>
         <main id="main" tabIndex={-1} className="signin-main">
           {body}
         </main>
+        {network}
       </div>
     );
   }
@@ -276,21 +319,7 @@ export function Shell({ children }: { children: ReactNode }) {
               </nav>
             </>
           ) : null}
-          <nav aria-label="Marketplace" className="side-nav side-nav-market">
-            <p className="side-nav-heading" aria-hidden="true">
-              Open marketplace
-            </p>
-            <ul>
-              {MARKET_NAV.map(([href, label]) => (
-                <li key={href}>
-                  <Link href={href} aria-current={marketCurrent(pathname, href) ? "page" : undefined} title={label}>
-                    <Icon name="store" />
-                    <span className="nav-label">{label}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
+
           <div className="sidebar-foot">
             <span className="owner-chip" aria-hidden="true">
               {(access.address ?? ROLE_TITLE[access.role]).slice(0, 1)}
@@ -317,6 +346,8 @@ export function Shell({ children }: { children: ReactNode }) {
                   try {
                     await api("control", "/session/logout", { method: "POST" });
                   } finally {
+                    clearResourceCache();
+                    rememberWallet(null);
                     setConnected(null);
                     await reloadAccess();
                   }
@@ -341,8 +372,6 @@ export function Shell({ children }: { children: ReactNode }) {
               <span className="logo" aria-hidden="true" />
               Veilo
             </Link>
-            {badge}
-            {inferenceLabel}
             {stopped ? (
               <span className="pill pill-danger" role="status">
                 Emergency stop active
@@ -361,8 +390,10 @@ export function Shell({ children }: { children: ReactNode }) {
               </div>
             ) : null}
             {session.error ? <ErrorNotice error={session.error} what="your session could not be confirmed; showing read-only controls" onRetry={reloadAccess} /> : null}
+            <MarketTabs pathname={pathname} />
             {children}
           </main>
+          {network}
         </div>
       </div>
     </>

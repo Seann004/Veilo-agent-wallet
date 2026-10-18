@@ -12,7 +12,9 @@ import { useAction, useResource } from "../hooks";
 import { ConfirmButton, ErrorNotice, KV, Loading, Section, TxLink } from "../ui";
 import { POLL_MS } from "./JobBoard";
 import { useMarket } from "./MarketContext";
-import { Countdown, FullValue, JobStates, Money, PausedNotice, PlainText, RequireMarketSession, TestTokenNote } from "./parts";
+import { Countdown, FullValue, JobStates, Money, PausedNotice, PlainText, RequireMarketSession } from "./parts";
+import { Select } from "../Select";
+import { AgentThinking } from "../ThinkingOrb";
 
 const CANCELLABLE = new Set(["created", "awaiting_approval", "awaiting_payment", "queued", "running", "input_required"]);
 const LIVE_REFUND = new Set(["requested", "approved", "submitted", "uncertain", "finalized"]);
@@ -55,7 +57,6 @@ function JobView({ jobId }: { jobId: string }) {
       <h1>Job</h1>
       <p className="small muted mono wrap-anywhere">{d.job.id}</p>
       <p className="small">{isBuyer ? "You hired this specialist." : isSeller ? "This job is assigned to you as the seller." : null}</p>
-      <TestTokenNote />
       <JobStates p={p} />
       {p.notes.map((n) => (
         <p key={n} className="notice notice-warn" role="status">
@@ -65,7 +66,7 @@ function JobView({ jobId }: { jobId: string }) {
       <ErrorNotice error={res.error} what="refresh failed; showing the last loaded state" onRetry={res.reload} />
       {live ? (
         <p className="small muted" role="status">
-          Refreshing every {POLL_MS / 1000} seconds until the job and its payment settle.
+          <AgentThinking state="waiting" decorative /> Refreshing every {POLL_MS / 1000} seconds until the job and its payment settle.
         </p>
       ) : null}
       <PausedNotice />
@@ -462,13 +463,7 @@ function RefundRequest({ jobId, decimals, remaining, onChanged }: { jobId: strin
           {wallets.length === 0 ? (
             <p className="small notice notice-warn">No verified wallet on this account.</p>
           ) : (
-            <select id={ids.to} value={to} onChange={(e) => setTo(e.target.value)}>
-              {wallets.map((w) => (
-                <option key={w.address} value={w.address}>
-                  {w.address}
-                </option>
-              ))}
-            </select>
+            <Select id={ids.to} label="Refund wallet" value={to} options={wallets.map((w) => ({ value: w.address, label: w.address }))} onChange={setTo} />
           )}
           <span className="hint">Only wallets verified on your marketplace account can receive refunds.</span>
         </div>

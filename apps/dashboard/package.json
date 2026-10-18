@@ -6,8 +6,11 @@
   "scripts": {
     "dev": "tsx scripts/dev.ts",
     "build": "next build",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=22.14.0 <25"
   },
   "dependencies": {
     "@solana/kit": "5.5.1",
@@ -17,15 +20,20 @@
     "@wallet-standard/app": "1.1.1",
     "@wallet-standard/base": "1.1.1",
     "@wallet-standard/features": "1.1.1",
+    "bot-avatars": "0.2.2",
     "next": "16.4.0",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1",
+    "server-only": "0.0.1",
+    "thinking-orbs": "0.3.2"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.2",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.8",
-    "@types/node": "22.20.5",
+    "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "happy-dom": "21.0.1",

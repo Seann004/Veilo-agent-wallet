@@ -6,6 +6,7 @@ import { listWallets, onWalletsChanged, type OwnerWallet } from "../../lib/walle
 import { useAction } from "../hooks";
 import { ErrorNotice } from "../ui";
 import { useMarket } from "./MarketContext";
+import { shortKey } from "../../lib/format";
 import { Address } from "./parts";
 
 /** Marketplace sign-in status, the wallet-switch pause and the sign-in/sign-out controls. */
@@ -36,7 +37,7 @@ export function MarketAccountBar() {
     ) : (
       <div className="actions">
         {wallets.map((w) => (
-          <button key={w.name} type="button" className="btn btn-primary" disabled={action.busy} onClick={() => void action.run(() => m.signIn(w))}>
+          <button key={w.name} type="button" className="btn btn-small btn-primary" disabled={action.busy} onClick={() => void action.run(() => m.signIn(w))}>
             <img src={w.icon} alt="" width={20} height={20} /> {verb} {w.name}
           </button>
         ))}
@@ -44,36 +45,35 @@ export function MarketAccountBar() {
     );
 
   return (
-    <section className="panel market-account" aria-label="Marketplace account">
-      <p className="small boundary" role="note">
-        <strong>Two separate sign-ins.</strong> {SPENDING_BOUNDARY}
-      </p>
+    <section className="market-account" aria-label="Marketplace account">
       {!m.ready ? (
         <p role="status" className="muted">
           Checking marketplace sign-in…
         </p>
       ) : m.me ? (
         <div className="account-row">
-          <p className="account-who" role="status">
-            Signed in to the marketplace as <Address value={m.me.address} />
-            {m.wallet ? <span className="pill pill-ok">wallet connected</span> : <span className="pill pill-muted">wallet not connected in this tab</span>}
+          <p className="account-who small" role="status">
+            Signed in to the marketplace as{" "}
+            <span className="mono" title={m.me.address} aria-label={m.me.address}>
+              {shortKey(m.me.address, 6)}
+            </span>
+            {m.wallet ? null : <span className="muted"> · no wallet needed to browse</span>}
           </p>
           <div className="actions">
-            <button type="button" className="btn" disabled={action.busy} onClick={() => void action.run(() => m.signOut())}>
+            <button type="button" className="btn btn-small" disabled={action.busy} onClick={() => void action.run(() => m.signOut())}>
               Sign out of marketplace
             </button>
             {m.wallet ? (
-              <button type="button" className="btn" disabled={action.busy} onClick={() => void action.run(() => m.disconnectWallet())}>
+              <button type="button" className="btn btn-small" disabled={action.busy} onClick={() => void action.run(() => m.disconnectWallet())}>
                 Disconnect wallet
               </button>
             ) : null}
           </div>
         </div>
       ) : (
-        <div>
-          <p>
-            Sign in with your wallet to hire specialists, see your jobs or sell. Your wallet will show this login message:{" "}
-            <q className="statement">{SIGN_IN_STATEMENT}</q> It sends no transaction, and Veilo never asks for your seed phrase.
+        <div className="account-row">
+          <p className="small muted account-who" title={`${SIGN_IN_STATEMENT} ${SPENDING_BOUNDARY}`}>
+            Hiring and selling use a separate marketplace sign-in. It's a login message only, nothing is spent.
           </p>
           {walletButtons("Sign in with")}
         </div>
@@ -82,7 +82,7 @@ export function MarketAccountBar() {
         <div className="notice notice-warn" role="alert">
           <strong>Wallet switched.</strong> Your wallet is now on <Address value={m.mismatch} />, but this marketplace session belongs to{" "}
           <Address value={m.me.address} />. Hiring, approvals and seller actions are paused. Switch the wallet back, or sign in again for the new
-          address — the session is never moved to it automatically.
+          address. The session never moves to it automatically.
           {walletButtons("Sign in again with")}
         </div>
       ) : null}

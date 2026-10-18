@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { canonicalJson, sha256Hex } from "../gateway/digest";
+import { codeExecutionToolProblem, mcpTemplateRefSchema, templatedToolProblem } from "./mcp-templates";
 
 /**
  * A remote MCP tool exactly as the operator reviewed it. A server may change `tools/list` at any
@@ -10,12 +11,19 @@ export const mcpToolPinSchema = z
     name: z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/),
     description: z.string().max(8_000),
     inputSchema: z.record(z.string(), z.unknown()),
+    /** Present on a Veilo templated tool: it runs a fixed template through this pinned upstream tool. */
+    template: mcpTemplateRefSchema.optional(),
   })
   .strict();
 export type McpToolPin = z.infer<typeof mcpToolPinSchema>;
 
 export function mcpToolDigest(t: McpToolPin): string {
-  return sha256Hex(`veilo:mcp-tool:v1\n${canonicalJson({ name: t.name, description: t.description, inputSchema: t.inputSchema })}`);
+  return sha256Hex(`veilo:mcp-tool:v1\n${canonicalJson({ name: t.name, description: t.description, inputSchema: t.inputSchema, ...(t.template ? { template: t.template } : {}) })}`);
+}
+
+/** Why a pinned tool may not be offered on this endpoint, or null. */
+export function mcpToolPinProblem(t: McpToolPin, endpoint: string): string | null {
+  return t.template ? templatedToolProblem({ name: t.name, inputSchema: t.inputSchema, template: t.template }, endpoint) : codeExecutionToolProblem(t);
 }
 
 export function mcpManifestDigest(tools: readonly McpToolPin[]): string {
@@ -51,7 +59,13 @@ export const connectorProposalSchema = z
     tools: z.array(mcpToolPinSchema).min(1).max(32),
   })
   .strict()
-  .refine((c) => new Set(c.tools.map((t) => t.name)).size === c.tools.length, "tool names must be unique");
+  .refine((c) => new Set(c.tools.map((t) => t.name)).size === c.tools.length, "tool names must be unique")
+  .superRefine((c, ctx) => {
+    for (const t of c.tools) {
+      const p = mcpToolPinProblem(t, c.endpoint);
+      if (p) ctx.addIssue({ code: "custom", message: p });
+    }
+  });
 export type ConnectorProposal = z.infer<typeof connectorProposalSchema>;
 
 const PLACEHOLDER = "{{input}}";

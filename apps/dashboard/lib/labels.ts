@@ -47,7 +47,9 @@ export function purchaseLabel(p: Pick<Purchase, "states" | "label" | "paymentPat
   if (ctx.agentStopped && hasLiveAuthority(s)) return LABEL_STOPPED_AUTHORIZED;
   if (p.paymentPath === "prepaid_credits" && s.authorization !== "rejected" && s.authorization !== "awaiting_approval") {
     if (s.fulfilment === "uncertain" || s.fulfilment === "in_progress") return LABEL_WAITING;
-    return LABEL_CREDITS_NO_CHARGE;
+    // Only a delivered call used credits; an abandoned one keeps control's own label.
+    if (s.fulfilment === "delivered") return LABEL_CREDITS_NO_CHARGE;
+    return p.label;
   }
   return p.label;
 }
@@ -66,7 +68,7 @@ export function legStateLabel(state: string): string {
     case "submitted":
     case "signed":
     case "proof_released":
-      return `${state.replace(/_/g, " ")} — ${LABEL_WAITING}`;
+      return `${state.replace(/_/g, " ")}: ${LABEL_WAITING}`;
     case "paid_without_result":
       return LABEL_PAID_NO_RESULT;
     case "not_required":
@@ -100,7 +102,7 @@ export function stateSummaries(p: Pick<Purchase, "states" | "paymentPath">): [St
   let payment: Omit<StateSummary, "group">;
   if (s.authorization === "rejected") payment = { tone: "idle", text: "Not paid: rejected by policy" };
   else if (s.authorization === "awaiting_approval") payment = { tone: "wait", text: "Not paid yet: awaiting your approval" };
-  else if (prepaid) payment = { tone: "idle", text: "Prepaid credits: no on-chain payment for this call" };
+  else if (prepaid) payment = { tone: "idle", text: "AI credits: no on-chain payment for this call" };
   else if (s.merchant === "finalized") payment = { tone: "ok", text: "Paid on-chain: merchant settlement finalized" };
   else if (s.merchant === "uncertain") payment = { tone: "wait", text: "Uncertain: the payment may have settled, checking the chain" };
   else if (s.merchant === "submitted" || s.merchant === "signed") payment = { tone: "wait", text: "Waiting for confirmation: merchant payment signed or submitted" };
@@ -185,7 +187,7 @@ export function runBlockedReason(status: AgentStatus, workspaceStopped: boolean)
   if (workspaceStopped) return "Everything is stopped. Resume from the Workspace page to start work again.";
   switch (status) {
     case "draft":
-      return "This agent is off. Activate it to start work.";
+      return "This agent is off. Turn it on to approve its spending limits and let it start work.";
     case "paused":
       return "This agent is paused. Resume it to start work.";
     case "revoked":
@@ -194,4 +196,61 @@ export function runBlockedReason(status: AgentStatus, workspaceStopped: boolean)
     default:
       return null;
   }
+}
+
+export type SkuGroup = "Data" | "AI work" | "Paid APIs" | "Swaps" | "Hiring" | "Other";
+
+const SKU_INFO: Record<string, { label: string; group: SkuGroup }> = {
+  "research-basic": { label: "Research data", group: "Data" },
+  "research-expanded": { label: "Research data (more sources)", group: "Data" },
+  "external-x402-batch": { label: "Paid APIs", group: "Paid APIs" },
+  summarize: { label: "Summaries", group: "AI work" },
+  analyze: { label: "Analysis", group: "AI work" },
+  "content-package": { label: "Content drafts", group: "AI work" },
+  "swap-usdc-to-sol": { label: "Swap USDC to SOL", group: "Swaps" },
+  "specialist-job": { label: "Hire a specialist", group: "Hiring" },
+};
+
+/** Plain names for what an agent can buy; unknown SKUs fall back to their own name. */
+export const skuLabel = (sku: string): string => SKU_INFO[sku]?.label ?? sku.charAt(0).toUpperCase() + sku.slice(1).replace(/-/g, " ");
+export const skuGroup = (sku: string): SkuGroup => SKU_INFO[sku]?.group ?? "Other";
+/** Retired: AI now runs on the owner's own key, so credit packs are never offered. */
+export const HIDDEN_SKUS = new Set(["inference-credit-pack"]);
+
+const TASK_STATE: Record<string, string> = {
+  queued: "Waiting",
+  running: "Working",
+  completed: "Done",
+  incomplete: "Stopped part-way",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
+export const taskStateLabel = (state: string): string => TASK_STATE[state] ?? state.replace(/_/g, " ");
+
+const CODE_TEXT: Record<string, string> = {
+  BUDGET_EXCEEDED: "over its budget",
+  NOTE_PENDING: "no spendable USDC in the pool",
+  SERVICE_NOT_ALLOWED: "not allowed by its limits",
+  POLICY_DENIED: "not allowed",
+  ACCOUNT_STOPPED: "agent is off",
+  NOT_READY: "not ready yet",
+  PROVIDER_UNAVAILABLE: "service unavailable",
+};
+
+/** Replaces "(CODE: technical message)" in an outcome with a plain reason. */
+export const plainOutcome = (text: string): string =>
+  text.replace(/\(([A-Z][A-Z_]+)(?::[^)]*)?\)/g, (_, code: string) => `(${CODE_TEXT[code] ?? code.toLowerCase().replace(/_/g, " ")})`);
+
+/**
+ * A payment with nothing left to happen: delivered and settled on chain, or abandoned before any
+ * money moved, with no recovery under way. Anything else still shows where it stands.
+ */
+export function isSettled(st: { authorization: string; merchant: string; fulfilment: string; recovery: string }): boolean {
+  if (st.recovery === "recovered") return true;
+  if (st.recovery !== "none") return false;
+  if (st.authorization === "rejected") return true;
+  if (st.authorization !== "released") return false;
+  // Prepaid credit calls have no merchant leg.
+  if (st.fulfilment === "delivered") return st.merchant === "finalized" || st.merchant === "not_required";
+  return st.fulfilment === "abandoned" && (st.merchant === "not_started" || st.merchant === "not_required");
 }

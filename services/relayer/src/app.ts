@@ -2,11 +2,12 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import { healthReport, type ServiceHealth } from "@veilo/contracts";
-import { recoveryRequestWire, withdrawalRequestWire } from "@veilo/contracts/relayer";
+import { recoveryRequestWire, swapRequestWire, withdrawalRequestWire } from "@veilo/contracts/relayer";
 import { EncodingError, ReplayMismatchError } from "@veilo/privacy-sdk";
 import { sponsorTotals, type RelayerDb } from "./db";
 import type { DeploymentStatus } from "./deployment";
 import { IndexerError, type Indexer } from "./indexer";
+import type { SwapService } from "./swaps";
 import { RelayerError, type RecoveryService, type WithdrawalService } from "./withdrawals";
 
 export interface RelayerAppDeps {
@@ -15,6 +16,7 @@ export interface RelayerAppDeps {
   indexer: () => Indexer | null;
   withdrawals: WithdrawalService;
   recoveries: RecoveryService;
+  swaps: SwapService;
   /** Digest of the wallet service credential; only the wallet may submit material. */
   walletCredentialDigest: string | null;
   log?: (line: string) => void;
@@ -80,6 +82,14 @@ export function createApp(health: ServiceHealth, deps?: RelayerAppDeps): Express
 
   app.post("/recoveries", wallet, async (req, res) => {
     res.status(202).json(await deps.recoveries.submit(parse(recoveryRequestWire, req.body)));
+  });
+  app.post("/swaps", wallet, async (req, res) => {
+    res.status(202).json(await deps.swaps.submit(parse(swapRequestWire, req.body)));
+  });
+  app.get("/swaps/:id", wallet, (req, res) => {
+    const v = deps.swaps.view(idParam(req));
+    if (!v) throw new RelayerError("NOT_FOUND", "swap not found");
+    res.json(v);
   });
   app.get("/recoveries/:id", wallet, (req, res) => {
     const v = deps.recoveries.view(idParam(req));

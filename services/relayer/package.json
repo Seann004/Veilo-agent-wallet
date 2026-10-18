@@ -13,6 +13,7 @@
     "approve-root": "tsx src/cli/approve-root.ts"
   },
   "dependencies": {
+    "@orca-so/whirlpools-client": "7.0.0",
     "@solana-program/compute-budget": "0.11.0",
     "@solana-program/token": "0.9.0",
     "@solana/kit": "5.5.1",
@@ -25,11 +26,11 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
     "@types/express": "5.0.6",
-    "@types/node": "22.20.5",
+    "@types/node": "24.19.2",
     "tsx": "4.23.15",
     "typescript": "5.9.3",
-    "vitest": "5.0.4",
-    "@types/better-sqlite3": "7.6.13"
+    "vitest": "5.0.4"
   }
 }

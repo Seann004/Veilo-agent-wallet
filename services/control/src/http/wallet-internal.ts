@@ -12,6 +12,7 @@ import {
   registerWalletDepositNote,
   walletMarkRecoverable,
   walletRecordMerchantExpired,
+  walletRecordSwapNotSigned,
   walletRecordRecovery,
 } from "../ledger/wallet-bridge";
 import { actorOf, requireActor, type AuthDeps } from "./actor";
@@ -94,6 +95,11 @@ export function walletInternalRouter(deps: AuthDeps): Router {
   r.post("/internal/wallet/purchases/:id/merchant-expired", (req, res) => {
     parse(z.object({}).strict(), req.body);
     res.json({ purchase: purchaseView(ledger, walletRecordMerchantExpired(ledger, purchaseParam(req))) });
+  });
+
+  r.post("/internal/wallet/purchases/:id/swap-not-signed", (req, res) => {
+    parse(z.object({}).strict(), req.body);
+    res.json({ purchase: purchaseView(ledger, walletRecordSwapNotSigned(ledger, purchaseParam(req))) });
   });
 
   r.post("/internal/wallet/purchases/:id/recovered", (req, res) => {

@@ -25,6 +25,7 @@ import { KeyedLock } from "./locks";
 import type { PermitSigner } from "./permits";
 import { LISTING_SERVICE_PREFIX, type SellerClients } from "../marketplace/seller-clients";
 import type { ExternalBatchRunner } from "../external/batch";
+import { SWAP_SERVICE_KEY, swapFundingBinding, swapInputAmount, type SwapRunner } from "../swap/service";
 import {
   EXTERNAL_BATCH_SKU,
   EXTERNAL_SERVICE_PREFIX,
@@ -90,6 +91,8 @@ export interface OrchestratorDeps {
   funding: FundingProvider;
   /** Pays approved external x402 resources; absent when external purchases are not configured. */
   external?: ExternalBatchRunner | undefined;
+  /** Runs the owner-approved devnet swap; absent when swaps are not configured. */
+  swap?: SwapRunner | undefined;
   /** Seller-host clients for marketplace listing services; absent when the marketplace is not configured. */
   sellers?: SellerClients | undefined;
   /** Called once the one-time payer of a purchase is known, before its merchant leg is signed. */
@@ -168,6 +171,9 @@ export class PurchaseOrchestrator {
     if (external) {
       const problem = p.sku === EXTERNAL_BATCH_SKU ? externalInputProblem(external, input) : "external services sell only batches";
       if (problem) throw new ControlError("SERVICE_NOT_ALLOWED", `external purchase input refused: ${problem}`);
+    } else if (this.#service(p).service_key === SWAP_SERVICE_KEY) {
+      // The agent supplies only the amount, which authorization already priced the purchase at.
+      if (swapInputAmount(input) !== big(p.price_usdc)) throw new ControlError("IDEMPOTENCY_CONFLICT", "swap amount differs from the authorized price");
     } else if (!isGatewaySku(p.sku)) {
       throw new ControlError("IDEMPOTENCY_CONFLICT", "input does not match the purchase request digest");
     }
@@ -323,6 +329,10 @@ export class PurchaseOrchestrator {
       await this.#driveExternal(purchaseId);
       return;
     }
+    if (this.#service(p).service_key === SWAP_SERVICE_KEY) {
+      await this.#driveSwap(purchaseId);
+      return;
+    }
     const gateway = await this.#clientFor(p);
     const input = this.input(p.id);
     if (!input) throw new Blocked("NOT_READY", "purchase input has not been supplied");
@@ -364,6 +374,37 @@ export class PurchaseOrchestrator {
         continue;
       }
       if (!(await runner.step(p, input, binding))) return;
+    }
+  }
+
+  // ---- devnet swap (private funding leg, then one swap from the fresh wallet) ---------------------
+
+  async #driveSwap(purchaseId: string): Promise<void> {
+    const runner = this.deps.swap;
+    if (!runner) throw new Blocked("NOT_READY", "devnet swaps are not configured");
+    let p = getPurchaseRow(this.ledger, purchaseId);
+    if (p.payment_path !== "private_x402") throw new Blocked("SERVICE_NOT_ALLOWED", "swaps are funded only through the private pool");
+    const svc = this.#service(p);
+    // Withdrawn approval cancels a swap whose proof was never released; one already released
+    // keeps reconciling to a final or recoverable state.
+    if (svc.status !== "approved" && p.authorization_state === "reserved") {
+      immediate(this.ledger.db, () => {
+        const cur = getPurchaseRow(this.ledger, p.id);
+        if (cur.authorization_state === "reserved") cancelUnreleased(this.ledger, cur, "rejected");
+      });
+      throw new Blocked("SERVICE_NOT_ALLOWED", "the owner withdrew swap approval before funding");
+    }
+    const binding = swapFundingBinding(p, svc.network, svc.mint);
+    this.#ensureExecution(p);
+    for (let step = 0; step < MAX_STEPS; step += 1) {
+      p = getPurchaseRow(this.ledger, purchaseId);
+      if (p.recovery_state !== "none" || TERMINAL_FULFILMENT.has(p.fulfilment_state)) return;
+      if (["expired_unsettled", "abandoned"].includes(p.funding_state)) return;
+      if (p.funding_state !== "finalized") {
+        if (!(await this.#fundingStep(p, () => binding))) return;
+        continue;
+      }
+      if (!(await runner.step(p, binding))) return;
     }
   }
 

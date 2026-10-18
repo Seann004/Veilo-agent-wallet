@@ -3,6 +3,8 @@ import { z } from "zod";
 import { immediate } from "@veilo/db";
 import { iso, num, type Ledger } from "../context";
 import { ControlError } from "../errors";
+import type { RunnerCredentialProvisioner } from "../auth/runner-credentials";
+import { progressFor } from "../agents/progress";
 import { taskView, type TaskRow } from "../agents/work";
 import { revokeAgent } from "../ledger/authority";
 import { writeAudit } from "../ledger/events";
@@ -41,7 +43,7 @@ function jobsFor(ledger: Ledger, workspaceId: string, agentId: string | undefine
  * Workspace read views of tasks and jobs, and owner-only agent archiving. Reads only; archiving revokes the
  * agent's authority through the same serialized path as revoke before marking it archived.
  */
-export function ownerRouter(deps: AuthDeps): Router {
+export function ownerRouter(deps: AuthDeps & { runnerCredentials?: RunnerCredentialProvisioner | undefined }): Router {
   const { ledger } = deps;
   const r = Router();
   const owner = requireActor(deps, ["owner"]);
@@ -65,8 +67,9 @@ export function ownerRouter(deps: AuthDeps): Router {
         `SELECT * FROM task WHERE workspace_id = ? AND (? IS NULL OR agent_id = ?) ORDER BY created_at_ms DESC LIMIT ?`,
       )
       .all(o.workspaceId, q.agentId ?? null, q.agentId ?? null, q.limit) as Array<TaskRow & { updated_at_ms: bigint }>;
+    const progress = progressFor(ledger, tasks.map((t) => t.id));
     res.json({
-      tasks: tasks.map((t) => ({ ...taskView(t), updatedAt: iso(t.updated_at_ms) })),
+      tasks: tasks.map((t) => ({ ...taskView(t), updatedAt: iso(t.updated_at_ms), progress: progress.get(t.id) ?? [] })),
       jobs: jobsFor(ledger, o.workspaceId, q.agentId, q.limit),
     });
   });
@@ -90,6 +93,7 @@ export function ownerRouter(deps: AuthDeps): Router {
       }
       return requireAgent(ledger, o.workspaceId, agentId);
     });
+    deps.runnerCredentials?.syncQuietly();
     res.json({ agent: { id: agent.id, name: agent.name, role: agent.role, status: agent.status, revocationEpoch: num(agent.revocation_epoch) } });
   });
 

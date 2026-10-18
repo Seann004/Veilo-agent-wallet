@@ -6,32 +6,29 @@ import { useId, useState } from "react";
 import { api } from "../../lib/api";
 import { parseUnits } from "../../lib/market/amounts";
 import { marketApi } from "../../lib/market/client";
-import { categoryLabel, kindGlyph, type LocalRun, type WorkflowEntry } from "../../lib/market/workflows";
+import { localControllerStatus } from "../../lib/market/controller-registration";
+import { categoryLabel, effectLabel, effectPillClass, hiringAgents, kindGlyph, workflowAgents, type LocalRun, type WorkflowEntry } from "../../lib/market/workflows";
 import type { Workspace } from "../../lib/types";
 import { useAction, useResource } from "../hooks";
-import { ConfirmButton, ErrorNotice, KV, Loading, Section } from "../ui";
+import { ConfirmButton, ErrorNotice, KV, Loading } from "../ui";
 import { useMarket } from "./MarketContext";
-import { Address, FullValue, Money, PlainText, TestTokenNote } from "./parts";
-
-const KIND_LABEL: Record<string, string> = {
-  managed_template: "Managed template (Veilo-hosted inference)",
-  remote_endpoint: "Seller endpoint",
-  provider_adapter: "Provider adapter on the seller's host",
-  external_x402: "External x402 resource",
-};
+import { Address, creatorAvatar, DetailHeader, DetailSections, FullValue, Money, PlainText, type DetailSection } from "./parts";
+import { Select } from "../Select";
 
 function willAndWont(w: WorkflowEntry): { will: string[]; wont: string[] } {
   const drafts = w.steps.some((s) => s.effect === "draft_external");
+  const publishes = w.steps.filter((s) => s.effect === "publish_external");
   return {
     will: [
       `Buy ${w.steps.length} step${w.steps.length === 1 ? "" : "s"} in order, each as its own payment to the recipient shown`,
       "Stop before paying any step whose price or recipient changed",
       "Pass earlier outputs to later steps only as stored data",
       ...(drafts ? ["Prepare a draft you can review"] : []),
+      ...publishes.map((s) => `${effectLabel(s.effect, s.provider)} in step ${s.index + 1}, with no review step after you approve the run`),
     ],
     wont: [
       "Spend more than the total you approve",
-      "Post, publish or send anything on your behalf",
+      publishes.length > 0 ? "Post or send anything except the publishing step named above" : "Post, publish or send anything on your behalf",
       "Buy later steps after a step fails or is uncertain",
       "Charge a platform fee",
     ],
@@ -41,6 +38,7 @@ function willAndWont(w: WorkflowEntry): { will: string[]; wont: string[] } {
 /** One live workflow: its chain, prices and recipients, and the two ways to use it. */
 export function WorkflowDetail({ slug }: { slug: string }) {
   const m = useMarket();
+  const [open, setOpen] = useState("about");
   const res = useResource(() => marketApi<{ workflow: WorkflowEntry }>(`/marketplace/workflows/${encodeURIComponent(slug)}`), `workflow:${slug}`);
   if (res.loading && !res.data) return <Loading label="workflow" />;
   if (res.error || !res.data) return <ErrorNotice error={res.error} what="this workflow could not be loaded" onRetry={res.reload} />;
@@ -48,93 +46,121 @@ export function WorkflowDetail({ slug }: { slug: string }) {
   const decimals = m.decimalsFor(w.mint, w.network);
   const ww = willAndWont(w);
   const unavailable = w.steps.filter((s) => s.providerStatus === "not_configured" || s.providerStatus === "unknown" || s.providerStatus === "manifest_changed");
+  const sections: DetailSection[] = [
+    {
+      id: "about",
+      label: "About",
+      sub: "What it does and won't do",
+      body: (
+        <div className="stack">
+          <PlainText text={w.description ?? w.summary} />
+          {w.safety_promise ? (
+            <p className="notice notice-help">
+              <PlainText text={w.safety_promise} inline />
+            </p>
+          ) : null}
+          {unavailable.length > 0 ? (
+            <p className="notice notice-warn" role="note">
+              {unavailable.length} step{unavailable.length === 1 ? " uses a provider" : "s use providers"} that the seller has not configured or that need re-review. Those steps
+              cannot be quoted, so a run stops before paying them.
+            </p>
+          ) : null}
+          <div className="grid-2">
+            <div>
+              <h3>It will</h3>
+              <ul>
+                {ww.will.map((x) => (
+                  <li key={x}>{x}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3>It won't</h3>
+              <ul>
+                {ww.wont.map((x) => (
+                  <li key={x}>{x}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <p className="small muted">
+            {categoryLabel(w.category)} · {w.paid_runs} paid run{w.paid_runs === 1 ? "" : "s"}
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: "steps",
+      label: "Steps",
+      sub: `${w.steps.length} paid tool${w.steps.length === 1 ? "" : "s"} in order`,
+      body: (
+        <>
+          <ol className="chain" aria-label="Tool chain">
+            {w.steps.map((s) => (
+              <li key={s.index} className="chain-step">
+                <span className="chain-glyph" aria-hidden="true">
+                  {kindGlyph(s.kind, s.provider)}
+                </span>
+                <div>
+                  <p className="chain-title">
+                    Step {s.index + 1}: <PlainText text={s.title ?? "Unknown tool"} inline />{" "}
+                    {s.effect !== "read_only" ? <span className={effectPillClass(s.effect)}>{effectLabel(s.effect, s.provider)}</span> : null}
+                    {s.providerStatus === "not_configured" || s.providerStatus === "unknown" ? <span className="pill pill-muted">Provider not configured</span> : null}
+                    {s.providerStatus === "manifest_changed" ? <span className="pill pill-danger">Manifest changed</span> : null}
+                  </p>
+                  <KV
+                    rows={[
+                      ["By", <PlainText key="by" text={s.sellerName ?? "—"} inline />],
+                      ["Up to", <Money key="p" compact amount={s.priceBaseUnits} decimals={decimals} />],
+                      ["Paid to", s.recipient ? <Address key="r" value={s.recipient} /> : "—"],
+                    ]}
+                  />
+                </div>
+              </li>
+            ))}
+          </ol>
+          <p className="workflow-total">
+            Total per run: <Money amount={String(w.total_base_units)} decimals={decimals} /> · Platform fee: {w.fee_bps === 0 ? "none" : <span className="pill pill-danger">{w.fee_bps} bps</span>}
+          </p>
+        </>
+      ),
+    },
+    { id: "run", label: "Run once", sub: "Approve one run and its total", body: <RunOnce w={w} /> },
+    { id: "add", label: "Add to an agent", sub: "Let an agent use it within a budget", body: <AddToAgent w={w} /> },
+    ...(w.sample_output
+      ? [
+          {
+            id: "sample",
+            label: "Sample",
+            sub: "Example output from the creator",
+            body: (
+              <pre className="plain-text">
+                <PlainText text={w.sample_output} />
+              </pre>
+            ),
+          },
+        ]
+      : []),
+  ];
   return (
     <>
-      <p className="small">
-        <Link href="/marketplace">← Back to the marketplace</Link>
-      </p>
-      <h1>
-        <PlainText text={w.title} inline />
-      </h1>
-      <p className="role">
-        by <PlainText text={w.creator_name} inline /> {w.demo ? <span className="pill pill-muted">demo</span> : null} · {categoryLabel(w.category)} · {w.paid_runs} paid run
-        {w.paid_runs === 1 ? "" : "s"}
-      </p>
-      <TestTokenNote />
-      <p>
-        <PlainText text={w.description ?? w.summary} />
-      </p>
-      {w.safety_promise ? (
-        <p className="notice notice-help">
-          <PlainText text={w.safety_promise} inline />
-        </p>
-      ) : null}
-      {unavailable.length > 0 ? (
-        <p className="notice notice-warn" role="note">
-          {unavailable.length} step{unavailable.length === 1 ? " uses a provider" : "s use providers"} that the seller has not configured or that need re-review. Those steps
-          cannot be quoted, so a run stops before paying them.
-        </p>
-      ) : null}
-
-      <Section title="Tool chain">
-        <ol className="chain">
-          {w.steps.map((s) => (
-            <li key={s.index} className="chain-step">
-              <span className="chain-glyph" aria-hidden="true">
-                {kindGlyph(s.kind, s.provider)}
-              </span>
-              <div>
-                <p className="chain-title">
-                  Step {s.index + 1}: <PlainText text={s.title ?? "Unknown tool"} inline /> {s.effect === "draft_external" ? <span className="pill pill-warn">drafts only</span> : null}
-                  {s.providerStatus === "not_configured" || s.providerStatus === "unknown" ? <span className="pill pill-muted">Provider not configured</span> : null}
-                  {s.providerStatus === "manifest_changed" ? <span className="pill pill-danger">Manifest changed</span> : null}
-                </p>
-                <KV
-                  rows={[
-                    ["Kind", KIND_LABEL[s.kind] ?? s.kind],
-                    ["By", <PlainText key="by" text={s.sellerName ?? "—"} inline />],
-                    ["Price (step maximum)", <Money key="p" amount={s.priceBaseUnits} decimals={decimals} />],
-                    ["Recipient", s.recipient ? <Address key="r" value={s.recipient} /> : "—"],
-                    ["Inputs", Object.entries(s.inputs).map(([k, v]) => `${k} ← ${v.from === "step" ? `step ${v.step + 1} output` : v.from === "run_input" ? `your input “${v.name}”` : "fixed text"}`).join("; ") || "—"],
-                    ["Output", s.output?.kind ?? "—"],
-                  ]}
-                />
-              </div>
-            </li>
-          ))}
-        </ol>
-        <p className="workflow-total">
-          Total per run: <Money amount={String(w.total_base_units)} decimals={decimals} /> · Platform fee: {w.fee_bps === 0 ? "none" : <span className="pill pill-danger">{w.fee_bps} bps</span>}
-        </p>
-      </Section>
-
-      <div className="grid-2">
-        <Section title="What it will do">
-          <ul>
-            {ww.will.map((x) => (
-              <li key={x}>{x}</li>
-            ))}
-          </ul>
-        </Section>
-        <Section title="What it won't do">
-          <ul>
-            {ww.wont.map((x) => (
-              <li key={x}>{x}</li>
-            ))}
-          </ul>
-        </Section>
-      </div>
-
-      {w.sample_output ? (
-        <Section title="Sample output (from the creator)">
-          <pre className="plain-text">
-            <PlainText text={w.sample_output} />
-          </pre>
-        </Section>
-      ) : null}
-
-      <RunOnce w={w} />
-      <AddToAgent w={w} />
+      <DetailHeader
+        avatar={creatorAvatar(w.title)}
+        title={w.title}
+        by={`${w.creator_name}${w.demo ? " (demo)" : ""}`}
+        summary={w.summary}
+        actions={
+          <>
+            <button type="button" className="btn btn-primary btn-pill" onClick={() => setOpen("run")}>
+              Run once · <Money compact amount={String(w.total_base_units)} decimals={decimals} />
+            </button>
+            <button type="button" className="btn btn-pill" onClick={() => setOpen("add")}>
+              Add to an agent
+            </button>
+          </>
+        }
+      />
+      <DetailSections sections={sections} open={open} onOpen={setOpen} />
     </>
   );
 }
@@ -147,15 +173,26 @@ function useAgents() {
 function RunOnce({ w }: { w: WorkflowEntry }) {
   const router = useRouter();
   const ws = useAgents();
+  const controller = useResource(localControllerStatus, "local-controller");
+  const unlinked = controller.data !== undefined && (!controller.data.configured || controller.data.registration === null);
   const act = useAction();
   const [agentId, setAgentId] = useState("");
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [prepared, setPrepared] = useState<LocalRun | null>(null);
   const formId = useId();
-  const agents = (ws.data?.agents ?? []).filter((a) => a.status === "active");
+  const agents = hiringAgents(ws.data?.agents ?? []);
+  const agentOptions = [{ value: "", label: "Choose an agent" }, ...agents.map((a) => ({ value: a.id, label: a.name }))];
   return (
-    <Section title="Run once">
-      <p className="small">This prepares the run in your local control service. Nothing is paid until you approve the exact steps, recipients and total below.</p>
+    <div className="stack">
+      <p className="small">Nothing is paid until you approve the exact steps and total.</p>
+      {unlinked ? (
+        <div className="notice notice-warn" role="status">
+          <p className="flush">
+            Link this computer&apos;s controller to your marketplace account first. It authorizes every step&apos;s payment.{" "}
+            <Link href="/marketplace/agents">Link it under Marketplace → Agents</Link>
+          </p>
+        </div>
+      ) : null}
       <ErrorNotice error={ws.error} what="your local agents could not be loaded (sign in to the local dashboard first)" />
       <ErrorNotice error={act.error} what="the run could not be prepared or approved" />
       {!prepared ? (
@@ -168,15 +205,14 @@ function RunOnce({ w }: { w: WorkflowEntry }) {
           }}
         >
           <div className="field">
-            <label htmlFor={`${formId}-agent`}>Agent whose budget pays</label>
-            <select id={`${formId}-agent`} required value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-              <option value="">Choose an agent</option>
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+            <label htmlFor={`${formId}-agent`}>Which agent&apos;s limits cover this run</label>
+            <Select id={`${formId}-agent`} label="Which agent's limits cover this run" required value={agentId} options={agentOptions} onChange={setAgentId} />
+            <p className="hint">Paid from your private pool. Only agents that are on and allowed to hire appear here.</p>
+            {ws.data && agents.length === 0 ? (
+              <p className="notice notice-warn" role="note">
+                No agent can hire yet. <Link href="/agents/new">Create an agent</Link> that is allowed to hire specialists, and turn it on.
+              </p>
+            ) : null}
           </div>
           {(w.run_inputs ?? []).map((ri) => (
             <div className="field" key={ri.name}>
@@ -191,34 +227,70 @@ function RunOnce({ w }: { w: WorkflowEntry }) {
           </button>
         </form>
       ) : (
-        <RunTerms run={prepared} w={w} onApprove={async () => {
+        <RunTermsView run={prepared} w={w} onApprove={async () => {
           const r = await act.run(() => api<{ run: LocalRun }>("control", `/workflows/runs/${prepared.id}/approve`, { method: "POST", body: { approvalDigest: prepared.approvalDigest } }));
           if (r) router.push(`/marketplace/runs/${r.run.id}`);
         }} busy={act.busy} />
       )}
-    </Section>
+    </div>
   );
 }
 
-function RunTerms({ run, w, onApprove, busy }: { run: LocalRun; w: WorkflowEntry; onApprove: () => void; busy: boolean }) {
+export function RunTermsView({ run, w, onApprove, busy }: { run: LocalRun; w: WorkflowEntry; onApprove: () => void; busy: boolean }) {
   const m = useMarket();
   const decimals = m.decimalsFor(w.mint, w.network);
+  const publishes = w.steps.filter((s) => s.effect === "publish_external");
   return (
     <div className="stack local-approval">
-      <p>You are approving these exact terms. Any step whose quote differs stops the run for a fresh approval.</p>
-      <ol>
-        {run.terms.steps.map((s, i) => (
-          <li key={i}>
-            Step {i + 1}: up to <Money amount={s.maxBaseUnits} decimals={decimals} /> to <Address value={s.recipient} /> ({s.toolKind})
-          </li>
-        ))}
-      </ol>
-      <KV
-        rows={[
-          ["Total", <Money key="t" amount={run.terms.totalMaxBaseUnits} decimals={decimals} />],
-          ["Approval digest", <FullValue key="d" value={run.approvalDigest} />],
-        ]}
-      />
+      <p className="small flush">You approve these exact steps. If a price changes, the run stops and asks again.</p>
+      {publishes.length > 0 ? (
+        <p className="notice notice-warn flush" role="note">
+          {publishes.map((s) => `Step ${s.index + 1}: ${effectLabel(s.effect, s.provider)}.`).join(" ")} Approving this run lets it post without asking again.
+        </p>
+      ) : null}
+      <div className="table-wrap">
+        <table className="terms-table">
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">What</th>
+              <th scope="col">Effect</th>
+              <th scope="col">Paid to</th>
+              <th scope="col" className="num">
+                Up to (USDC)
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {run.terms.steps.map((s, i) => (
+              <tr key={i}>
+                <td>{i + 1}</td>
+                <td>{w.steps[i]?.title ? <PlainText text={w.steps[i]!.title ?? ""} inline /> : `Step ${i + 1}`}</td>
+                <td>{w.steps[i] ? <span className={effectPillClass(w.steps[i]!.effect)}>{effectLabel(w.steps[i]!.effect, w.steps[i]!.provider)}</span> : "Unknown"}</td>
+                <td>
+                  <Address value={s.recipient} />
+                </td>
+                <td className="num">
+                  <Money compact amount={s.maxBaseUnits} decimals={decimals} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="terms-total">
+        Total up to <Money compact amount={run.terms.totalMaxBaseUnits} decimals={decimals} /> · Solana devnet
+      </p>
+      <details className="tech-details">
+        <summary>Technical details</summary>
+        <KV
+          rows={[
+            ["Total (base units)", <span key="tb" className="mono">{run.terms.totalMaxBaseUnits}</span>],
+            ...run.terms.steps.map((s, i): [string, React.ReactNode] => [`Step ${i + 1} (base units)`, <span key={i} className="mono">{s.maxBaseUnits} · {s.toolKind}</span>]),
+            ["Approval digest", <FullValue key="d" value={run.approvalDigest} />],
+          ]}
+        />
+      </details>
       <ConfirmButton label="Approve and run" confirmLabel="Confirm approval" onConfirm={onApprove} disabled={busy} />
     </div>
   );
@@ -231,26 +303,31 @@ function AddToAgent({ w }: { w: WorkflowEntry }) {
   const act = useAction();
   const [agentId, setAgentId] = useState("");
   const [budget, setBudget] = useState("");
+  const [ask, setAsk] = useState(true);
   const [done, setDone] = useState(false);
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const formId = useId();
   const decimals = m.decimalsFor(w.mint, w.network);
-  const agents = (ws.data?.agents ?? []).filter((a) => a.status === "active");
+  const agents = workflowAgents(ws.data?.agents ?? []);
+  const agentOptions = [{ value: "", label: "Choose an agent" }, ...agents.map((a) => ({ value: a.id, label: a.name }))];
   return (
-    <Section title="Add to agent">
-      <p className="small">
-        The agent may propose runs of this version. Proposals within the budget start without asking again; anything else waits for you. Agents can never raise the budget.
-      </p>
+    <div className="stack">
+      <p className="small">Let an agent use this workflow when a task needs it.</p>
       <ErrorNotice error={act.error} what="the assignment could not be saved" />
       {done ? (
         <p className="notice notice-help" role="status">
-          Added. The agent can now propose runs within the budget.
+          {ask ? "Added. The agent can propose runs; each one waits for your approval." : "Added. The agent can run it within the budget without asking."}
         </p>
       ) : (
         <form
           className="stack"
           onSubmit={async (e) => {
             e.preventDefault();
+            if (ask) {
+              const r = await act.run(() => api("control", "/workflows/assignments", { method: "POST", body: { agentId, versionId: w.version_id, askEachRun: true } }));
+              if (r) setDone(true);
+              return;
+            }
             let units: string;
             if (decimals === null) {
               if (!/^[1-9][0-9]{0,18}$/.test(budget.trim())) return setBudgetError("enter a whole number of base units");
@@ -267,28 +344,32 @@ function AddToAgent({ w }: { w: WorkflowEntry }) {
         >
           <div className="field">
             <label htmlFor={`${formId}-agent`}>Agent</label>
-            <select id={`${formId}-agent`} required value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-              <option value="">Choose an agent</option>
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+            <Select id={`${formId}-agent`} label="Agent" required value={agentId} options={agentOptions} onChange={setAgentId} />
+            <p className="hint">Only custom agents that are on and allowed to hire appear here.</p>
+            {ws.data && agents.length === 0 ? (
+              <p className="notice notice-warn" role="note">
+                No agent can take a workflow yet. <Link href="/agents/new">Create a custom agent</Link> that is allowed to hire specialists, and turn it on.
+              </p>
+            ) : null}
           </div>
-          <div className="field">
-            <label htmlFor={`${formId}-budget`}>Budget {decimals === null ? "(base units)" : "(USDC)"}</label>
-            <input id={`${formId}-budget`} required inputMode="decimal" aria-invalid={budgetError !== null} value={budget} onChange={(e) => setBudget(e.target.value)} />
-            {budgetError ? <p className="field-error">{budgetError}</p> : null}
-            <p className="hint">
-              At least one run: <Money amount={String(w.total_base_units)} decimals={decimals} />
-            </p>
-          </div>
+          <label className="field inline">
+            <input type="checkbox" checked={ask} onChange={(e) => setAsk(e.target.checked)} /> Ask me before each run
+          </label>
+          {ask ? (
+            <p className="hint flush">The agent proposes a run with its topic; you review and approve it. Each run costs up to <Money compact amount={String(w.total_base_units)} decimals={decimals} />.</p>
+          ) : (
+            <div className="field">
+              <label htmlFor={`${formId}-budget`}>Budget {decimals === null ? "(base units)" : "(USDC)"}</label>
+              <input id={`${formId}-budget`} required inputMode="decimal" aria-invalid={budgetError !== null} value={budget} onChange={(e) => setBudget(e.target.value)} />
+              {budgetError ? <p className="field-error">{budgetError}</p> : null}
+              <p className="hint">Runs within this budget start without asking. At least one run: <Money compact amount={String(w.total_base_units)} decimals={decimals} /></p>
+            </div>
+          )}
           <button type="submit" className="btn" disabled={act.busy || agentId === ""}>
             Add to agent
           </button>
         </form>
       )}
-    </Section>
+    </div>
   );
 }

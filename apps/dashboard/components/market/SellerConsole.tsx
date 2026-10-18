@@ -6,20 +6,20 @@ import { shortKey, when } from "../../lib/format";
 import { parseUnits } from "../../lib/market/amounts";
 import { supabase } from "../../lib/market/client";
 import { presentJob } from "../../lib/market/job-state";
-import { DECIMALS_UNVERIFIED, NO_BALANCE_NOTE, payoutProofMessage } from "../../lib/market/messages";
+import { DECIMALS_UNVERIFIED, NO_BALANCE_NOTE, OFFER_DRAFT_KEY, payoutProofMessage } from "../../lib/market/messages";
 import { MANAGED_TEMPLATES, type RefundRow, type SellerDashboard } from "../../lib/market/types";
 import { listWallets, onWalletsChanged, signChallenge, type OwnerWallet } from "../../lib/wallet";
 import { useAction, useResource } from "../hooks";
 import { ErrorNotice, KV, Loading, Section } from "../ui";
 import { RefundItem } from "./JobDetail";
 import { useMarket } from "./MarketContext";
-import { Address, FullValue, JobStates, Money, PausedNotice, PlainText, RequireMarketSession, TestTokenNote } from "./parts";
+import { Address, FullValue, JobStates, Money, PausedNotice, PlainText, RequireMarketSession } from "./parts";
+import { Select } from "../Select";
 
 export function SellerConsole() {
   return (
     <>
       <h1>Seller console</h1>
-      <TestTokenNote />
       <RequireMarketSession what="open the seller console">
         <Console />
       </RequireMarketSession>
@@ -279,17 +279,30 @@ function Listings({ d, onChanged }: { d: SellerDashboard; onChanged: () => Promi
   );
 }
 
+/** A custom agent's instructions handed over from its page; the form clears it once mounted. */
+function offerDraft(): { title: string; sellerInstructions: string } {
+  try {
+    const raw = sessionStorage.getItem(OFFER_DRAFT_KEY);
+    const d = raw ? (JSON.parse(raw) as { title?: unknown; sellerInstructions?: unknown }) : {};
+    return {
+      title: typeof d.title === "string" ? d.title.slice(0, 120) : "",
+      sellerInstructions: typeof d.sellerInstructions === "string" ? d.sellerInstructions.slice(0, 8000) : "",
+    };
+  } catch {
+    return { title: "", sellerInstructions: "" };
+  }
+}
+
 function VersionForm({ listingId, d, onCreated }: { listingId: string; d: SellerDashboard; onCreated: () => Promise<void> }) {
   const m = useMarket();
   const action = useAction();
-  const [f, setF] = useState({
-    title: "",
+  const [f, setF] = useState(() => ({
+    ...offerDraft(),
     summary: "",
     description: "",
     runtimeKind: "managed_template" as "managed_template" | "remote_endpoint",
     template: MANAGED_TEMPLATES[0] as string,
     remoteOrigin: "",
-    sellerInstructions: "",
     briefHint: "",
     maxBriefChars: "16000",
     format: "markdown" as "markdown" | "json",
@@ -300,7 +313,14 @@ function VersionForm({ listingId, d, onCreated }: { listingId: string; d: Seller
     refundTerms: "",
     dataHandling: "",
     termsVersion: "1",
-  });
+  }));
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem(OFFER_DRAFT_KEY);
+    } catch {
+      // Nothing to clear without storage.
+    }
+  }, []);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const id = useId();
   const decimals = m.token?.decimals ?? null;
@@ -369,13 +389,7 @@ function VersionForm({ listingId, d, onCreated }: { listingId: string; d: Seller
           ? field(
               "template",
               "Template",
-              <select id={`${id}-template`} value={f.template} onChange={set("template")}>
-                {MANAGED_TEMPLATES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>,
+              <Select id={`${id}-template`} label="Template" value={f.template} options={MANAGED_TEMPLATES.map((t) => ({ value: t, label: t }))} onChange={(v) => setF({ ...f, template: v })} />,
             )
           : field(
               "remoteOrigin",
@@ -385,7 +399,7 @@ function VersionForm({ listingId, d, onCreated }: { listingId: string; d: Seller
             )}
       </fieldset>
       <fieldset className="private-field">
-        <legend>Private — seller-only instructions</legend>
+        <legend>Private seller-only instructions</legend>
         {field(
           "sellerInstructions",
           "Instructions for your runtime (private)",
@@ -399,10 +413,7 @@ function VersionForm({ listingId, d, onCreated }: { listingId: string; d: Seller
         {field(
           "format",
           "Output format",
-          <select id={`${id}-format`} value={f.format} onChange={set("format")}>
-            <option value="markdown">markdown</option>
-            <option value="json">json</option>
-          </select>,
+          <Select id={`${id}-format`} label="Output format" value={f.format} options={[{ value: "markdown", label: "markdown" }, { value: "json", label: "json" }]} onChange={(v) => setF({ ...f, format: v })} />,
         )}
         {field("sections", "Output sections (one per line)", <textarea id={`${id}-sections`} rows={3} value={f.sections} onChange={set("sections")} />)}
         <div className="field">
@@ -422,13 +433,7 @@ function VersionForm({ listingId, d, onCreated }: { listingId: string; d: Seller
               Verify a payout wallet first.
             </p>
           ) : (
-            <select id={`${id}-payoutVersionId`} value={f.payoutVersionId} onChange={set("payoutVersionId")}>
-              {d.payouts.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.address}
-                </option>
-              ))}
-            </select>
+            <Select id={`${id}-payoutVersionId`} label="Payout wallet" value={f.payoutVersionId} options={d.payouts.map((p) => ({ value: p.id, label: p.address }))} onChange={(v) => setF({ ...f, payoutVersionId: v })} />
           ),
         )}
         {field("turnaroundMinutes", "Turnaround (minutes) *", <input id={`${id}-turnaroundMinutes`} required inputMode="numeric" value={f.turnaroundMinutes} onChange={set("turnaroundMinutes")} />)}

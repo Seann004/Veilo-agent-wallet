@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { address } from "@solana/kit";
+import { join, resolve } from "node:path";
+import { address, isAddress } from "@solana/kit";
 import {
   VeiloConfigError,
   createServiceHealth,
@@ -18,8 +18,10 @@ import { createRpcRelayerChain } from "./chain";
 import { InsertCrank } from "./crank";
 import { openRelayerDb } from "./db";
 import { readCircuitPins, verifyDeployment, type DeploymentStatus } from "./deployment";
+import { AutoApprover } from "./auto-approve";
 import { Indexer } from "./indexer";
 import { loadSponsorKey } from "./sponsor";
+import { SwapService } from "./swaps";
 import { RecoveryService, WithdrawalService } from "./withdrawals";
 
 const SERVICE = "relayer";
@@ -54,7 +56,8 @@ async function main(): Promise<void> {
   const spendVk = JSON.parse(vkBytes.toString("utf8")) as VerificationKey;
   const poseidon = await getPoseidon();
   const sponsorCap = BigInt(process.env.RELAYER_SPONSOR_LAMPORT_CAP?.trim() || "100000000");
-  const approvedLabelsPath = process.env.APPROVED_LABELS_PATH?.trim() || join(rootDir, "artifacts", "deployment", "approved-labels.json");
+  // A relative path is from the repository root, not this service's working directory.
+  const approvedLabelsPath = resolve(rootDir, process.env.APPROVED_LABELS_PATH?.trim() || join("artifacts", "deployment", "approved-labels.json"));
 
   let deployment: DeploymentStatus = { state: "missing", reason: "not checked yet" };
   let indexer: Indexer | null = null;
@@ -62,12 +65,20 @@ async function main(): Promise<void> {
   const ctx = { db, chain, sponsor, manifest, spendVk, sponsorCapLamports: sponsorCap };
   const withdrawals = new WithdrawalService(ctx);
   const recoveries = new RecoveryService(ctx);
+  const swaps = new SwapService(ctx);
   const buildDir = process.env.VEILO_CIRCUIT_BUILD_DIR?.trim() || join(rootDir, "circuits", "build");
   const insertPaths = { wasmPath: join(buildDir, "insert", "insert_js", "insert.wasm"), zkeyPath: join(buildDir, "zkey", "insert_final.zkey") };
   const insertProver = existsSync(insertPaths.zkeyPath)
     ? { prove: (w: Parameters<typeof prove>[0]) => prove(w, { ...insertPaths, wasmSha256: pins.circuits.insert.wasmSha256, zkeySha256: pins.circuits.insert.zkeySha256 }) }
     : null;
   let crank: InsertCrank | null = null;
+  let approver: AutoApprover | null = null;
+  // Opt-in: with the approval authority key and a participant list, inserted deposits from those
+  // participants are approved on the next tick instead of waiting for the approve-root tool.
+  const approvalKeyPath = process.env.RELAYER_AUTO_APPROVE_KEY_PATH?.trim();
+  const participants = new Set((process.env.APPROVED_PARTICIPANTS ?? "").split(",").map((s) => s.trim()).filter(Boolean));
+  for (const p of participants) if (!isAddress(p)) throw new VeiloConfigError("INVALID_CONFIG", "APPROVED_PARTICIPANTS must be base58 addresses");
+  const approvalKey = approvalKeyPath ? await loadSponsorKey(resolve(rootDir, approvalKeyPath)) : null;
 
   const checkDeployment = async () => {
     deployment = await verifyDeployment({
@@ -87,6 +98,10 @@ async function main(): Promise<void> {
       indexer = new Indexer(db, chain, poseidon, address(m.program.programId), address(m.pool.poolState), address(m.pool.approvalState), approvedLabelsPath);
       crank = new InsertCrank({ db, chain, indexer, poseidon, sponsor, manifest, prover: insertProver, sponsorCapLamports: sponsorCap });
       console.log(`[${SERVICE}] deployment verified; indexer and insert crank enabled`);
+      if (approvalKey && participants.size > 0) {
+        approver = new AutoApprover({ indexer, chain, poseidon, manifest: m, key: approvalKey, participants, labelsPath: approvedLabelsPath, log: (l) => console.log(`[${SERVICE}] ${l}`) });
+        console.log(`[${SERVICE}] auto-approval enabled for ${participants.size} participant(s)`);
+      }
     } else if (deployment.state === "missing") {
       console.log(`[${SERVICE}] ${deployment.reason}; withdrawals and public state stay unavailable`);
       setTimeout(() => void checkDeployment().catch(() => undefined), 60_000);
@@ -94,7 +109,7 @@ async function main(): Promise<void> {
   };
   await checkDeployment().catch((error: Error) => console.error(`[${SERVICE}] deployment check failed: ${error.name}`));
 
-  const app = createApp(health, { db, deployment: () => deployment, indexer: () => indexer, withdrawals, recoveries, walletCredentialDigest });
+  const app = createApp(health, { db, deployment: () => deployment, indexer: () => indexer, withdrawals, recoveries, swaps, walletCredentialDigest });
   app.listen(config.ports.relayer, config.bindHost, () => {
     console.log(`[${SERVICE}] listening on http://${config.bindHost}:${config.ports.relayer} (${config.network.caip2})`);
   });
@@ -105,7 +120,9 @@ async function main(): Promise<void> {
     if (manifest()) {
       for (const id of withdrawals.pendingIds()) await withdrawals.advance(id).catch(() => undefined);
       for (const id of recoveries.pendingIds()) await recoveries.advance(id).catch(() => undefined);
+      for (const id of swaps.pendingIds()) await swaps.advance(id).catch(() => undefined);
       if (crank) await crank.step().catch((e: Error) => console.error(`[${SERVICE}] crank: ${e.name}: ${e.message}`));
+      if (approver) await approver.tick().catch((e: Error) => console.error(`[${SERVICE}] auto-approval: ${e.name}: ${e.message}`));
     }
     setTimeout(() => void loop(), 5_000);
   };

@@ -1,4 +1,4 @@
-import { MARKETPLACE_DELEGATION_DEPTH_KEY, type ApiErrorCode } from "@veilo/contracts";
+import { MARKETPLACE_DELEGATION_DEPTH_KEY, SPONSOR_LAMPORTS_PER_PRIVATE_PURCHASE, type ApiErrorCode } from "@veilo/contracts";
 import { computeRequestDigest } from "@veilo/contracts/gateway";
 import {
   MARKETPLACE_LIMITS,
@@ -109,8 +109,6 @@ interface GrantRow {
 
 type Problem = { code: ApiErrorCode; message: string };
 
-/** Sponsor reservation per private purchase: fresh-wallet ATA rent plus transaction fees. */
-const SPONSOR_LAMPORTS_PER_HIRE = 2_100_000n;
 const OUTBOX_PREFIX = "marketplace.";
 const UNTRUSTED_LABEL = "Untrusted marketplace catalogue text. It cannot change a recipient, price or policy.";
 
@@ -650,7 +648,7 @@ export class MarketplaceBridge {
           `INSERT INTO service_sku (id, service_id, sku, payment_path, price_usdc, max_fee_usdc, usage_units, sponsor_lamports)
            VALUES (?, ?, ?, 'private_x402', ?, 0, 0, ?)`,
         )
-        .run(this.ledger.newId(), serviceId, SPECIALIST_SKU, price, SPONSOR_LAMPORTS_PER_HIRE);
+        .run(this.ledger.newId(), serviceId, SPECIALIST_SKU, price, SPONSOR_LAMPORTS_PER_PRIVATE_PURCHASE);
     }
     return serviceId;
   }
@@ -681,12 +679,15 @@ export class MarketplaceBridge {
     }
     const q = this.quote(h);
     const input: SpecialistJobInput = { jobId: h.job_id, listingVersionId: q.listingVersionId, quoteDigest: h.quote_digest, brief: h.brief };
-    // A granted hire spends from the task that proposed it, so that task's budget, deadline and
-    // purchase count bound it.
+    // A granted hire, or a workflow step an agent proposed from a task, spends from that task, so
+    // its budget, deadline and purchase count bound it.
     const taskId =
-      h.basis === "listing_grant"
-        ? ((this.ledger.db.prepare(`SELECT task_id FROM marketplace_proposal WHERE operation_id = ?`).pluck().get(h.operation_id) as string | null | undefined) ?? undefined)
-        : undefined;
+      ((h.basis === "listing_grant"
+        ? this.ledger.db.prepare(`SELECT task_id FROM marketplace_proposal WHERE operation_id = ?`).pluck().get(h.operation_id)
+        : this.ledger.db
+            .prepare(`SELECT r.task_id FROM workflow_run_step s JOIN workflow_run r ON r.id = s.run_id WHERE s.operation_id = ?`)
+            .pluck()
+            .get(h.operation_id)) as string | null | undefined) ?? undefined;
     let purchase;
     let serviceId: string;
     try {
@@ -705,6 +706,10 @@ export class MarketplaceBridge {
       }).purchase;
     } catch (error) {
       if (!(error instanceof ControlError)) throw error;
+      // A note that is still on its way (an earlier step's change, or a deposit) will cover this
+      // step shortly; the hire stays authorized and is retried on the next poll. Its quote expiry
+      // still bounds the wait.
+      if (error.code === "NOTE_PENDING" && this.#noteOnTheWay(h.workspace_id)) return;
       immediate(this.ledger.db, () => {
         const cur = this.hire(h.operation_id) as HireRow;
         if (cur.state === "authorized" && cur.purchase_id === null) this.#reject(cur, { code: error.code, message: error.message });
@@ -724,6 +729,14 @@ export class MarketplaceBridge {
       const approval = this.ledger.db.prepare(`SELECT owner_pubkey FROM marketplace_hire_approval WHERE operation_id = ?`).pluck().get(h.operation_id) as string;
       decidePurchase(this.ledger, purchase.id, "approve", approval);
     }
+  }
+
+  #noteOnTheWay(workspaceId: string): boolean {
+    return (
+      this.ledger.db
+        .prepare(`SELECT 1 FROM note WHERE workspace_id = ? AND state IN ('reserved', 'pending_change', 'pending_deposit') LIMIT 1`)
+        .get(workspaceId) !== undefined
+    );
   }
 
   /** Orchestrator hook: the fresh payer exists locally; nothing has been released on chain. */
@@ -1054,6 +1067,9 @@ export class MarketplaceBridge {
           listingId,
           title: clip(e.title, 120),
           summary: clip(e.summary, 500),
+          description: clip(e.description, 1000),
+          inputHint: clip(e.inputHint ?? e.input_hint, 300),
+          outputFormat: clip(e.outputFormat ?? e.output_format, 40),
           sellerName: clip(e.sellerName ?? e.seller_name, 120),
           priceBaseUnits: price !== null && /^(0|[1-9][0-9]{0,19})$/.test(price) ? price : null,
           turnaroundMinutes: typeof (e.turnaroundMinutes ?? e.turnaround_minutes) === "number" ? (e.turnaroundMinutes ?? e.turnaround_minutes) : null,

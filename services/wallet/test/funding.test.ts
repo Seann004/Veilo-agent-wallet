@@ -56,6 +56,9 @@ describe("private funding: original note, then its change note (PRIV-01 flow, LE
     const status = w.notes.status() as { notes: Array<{ state: string; available: boolean; depositStages: Record<string, boolean> }> };
     expect(status.notes[0]!.state).toBe("spendable");
     expect(status.notes[0]!.depositStages).toEqual({ submitted: true, finalized: true, indexed: true, approved: true, spendable: true });
+    const stamped = status.notes[0] as unknown as { createdAt: string | null; updatedAt: string | null };
+    expect(Number.isNaN(Date.parse(stamped.createdAt ?? ""))).toBe(false);
+    expect(Date.parse(stamped.updatedAt ?? "")).toBeGreaterThanOrEqual(Date.parse(stamped.createdAt ?? ""));
 
     const id1 = await prepared("p1");
     const f1 = w.store.funding(id1)!;

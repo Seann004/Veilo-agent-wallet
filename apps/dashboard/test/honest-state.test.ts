@@ -22,10 +22,18 @@ describe("backend truth in summaries and errors", () => {
   it("reports the task state, not the job lease outcome, and lists unpurchased services", () => {
     const task = { id: "t1", state: "incomplete" } as Task;
     const s = summarizeResult(job({ artifactId: "x", paid: [{ sku: "research-basic", outcome: "not purchased (SERVICE_NOT_ALLOWED)" }] }), task);
-    expect(s).toBe("Task incomplete · research-basic: not purchased (SERVICE_NOT_ALLOWED) · result saved to Content");
+    expect(s).toBe("Stopped part-way · Research data: not purchased (not allowed by its limits) · Saved to Outputs");
     expect(s).not.toContain("completed");
     expect(summarizeResult(job({ decision: "paused_after_rejection", detail: "waiting" }, null))).toBe("paused_after_rejection: waiting");
     expect(summarizeResult(undefined)).toBe("No result yet");
+  });
+
+  it("says why a job failed instead of a bare state", () => {
+    const failed = { id: "t1", state: "failed" } as Task;
+    expect(summarizeResult(job({ failure: "Couldn't save the answer: it cited a page the agent wasn't cleared to read.", artifactId: null }), failed)).toBe(
+      "Failed · Couldn't save the answer: it cited a page the agent wasn't cleared to read.",
+    );
+    expect(summarizeResult(job({ artifactId: null, notes: [] }), failed)).toBe("Failed · No reason was recorded for this failure.");
   });
 
   it("maps a service without its JSON API to NOT_READY and keeps JSON error codes", async () => {
@@ -35,5 +43,21 @@ describe("backend truth in summaries and errors", () => {
     const e = await api("control", "/agents").catch((x: unknown) => x);
     expect(e).toBeInstanceOf(ApiError);
     expect(e).toMatchObject({ code: "BUDGET_EXCEEDED", message: "agent cap" });
+  });
+});
+
+describe("settled payments", () => {
+  it("treats only finished outcomes as settled, including prepaid, rejected and recovered ones", async () => {
+    const { isSettled } = await import("../lib/labels");
+    const base = { authorization: "released", merchant: "finalized", fulfilment: "delivered", recovery: "none" };
+    expect(isSettled(base)).toBe(true);
+    expect(isSettled({ ...base, merchant: "not_required" })).toBe(true);
+    expect(isSettled({ ...base, merchant: "not_required", fulfilment: "abandoned" })).toBe(true);
+    expect(isSettled({ ...base, authorization: "rejected", merchant: "not_started", fulfilment: "not_started" })).toBe(true);
+    expect(isSettled({ ...base, recovery: "recovered" })).toBe(true);
+    expect(isSettled({ ...base, merchant: "submitted", fulfilment: "not_started" })).toBe(false);
+    expect(isSettled({ ...base, fulfilment: "paid_without_result" })).toBe(false);
+    expect(isSettled({ ...base, recovery: "recoverable" })).toBe(false);
+    expect(isSettled({ ...base, authorization: "awaiting_approval" })).toBe(false);
   });
 });

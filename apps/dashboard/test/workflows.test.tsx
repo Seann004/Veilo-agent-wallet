@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MarketContextProvider, type MarketContextValue } from "../components/market/MarketContext";
-import { WorkflowBrowse } from "../components/market/WorkflowBrowse";
-import { WorkflowRunView } from "../components/market/WorkflowRuns";
+import { MarketAccountBar } from "../components/market/MarketAccountBar";
+import { MarketHome, pickFeatured } from "../components/market/MarketHome";
+import { WorkflowRunList, WorkflowRunView } from "../components/market/WorkflowRuns";
+import { partitionRuns, plainReason, stepTitles } from "../lib/market/workflows";
 import { matchRoute } from "../lib/server/proxy";
 import type { LocalRun, WorkflowEntry } from "../lib/market/workflows";
 
@@ -78,21 +80,30 @@ function workflow(i: number, extra: Partial<WorkflowEntry> = {}): WorkflowEntry 
   };
 }
 
-describe("workflow browse", () => {
-  it("shows category tabs as links, prices in USDC, the chain, and hostile text as text", async () => {
-    const list = [0, 1, 2, 3, 4].map((i) => workflow(i));
-    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ workflows: list })));
-    render(withMarket(<WorkflowBrowse />));
-    const tabs = await screen.findByRole("navigation", { name: "Categories" });
-    expect(within(tabs).getByRole("link", { name: "Research" }).getAttribute("href")).toBe("/marketplace/c/research");
-    expect(within(tabs).getByRole("link", { name: "All" }).getAttribute("aria-current")).toBe("page");
-    expect(await screen.findByRole("link", { name: "View all" })).toBeTruthy();
-    expect(screen.getAllByText(/per run/).length).toBe(4);
-    expect(screen.getAllByText(/Solana devnet · USDC/).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("list", { name: "Tool chain" })[0]!.textContent).toContain("RPC");
+describe("marketplace browse", () => {
+  it("lists workflows and starter agents together, filters in place, and shows hostile text as text", async () => {
+    const list = [0, 1, 2, 3, 4].map((i) => workflow(i, i === 4 ? { category: "media", title: "Clip maker" } : {}));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => (String(url).includes("/listings") ? Response.json({ listings: [] }) : Response.json({ workflows: list }))),
+    );
+    render(withMarket(<MarketHome />));
+    expect(await screen.findAllByText(/per run/)).toHaveLength(5);
+    expect(screen.getByRole("heading", { name: "Featured" })).toBeTruthy();
+    // Without an owner session a starter agent can't be added; the button says why instead of linking.
+    expect(screen.getAllByRole("button", { name: "Add" }).every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
+    expect(screen.queryByText("Solana devnet · USDC")).toBeNull();
     expect(screen.getAllByText(HOSTILE).length).toBeGreaterThan(0);
     expect(document.querySelector("script")).toBeNull();
     expect((window as unknown as { __pwned?: number }).__pwned).toBeUndefined();
+
+    const cats = screen.getByRole("group", { name: "Categories" });
+    expect(within(cats).queryAllByRole("link")).toHaveLength(0);
+    fireEvent.click(within(cats).getByRole("button", { name: "Media" }));
+    expect(screen.queryByRole("heading", { name: "Featured" })).toBeNull();
+    const rows = within(screen.getByRole("list", { name: "Marketplace agents" })).getAllByRole("listitem");
+    expect(rows.map((r) => r.textContent).join(" ")).toContain("Clip maker");
+    expect(screen.getAllByText(/per run/)).toHaveLength(1);
   });
 });
 
@@ -118,15 +129,151 @@ describe("workflow run view", () => {
     };
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ run })));
     render(<WorkflowRunView runId={run.id} />);
-    expect(await screen.findByText(/Stopped — later steps were not bought/)).toBeTruthy();
-    const steps = screen.getAllByRole("listitem").filter((li) => li.className === "timeline-step");
+    expect((await screen.findAllByText("Failed")).length).toBeGreaterThan(0);
+    const steps = screen.getAllByRole("listitem").filter((li) => li.classList.contains("stepper-step"));
     expect(steps).toHaveLength(2);
     const pills = [...steps[1]!.querySelectorAll(".pill")].map((p) => p.textContent);
-    expect(pills).toEqual(["Paid", "Failed"]);
+    expect(pills).toEqual(["Failed"]);
+    expect(within(steps[0]!).getByText("Delivered")).toBeTruthy();
     const links = within(steps[0]!).getAllByRole("link");
     expect(links.every((a) => (a.getAttribute("href") ?? "").includes("cluster=devnet"))).toBe(true);
     expect(screen.getAllByText((t) => t.includes(HOSTILE)).length).toBeGreaterThan(0);
     expect(document.querySelector("script")).toBeNull();
+  });
+});
+
+describe("workflow run progress", () => {
+  it("shows the waiting reason and plain step states", async () => {
+    const base = (i: number, state: string, payment: LocalRun["steps"][number]["payment"], execution: LocalRun["steps"][number]["execution"]): LocalRun["steps"][number] => ({
+      index: i, toolKind: "external", toolId: `t${i}`, recipient: RECIPIENT, max: "3000", state, payment, execution, paid: payment === "paid" ? "3000" : null, jobId: null, purchaseId: null, fundingSignature: null, merchantSignatures: [], artifact: null, stop: null,
+    });
+    const run: LocalRun = {
+      id: "20000000-0000-4000-8000-000000000002", cloudRunId: "c", workflowVersionId: "v", agentId: "a", status: "running", isTest: false, requestedBy: "owner", approvedBy: RECIPIENT, approvalDigest: "a".repeat(64),
+      terms: { steps: [], totalMaxBaseUnits: "9000", network: NETWORK, mint: MINT },
+      total: { amount: "9000", unit: "usdc_base_units" },
+      stop: null,
+      waiting: { code: "PRIVATE_POOL_PENDING", reason: "Waiting for your private balance to settle.", since: "2026-10-18T00:00:00Z" },
+      steps: [base(0, "paid", "paid", "delivered"), base(1, "hiring", "not_paid", "not_run"), base(2, "pending", "not_paid", "not_run")],
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ run })));
+    render(<WorkflowRunView runId={run.id} />);
+    expect(await screen.findByText("Waiting for your private balance to settle.")).toBeTruthy();
+    expect(document.querySelector(".run-head .pill")?.textContent).toBe("Waiting");
+    const pills = [...document.querySelectorAll(".stepper-step .pill")].map((p) => p.textContent);
+    expect(pills).toEqual(["Delivered", "Getting a quote", "Not started"]);
+    expect(screen.getByRole("button", { name: "Refresh now" })).toBeTruthy();
+  });
+});
+
+function localRun(id: string, status: LocalRun["status"], extra: Partial<LocalRun> = {}): LocalRun {
+  return {
+    id,
+    cloudRunId: "c",
+    workflowVersionId: "10000000-0000-4000-8000-000000000001",
+    agentId: "a",
+    status,
+    isTest: false,
+    requestedBy: "agent",
+    approvedBy: null,
+    approvalDigest: "a".repeat(64),
+    terms: { steps: [], totalMaxBaseUnits: "230000", network: NETWORK, mint: MINT },
+    total: { amount: "230000", unit: "usdc_base_units" },
+    stop: null,
+    steps: [],
+    ...extra,
+  };
+}
+
+describe("workflow run readability", () => {
+  it("shows USDC amounts, catalogue step titles and reasons without error-code prefixes", async () => {
+    const step = (i: number): LocalRun["steps"][number] => ({
+      index: i, toolKind: "listing", toolId: `t${i}`, recipient: RECIPIENT, max: i === 0 ? "3000" : "10000", state: i === 0 ? "failed" : "not_run", payment: "not_paid", execution: i === 0 ? "failed" : "not_run", paid: null, jobId: null, purchaseId: null, fundingSignature: null, merchantSignatures: [], artifact: null,
+      stop: i === 0 ? { code: "SERVICE_NOT_ALLOWED", reason: "SERVICE_NOT_ALLOWED: hire not created: no approved workflow run matches" } : null,
+    });
+    const run = localRun("20000000-0000-4000-8000-000000000003", "failed", { total: { amount: "13000", unit: "usdc_base_units" }, stop: { code: "SERVICE_NOT_ALLOWED", reason: "SERVICE_NOT_ALLOWED: hire not created: no approved workflow run matches" }, steps: [step(0), step(1)] });
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => (String(url).includes("/marketplace/workflows") ? Response.json({ workflows: [workflow(1)] }) : Response.json({ run }))));
+    render(withMarket(<WorkflowRunView runId={run.id} />));
+    expect(await screen.findByText("Paid RPC")).toBeTruthy();
+    expect(screen.getByText("Brief writer")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Token brief 1");
+    expect(document.body.textContent).toContain("0.013 USDC");
+    expect(document.body.textContent).not.toContain("base units (token decimals");
+    expect(document.body.textContent).not.toContain("Marketplace tool");
+    expect(screen.getAllByText("Hire not created: no approved workflow run matches").length).toBeGreaterThan(0);
+    expect(document.querySelector(".run-reason")?.textContent).not.toContain("SERVICE_NOT_ALLOWED");
+  });
+
+  it("hides older failed runs by default and shows them again on request", async () => {
+    const runs = [localRun("20000000-0000-4000-8000-00000000000a", "failed"), localRun("20000000-0000-4000-8000-00000000000b", "completed"), localRun("20000000-0000-4000-8000-00000000000c", "rejected"), localRun("20000000-0000-4000-8000-00000000000d", "failed")];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => (String(url).includes("/marketplace/workflows") ? Response.json({ workflows: [] }) : Response.json({ runs }))));
+    render(withMarket(<WorkflowRunList />));
+    const toggle = (await screen.findByRole("switch", { name: /Hide failed runs/ })) as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+    expect(within(screen.getByRole("list", { name: "Workflow runs" })).getAllByRole("listitem")).toHaveLength(2);
+    expect(document.body.textContent).toContain("0.23 USDC");
+    fireEvent.click(toggle);
+    const items = within(screen.getByRole("list", { name: "Workflow runs" })).getAllByRole("listitem");
+    expect(items).toHaveLength(4);
+    expect(items.filter((li) => li.querySelector(".run-card-old"))).toHaveLength(2);
+  });
+
+  it("shows each run as a card with its workflow, steps, total, agent and a link", async () => {
+    const runs = [localRun("20000000-0000-4000-8000-00000000000e", "completed", { agentId: "ag1", createdAt: "2026-10-17T10:00:00Z" })];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        String(url).includes("/marketplace/workflows") ? Response.json({ workflows: [workflow(1)] }) : String(url).includes("/workspace") ? Response.json({ agents: [{ id: "ag1", name: "Scout" }] }) : Response.json({ runs }),
+      ),
+    );
+    render(withMarket(<WorkflowRunList />));
+    const link = await screen.findByRole("link", { name: /Token brief 1/ });
+    expect(link.getAttribute("href")).toBe("/marketplace/runs/20000000-0000-4000-8000-00000000000e");
+    expect(link.textContent).not.toMatch(/Run 2000/);
+    expect(link.textContent).toContain("Completed");
+    expect(link.textContent).toContain("steps paid");
+    expect(link.textContent).toContain("17 Oct 2026");
+    await vi.waitFor(() => expect(link.textContent).toContain("Scout"));
+  });
+
+  it("explains an empty run list kindly", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ runs: [] })));
+    render(withMarket(<WorkflowRunList />));
+    expect(await screen.findByText(/Nothing has run yet/)).toBeTruthy();
+  });
+
+  it("features at most one TikTok carousel, preferring the designed public one, plus varied items", () => {
+    const e = (title: string, runs = 0, key = title) => ({ key, title, runs });
+    const flows = [
+      e("TikTok carousel from a topic", 9),
+      e("TikTok carousel (designed slides)", 8),
+      e("TikTok carousel (designed, posts publicly)", 1),
+      e("Token supply brief"),
+      e("Launch content kit"),
+      e("Wallet activity snapshot", 5),
+    ];
+    const picked = pickFeatured(flows, [e("Research", 0, "template:research")]);
+    expect(picked.map((x) => x.title)).toEqual(["TikTok carousel (designed, posts publicly)", "Token supply brief", "Launch content kit", "Research"]);
+    expect(pickFeatured([...flows].reverse(), []).filter((x) => /tiktok/i.test(x.title))).toHaveLength(1);
+    expect(pickFeatured(flows.slice(0, 2), [])[0]!.title).toBe("TikTok carousel (designed slides)");
+  });
+
+  it("helpers: plain reasons, run partition and step title fallback", () => {
+    expect(plainReason("NOT_READY: PRICE_CHANGED: step 0 price differs")).toEqual({ text: "Step 0 price differs", codes: ["NOT_READY", "PRICE_CHANGED"] });
+    expect(plainReason("Waiting for funds.")).toEqual({ text: "Waiting for funds.", codes: [] });
+    const p = partitionRuns([{ status: "failed" as const }, { status: "running" as const }, { status: "failed" as const }], true);
+    expect(p.shown.map((r) => r.status)).toEqual(["failed", "running"]);
+    expect(p.olderFailed).toHaveLength(1);
+    expect(stepTitles(undefined, 2)).toEqual(["Step 1", "Step 2"]);
+  });
+});
+
+describe("marketplace header", () => {
+  it("shows the short address once and says no wallet is needed to browse", () => {
+    const me = { userId: "u", address: RECIPIENT, workspace: null } as unknown as MarketContextValue["me"];
+    render(<MarketContextProvider value={{ ...market(), me, canAct: true }}><MarketAccountBar /></MarketContextProvider>);
+    const who = screen.getByRole("status");
+    expect(who.textContent).toBe("Signed in to the marketplace as 9xQeWv…usVFin · no wallet needed to browse");
+    expect(who.textContent).not.toContain("wallet not connected");
   });
 });
 

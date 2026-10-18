@@ -12,7 +12,8 @@ import type { Workspace } from "../../lib/types";
 import { useAction, useResource } from "../hooks";
 import { ConfirmButton, EmptyState, ErrorNotice, KV, Loading, Section, TxLink } from "../ui";
 import { useMarket } from "./MarketContext";
-import { Countdown, FullValue, Money, PlainText, TestTokenNote } from "./parts";
+import { Countdown, FullValue, Money, PlainText } from "./parts";
+import { Select } from "../Select";
 
 /** A hire as the local control service stores it; listing text and the brief are untrusted. */
 export interface LocalHire {
@@ -59,16 +60,16 @@ export interface ListingGrant {
 }
 
 const STATE_LABEL: Record<string, string> = {
-  received: "Received — checking",
+  received: "Received: checking",
   awaiting_approval: "Waiting for your local approval",
-  authorized: "Authorized — payment starting",
+  authorized: "Authorized: payment starting",
   purchasing: "Paying",
-  uncertain: "Payment outcome uncertain — reconciling",
+  uncertain: "Payment outcome uncertain: reconciling",
   paid: "Paid",
-  failed_unpaid: "Failed — nothing was paid",
-  rejected: "Rejected — nothing was paid",
-  evidence_rejected: "Paid — evidence refused, retrying",
-  recoverable: "Unpaid — funds recoverable",
+  failed_unpaid: "Failed: nothing was paid",
+  rejected: "Rejected: nothing was paid",
+  evidence_rejected: "Paid: evidence refused, retrying",
+  recoverable: "Unpaid: funds recoverable",
 };
 
 /**
@@ -79,12 +80,8 @@ export function LocalApproval() {
   const ws = useResource(() => api<Workspace>("control", "/workspace"), "local-approval-workspace");
   return (
     <>
-      <h1>Local approval</h1>
-      <p className="notice" role="note">
-        This is where payments are actually authorized. Approving here lets your <strong>local controller</strong> pay the seller from the chosen
-        agent&apos;s budget, after re-checking the quote and your limits. It uses your local owner sign-in, not your marketplace sign-in.
-      </p>
-      <TestTokenNote />
+      <h1>Approvals</h1>
+      <p className="lede">Hires your agents propose wait here. Workflow runs are approved on their run page.</p>
       {ws.loading && !ws.data ? <Loading label="local workspace" /> : null}
       {ws.error?.status === 401 ? (
         <p className="notice notice-warn" role="status">
@@ -109,13 +106,14 @@ function Hires({ workspace }: { workspace: Workspace }) {
   const hires = useResource(() => api<{ items: LocalHire[] }>("control", `/marketplace/hires${all ? "?state=all" : ""}`), `hires:${all}`);
   return (
     <Section
-      title={all ? "All marketplace hires" : "Hires waiting for local approval"}
+      title={all ? "All hires" : "Waiting for you"}
       actions={
         <button type="button" className="btn btn-small" aria-pressed={all} onClick={() => setAll(!all)}>
           {all ? "Show pending only" : "Show all"}
         </button>
       }
     >
+      <p className="small muted">{all ? "Every hire your agents have proposed, newest first." : "Approving lets your controller pay the seller from the agent's budget, after re-checking the quote and your limits."}</p>
       {hires.loading && !hires.data ? <Loading label="hires" /> : null}
       <ErrorNotice error={hires.error} what="hires could not be loaded" onRetry={hires.reload} />
       {hires.data && hires.data.items.length === 0 ? <EmptyState>{all ? "No marketplace hires yet." : "Nothing is waiting for your approval."}</EmptyState> : null}
@@ -224,13 +222,7 @@ function HireCard({ hire: h, workspace, onChanged }: { hire: LocalHire; workspac
             {agents.length === 0 ? (
               <p className="small notice notice-warn">No active local agent. Activate an agent in your workspace first.</p>
             ) : (
-              <select id={ids.agent} value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} ({a.role})
-                  </option>
-                ))}
-              </select>
+              <Select id={ids.agent} label="Agent" value={agentId} options={agents.map((a) => ({ value: a.id, label: `${a.name} (${a.role})` }))} onChange={setAgentId} />
             )}
             <span className="hint">The controller still enforces this agent&apos;s limits and the workspace limits; an over-budget approval is refused.</span>
           </div>
@@ -284,11 +276,8 @@ function Grants({ workspace }: { workspace: Workspace }) {
   // Only custom agents propose hires, so a grant on any other role could never match.
   const agents = workspace.agents.filter((a) => a.role === "custom" && a.status !== "revoked" && a.status !== "archived");
   return (
-    <Section title="Local listing grants">
-      <p className="small">
-        A grant lets one local agent hire one listing without asking you each time, up to a maximum total. Grants live in your local controller and
-        replace any cloud proposal; the controller still applies every budget limit.
-      </p>
+    <Section title="Pre-approved listings">
+      <p className="small muted">Listings an agent may hire without asking you each time, up to a maximum total.</p>
       {agents.length === 0 ? <EmptyState>No custom agents. Only custom agents propose hires.</EmptyState> : agents.map((a) => <AgentGrants key={a.id} agentId={a.id} name={a.name} />)}
     </Section>
   );
@@ -343,14 +332,19 @@ export function AgentGrants({ agentId, name }: { agentId: string; name: string }
         <div className="grid-2">
           <div className="field">
             <label htmlFor={ids.listing}>Listing</label>
-            <select id={ids.listing} value={listingId} onChange={(e) => setListingId(e.target.value)}>
-              <option value="">Choose a published listing</option>
-              {catalogue.data?.listings.map((l) => (
-                <option key={l.listing_id} value={l.listing_id}>
-                  {l.title} — {l.seller_name} ({m.decimalsFor(l.mint, l.network) === null ? `${String(l.price_base_units)} base units` : `${formatUnits(l.price_base_units, m.decimalsFor(l.mint, l.network)!)} USDC`})
-                </option>
-              ))}
-            </select>
+            <Select
+              id={ids.listing}
+              label="Listing"
+              value={listingId}
+              options={[
+                { value: "", label: "Choose a published listing" },
+                ...(catalogue.data?.listings ?? []).map((l) => {
+                  const d = m.decimalsFor(l.mint, l.network);
+                  return { value: l.listing_id, label: `${l.title} · ${l.seller_name} (${d === null ? `${String(l.price_base_units)} base units` : `${formatUnits(l.price_base_units, d)} USDC`})` };
+                }),
+              ]}
+              onChange={setListingId}
+            />
           </div>
           <div className="field">
             <label htmlFor={ids.max}>Maximum total per hire</label>

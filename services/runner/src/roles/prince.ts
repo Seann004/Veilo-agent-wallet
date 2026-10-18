@@ -1,13 +1,17 @@
-import { FIXTURE_DATA_LABEL, SPONSORED_PLANNING_LABEL } from "@veilo/contracts/gateway";
+import { FIXTURE_DATA_LABEL } from "@veilo/contracts/gateway";
 import { ToolDenied } from "../control-client";
 import { safeFetch, type SafeFetchPolicy } from "../safe-fetch";
 import {
+  BYOK_LABEL,
   buy,
   delivered,
   fenceConnectorOutput,
   outcomeText,
   parseJsonObject,
   plan,
+  planningSummary,
+  runAi,
+  step,
   runProposedCalls,
   stripUnlistedUrls,
   tryTool,
@@ -120,6 +124,7 @@ async function docsEvidence(ctx: RoleContext, question: string): Promise<DocsEvi
 export async function runPrince(ctx: RoleContext, fetchPolicy: SafeFetchPolicy): Promise<RoleOutcome> {
   const input = ctx.task.input as { question: string; sources?: string[]; handoffToAgentId?: string; onchain?: unknown };
   const question = input.question;
+  await step(ctx, "Checking services and budget");
   const catalogReply = await tryTool(ctx, "catalog_lookup");
   const budgetReply = await tryTool(ctx, "budget_summary");
   const catalog: CatalogItem[] = Array.isArray(catalogReply.body?.items) ? catalogReply.body.items : [];
@@ -142,6 +147,7 @@ export async function runPrince(ctx: RoleContext, fetchPolicy: SafeFetchPolicy):
   const comparison = options.map((o) => `- ${o.item.sku}: ${o.price} test-USDC base units, ${o.fits ? "fits the task, per-purchase and agent budgets" : "does not fit the current budget"}`);
 
   // Planning call 1: choose the dataset. Invalid or unavailable output falls back deterministically.
+  await step(ctx, "Planning the research");
   const planText = await plan(
     ctx,
     "choose research dataset",
@@ -161,6 +167,7 @@ export async function runPrince(ctx: RoleContext, fetchPolicy: SafeFetchPolicy):
   let records: EvidenceRecord[] = [];
   let dataPurchaseId: string | null = null;
   if (chosen) {
+    await step(ctx, `Buying research data (${chosen.item.sku})`);
     const r = await buy(ctx, chosen.item, `data:${chosen.item.sku}`, { query: question.slice(0, 500) }, rationale);
     paid.push({ purchaseId: r.body?.purchase?.id ?? null, sku: chosen.item.sku, path: "private_x402", price: chosen.price.toString(), usage: "0", outcome: outcomeText(r) });
     if (delivered(r)) {
@@ -180,8 +187,11 @@ export async function runPrince(ctx: RoleContext, fetchPolicy: SafeFetchPolicy):
       .join("\n")
       .slice(0, 20_000);
     const analyzeInput = { text: evidenceText, question: question.slice(0, 1_000) };
-    const prepaid = catalog.find((c) => c.sku === "analyze" && c.paymentPath === "prepaid_credits");
-    const perCall = catalog.find((c) => c.sku === "analyze" && c.paymentPath === "private_x402");
+    await step(ctx, "Analyzing the evidence");
+    const own = await runAi(ctx, "analyze", analyzeInput);
+    const prepaid = own ? undefined : catalog.find((c) => c.sku === "analyze" && c.paymentPath === "prepaid_credits");
+    const perCall = own ? undefined : catalog.find((c) => c.sku === "analyze" && c.paymentPath === "private_x402");
+    if (own) analysis = { text: own.text ?? "", label: `${BYOK_LABEL}: ${own.model}` };
     let r = prepaid ? await buy(ctx, prepaid, "analyze:prepaid", analyzeInput, "Analyze purchased evidence with prepaid credits") : undefined;
     if (r && prepaid) paid.push({ purchaseId: r.body?.purchase?.id ?? null, sku: "analyze", path: "prepaid_credits", price: "0", usage: prepaid.usage.amount, outcome: outcomeText(r) });
     const refusedBeforeUse = r !== undefined && !delivered(r) && (r.body?.purchase?.states?.fulfilment === "abandoned" || r.body?.purchase === undefined);
@@ -189,7 +199,9 @@ export async function runPrince(ctx: RoleContext, fetchPolicy: SafeFetchPolicy):
       r = await buy(ctx, perCall, "analyze:per-call", analyzeInput, "Per-call analysis: prepaid credits unavailable");
       paid.push({ purchaseId: r.body?.purchase?.id ?? null, sku: "analyze", path: "private_x402", price: perCall.price.amount, usage: "0", outcome: outcomeText(r) });
     }
-    if (r && delivered(r)) {
+    if (own) {
+      // Analysed on the owner's own provider: nothing was purchased.
+    } else if (r && delivered(r)) {
       const result = r.body.execution?.result as { text?: string; provenance?: { label?: string } } | null;
       analysis = { text: String(result?.text ?? ""), label: String(result?.provenance?.label ?? "") };
       analysisPurchaseId = r.body.purchase.id as string;
@@ -265,7 +277,7 @@ ${analysis.text.slice(0, 6_000)}${docs ? `\n\nDocumentation excerpt (untrusted c
     "",
     "## Paid services used",
     ...(paid.length > 0 ? paid.map((p) => `- ${p.sku} via ${p.path}: ${p.path === "prepaid_credits" ? `${p.usage} gateway microcredits` : `${p.price} test-USDC base units`} — ${p.outcome}${p.purchaseId ? ` (purchase ${p.purchaseId})` : ""}`) : ["- None."]),
-    `- ${ctx.client.planningCalls} ${SPONSORED_PLANNING_LABEL} call(s); not paid with test USDC or credits.`,
+    `- ${planningSummary(ctx.client)}; not paid with USDC or credits.`,
     ...(ownerSources.length > 0 ? ["", "## Owner-suggested sources", ...ownerSources] : []),
     ...(ctx.notes.length > 0 || sideEffects.length > 0
       ? ["", "## Notes", ...ctx.notes.map((n) => `- ${n}`), ...sideEffects.map((s) => `- Planner-proposed tool ${s.tool}: ${s.outcome}`)]
@@ -300,8 +312,10 @@ async function analyzeEvidence(
   evidence: string,
   question: string,
   paid: Array<{ purchaseId: string | null; sku: string; path: string; price: string; usage: string; outcome: string }>,
-): Promise<{ text: string; label: string; purchaseId: string } | undefined> {
+): Promise<{ text: string; label: string; purchaseId: string | null } | undefined> {
   const analyzeInput = { text: evidence, question: question.slice(0, 1_000) };
+  const own = await runAi(ctx, "analyze", analyzeInput);
+  if (own) return { text: own.text ?? "", label: `${BYOK_LABEL}: ${own.model}`, purchaseId: null };
   const prepaid = catalog.find((c) => c.sku === "analyze" && c.paymentPath === "prepaid_credits");
   const perCall = catalog.find((c) => c.sku === "analyze" && c.paymentPath === "private_x402");
   let r = prepaid ? await buy(ctx, prepaid, "analyze:prepaid", analyzeInput, "Analyze purchased on-chain data with prepaid credits") : undefined;
@@ -365,7 +379,7 @@ async function runOnchain(ctx: RoleContext, question: string, target: OnchainTar
     ...paid.map((p) => `- ${p.sku} via ${p.path}: ${p.path === "prepaid_credits" ? `${p.usage} gateway microcredits` : `${p.price} test-USDC base units reserved`} — ${p.outcome}${p.purchaseId ? ` (purchase ${p.purchaseId})` : ""}`),
     ...(unspent > 0n && records.length > 0 ? [`- ${unspent} test-USDC base units of the batch were not spent and stay recoverable by the owner.`] : []),
     "- All calls in one batch were paid by one one-time payer and are linkable to each other on chain.",
-    `- ${ctx.client.planningCalls} ${SPONSORED_PLANNING_LABEL} call(s); not paid with test USDC or credits.`,
+    `- ${planningSummary(ctx.client)}; not paid with USDC or credits.`,
     ...(ctx.notes.length > 0 ? ["", "## Notes", ...ctx.notes.map((n) => `- ${n}`)] : []),
   ];
   const sourcePurchaseIds = [paid[0]?.purchaseId ?? null, analysis?.purchaseId ?? null].filter((x): x is string => x !== null);

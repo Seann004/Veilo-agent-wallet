@@ -5,7 +5,7 @@ import { GATEWAY_CREDIT_LABEL as CONTRACT_CREDIT_LABEL, SPONSORED_PLANNING_LABEL
 import { paymentStatusLabel } from "@veilo/contracts";
 import { ActivityDrawer } from "../components/Activity";
 import { withRole } from "./access-fixtures";
-import { DevnetBadge } from "../components/DevnetBadge";
+import { NetworkStatus } from "../components/NetworkStatus";
 import {
   GATEWAY_CREDIT_LABEL,
   LABEL_CREDITS_NO_CHARGE,
@@ -58,7 +58,7 @@ describe("owner-facing labels", () => {
     expect(within(dialog).getByText(LABEL_STOPPED_AUTHORIZED)).toBeTruthy();
     expect(within(dialog).getByText("Funding (pool withdrawal to fresh wallet)")).toBeTruthy();
     expect(within(dialog).getByText("Merchant (x402 settlement)")).toBeTruthy();
-    expect(within(dialog).getByText(`submitted — ${LABEL_WAITING}`)).toBeTruthy();
+    expect(within(dialog).getByText(`submitted: ${LABEL_WAITING}`)).toBeTruthy();
     const links = within(dialog).getAllByRole("link").map((a) => a.getAttribute("href"));
     expect(links.some((h) => h?.startsWith("https://explorer.solana.com/tx/FundSig") && h.endsWith("?cluster=devnet"))).toBe(true);
     expect(links.some((h) => h?.startsWith("https://explorer.solana.com/tx/MerchSig") && h.endsWith("?cluster=devnet"))).toBe(true);
@@ -72,15 +72,15 @@ describe("owner-facing labels", () => {
     expect(screen.getAllByText(LABEL_PAID_NO_RESULT).length).toBeGreaterThan(0);
   });
 
-  it("confirms devnet only when the verified identity matches the workspace", () => {
+  it("shows live on devnet only when the verified identity matches the workspace", () => {
     const ws = workspace().workspace;
     const identity = { genesisHash: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG", caip2: ws.network, mint: ws.mint, mintDecimals: 6, checkedAt: "" };
-    const { rerender } = render(<DevnetBadge health={{ service: "control", status: "ok", network: ws.network, chain: { state: "verified", identity } }} healthError={undefined} workspace={ws} />);
-    expect(screen.getByRole("status").textContent).toContain("confirmed devnet");
-    rerender(<DevnetBadge health={{ service: "control", status: "unavailable", network: ws.network, chain: { state: "unavailable", reason: "x" } }} healthError={undefined} workspace={ws} />);
+    const { rerender } = render(<NetworkStatus health={{ service: "control", status: "ok", network: ws.network, chain: { state: "verified", identity } }} healthError={undefined} workspace={ws} />);
+    expect(screen.getByRole("status").textContent).toBe("Live on Solana devnet");
+    rerender(<NetworkStatus health={{ service: "control", status: "unavailable", network: ws.network, chain: { state: "unavailable", reason: "x" } }} healthError={undefined} workspace={ws} />);
     expect(screen.getByRole("status").textContent).toContain("Solana devnet");
     expect(screen.getByRole("status").textContent).toContain("not confirmed");
-    rerender(<DevnetBadge health={{ service: "control", status: "ok", network: ws.network, chain: { state: "verified", identity: { ...identity, mint: "Other" } } }} healthError={undefined} workspace={ws} />);
+    rerender(<NetworkStatus health={{ service: "control", status: "ok", network: ws.network, chain: { state: "verified", identity: { ...identity, mint: "Other" } } }} healthError={undefined} workspace={ws} />);
     expect(screen.getByRole("status").textContent).toContain("mismatch");
   });
 });

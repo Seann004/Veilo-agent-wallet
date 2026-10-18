@@ -1,5 +1,6 @@
 // TEST ONLY. Boots control (real ledger, routes, orchestrator, scheduler) against the real
 // gateway service code with its test chain/facilitator and FIXTURE provider.
+import type { ChannelService } from "../../src/channels/service";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import {
@@ -25,6 +26,8 @@ import { GatewayClient, type FetchLike } from "../../src/integration/gateway-cli
 import { PermitSigner } from "../../src/integration/permits";
 import { activateDefaults, addNotes, createEnv, type TestEnv } from "../helpers";
 import { TestFundingProvider } from "./test-funding-provider";
+import type { AiService } from "../../src/ai/service";
+import type { WorkflowRunner } from "../../src/workflows/runner";
 
 const config = loadConfig({
   DEVNET_RPC_URL: "https://rpc.test.invalid",
@@ -100,6 +103,11 @@ export interface StackOptions {
   settlePollMs?: number;
   /** Agent connectors for the app; absent means the routes answer NOT_READY. */
   connectors?: (ledger: Ledger) => AgentConnectors;
+  /** The owner's model provider (BYOK); absent means agents fall back to sponsored planning and paid AI. */
+  ai?: (ledger: Ledger) => AiService;
+  channels?: (ledger: Ledger) => ChannelService;
+  /** A workflow runner on fake marketplace ports; absent means the workflow routes answer NOT_READY. */
+  workflows?: (ledger: Ledger) => WorkflowRunner;
 }
 
 export async function makeStack(options: StackOptions = {}): Promise<Stack> {
@@ -140,12 +148,13 @@ export async function makeStack(options: StackOptions = {}): Promise<Stack> {
 
   const build = () => createIntegration(env.ledger, { gateway: gatewayClient, permits, funding, ...(options.leaseMs !== undefined ? { leaseMs: options.leaseMs } : {}), ...(options.purchaseSweepMs !== undefined ? { purchaseSweepMs: options.purchaseSweepMs } : {}), ...(options.settleWaitMs !== undefined ? { settleWaitMs: options.settleWaitMs } : {}), ...(options.settlePollMs !== undefined ? { settlePollMs: options.settlePollMs } : {}) });
   const listen = async (integration: Integration) => {
-    const app = createApp(createServiceHealth("control", config, false), { ledger: env.ledger, session, services: new ServiceCredentials([]), log: () => undefined, integration, connectors: options.connectors?.(env.ledger) });
+    const app = createApp(createServiceHealth("control", config, false), { ledger: env.ledger, session, services: new ServiceCredentials([]), log: () => undefined, integration, connectors: options.connectors?.(env.ledger), ai: options.ai?.(env.ledger), channels: options.channels?.(env.ledger) });
     const server = app.listen(0, "127.0.0.1");
     await new Promise<void>((r) => server.once("listening", () => r()));
     return server;
   };
   const integration = build();
+  if (options.workflows) integration.workflows = options.workflows(env.ledger);
   const server = await listen(integration);
   const tokens = new Map<string, string>();
 

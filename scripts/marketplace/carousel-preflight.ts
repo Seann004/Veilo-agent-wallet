@@ -8,6 +8,7 @@
  * creates a post or draft.
  */
 import { findRepoRoot, loadDotEnv } from "@veilo/contracts";
+import { CAROUSEL_SLIDES } from "@veilo/contracts/marketplace";
 
 const rootDir = findRepoRoot();
 loadDotEnv({ rootDir });
@@ -24,7 +25,7 @@ async function zernio(path: string, key: string): Promise<{ status: number; body
 
 async function main(): Promise<void> {
   const hf = Boolean(env("HIGGSFIELD_API_KEY_ID") && env("HIGGSFIELD_API_KEY_SECRET"));
-  const cap = Math.min(4, Math.max(2, Number(env("HIGGSFIELD_MAX_IMAGES") ?? 4) || 4));
+  const cap = Math.min(CAROUSEL_SLIDES.max, Math.max(2, Math.trunc(Number(env("HIGGSFIELD_MAX_IMAGES") ?? CAROUSEL_SLIDES.max) || CAROUSEL_SLIDES.max)));
   add("Higgsfield key", hf, hf ? `set; at most ${cap} images per run (HIGGSFIELD_MAX_IMAGES)` : "HIGGSFIELD_API_KEY_ID / HIGGSFIELD_API_KEY_SECRET missing: the image step shows \"Provider not configured\" and is never quoted or paid");
 
   const key = env("ZERNIO_API_KEY");
@@ -43,9 +44,16 @@ async function main(): Promise<void> {
         add("ZERNIO_TIKTOK_ACCOUNT_ID", known, known ? "matches a connected TikTok account" : "not among the connected TikTok accounts");
         if (known) {
           const c = await zernio(`/accounts/${encodeURIComponent(account)}/tiktok/creator-info`, key);
-          const text = JSON.stringify(c.body ?? {});
-          const selfOnly = /SELF_ONLY/.test(text);
-          add("Private draft allowed", c.status === 200 && selfOnly, c.status === 200 ? (selfOnly ? "SELF_ONLY is an allowed privacy level" : "SELF_ONLY not offered for this creator") : `HTTP ${c.status} from creator-info`);
+          // Mirrors the Zernio adapter: SELF_ONLY when offered, otherwise the first offered level; either way the post is an inbox draft.
+          const body = c.body as { privacyLevels?: Array<{ value?: unknown }>; creator?: { canPostMore?: unknown } } | null;
+          const levels = (Array.isArray(body?.privacyLevels) ? body.privacyLevels : []).map((l) => l.value).filter((v): v is string => typeof v === "string");
+          const level = levels.includes("SELF_ONLY") ? "SELF_ONLY" : levels[0];
+          const canPost = body?.creator?.canPostMore !== false;
+          add(
+            "TikTok draft privacy level",
+            c.status === 200 && level !== undefined && canPost,
+            c.status !== 200 ? `HTTP ${c.status} from creator-info` : !level ? "the account offers no privacy level" : !canPost ? "the account cannot post more right now" : `drafts use ${level} (offered: ${levels.join(", ")})`,
+          );
         }
       }
     }
@@ -65,7 +73,7 @@ async function main(): Promise<void> {
     [
       "",
       "Most one run can cost: 0.23 USDC on devnet (planner 0.02, images 0.20, draft 0.01) plus",
-      `${cap} Higgsfield images on the seller's own Higgsfield credits; Zernio makes one private TikTok draft.`,
+      `${cap} Higgsfield images on the seller's own Higgsfield credits; Zernio makes one TikTok inbox draft (never published).`,
       "Nothing was generated, drafted or paid by this check.",
     ].join("\n"),
   );

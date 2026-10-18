@@ -1,23 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useId, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { api } from "../lib/api";
 import { useAgentAvatar, setAgentAvatar } from "../lib/avatars";
-import { credits, parseUsdcInput, usdc, when } from "../lib/format";
-import { REVIEW_LABEL, ROLE_LABEL, agentStateLabel, purchaseLabel, runBlockedReason } from "../lib/labels";
+import { parseUsdcInput, usdc, when } from "../lib/format";
+import { REVIEW_LABEL, ROLE_LABEL, agentStateLabel, purchaseLabel, runBlockedReason, skuLabel, taskStateLabel } from "../lib/labels";
 import type { Activity, Agent, Balances, ContentItem, Handoff, Job, LimitUsage, Purchase, Task } from "../lib/types";
 import { ActivityDrawer } from "./Activity";
-import { summarizeResult } from "../lib/results";
+import { RUN_SETTLED, runStatusLine, summarizeResult, workflowRunOf, type ProposedWorkflowRun } from "../lib/results";
+import type { LocalRun } from "../lib/market/workflows";
+import { AgentThinking, type ThinkingKind } from "./ThinkingOrb";
 import { AgentControls } from "./AgentControls";
 import { AgentConnectors } from "./AgentConnectors";
+import { AgentDelivery } from "./Channels";
 import { CustomAgentPanel } from "./CustomAgentFields";
-import { AgentAvatar, AvatarImage, AvatarPicker } from "./Avatar";
+import { AgentAvatar, AvatarImage, AvatarPicker, WorkingAvatar } from "./Avatar";
+import { Markdown, truncateMarkdown } from "./Markdown";
 import { Icon } from "./Icon";
 import { Select } from "./Select";
 import { PolicyForm, PolicyReview, type AgentPolicyInput } from "./Policy";
 import { useCapability, useOwner } from "./Shell";
-import { useAction, useResource } from "./hooks";
+import { useAction, usePolling, useResource } from "./hooks";
 import { DeniedHint, ErrorNotice, KV, Loading } from "./ui";
 import { AgentWorkflows } from "./market/AgentWorkflows";
 
@@ -87,6 +91,7 @@ export function ResearchForm({ agent, disabled: blocked, onQueued }: { agent: Ag
   const [sources, setSources] = useState("");
   const [deadline, setDeadline] = useState("");
   const [budget, setBudget] = useState("");
+  const [budgetError, setBudgetError] = useState<string | null>(null);
   const action = useAction();
   const [queued, setQueued] = useState<string | null>(null);
   const qid = useId();
@@ -97,12 +102,17 @@ export function ResearchForm({ agent, disabled: blocked, onQueued }: { agent: Ag
       onSubmit={(e) => {
         e.preventDefault();
         if (disabled || action.busy || question.trim() === "") return;
+        const limit = budget.trim() && budgetCap.allowed ? parseUsdcInput(budget) : null;
+        if (budget.trim() && budgetCap.allowed && limit === null) {
+          setBudgetError("Enter a task budget such as 0.01, with up to six decimal places, or leave it blank to use the policy budget.");
+          return;
+        }
+        setBudgetError(null);
         void action.run(async () => {
           const list = sources
             .split(/\s+/)
             .map((s) => s.trim())
             .filter(Boolean);
-          const limit = budget && budgetCap.allowed ? parseUsdcInput(budget) : null;
           const r = await api<{ taskId: string; executor: string }>("control", `/agents/${agent.id}/run`, {
             method: "POST",
             body: {
@@ -153,6 +163,7 @@ export function ResearchForm({ agent, disabled: blocked, onQueued }: { agent: Ag
           )}
         </div>
       </details>
+      {budgetError ? <p role="alert" className="notice notice-error">{budgetError}</p> : null}
       {!run.allowed ? <DeniedHint reason={run.reason} /> : null}
       <Queued text={queued} />
       <ErrorNotice error={action.error} />
@@ -337,6 +348,42 @@ function ResultText({ text }: { text: string }) {
   );
 }
 
+/**
+ * What the agent did, from the runner's details section: model used, connectors called,
+ * marketplace search and notes. The task line repeats the owner's message and is left out.
+ */
+function stepsOf(content: string): string[] {
+  const i = content.indexOf("\n— Details —\n");
+  if (i < 0) return [];
+  return content
+    .slice(i + "\n— Details —\n".length)
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l !== "" && !l.startsWith("Task: "));
+}
+
+/** The part of an output meant for the owner: everything before the runner's details marker. */
+function answerOf(content: string): string {
+  return content.split("\n— Details —\n")[0]!.trim();
+}
+
+const CHAT_ANSWER_PREVIEW = 900;
+
+function ChatAnswer({ answer }: { answer: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const long = answer.length > CHAT_ANSWER_PREVIEW;
+  return (
+    <>
+      <Markdown className="md-bubble">{long && !expanded ? truncateMarkdown(answer, CHAT_ANSWER_PREVIEW) : answer}</Markdown>
+      {long ? (
+        <button type="button" className="link-btn output-more" aria-expanded={expanded} onClick={() => setExpanded((x) => !x)}>
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      ) : null}
+    </>
+  );
+}
+
 /** Thread entries come only from recorded tasks, finished jobs, purchases and saved content. */
 function buildThread(
   tasks: Task[],
@@ -346,6 +393,19 @@ function buildThread(
   agentStopped: boolean,
   openPurchase: (id: string) => void,
 ): ThreadEntry[] {
+  const runOfTask = new Map<string, string>();
+  for (const j of jobs) {
+    const run = workflowRunOf(j);
+    if (run && j.taskId) runOfTask.set(j.taskId, run.runId);
+  }
+  const byRun = new Map<string, Purchase[]>();
+  for (const p of purchases) {
+    const runId = p.taskId ? runOfTask.get(p.taskId) : undefined;
+    if (runId) byRun.set(runId, [...(byRun.get(runId) ?? []), p]);
+  }
+  const grouped = new Set<string>();
+  for (const [, ps] of byRun) if (ps.length >= 2) for (const p of ps) grouped.add(p.id);
+
   const out: ThreadEntry[] = [];
   for (const t of tasks) {
     out.push({
@@ -355,66 +415,79 @@ function buildThread(
         <li className="bubble bubble-owner">
           {t.objective}
           <span className="bubble-meta">
-            Task {t.state.replace(/_/g, " ")} · budget {usdc(t.limits.taskUsdc)} · {when(t.createdAt)}
+            {taskStateLabel(t.state)} · {when(t.createdAt)}
           </span>
         </li>
       ),
     });
   }
-  for (const j of jobs.filter((x) => x.state === "completed" || x.state === "failed")) {
+  // A finished job that saved an output is shown by that output, which carries the task's state;
+  // jobs without one say how they ended.
+  const shown = new Set(items.map((c) => c.taskId));
+  for (const j of jobs.filter((x) => (x.state === "completed" || x.state === "failed") && !(x.taskId && shown.has(x.taskId)))) {
     out.push({
       at: j.updatedAt,
       key: `j-${j.id}`,
       node: (
         <li className="bubble bubble-agent">
           <ResultText text={summarizeResult(j, tasks.find((t) => t.id === j.taskId))} />
-          <span className="bubble-meta">
-            {j.kind.replace(/_/g, " ")} · {when(j.updatedAt)}
-          </span>
+          <span className="bubble-meta">{when(j.updatedAt)}</span>
         </li>
       ),
     });
   }
-  for (const p of purchases) {
+  const card = (p: Purchase): ReactNode => (
+    <li className="thread-item" key={p.id}>
+      <button type="button" className="attachment" aria-haspopup="dialog" onClick={() => openPurchase(p.id)}>
+        <span className="attachment-icon">
+          <Icon name="card" />
+        </span>
+        <span className="attachment-text">
+          <strong>
+            {skuLabel(p.sku)} · {p.paymentPath === "prepaid_credits" ? "prepaid AI credits" : usdc(p.price.amount)}
+          </strong>
+          <span>{purchaseLabel(p, { agentStopped })}</span>
+        </span>
+        <Icon name="arrow" size={16} />
+      </button>
+    </li>
+  );
+  for (const p of purchases.filter((x) => !grouped.has(x.id))) out.push({ at: p.createdAt, key: `p-${p.id}`, node: card(p) });
+  for (const [runId, ps] of byRun) {
+    if (ps.length < 2) continue;
     out.push({
-      at: p.createdAt,
-      key: `p-${p.id}`,
-      node: (
-        <li className="thread-item">
-          <button type="button" className="attachment" aria-haspopup="dialog" onClick={() => openPurchase(p.id)}>
-            <span className="attachment-icon">
-              <Icon name="card" />
-            </span>
-            <span className="attachment-text">
-              <strong>
-                {p.sku} · {p.paymentPath === "prepaid_credits" ? credits(p.usage.amount) : usdc(p.price.amount)}
-              </strong>
-              <span>{purchaseLabel(p, { agentStopped })}</span>
-            </span>
-            <Icon name="arrow" size={16} />
-          </button>
-        </li>
-      ),
+      at: ps.map((p) => p.createdAt).sort().at(-1)!,
+      key: `run-pay-${runId}`,
+      node: <RunPayments runId={runId} purchases={ps} cards={ps.map(card)} />,
     });
   }
   for (const c of items) {
+    const answer = c.kind === "content_calendar" ? "" : answerOf(c.content);
+    const steps = stepsOf(c.content);
+    const taskState = tasks.find((t) => t.id === c.taskId)?.state;
+    const proposed = workflowRunOf(jobs.find((j) => j.taskId === c.taskId && j.result?.workflowRun));
     out.push({
       at: c.createdAt,
       key: `c-${c.id}`,
       node: (
-        <li className="thread-item">
-          <Link href="/content" className="attachment">
-            <span className="attachment-icon">
-              <Icon name="file" />
-            </span>
-            <span className="attachment-text">
-              <strong>{c.title}</strong>
-              <span>
-                {c.kind.replace(/_/g, " ")} · revision {c.revision} · {REVIEW_LABEL[c.reviewState] ?? c.reviewState}
-              </span>
-            </span>
-            <Icon name="arrow" size={16} />
-          </Link>
+        <li className="bubble bubble-agent bubble-answer">
+          {/* The title repeats the owner's message, so it is shown only when there is no answer text. */}
+          {answer ? <ChatAnswer answer={answer} /> : <strong className="bubble-title">{c.title}</strong>}
+          {proposed ? <ProposedRunStatus proposed={proposed} /> : null}
+          {steps.length > 0 ? (
+            <details className="advanced bubble-steps">
+              <summary>How I did it</summary>
+              <ul>
+                {steps.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+          <span className="bubble-meta">
+            {taskState && taskState !== "completed" ? `${taskStateLabel(taskState)} · ` : ""}
+            {REVIEW_LABEL[c.reviewState] ?? c.reviewState} · <Link href="/outputs">Open in Outputs</Link>
+          </span>
         </li>
       ),
     });
@@ -422,25 +495,43 @@ function buildThread(
   return out.sort((a, b) => a.at.localeCompare(b.at));
 }
 
-function Routines({ agent, stopped }: { agent: Agent; stopped: boolean }) {
-  const t = agent.trigger as { type?: string; pollSeconds?: number };
-  const running = agent.status === "active" && !stopped;
-  const rows: Array<[string, string]> =
-    t.type === "low_credit_balance"
-      ? [[`Credit check every ${t.pollSeconds ?? 60} s`, running ? "Scheduled" : "Paused until the agent is active"]]
-      : [["Runs when you send a task", running ? "Ready" : "Not accepting tasks"]];
+const cutoffKey = (agentId: string) => `veilo:chat-cutoff:${agentId}`;
+
+function readCutoff(agentId: string): string | null {
+  try {
+    return window.localStorage.getItem(cutoffKey(agentId));
+  } catch {
+    return null;
+  }
+}
+
+function writeCutoff(agentId: string, at: string | null): void {
+  try {
+    if (at === null) window.localStorage.removeItem(cutoffKey(agentId));
+    else window.localStorage.setItem(cutoffKey(agentId), at);
+  } catch {
+    // Storage can be blocked; the thread then simply shows everything.
+  }
+}
+
+/** Entries from a "New chat" cutoff on; the cutoff is an ISO instant stored per agent. */
+export function afterCutoff<T extends { at: string }>(entries: T[], cutoff: string | null): T[] {
+  if (cutoff === null) return entries;
+  const t = Date.parse(cutoff);
+  return Number.isFinite(t) ? entries.filter((e) => Date.parse(e.at) > t) : entries;
+}
+
+/** Payment cards for a run's step purchases: one summary line once the run completed, else each card. */
+function RunPayments({ runId, purchases, cards }: { runId: string; purchases: Purchase[]; cards: ReactNode }) {
+  const view = useResource(() => api<{ run: LocalRun }>("control", `/workflows/runs/${runId}`), `workflow-run:${runId}`);
+  if (view.data?.run?.status !== "completed") return <>{cards}</>;
+  const total = purchases.reduce((sum, p) => sum + BigInt(p.price.amount), 0n).toString();
   return (
-    <ul className="routines">
-      {rows.map(([title, sub]) => (
-        <li key={title} className={running ? "" : "paused"}>
-          <Icon name={running ? "clock" : "pause"} />
-          <div>
-            {title}
-            <span>{sub}</span>
-          </div>
-        </li>
-      ))}
-    </ul>
+    <li className="thread-item run-payments">
+      <span className="small">
+        Workflow run · {purchases.length} payments · {usdc(total)} · <Link href={`/marketplace/runs/${runId}`}>View run</Link>
+      </span>
+    </li>
   );
 }
 
@@ -489,6 +580,74 @@ function AvatarSettings({ agent }: { agent: Agent }) {
   );
 }
 
+/** Which orb animation fits a reported step. */
+function orbFor(label: string): ThinkingKind {
+  if (/^Searching/.test(label)) return "searching";
+  if (/^(Planning|Choosing|Deciding)/.test(label)) return "planning";
+  if (/^(Calling connector|Reading)/.test(label)) return "connecting";
+  if (/^(Saving|Writing|Working on|Analyzing)/.test(label)) return "composing";
+  return "working";
+}
+
+function elapsedText(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+}
+
+/** Live view of a running job: the steps the runner reported, the current one animated, and elapsed time. */
+export function WorkingSteps({ name, task, queued }: { name: string; task: Task | undefined; queued: boolean }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const steps = task?.progress ?? [];
+  const since = task?.startedAt ? Date.parse(task.startedAt) : NaN;
+  const current = steps.at(-1);
+  return (
+    <li className="bubble bubble-agent bubble-working" role="status" aria-live="polite">
+      <span className="working-head">
+        <AgentThinking state={current ? orbFor(current.label) : queued ? "waiting" : "working"} decorative />
+        <span>{queued && steps.length === 0 ? `${name} is about to start…` : `${name} is working…`}</span>
+        {Number.isFinite(since) ? <span className="working-elapsed">{elapsedText(now - since)}</span> : null}
+      </span>
+      {steps.length > 0 ? (
+        <ol className="working-steps" aria-label="Steps so far">
+          {steps.map((step, i) => {
+            const isCurrent = i === steps.length - 1;
+            return (
+              <li key={`${step.at}-${i}`} className={isCurrent ? "is-current" : "is-done"} aria-current={isCurrent ? "step" : undefined}>
+                {isCurrent ? <span className="working-dot" aria-hidden="true" /> : <Icon name="check" size={14} />}
+                <span>{step.label}</span>
+              </li>
+            );
+          })}
+        </ol>
+      ) : null}
+    </li>
+  );
+}
+
+/**
+ * A proposed workflow run's live status from the run view. When the run cannot be read (for example
+ * by a guest), it falls back to the state recorded when the job finished.
+ */
+export function ProposedRunStatus({ proposed }: { proposed: ProposedWorkflowRun }) {
+  const view = useResource(() => api<{ run: LocalRun }>("control", `/workflows/runs/${proposed.runId}`), `workflow-run:${proposed.runId}`);
+  const run = view.data?.run && Array.isArray(view.data.run.steps) ? view.data.run : undefined;
+  usePolling(view.reload, `workflow-run:${proposed.runId}`, run !== undefined && !RUN_SETTLED.has(run.status));
+  const status = run?.status ?? proposed.status;
+  const awaiting = status === "awaiting_approval";
+  const line = run ? runStatusLine(run) : awaiting ? "Workflow run waiting for your approval" : "Workflow run started under your assignment";
+  return (
+    <span className="bubble-line run-status" role="status">
+      {run && !RUN_SETTLED.has(run.status) && !awaiting ? <AgentThinking state="working" decorative /> : null}
+      {run ? `Workflow run: ${line} · ` : `${line} · `}
+      <Link href={`/marketplace/runs/${proposed.runId}`}>{awaiting ? "Review and approve" : "View run"}</Link>
+    </span>
+  );
+}
+
 export function AgentDetail({ agentId }: { agentId: string }) {
   const { workspace, reloadWorkspace } = useOwner();
   const agent = workspace.agents.find((a) => a.id === agentId);
@@ -506,11 +665,29 @@ export function AgentDetail({ agentId }: { agentId: string }) {
   const configure = useCapability("configure");
   const [checkResult, setCheckResult] = useState<string | null>(null);
   const avatar = useAgentAvatar(agentId, agent?.role ?? "research");
+  const threadRef = useRef<HTMLOListElement>(null);
+  const [cutoff, setCutoff] = useState<string | null>(null);
+  useEffect(() => setCutoff(readCutoff(agentId)), [agentId]);
+  const threadSize = (tasks.data?.tasks.length ?? 0) + (tasks.data?.jobs.length ?? 0) + (content.data?.items.length ?? 0) + (activity.data?.purchases.length ?? 0);
+  // Like a chat: open at, and follow, the newest message.
+  useEffect(() => {
+    const el = threadRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [threadSize, agentId]);
 
-  if (!agent) return <p className="notice notice-error">Agent not found in this workspace.</p>;
   const reloadAll = async () => {
-    await Promise.all([reloadWorkspace(), tasks.reload(), balances.reload(), activity.reload(), content.reload(), handoffs.reload()]);
+    // Read the job state first so its final artifacts cannot be missed when polling stops.
+    await tasks.reload();
+    await Promise.all([reloadWorkspace(), balances.reload(), activity.reload(), content.reload(), handoffs.reload()]);
   };
+  const activeJob = tasks.data?.jobs.find((j) => j.state === "queued" || j.state === "leased" || j.state === "reconciling");
+  // Keep refreshing while a job runs or one of this agent's payments is in flight on chain;
+  // payments waiting on the owner do not need polling.
+  const unsettled = (activity.data?.purchases ?? []).some(
+    (p) => p.agentId === agentId && (["in_progress", "uncertain"].includes(p.states.fulfilment) || ["submitted", "signed", "uncertain", "proof_released"].includes(p.states.merchant)),
+  );
+  usePolling(reloadAll, agentId, activeJob !== undefined || unsettled);
+  if (!agent) return <p className="notice notice-error">Agent not found in this workspace.</p>;
   const activateDraft = (version: number) =>
     void save.run(async () => {
       await api("control", `/agents/${agent.id}/config`, { method: "PATCH", body: { activatePolicyVersion: version } });
@@ -524,13 +701,22 @@ export function AgentDetail({ agentId }: { agentId: string }) {
   const drafts = workspace.policies.filter((p) => p.scope === "agent" && p.agentId === agent.id && p.status === "draft");
   const budget = balances.data?.agents.find((b) => b.agentId === agent.id);
   const cash = balances.data?.cash?.byAgent.find((c) => c.agentId === agent.id);
-  const usage = balances.data?.usageByAgent?.find((u) => u.agentId === agent.id);
-  const activeJob = tasks.data?.jobs.find((j) => j.state === "queued" || j.state === "leased" || j.state === "reconciling");
   const purchases = activity.data?.purchases.filter((p) => p.agentId === agent.id) ?? [];
   const openPurchase = purchases.find((p) => p.id === openPurchaseId);
   const current = policyInputOf(agent);
   const loaded = tasks.data !== undefined && activity.data !== undefined && content.data !== undefined;
-  const entries = tasks.data && content.data ? buildThread(tasks.data.tasks, tasks.data.jobs, purchases, content.data.items, agentStopped, setOpenPurchaseId) : [];
+  const allEntries = tasks.data && content.data ? buildThread(tasks.data.tasks, tasks.data.jobs, purchases, content.data.items, agentStopped, setOpenPurchaseId) : [];
+  const entries = afterCutoff(allEntries, cutoff);
+  const hiddenCount = allEntries.length - entries.length;
+  const startNewChat = () => {
+    const at = new Date().toISOString();
+    writeCutoff(agentId, at);
+    setCutoff(at);
+  };
+  const showEarlier = () => {
+    writeCutoff(agentId, null);
+    setCutoff(null);
+  };
   const blocked = runBlockedReason(agent.status, stopped);
   const tz = workspace.workspace.timezone || "UTC";
 
@@ -548,18 +734,32 @@ export function AgentDetail({ agentId }: { agentId: string }) {
     }
     threadNodes.push(<Fragment key={e.key}>{e.node}</Fragment>);
   }
+  if (activeJob) {
+    threadNodes.push(<WorkingSteps key="working" name={agent.name} queued={activeJob.state === "queued"} task={tasks.data?.tasks.find((t) => t.id === activeJob.taskId)} />);
+  }
 
   return (
     <div className="agent-view">
       <section className="thread-panel" aria-label={`${agent.name} thread`}>
         <header className="thread-head">
-          <AgentAvatar agent={agent} size={36} />
+          {activeJob ? <WorkingAvatar agent={agent} size={48} /> : <AgentAvatar agent={agent} size={36} />}
           <div>
             <h1>{agent.name}</h1>
             <p className="role">{ROLE_LABEL[agent.role]}</p>
           </div>
           <span className={`pill pill-${canRun ? "ok" : agent.status === "paused" || agent.status === "draft" ? "warn" : "danger"}`}>{agentStateLabel(agent.status, stopped)}</span>
+          <button type="button" className="btn btn-small" onClick={startNewChat} disabled={entries.length === 0}>
+            New chat
+          </button>
         </header>
+        {cutoff !== null && hiddenCount > 0 ? (
+          <p className="small muted thread-earlier">
+            Earlier messages hidden. Tasks, payments and outputs are still in Activity and Outputs.{" "}
+            <button type="button" className="link-btn" onClick={showEarlier}>
+              Show earlier messages
+            </button>
+          </p>
+        ) : null}
         {blocked ? (
           <div className="notice notice-warn thread-notice" role="status">
             {blocked}
@@ -571,12 +771,12 @@ export function AgentDetail({ agentId }: { agentId: string }) {
                 title={configure.reason ?? undefined}
                 onClick={() => activateDraft(drafts.at(-1)!.version)}
               >
-                Activate policy v{drafts.at(-1)!.version}
+                Turn on with these limits
               </button>
             ) : null}
           </div>
         ) : null}
-        <ol className="thread" aria-label="Tasks, results and payments">
+        <ol className="thread" aria-label="Tasks, results and payments" ref={threadRef}>
           {!loaded ? (
             <li className="thread-empty">
               <Loading label="thread" />
@@ -586,8 +786,8 @@ export function AgentDetail({ agentId }: { agentId: string }) {
               {agent.role === "credit_manager"
                 ? `No credit checks recorded yet. ${agent.name} checks on schedule once its policy is active, or use Check now.`
                 : canRun
-                  ? `No tasks yet. Send ${agent.name} a task below.`
-                  : `No tasks yet. ${agent.name} can take tasks once its policy is active and it is not stopped.`}
+                  ? `Send ${agent.name} a message to start a job.`
+                  : `${agent.name} isn't on yet.`}
             </li>
           ) : (
             threadNodes
@@ -620,8 +820,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
         ) : null}
         {agent.role === "research" ? <ResearchForm agent={agent} disabled={!canRun} onQueued={reloadAll} /> : null}
         {agent.role === "content" ? <CampaignForm agent={agent} disabled={!canRun} handoffs={handoffs.data?.items ?? []} onQueued={reloadAll} /> : null}
-        {agent.role === "custom" ? <CustomAgentPanel agent={agent} policy={current} canRun={canRun} terminal={terminal} onChanged={reloadAll} /> : null}
-        {configure.allowed ? <AgentWorkflows agentId={agentId} /> : null}
+        {agent.role === "custom" ? <CustomAgentPanel part="composer" agent={agent} policy={current} canRun={canRun} terminal={terminal} onChanged={reloadAll} /> : null}
       </section>
 
       <aside className="details-panel" aria-label={`${agent.name} details`}>
@@ -634,33 +833,27 @@ export function AgentDetail({ agentId }: { agentId: string }) {
           </div>
           <AgentControls agent={agent} onChanged={reloadAll} compact />
         </div>
-
-        <div className="panel">
-          <h2 className="section-title">Status</h2>
-          <Routines agent={agent} stopped={stopped} />
-          <p className="small muted flush routines-foot">
-            {activeJob ? `${activeJob.kind.replace(/_/g, " ")} ${activeJob.state} · attempt ${activeJob.attempts}` : "No job running"}
-          </p>
-        </div>
+        {agent.role === "custom" ? <CustomAgentPanel part="details" agent={agent} policy={current} canRun={canRun} terminal={terminal} onChanged={reloadAll} /> : null}
 
         <div className="panel">
           <h2 className="section-title">Spending</h2>
-          <LimitBar label="Lifetime" u={budget?.lifetime} />
-          <LimitBar label="Last 24 h" u={budget?.rolling24h} />
-          <KV
-            rows={[
-              ["Spent", cash ? usdc(cash.spent) : "—"],
-              ["Reserved", cash ? usdc(cash.reserved) : "—"],
-              ["Credits used", usage ? credits(usage.consumedUnits) : "—"],
-              ...(usage && usage.packsPurchased > 0 ? [["Credit packs", `${usage.packsPurchased} (${usdc(usage.packCashSpent)}, in spent)`] as [string, string]] : []),
-            ]}
-          />
+          <LimitBar label="Total" u={budget?.lifetime} />
+          <LimitBar label="Today" u={budget?.rolling24h} />
           <p className="small muted section-foot">
-            {purchases.length} purchase{purchases.length === 1 ? "" : "s"} · <Link href="/activity">Activity</Link>
+            {cash ? `${usdc(cash.spent)} spent` : "—"} · <Link href="/wallet">Payments</Link>
           </p>
         </div>
 
         <AgentConnectors agent={agent} />
+
+        {configure.allowed ? <AgentWorkflows agentId={agentId} /> : null}
+
+        {configure.allowed ? (
+          <div className="panel">
+            <h2 className="section-title">Results</h2>
+            <AgentDelivery agent={agent} canEdit={configure.allowed} />
+          </div>
+        ) : null}
 
         {agent.role === "content" ? (
           <div className="panel">
@@ -670,12 +863,10 @@ export function AgentDetail({ agentId }: { agentId: string }) {
         ) : null}
 
         <details className="panel disclosure" id="settings" open={agent.status === "draft" || undefined}>
-          <summary>Policy and settings</summary>
+          <summary>Settings and limits</summary>
           <KV
             rows={[
               ["Job", agent.description ?? "—"],
-              ["Trigger", Object.entries(agent.trigger).map(([k, v]) => `${k}: ${String(v)}`).join(", ") || "—"],
-              ["Model profile", agent.modelProfile ?? "default"],
             ]}
           />
           {current ? <PolicyReview policy={agent.activePolicy!} workspacePolicy={wsPolicy} title={`Active policy v${agent.activePolicy!.version}`} /> : <p className="notice notice-warn">No active policy: this agent cannot spend.</p>}
@@ -688,7 +879,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
                 disabled={save.busy || terminal || !configure.allowed}
                 onClick={() => activateDraft(d.version)}
               >
-                Activate policy v{d.version}
+                Use these limits
               </button>
             </div>
           ))}

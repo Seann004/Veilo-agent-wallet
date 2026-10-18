@@ -15,7 +15,7 @@ The service key stays in the marketplace process only.
 
 ## Application quickstart
 
-Use Node **>=22.14.0 <23**, **pnpm 10.34.6**, and Docker with a running Linux daemon. Native Rust, Solana, Anchor and circom are provided by the pinned Docker toolchain. Allow time/disk/network for the first image and proof builds.
+Use Node **24 LTS** (`>=22.14.0 <25`), **pnpm 10.34.6**, and Docker with a running Linux daemon. Native Rust, Solana, Anchor and circom are provided by the pinned Docker toolchain. Allow time/disk/network for the first image and proof builds.
 
 From the repository root:
 

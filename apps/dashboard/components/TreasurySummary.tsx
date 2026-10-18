@@ -1,7 +1,8 @@
 "use client";
 
-import { credits, lamports, minBase, usdc } from "../lib/format";
-import { GATEWAY_CREDIT_LABEL, LABEL_CREDITS_NO_CHARGE, ROLE_LABEL, SPONSORED_PLANNING_LABEL } from "../lib/labels";
+import type { ReactNode } from "react";
+import { lamports, minBase, usdc } from "../lib/format";
+import { ROLE_LABEL } from "../lib/labels";
 import type { Agent, Balances, LimitUsage } from "../lib/types";
 import { KV, Section } from "./ui";
 
@@ -42,68 +43,32 @@ export function TreasurySummary({ balances, agents }: { balances: Balances; agen
   // Absent in the public view: pool balance movements could be matched to on-chain withdrawals.
   const buckets = balances.tokens.buckets;
   const poolSpendable = buckets?.approved_unreserved ?? "0";
-  const gc = balances.gatewayCredits;
+  const ready = buckets ? (BigInt(buckets.approved_unreserved ?? "0") + BigInt(buckets.confirmed_change ?? "0")).toString() : null;
+  const used = (u: LimitUsage) => (BigInt(u.settled) + BigInt(u.reserved)).toString();
   return (
     <Section title="Shared treasury">
-      <p className="small">
-        Three separate meters. They are never added together: cash is devnet USDC, credits are a prepaid balance bought with that cash, and sponsored planning is paid by the operator.
+      <div className="stats stats-3">
+        <div className="stat">
+          <span className="stat-label">Ready to spend in pool</span>
+          <span className="stat-value">{ready === null ? "—" : usdc(ready)}</span>
+          <span className="stat-sub">{ready === null ? "Hidden in the public view" : "Approved notes and change, not reserved"}</span>
+        </div>
+        <div className="stat">
+          <span className="stat-label">Spent today</span>
+          <span className="stat-value">{wsActive ? usdc(used(wsActive.rolling24h)) : "—"}</span>
+          <span className="stat-sub">{wsActive ? `of ${usdc(wsActive.rolling24h.limit)} per 24 h` : "No active workspace policy"}</span>
+        </div>
+        <div className="stat">
+          <span className="stat-label">Lifetime used</span>
+          <span className="stat-value">{wsActive ? usdc(used(wsActive.lifetime)) : "—"}</span>
+          <span className="stat-sub">{wsActive ? `of ${usdc(wsActive.lifetime.limit)} cap` : "No active workspace policy"}</span>
+        </div>
+      </div>
+      {wsActive ? null : <p className="notice notice-warn">Workspace policy is not activated; no agent can spend.</p>}
+      <p className="hint">
+        Each agent can spend at most its own remaining limit, the workspace&apos;s remaining limit and its per-purchase cap. No agent can spend the whole pool.
       </p>
-      <div className="grid-3 meters">
-        <div className="meter">
-          <h3>Cash spent (USDC)</h3>
-          <p className="meter-value">{balances.cash ? usdc(balances.cash.spent) : "—"}</p>
-          <p className="small muted">{balances.cash ? `${usdc(balances.cash.reserved)} reserved by live purchases` : "Cash accounting unavailable."}</p>
-        </div>
-        <div className="meter">
-          <h3>Prepaid credits</h3>
-          <p className="meter-value">{gc.available ? credits(gc.usable) : "Not ready"}</p>
-          <p className="small muted">
-            {gc.available ? `${credits(gc.consumed)} consumed so far. Using credits is not a second payment.` : "The gateway balance could not be read; no balance is shown."}
-          </p>
-        </div>
-        <div className="meter">
-          <h3>Sponsored planning</h3>
-          <p className="meter-value">{balances.sponsoredPlanning ? `${balances.sponsoredPlanning.total} call(s)` : "—"}</p>
-          <p className="small muted">Operator-funded; costs you no cash or credits.</p>
-        </div>
-      </div>
-      <div className="grid-2">
-        <div>
-          <h3>Global limits (workspace policy)</h3>
-          {wsActive ? (
-            <KV
-              rows={[
-                ["Lifetime", <Usage key="l" u={wsActive.lifetime} label="lifetime" />],
-                ["Rolling 24 h", <Usage key="r" u={wsActive.rolling24h} label="in 24 h" />],
-                ["SOL sponsor allowance", `${lamports(wsActive.sponsor.available)} remaining of ${lamports(wsActive.sponsor.limit)}`],
-                ["Tier", wsActive.tier.replace(/_/g, " ")],
-              ]}
-            />
-          ) : (
-            <p className="notice notice-warn">Workspace policy is not activated; no agent can spend.</p>
-          )}
-        </div>
-        <div>
-          <h3>Cash (USDC)</h3>
-          {balances.cash ? (
-            <KV
-              rows={[
-                ["Cash spent", <strong key="s" data-testid="cash-spent">{usdc(balances.cash.spent)}</strong>],
-                ["Cash reserved (live exposure)", usdc(balances.cash.reserved)],
-              ]}
-            />
-          ) : (
-            <p className="muted">Cash accounting unavailable.</p>
-          )}
-          <p className="muted small">{balances.cash?.note}</p>
-        </div>
-      </div>
 
-      <h3>Per-agent and global remaining</h3>
-      <p className="small">
-        An agent can spend at most the smallest of its own remaining limits and the workspace&apos;s remaining limits, and never more than its
-        per-purchase cap. Pool value is shared by all agents; no agent can spend the whole pool.
-      </p>
       <div className="table-wrap">
         <table>
           <caption className="sr-only">Remaining spending limits per agent</caption>
@@ -145,66 +110,46 @@ export function TreasurySummary({ balances, agents }: { balances: Balances; agen
         </table>
       </div>
 
-      <div className="grid-2">
-        <div>
-          <h3>{GATEWAY_CREDIT_LABEL}</h3>
-          {gc.available ? (
-            <>
-              <KV
-                rows={[
-                  ["Credits purchased", credits(gc.purchased)],
-                  ["Credits consumed", credits(gc.consumed)],
-                  ["Credits reserved", credits(gc.reserved)],
-                  ["Credits available", <strong key="u">{credits(gc.usable)}</strong>],
-                ]}
-              />
-              {gc.stale ? <p className="notice notice-warn">Balance is stale; Shawn pauses top-up checks until it refreshes.</p> : null}
-              <p className="small">
-                Credit packs are bought with USDC and counted once in cash spent. Calls that use prepaid credits: “{LABEL_CREDITS_NO_CHARGE}”.
-              </p>
-            </>
-          ) : (
-            <p className="notice notice-warn" role="status">
-              Not ready: {gc.message} ({gc.code})
-            </p>
-          )}
-          {balances.usageByAgent ? (
-            <ul className="plain small">
-              {balances.usageByAgent.map((u) => (
-                <li key={u.agentId}>
-                  {u.name}: consumed {credits(u.consumedUnits)}, reserved {credits(u.reservedUnits)}
-                  {u.packsPurchased > 0 ? `; bought ${u.packsPurchased} pack(s) = ${credits(u.packUnitsPurchased)} for ${usdc(u.packCashSpent)} (already in cash spent)` : ""}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {balances.sponsoredPlanning ? (
-            <p className="small">
-              <strong>{SPONSORED_PLANNING_LABEL}</strong>: {balances.sponsoredPlanning.total} call(s), operator-funded and separate from cash and
-              credits.
-            </p>
-          ) : null}
-        </div>
-        <div>
-          <h3>Pool funds and recoverable funds</h3>
-          {buckets ? (
-            <KV
-              rows={[
-                ["Spendable pool notes (approved, unreserved)", <strong key="p">{usdc(poolSpendable)}</strong>],
-                ...Object.entries(BUCKET_LABEL)
-                  .filter(([k]) => k !== "approved_unreserved")
-                  .map(([k, label]) => [label, usdc(buckets[k] ?? "0")] as [string, string]),
-              ]}
-            />
-          ) : (
-            <p className="small muted">Pool balances are hidden in the public view.</p>
-          )}
-          <p className="small muted">
-            Funded fresh-wallet balances are recoverable to the owner account once no signed merchant payment can still settle. Recovered funds
-            return outside the pool; private spending requires a new deposit.
-          </p>
-        </div>
-      </div>
+      <details className="disclosure treasury-details">
+        <summary>How limits work</summary>
+        <p className="small">
+          Cash is USDC paid privately from your pool. AI runs on your own model key; trial planning calls before you add one are paid by the operator
+          and cost you no USDC.
+        </p>
+        <KV
+          rows={[
+            ["Cash spent", <strong key="s" data-testid="cash-spent">{balances.cash ? usdc(balances.cash.spent) : "—"}</strong>],
+            ["Cash reserved (live exposure)", balances.cash ? usdc(balances.cash.reserved) : "—"],
+            ["Trial AI calls", balances.sponsoredPlanning ? `${balances.sponsoredPlanning.total} call(s)` : "—"],
+            ...(wsActive
+              ? ([
+                  ["Lifetime", <Usage key="l" u={wsActive.lifetime} label="lifetime" />],
+                  ["Rolling 24 h", <Usage key="r" u={wsActive.rolling24h} label="in 24 h" />],
+                  ["SOL sponsor allowance", `${lamports(wsActive.sponsor.available)} remaining of ${lamports(wsActive.sponsor.limit)}`],
+                  ["Tier", wsActive.tier.replace(/_/g, " ")],
+                ] as Array<[string, ReactNode]>)
+              : []),
+          ]}
+        />
+        {balances.cash?.note ? <p className="small muted">{balances.cash.note}</p> : null}
+        <h3>Pool funds</h3>
+        {buckets ? (
+          <KV
+            rows={[
+              ["Spendable pool notes (approved, unreserved)", <strong key="p">{usdc(poolSpendable)}</strong>],
+              ...Object.entries(BUCKET_LABEL)
+                .filter(([k]) => k !== "approved_unreserved")
+                .map(([k, label]) => [label, usdc(buckets[k] ?? "0")] as [string, string]),
+            ]}
+          />
+        ) : (
+          <p className="small muted">Pool balances are hidden in the public view.</p>
+        )}
+        <p className="small muted">
+          Funded fresh-wallet balances are recoverable to the owner account once no signed merchant payment can still settle. Recovered funds
+          return outside the pool; private spending requires a new deposit.
+        </p>
+      </details>
     </Section>
   );
 }

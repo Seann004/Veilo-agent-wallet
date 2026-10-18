@@ -67,7 +67,7 @@ describe("AGT-01 Prince research (fixture mode)", () => {
     expect(b.content).toContain("analyze via prepaid_credits: 200000 gateway microcredits — Delivered");
     expect(b.content).toContain("[incomplete] How costs compare");
     expect(b.content).toContain("http://169.254.169.254/latest/meta-data — not fetched");
-    expect(b.content).toContain("2 operator-sponsored planning call(s)");
+    expect(b.content).toContain("2 operator-sponsored planning calls");
     // Every citation maps to a record delivered by the purchased dataset.
     const purchased = s.integration.orchestrator.view(b.sources[0]!).result as { records: Array<{ source: { url: string } }> };
     const urls = new Set(purchased.records.map((r) => r.source.url));
@@ -308,7 +308,7 @@ describe("LLM-01 at runner level", () => {
     expect(done.outcome.taskState).toBe("incomplete");
     expect(analyzeCalls).toBe(1);
     const b = brief(s, run.body.taskId);
-    expect(b.content).toContain("Operator-sponsored planning unavailable");
+    expect(b.content).toContain("Operator-sponsored planning failed");
     expect(b.content).toContain("analyze via prepaid_credits: 200000 gateway microcredits — Waiting for confirmation");
     expect(b.content).toContain("[incomplete] No paid analysis result is available.");
     // The uncertain usage keeps its credits reserved; no per-call fallback purchase was made.

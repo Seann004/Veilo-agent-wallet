@@ -4,6 +4,7 @@ import { address, type Address } from "@solana/kit";
 import { VeiloConfigError, type VeiloConfig } from "@veilo/contracts";
 import { openSecretsDatabase, secretsDatabasePath } from "@veilo/db";
 import { assertManifestMatches, getPoseidon, ManifestMismatchError } from "@veilo/privacy-sdk";
+import { OrcaSwapQuoter } from "./swap";
 import { createRpcChainPort, HttpControlPort, HttpRelayerPort, SnarkjsProver } from "./adapters";
 import type { WalletDeps } from "./deps";
 import { FundingService } from "./funding";
@@ -74,6 +75,7 @@ export async function createWalletRuntime(config: VeiloConfig, env: Record<strin
     merchant: x402MerchantSigner(config.network.rpcUrl),
     pool,
     ownerRecoveryAddress: ownerRecoveryAddress(env),
+    swapQuoter: new OrcaSwapQuoter(config.network.rpcUrl),
     log: (line) => console.log(line),
   };
   const funding = new FundingService(deps);

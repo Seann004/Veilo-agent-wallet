@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MANAGED_TEMPLATES, quoteSchema, resultEnvelopeSchema } from "./schemas";
+import { TOOL_PROVIDERS } from "./workflows";
 
 const hex64 = z.string().regex(/^[0-9a-f]{64}$/);
 const signature = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{64,90}$/, "must be a base58 transaction signature");
@@ -30,7 +31,7 @@ export const sellerHostJobViewSchema = z
     inputs: z.array(z.object({ kind: z.string(), body: z.string(), createdAt: z.string() }).strict()),
     /** The listing's pinned provider tool, when the listing is a provider adapter on the seller's own host. */
     tool: z
-      .object({ provider: z.enum(["higgsfield", "makeugc", "zernio"]), toolName: z.string(), manifestSha256: z.string().regex(/^[0-9a-f]{64}$/) })
+      .object({ provider: z.enum(TOOL_PROVIDERS), toolName: z.string(), manifestSha256: z.string().regex(/^[0-9a-f]{64}$/) })
       .strict()
       .nullable()
       .optional(),

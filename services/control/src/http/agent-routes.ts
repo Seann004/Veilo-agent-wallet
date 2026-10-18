@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
-import type { z } from "zod";
+import type { ChannelService } from "../channels/service";
+import { z } from "zod";
 import {
   contentPatchSchema,
   contentQuerySchema,
@@ -16,6 +17,9 @@ import { claimWorkerJob, completeWorkerJob, heartbeatWorkerJob, ownTask, sponsor
 import type { Integration } from "../integration";
 import { requireAgent } from "../ledger/workspace";
 import { READERS, actorOf, requireActor, type AuthDeps } from "./actor";
+import { AI_SKUS, type AiService } from "../ai/service";
+import { browseLanded, browsePermit } from "../agents/browse";
+import { recordProgress } from "../agents/progress";
 
 function parse<S extends z.ZodType>(schema: S, value: unknown): z.infer<S> {
   const r = schema.safeParse(value ?? {});
@@ -36,7 +40,7 @@ const param = (req: Request, name: string): string => {
  * Content/handoff reads for every workspace role, owner-only edits and decisions, and the runner's
  * job/planning endpoints. None of these perform inference, purchases or publishing on behalf of an edit or approval.
  */
-export function agentRouter(deps: AuthDeps & { integration?: Integration | undefined }): Router {
+export function agentRouter(deps: AuthDeps & { integration?: Integration | undefined; ai?: AiService | undefined; channels?: ChannelService | undefined }): Router {
   const { ledger } = deps;
   const r = Router();
   const owner = requireActor(deps, ["owner"]);
@@ -101,16 +105,50 @@ export function agentRouter(deps: AuthDeps & { integration?: Integration | undef
   });
 
   r.post("/worker/jobs/:id/complete", worker, (req, res) => {
-    res.json(completeWorkerJob(ledger, workerAgent(res), param(req, "id"), parse(jobCompleteSchema, req.body)));
+    const out = completeWorkerJob(ledger, workerAgent(res), param(req, "id"), parse(jobCompleteSchema, req.body));
+    const taskId = (out.job as { taskId?: string | null }).taskId;
+    // Sent after the reply and outside the transaction; the outcome is recorded on the task.
+    if (taskId && deps.channels) void deps.channels.deliverTask(taskId);
+    res.json(out);
   });
 
   r.get("/worker/tasks/:id", worker, (req, res) => {
     res.json({ task: taskView(ownTask(ledger, workerAgent(res).id, param(req, "id"))) });
   });
 
+  r.post("/worker/tasks/:id/progress", worker, (req, res) => {
+    const body = parse(z.object({ label: z.string().min(1).max(1_000) }).strict(), req.body);
+    res.status(201).json(recordProgress(ledger, workerAgent(res), param(req, "id"), body.label));
+  });
+
   r.post("/worker/planning", worker, async (req, res) => {
-    const out = await sponsoredPlanning(ledger, deps.integration?.gateway, workerAgent(res), parse(planningProxyRequestSchema, req.body));
+    const agent = workerAgent(res);
+    const body = parse(planningProxyRequestSchema, req.body);
+    // The owner's own provider when one is set; operator-sponsored planning is the trial fallback.
+    const out = deps.ai?.configured(agent.workspace_id) ? await deps.ai.plan(agent, body) : await sponsoredPlanning(ledger, deps.integration?.gateway, agent, body);
     res.status(out.status).json(out.body);
+  });
+
+  r.post("/worker/browse-permit", worker, (req, res) => {
+    const body = parse(z.object({ taskId: z.uuid(), url: z.string().min(1).max(2048) }).strict(), req.body);
+    res.json(browsePermit(ledger, workerAgent(res), body));
+  });
+
+  r.post("/worker/browse-landed", worker, (req, res) => {
+    const body = parse(z.object({ taskId: z.uuid(), permittedUrl: z.string().min(1).max(2048), finalUrl: z.string().min(1).max(2048) }).strict(), req.body);
+    res.json(browseLanded(ledger, workerAgent(res), body));
+  });
+
+  r.post("/worker/ai", worker, async (req, res) => {
+    if (!deps.ai) throw new ControlError("NOT_READY", "model provider settings are not available");
+    const body = parse(z.object({ taskId: z.uuid(), sku: z.enum(AI_SKUS), input: z.unknown() }).strict(), req.body);
+    res.json(await deps.ai.run(workerAgent(res), body));
+  });
+
+  r.post("/worker/describe-reference", worker, async (req, res) => {
+    if (!deps.ai) throw new ControlError("NOT_READY", "model provider settings are not available");
+    const body = parse(z.object({ taskId: z.uuid() }).strict(), req.body);
+    res.json(await deps.ai.describeReference(workerAgent(res), body));
   });
 
   return r;

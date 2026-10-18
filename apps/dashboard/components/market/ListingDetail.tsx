@@ -7,10 +7,9 @@ import { toBaseUnits } from "../../lib/market/amounts";
 import { SubmissionKey } from "../../lib/market/idempotency";
 import type { CatalogEntry, HireResponse, ListingSample, QuoteFields } from "../../lib/market/types";
 import { useAction, useResource } from "../hooks";
-import { ErrorNotice, KV, Loading, Section } from "../ui";
-import { turnaround } from "./Catalogue";
+import { ErrorNotice, KV, Loading } from "../ui";
 import { useMarket } from "./MarketContext";
-import { Countdown, FullValue, Money, PausedNotice, PlainText, RequireMarketSession, TestTokenNote } from "./parts";
+import { Countdown, creatorAvatar, turnaround, DetailHeader, DetailSections, FullValue, Money, PausedNotice, PlainText, RequireMarketSession, type DetailSection } from "./parts";
 
 const MAX_BRIEF = 16_000;
 
@@ -29,6 +28,7 @@ export function quoteProblems(q: QuoteFields, l: CatalogEntry): string[] {
 
 export function ListingDetail({ slug }: { slug: string }) {
   const m = useMarket();
+  const [open, setOpen] = useState("about");
   const res = useResource(
     () => (m.configured ? marketApi<{ listing: CatalogEntry; samples: ListingSample[] }>(`/marketplace/listings/${encodeURIComponent(slug)}`) : Promise.reject(new Error("marketplace not configured"))),
     `listing:${slug}`,
@@ -36,59 +36,91 @@ export function ListingDetail({ slug }: { slug: string }) {
   if (res.loading && !res.data) return <Loading label="listing" />;
   if (!res.data) return <ErrorNotice error={res.error} what="the listing could not be loaded" onRetry={res.reload} />;
   const { listing: l, samples } = res.data;
-  return (
-    <>
-      <p className="small">
-        <Link href="/marketplace">← Catalogue</Link>
-      </p>
-      <h1>{l.title}</h1>
-      <p className="role">by {l.seller_name}</p>
-      <TestTokenNote />
-      <div className="grid-2">
-        <Section title="Terms">
+  const decimals = m.decimalsFor(l.mint, l.network);
+  const sections: DetailSection[] = [
+    {
+      id: "about",
+      label: "About",
+      sub: "What you get and how fast",
+      body: (
+        <div className="stack">
+          <PlainText text={l.description} />
           <KV
             rows={[
-              ["Price", <Money key="p" amount={l.price_base_units} decimals={m.decimalsFor(l.mint, l.network)} />],
+              ["Price", <Money key="p" amount={l.price_base_units} decimals={decimals} />],
               ["Platform fee", l.fee_bps === 0 ? "Zero platform fee" : `unexpected fee (${l.fee_bps} bps)`],
               ["Turnaround", turnaround(l.turnaround_minutes)],
-              ["Recipient (seller payout wallet)", <FullValue key="r" value={l.recipient} />],
-              ["Network", <FullValue key="n" value={l.network} />],
-              ["Mint", <FullValue key="m" value={l.mint} />],
               ["Output", l.output_format],
               ["Runtime", l.runtime_kind === "managed_template" ? `Managed template (${l.template ?? "—"})` : "Reviewed remote endpoint"],
             ]}
           />
-        </Section>
-        <Section title="Hire this specialist">
-          <RequireMarketSession what="hire this specialist">
-            <HireFlow listing={l} />
-          </RequireMarketSession>
-        </Section>
-      </div>
-      <Section title="Description">
-        <PlainText text={l.description} />
-      </Section>
-      <div className="grid-2">
-        <Section title="Data handling">
-          <PlainText text={l.data_handling} />
-        </Section>
-        <Section title="Refund terms">
+        </div>
+      ),
+    },
+    {
+      id: "hire",
+      label: "Hire",
+      sub: "Send a brief and approve the quote",
+      body: (
+        <RequireMarketSession what="hire this specialist">
+          <HireFlow listing={l} />
+        </RequireMarketSession>
+      ),
+    },
+    {
+      id: "terms",
+      label: "Payment and refunds",
+      sub: "Who is paid, and refund terms",
+      body: (
+        <div className="stack">
+          <KV
+            rows={[
+              ["Recipient (seller payout wallet)", <FullValue key="r" value={l.recipient} />],
+              ["Network", <FullValue key="n" value={l.network} />],
+              ["Mint", <FullValue key="m" value={l.mint} />],
+            ]}
+          />
+          <h3>Refund terms</h3>
           <PlainText text={l.refund_terms} />
           <p className="small muted">Refunds are seller-funded transfers to a wallet verified on your account; Veilo cannot reverse a direct payment.</p>
-        </Section>
-      </div>
-      <Section title="Sample deliverables">
-        {samples.length === 0 ? (
+          <h3>Data handling</h3>
+          <PlainText text={l.data_handling} />
+        </div>
+      ),
+    },
+    {
+      id: "samples",
+      label: "Samples",
+      sub: "Example deliverables",
+      body:
+        samples.length === 0 ? (
           <p className="muted">The seller has not published samples.</p>
         ) : (
-          samples.map((s) => (
-            <article key={s.id} className="content-item">
-              <h3>{s.title}</h3>
-              <PlainText text={s.content} className="sample" />
-            </article>
-          ))
-        )}
-      </Section>
+          <div className="stack">
+            {samples.map((s) => (
+              <article key={s.id} className="content-item">
+                <h3>{s.title}</h3>
+                <PlainText text={s.content} className="sample" />
+              </article>
+            ))}
+          </div>
+        ),
+    },
+  ];
+  return (
+    <>
+      <DetailHeader
+        avatar={creatorAvatar(l.title)}
+        title={l.title}
+        by={l.seller_name}
+        summary={l.summary}
+        actions={
+          <button type="button" className="btn btn-primary btn-pill" onClick={() => setOpen("hire")}>
+            Hire · <Money compact amount={l.price_base_units} decimals={decimals} />
+          </button>
+        }
+      />
+      <DetailSections sections={sections} open={open} onOpen={setOpen} />
     </>
   );
 }

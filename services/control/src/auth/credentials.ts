@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { immediate } from "@veilo/db";
 import type { Ledger } from "../context";
 import { ControlError } from "../errors";
-import { writeAudit } from "../ledger/events";
+import { writeAudit, type ActorType } from "../ledger/events";
 import { requireAgent } from "../ledger/workspace";
 import { safeEqualHex, sha256Hex } from "./session";
 
@@ -14,7 +14,13 @@ export interface WorkerIdentity {
 }
 
 /** Issues a per-agent worker token. Only its digest is stored; the token is returned once. */
-export function issueWorkerCredential(ledger: Ledger, workspaceId: string, agentId: string, ownerId: string): { credentialId: string; token: string } {
+export function issueWorkerCredential(
+  ledger: Ledger,
+  workspaceId: string,
+  agentId: string,
+  ownerId: string,
+  actorType: ActorType = "owner",
+): { credentialId: string; token: string } {
   return immediate(ledger.db, () => {
     const agent = requireAgent(ledger, workspaceId, agentId);
     if (agent.status === "revoked" || agent.status === "archived") {
@@ -30,7 +36,7 @@ export function issueWorkerCredential(ledger: Ledger, workspaceId: string, agent
     writeAudit(ledger, {
       workspaceId,
       scope: `agent:${agentId}`,
-      actorType: "owner",
+      actorType,
       actorId: ownerId,
       action: "worker_credential.issue",
       policyResult: "not_applicable",

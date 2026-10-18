@@ -6,6 +6,8 @@ export interface ConnectorTool {
   description: string;
   inputSchema: Record<string, unknown>;
   sha256?: string;
+  /** Set when Veilo runs a fixed query through the server's code tool; the agent never sends code. */
+  template?: { upstream: string };
 }
 
 /** Operator-approved connector from GET /marketplace/connectors. */
@@ -138,6 +140,7 @@ function toolsOf(v: unknown): ConnectorTool[] {
     description: str(t.description),
     inputSchema: isRecord(t.inputSchema) ? t.inputSchema : {},
     ...(typeof t.sha256 === "string" ? { sha256: t.sha256 } : {}),
+    ...(isRecord(t.template) && typeof t.template.upstream === "string" ? { template: { upstream: t.template.upstream } } : {}),
   }));
 }
 

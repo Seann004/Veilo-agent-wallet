@@ -1,21 +1,24 @@
 "use client";
 
+import { Icon } from "./Icon";
 import Link from "next/link";
-import { useId, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { SPECIALIST_SKU } from "@veilo/contracts/marketplace";
 import { api } from "../lib/api";
 import { formatUnits, parseUnits } from "../lib/market/amounts";
 import { marketApi } from "../lib/market/client";
-import { DECIMALS_UNVERIFIED } from "../lib/market/messages";
+import { DECIMALS_UNVERIFIED, OFFER_DRAFT_KEY } from "../lib/market/messages";
 import type { CatalogEntry } from "../lib/market/types";
 import { AGENT_TEMPLATES, type Agent, type AgentTemplate } from "../lib/types";
 import type { AgentPolicyInput } from "./Policy";
-import { useCapability } from "./Shell";
+import { downscaleReferenceImage, REFERENCE_IMAGE_TYPES, referenceFileProblem } from "../lib/reference-image";
+import { useAccess, useCapability } from "./Shell";
 import { useAction, useResource } from "./hooks";
 import { AgentGrants } from "./market/LocalApproval";
 import { EnsureMarket, useMarket } from "./market/MarketContext";
 import { PlainText } from "./market/parts";
 import { DeniedHint, ErrorNotice, KV, Loading, Section } from "./ui";
+import { Select } from "./Select";
 
 /** Server limits from the control contracts (createAgentRequestSchema, runAgentRequestSchema, customTaskInputSchema). */
 export const CUSTOM_INSTRUCTIONS_MAX = 8_000;
@@ -57,7 +60,7 @@ export function withHiring(p: AgentPolicyInput, on: boolean): AgentPolicyInput {
 
 export const grantBody = (g: Pick<GrantDraft, "listingId" | "recipient" | "maxTotalUnits">) => ({ listingId: g.listingId, recipient: g.recipient, maxTotalUnits: g.maxTotalUnits });
 
-const TEMPLATE_HINT = "Stored with the agent. The runner currently follows your instructions only; the template does not change its tools or limits.";
+const TEMPLATE_OPTIONS = AGENT_TEMPLATES.map((t) => ({ value: t, label: TEMPLATE_LABEL[t] }));
 
 /** Shown wherever a task for a dashboard-created agent could otherwise look stuck. */
 export function RunnerCredentialNote() {
@@ -73,9 +76,7 @@ export function RunnerCredentialNote() {
 function HiringCopy() {
   return (
     <p className="small">
-      The agent searches the marketplace and may propose one specialist per task. Off: it only reports what it found and can never pay a specialist. On:
-      each hire waits for your approval in <Link href="/marketplace/approvals">Marketplace → Approvals</Link>, unless you pre-approve that listing below,
-      and every payment stays inside this agent&apos;s spending policy and the workspace limits.
+      Each hire waits for your OK in <Link href="/marketplace/approvals">Approvals</Link>, unless it matches a listing you pre-approve below. It always stays within this agent&apos;s limits.
     </p>
   );
 }
@@ -88,16 +89,7 @@ export function CustomAgentFields({ value, onChange }: { value: CustomDraft; onC
       <legend>Custom agent</legend>
       <div className="field">
         <label htmlFor={ids.template}>Starting template</label>
-        <select id={ids.template} value={value.template} onChange={(e) => onChange({ ...value, template: e.target.value as AgentTemplate })} aria-describedby={`${ids.template}-h`}>
-          {AGENT_TEMPLATES.map((t) => (
-            <option key={t} value={t}>
-              {TEMPLATE_LABEL[t]}
-            </option>
-          ))}
-        </select>
-        <span id={`${ids.template}-h`} className="hint">
-          {TEMPLATE_HINT}
-        </span>
+        <Select id={ids.template} label="Starting template" value={value.template} options={TEMPLATE_OPTIONS} onChange={(t) => onChange({ ...value, template: t })} />
       </div>
       <div className="field">
         <label htmlFor={ids.instructions}>Instructions *</label>
@@ -111,8 +103,7 @@ export function CustomAgentFields({ value, onChange }: { value: CustomDraft; onC
           aria-describedby={`${ids.instructions}-h`}
         />
         <span id={`${ids.instructions}-h`} className="hint">
-          How this agent should approach every job ({value.instructions.length}/{CUSTOM_INSTRUCTIONS_MAX} characters). Instructions cannot add tools, raise
-          limits or reach your keys.
+          What this agent does and how. It can&apos;t change its own limits or see your keys.
         </span>
       </div>
       <fieldset>
@@ -164,14 +155,13 @@ function GrantDraftPicker({ grants, onChange }: { grants: GrantDraft[]; onChange
       <div className="grid-2">
         <div className="field">
           <label htmlFor={ids.listing}>Listing</label>
-          <select id={ids.listing} value={listingId} onChange={(e) => setListingId(e.target.value)}>
-            <option value="">Choose a published listing</option>
-            {catalogue.data?.listings.map((l) => (
-              <option key={l.listing_id} value={l.listing_id}>
-                {l.title} — {l.seller_name}
-              </option>
-            ))}
-          </select>
+          <Select
+            id={ids.listing}
+            label="Listing"
+            value={listingId}
+            options={[{ value: "", label: "Choose a published listing" }, ...(catalogue.data?.listings ?? []).map((l) => ({ value: l.listing_id, label: `${l.title} · ${l.seller_name}` }))]}
+            onChange={setListingId}
+          />
         </div>
         <div className="field">
           <label htmlFor={ids.max}>Maximum total per hire</label>
@@ -198,55 +188,177 @@ function GrantDraftPicker({ grants, onChange }: { grants: GrantDraft[]; onChange
   );
 }
 
+export const STYLE_PRESETS = [
+  { value: "default", label: "Default", note: "" },
+  { value: "editorial", label: "Editorial charcoal (dark, terracotta accent)", note: "dark charcoal background, warm terracotta accent, editorial serif headlines" },
+  { value: "light", label: "Clean light (white, black type)", note: "clean white background with black type and generous spacing" },
+  { value: "bold", label: "Bold colour (bright, high contrast)", note: "bright saturated colours with high contrast and heavy type" },
+] as const;
+
+/** Textarea height that follows its content from minRows up to maxRows. */
+function useAutoGrow(ref: RefObject<HTMLTextAreaElement | null>, value: string, maxRows: number) {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const lh = parseFloat(getComputedStyle(el).lineHeight) || 22;
+    const max = lh * maxRows;
+    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+  }, [ref, value, maxRows]);
+}
+
 /** Custom agent job: the objective plus optional context and search terms; instructions come from the agent record. */
 export function CustomRunForm({ agent, disabled, onQueued }: { agent: Agent; disabled: boolean; onQueued: () => void | Promise<void> }) {
+  const run = useCapability("run");
   const [objective, setObjective] = useState("");
   const [context, setContext] = useState("");
   const [search, setSearch] = useState("");
-  const [queued, setQueued] = useState<string | null>(null);
+  const [style, setStyle] = useState<string>("default");
+  const [image, setImage] = useState<string | null>(null);
+  const [imageNote, setImageNote] = useState<string | null>(null);
+  const [imageBusy, setImageBusy] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  // Guests cannot attach images (control refuses them), so the field is not offered.
+  const canAttach = useAccess().role !== "guest";
+  const objectiveRef = useRef<HTMLTextAreaElement>(null);
+  useAutoGrow(objectiveRef, objective, 10);
   const action = useAction();
-  const ids = { objective: useId(), context: useId(), search: useId() };
+  const ids = { objective: useId(), context: useId(), search: useId(), style: useId(), image: useId() };
+  const off = disabled || action.busy || imageBusy;
+  const clearImage = () => {
+    setImage(null);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+  const takeImage = (file: File | undefined) => {
+    setImageNote(null);
+    if (!file) return;
+    const problem = referenceFileProblem(file);
+    if (problem) {
+      setImageNote(problem);
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    setImageBusy(true);
+    downscaleReferenceImage(file)
+      .then(setImage, (err: unknown) => {
+        setImageNote(err instanceof Error ? err.message : "That image could not be read.");
+        clearImage();
+      })
+      .finally(() => setImageBusy(false));
+  };
   return (
     <form
+      className="composer"
       onSubmit={(e) => {
         e.preventDefault();
+        if (off || objective.trim() === "") return;
         void action.run(async () => {
           const input: Record<string, string> = {};
-          if (context.trim()) input.context = context.trim();
-          if (search.trim()) input.searchQuery = search.trim();
-          const r = await api<{ taskId: string; executor: string }>("control", `/agents/${agent.id}/run`, {
+          const preset = STYLE_PRESETS.find((p) => p.value === style);
+          const styleLine = preset && preset.note ? `Visual style: ${preset.note}` : "";
+          const fullContext = [context.trim().slice(0, CUSTOM_CONTEXT_MAX - styleLine.length - 1), styleLine].filter(Boolean).join("\n");
+          const words = search.replace(/`/g, "").trim();
+          if (fullContext) input.context = fullContext;
+          if (words) input.searchQuery = words;
+          if (image) input.referenceImage = image;
+          await api<{ taskId: string; executor: string }>("control", `/agents/${agent.id}/run`, {
             method: "POST",
             body: { objective: objective.trim(), ...(Object.keys(input).length > 0 ? { input } : {}) },
           });
-          setQueued(`Task ${r.taskId} ${r.executor}.`);
           setObjective("");
+          clearImage();
           await onQueued();
         });
       }}
     >
-      <div className="field">
-        <label htmlFor={ids.objective}>Job for {agent.name} *</label>
-        <textarea id={ids.objective} required rows={3} maxLength={CUSTOM_OBJECTIVE_MAX} value={objective} onChange={(e) => setObjective(e.target.value)} />
+      <div className="composer-box">
+        <label htmlFor={ids.objective} className="sr-only">
+          Message {agent.name}
+        </label>
+        <textarea
+          id={ids.objective}
+          ref={objectiveRef}
+          rows={3}
+          className="composer-grow"
+          maxLength={CUSTOM_OBJECTIVE_MAX}
+          value={objective}
+          disabled={off}
+          placeholder={!run.allowed ? (run.reason ?? "") : disabled ? `${agent.name} can't take jobs right now` : `Message ${agent.name}…`}
+          onChange={(e) => setObjective(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }
+          }}
+        />
+        <button type="submit" className="send-btn" aria-label="Send job" disabled={off || objective.trim() === ""}>
+          <Icon name="send" />
+        </button>
       </div>
-      <div className="field">
-        <label htmlFor={ids.context}>Context (optional)</label>
-        <textarea id={ids.context} rows={3} maxLength={CUSTOM_CONTEXT_MAX} value={context} onChange={(e) => setContext(e.target.value)} />
-      </div>
-      <div className="field">
-        <label htmlFor={ids.search}>Marketplace search terms (optional)</label>
-        <input id={ids.search} maxLength={CUSTOM_SEARCH_MAX} value={search} onChange={(e) => setSearch(e.target.value)} aria-describedby={`${ids.search}-h`} />
-        <span id={`${ids.search}-h`} className="hint">
-          Left empty, the agent chooses its own terms. Listing text it reads is untrusted.
-        </span>
-      </div>
-      <button type="submit" className="btn btn-primary" disabled={disabled || action.busy || objective.trim() === ""}>
-        Start job
-      </button>
-      {queued ? (
-        <p role="status" className="notice">
-          {queued}
-        </p>
-      ) : null}
+      <details className="composer-more">
+        <summary>More options</summary>
+        <div className="field">
+          <label htmlFor={ids.context}>Extra context</label>
+          <textarea id={ids.context} rows={3} maxLength={CUSTOM_CONTEXT_MAX} value={context} onChange={(e) => setContext(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor={ids.search}>Marketplace search words</label>
+          <input id={ids.search} maxLength={CUSTOM_SEARCH_MAX} value={search} autoComplete="off" spellCheck={false} placeholder="e.g. database review" onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor={ids.style}>Style</label>
+          <Select id={ids.style} label="Style" value={style} options={STYLE_PRESETS.map((p) => ({ value: p.value, label: p.label }))} onChange={setStyle} />
+        </div>
+        {canAttach ? (
+          <div className="field">
+            <label htmlFor={ids.image}>Reference image (optional)</label>
+            {image ? (
+              <div className="ref-thumb">
+                <img src={image} alt="Reference image preview" />
+                <button type="button" className="ref-thumb-remove" aria-label="Remove reference image" onClick={clearImage}>
+                  <Icon name="close" size={12} />
+                </button>
+              </div>
+            ) : null}
+            {image === null ? (
+              <label
+                htmlFor={ids.image}
+                className={`ref-drop${dragging ? " dragging" : ""}${off ? " disabled" : ""}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (!off) setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  if (!off) takeImage(e.dataTransfer.files[0]);
+                }}
+              >
+                <Icon name="upload" size={18} />
+                <span>{imageBusy ? "Reading image…" : <>Drag an image here or <span className="ref-drop-browse">browse</span></>}</span>
+              </label>
+            ) : null}
+            <input
+              id={ids.image}
+              ref={fileRef}
+              type="file"
+              className="sr-only"
+              accept={REFERENCE_IMAGE_TYPES.join(",")}
+              disabled={off}
+              aria-describedby={`${ids.image}-h`}
+              onChange={(e) => takeImage(e.target.files?.[0])}
+            />
+            <span id={`${ids.image}-h`} className={imageNote ? "hint field-error" : "hint"} role={imageNote ? "alert" : undefined}>
+              {imageNote ?? "PNG, JPEG or WebP, up to 2 MB. Your AI model reads it to match the style; only your model provider sees it."}
+            </span>
+          </div>
+        ) : null}
+      </details>
+      {!run.allowed ? <DeniedHint reason={run.reason} /> : null}
       <ErrorNotice error={action.error} />
     </form>
   );
@@ -274,13 +386,7 @@ function InstructionsEditor({ agent, onSaved }: { agent: Agent; onSaved: () => P
       <h3>Edit instructions</h3>
       <div className="field">
         <label htmlFor={ids.template}>Template</label>
-        <select id={ids.template} value={template} onChange={(e) => setTemplate(e.target.value as AgentTemplate)}>
-          {AGENT_TEMPLATES.map((t) => (
-            <option key={t} value={t}>
-              {TEMPLATE_LABEL[t]}
-            </option>
-          ))}
-        </select>
+        <Select id={ids.template} label="Template" value={template} options={TEMPLATE_OPTIONS} onChange={setTemplate} />
       </div>
       <div className="field">
         <label htmlFor={ids.instructions}>Instructions</label>
@@ -302,18 +408,23 @@ export function CustomAgentPanel({
   canRun,
   terminal,
   onChanged,
+  part = "all",
 }: {
   agent: Agent;
   policy: AgentPolicyInput | null;
   canRun: boolean;
   terminal: boolean;
   onChanged: () => Promise<void>;
+  /** "composer" is the job form under the thread; "details" is everything else, for the side column. */
+  part?: "all" | "composer" | "details";
 }) {
   const toggle = useAction();
   const run = useCapability("run");
   const configure = useCapability("configure");
   const editable = !terminal && configure.allowed;
   const hiring = hiringAllowed(agent.activePolicy?.permissions?.allowedSkus);
+  const composer = <CustomRunForm agent={agent} disabled={!canRun || !run.allowed} onQueued={onChanged} />;
+  if (part === "composer") return composer;
   return (
     <>
       <Section title="Instructions" id="instructions">
@@ -323,14 +434,31 @@ export function CustomAgentPanel({
             ["Instructions", <PlainText key="i" text={agent.instructions ?? "—"} />],
           ]}
         />
-        <p className="small muted">{TEMPLATE_HINT}</p>
         {editable ? <InstructionsEditor agent={agent} onSaved={onChanged} /> : null}
       </Section>
-      <Section title={`New job for ${agent.name}`} id="run">
+      {part === "all" ? composer : null}
+      <details className="advanced">
+        <summary>Running it locally</summary>
         <RunnerCredentialNote />
-        <CustomRunForm agent={agent} disabled={!canRun || !run.allowed} onQueued={onChanged} />
-        {!run.allowed ? <DeniedHint reason={run.reason} /> : null}
-        <p className="small">Each job saves a scouting report to <Link href="/content">Content</Link> (under Research briefs).</p>
+      </details>
+      <Section title="Offer on the marketplace">
+        <p>List these instructions as a specialist that other workspaces can hire and pay you for.</p>
+        <p className="small muted">
+          Buyers&apos; jobs run on the marketplace&apos;s managed runtime with these instructions. They don&apos;t use this agent&apos;s connectors, your model key or your private pool.
+        </p>
+        <Link
+          className="btn"
+          href="/marketplace/seller"
+          onClick={() => {
+            try {
+              sessionStorage.setItem(OFFER_DRAFT_KEY, JSON.stringify({ title: agent.name, sellerInstructions: agent.instructions ?? "" }));
+            } catch {
+              // Without storage the seller form simply starts empty.
+            }
+          }}
+        >
+          Create a listing
+        </Link>
       </Section>
       <Section title="Marketplace hiring">
         <p>

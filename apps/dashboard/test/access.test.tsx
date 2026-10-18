@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ActivityDrawer } from "../components/Activity";
 import { AgentControls } from "../components/AgentControls";
@@ -87,11 +87,12 @@ describe.each<[AccessRole, { stop: boolean; run: boolean; budget: boolean; decid
     render(withRole(<ActivityDrawer purchase={p} events={[]} workspace={workspace()} onClose={vi.fn()} onChanged={vi.fn()} />, role));
     expect(button("Approve purchase").disabled).toBe(!allowed.decide);
     expect(button("Reject purchase").disabled).toBe(!allowed.decide);
-    expect(button("Reconcile with chain and gateway").disabled).toBe(!allowed.decide);
+    expect(button("Check status again").disabled).toBe(!allowed.decide);
   });
 
   it("gates content review and keeps text read-only for non-owners", () => {
     render(withRole(<ContentEditor item={draft()} onSaved={vi.fn()} />, role));
+    fireEvent.click(screen.getByRole("button", { name: allowed.review ? "Edit" : "View text" }));
     const body = screen.getByLabelText("Draft text") as HTMLTextAreaElement;
     expect(body.readOnly).toBe(!allowed.review);
     for (const b of screen.getAllByRole("button", { name: /^Mark / }) as HTMLButtonElement[]) expect(b.disabled).toBe(!allowed.review);
@@ -160,6 +161,23 @@ describe("shell access", () => {
     expect(await screen.findByText("Guest")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
     expect(screen.queryByText("Read-only public view.")).toBeNull();
+  });
+
+  it("ends a signed-in session whose anti-CSRF cookie is missing, once, so the owner signs in again", async () => {
+    const f = shellFetch({ role: "guest", address: GUEST_ADDRESS, expiresAt: "2026-10-18T00:00:00.000Z", publicView: false });
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(`${init?.method ?? "GET"} ${String(input)}`);
+      return f(input);
+    });
+    render(
+      <Shell>
+        <p>page body</p>
+      </Shell>,
+    );
+    await waitFor(() => expect(calls).toContain("POST /api/control/session/logout"));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(calls.filter((c) => c === "POST /api/control/session/logout")).toHaveLength(1);
   });
 
   it("asks for sign-in when there is no session and public view is off", async () => {

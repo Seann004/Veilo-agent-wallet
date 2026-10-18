@@ -4,9 +4,15 @@ import { ControlError } from "./errors";
 import type { AuthDeps } from "./http/actor";
 import type { AgentConnectors } from "./connectors/agent-connectors";
 import { agentRouter } from "./http/agent-routes";
+import { aiRouter } from "./http/ai-routes";
+import { channelRouter } from "./http/channel-routes";
+import type { ChannelService } from "./channels/service";
+import type { AiService } from "./ai/service";
+import type { RunnerCredentialProvisioner } from "./auth/runner-credentials";
 import { connectorRouter } from "./http/connector-routes";
 import { controlRouter } from "./http/routes";
 import { externalRouter } from "./http/external-routes";
+import { swapRouter } from "./http/swap-routes";
 import { workflowRouter } from "./http/workflow-routes";
 import { marketplaceRouter } from "./http/marketplace-routes";
 import { ownerRouter } from "./http/owner-routes";
@@ -23,6 +29,11 @@ export interface ControlDeps extends AuthDeps {
   maxExternalBatchUsdc?: bigint;
   /** Owner-attached read-only MCP connectors; routes answer NOT_READY when absent. */
   connectors?: AgentConnectors | undefined;
+  /** The owner's own model provider (BYOK); planning falls back to the sponsored trial without it. */
+  ai?: AiService | undefined;
+  channels?: ChannelService | undefined;
+  /** Single-host provisioning of runner worker credentials; absent unless the operator opts in. */
+  runnerCredentials?: RunnerCredentialProvisioner | undefined;
 }
 
 /**
@@ -52,6 +63,8 @@ export function createApp(health: ServiceHealth, deps?: ControlDeps): Express {
 
   const log = deps.log ?? ((line: string) => console.log(line));
   app.use(requestLog(log));
+  // An agent run may carry one reference image (at most 1.5 MB decoded); every other body stays small.
+  app.post(/^\/agents\/[0-9a-f-]{36}\/run$/, express.json({ limit: "2200kb", strict: true }));
   app.use(express.json({ limit: "256kb", strict: true }));
   app.use(walletInternalRouter(deps));
   app.use(controlRouter(deps));
@@ -59,6 +72,9 @@ export function createApp(health: ServiceHealth, deps?: ControlDeps): Express {
   app.use(ownerRouter(deps));
   app.use(marketplaceRouter(deps));
   app.use(externalRouter(deps));
+  app.use(swapRouter(deps));
+  app.use(aiRouter(deps));
+  app.use(channelRouter(deps));
   app.use(workflowRouter(deps));
   app.use(connectorRouter(deps));
   app.use((_req: Request, res: Response) => {

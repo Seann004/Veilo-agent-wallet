@@ -1,115 +1,190 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../../lib/api";
-import { RUN_STATUS_LABEL, type LocalRun } from "../../lib/market/workflows";
-import { useAction, useResource } from "../hooks";
-import { ConfirmButton, EmptyState, ErrorNotice, KV, Loading, Section, TxLink } from "../ui";
-import { Address, FullValue, Money, PlainText, TestTokenNote } from "./parts";
+import { when } from "../../lib/format";
+import type { Workspace } from "../../lib/types";
+import { marketApi } from "../../lib/market/client";
+import { partitionRuns, plainReason, RUN_STATUS_LABEL, runHeadline, stepStateLabel, stepTitles, type LocalRun, type RunHeadline, type StepStateLabel, type WorkflowEntry } from "../../lib/market/workflows";
+import { useAction, usePolling, useResource } from "../hooks";
+import { ConfirmButton, EmptyState, ErrorNotice, KV, Loading, TxLink } from "../ui";
+import { AgentThinking } from "../ThinkingOrb";
+import { useOptionalMarket } from "./MarketContext";
+import { Address, FullValue, Money, PlainText } from "./parts";
+import { StepOutput } from "./RunOutput";
+import { formatElapsed } from "../../lib/market/artifacts";
 
-const PAYMENT_LABEL: Record<LocalRun["steps"][number]["payment"], string> = { paid: "Paid", paying: "Paying", not_paid: "Not paid" };
-const EXECUTION_LABEL: Record<LocalRun["steps"][number]["execution"], string> = { delivered: "Delivered", failed: "Failed", not_run: "Not run", pending: "Pending" };
+const HEAD_CLASS: Record<RunHeadline, string> = { Running: "pill", Waiting: "pill pill-warn", Completed: "pill pill-ok", Failed: "pill pill-danger", Halted: "pill pill-warn" };
+const STATE_CLASS: Record<StepStateLabel, string> = {
+  "Not started": "pill pill-muted",
+  "Getting a quote": "pill pill-warn",
+  Paying: "pill pill-warn",
+  Paid: "pill pill-ok",
+  Delivered: "pill pill-ok",
+  Failed: "pill pill-danger",
+};
 
 const statusClass = (s: LocalRun["status"]) =>
   s === "completed" ? "pill pill-ok" : s === "failed" || s === "rejected" ? "pill pill-danger" : s === "halted" || s === "awaiting_approval" ? "pill pill-warn" : "pill";
 
+/** Decimals for a run's amounts, from the verified mint the marketplace context holds; null when unverified. */
+function useRunDecimals(): (r: Pick<LocalRun, "terms">) => number | null {
+  const m = useOptionalMarket();
+  return (r) => m?.decimalsFor(r.terms.mint, r.terms.network) ?? null;
+}
+
+/** The public catalogue, for workflow and step titles; empty when the marketplace is unreachable. */
+function useCatalogue(): WorkflowEntry[] {
+  const res = useResource(async () => {
+    try {
+      const r = await marketApi<{ workflows?: WorkflowEntry[] }>("/marketplace/workflows");
+      return { workflows: Array.isArray(r.workflows) ? r.workflows : [] };
+    } catch {
+      return { workflows: [] as WorkflowEntry[] };
+    }
+  }, "market:workflows");
+  return res.data?.workflows ?? [];
+}
+
+/** A stop or wait reason in plain words; its error codes stay in the tooltip. */
+function Reason({ text }: { text: string | null | undefined }) {
+  const r = plainReason(text);
+  return (
+    <span title={r.codes.length > 0 ? r.codes.join(" · ") : undefined}>
+      <PlainText text={r.text} inline />
+    </span>
+  );
+}
+
 /** Your workflow runs, as your local control service records them. */
 export function WorkflowRunList() {
   const runs = useResource(() => api<{ runs: LocalRun[] }>("control", "/workflows/runs"), "workflow-runs");
+  const decimalsOf = useRunDecimals();
+  const catalogue = useCatalogue();
+  const [hideFailed, setHideFailed] = useState(true);
+  const parts = partitionRuns(runs.data?.runs ?? [], hideFailed);
+  const agents = useResource(() => api<Workspace>("control", "/workspace").catch(() => null), "workflow-runs-workspace");
+  const agentName = (id: string) => agents.data?.agents?.find((a) => a.id === id)?.name ?? null;
   return (
     <>
-      <h1>Workflow runs</h1>
-      <TestTokenNote />
+      <div className="runs-head">
+        <h1>Workflow runs</h1>
+        {parts.olderFailed.length > 0 ? (
+          <label className="switch" htmlFor="hide-failed-runs" title={hideFailed ? `${parts.olderFailed.length} older failed or rejected run${parts.olderFailed.length === 1 ? "" : "s"} hidden` : undefined}>
+            <input id="hide-failed-runs" type="checkbox" role="switch" checked={hideFailed} onChange={(e) => setHideFailed(e.target.checked)} />
+            Hide failed runs
+          </label>
+        ) : null}
+      </div>
       {runs.loading && !runs.data ? <Loading label="runs" /> : null}
       <ErrorNotice error={runs.error} what="your runs could not be loaded (sign in to the local dashboard first)" onRetry={runs.reload} />
       {runs.data && runs.data.runs.length === 0 ? (
         <EmptyState>
-          No runs yet. <Link href="/marketplace">Browse workflows</Link>.
+          Nothing has run yet. Pick a workflow and your first run will show up here. <Link href="/marketplace">Browse workflows</Link>.
         </EmptyState>
       ) : null}
       {runs.data && runs.data.runs.length > 0 ? (
-        <ul className="job-list">
-          {runs.data.runs.map((r) => (
-            <li key={r.id}>
-              <Link href={`/marketplace/runs/${r.id}`}>Run {r.id.slice(0, 8)}</Link> <span className={statusClass(r.status)}>{RUN_STATUS_LABEL[r.status]}</span>
-              {r.isTest ? <span className="pill pill-muted"> test run</span> : null} · {r.steps.filter((s) => s.payment === "paid").length}/{r.steps.length} steps paid · total{" "}
-              <Money amount={r.total.amount} decimals={null} />
-            </li>
-          ))}
+        <ul className="run-cards" aria-label="Workflow runs">
+          {parts.shown.map((r) => {
+            const title = catalogue.find((w) => w.version_id === r.workflowVersionId)?.title;
+            const paid = r.steps.filter((s) => s.payment === "paid").length;
+            const who = agentName(r.agentId);
+            const stamp = r.updatedAt ?? r.createdAt;
+            return (
+              <li key={r.id}>
+                <Link href={`/marketplace/runs/${r.id}`} className={parts.olderFailed.includes(r) ? "run-card run-card-old" : "run-card"}>
+                  <span className="run-card-main">
+                    <span className="run-card-title">
+                      {title ? <PlainText text={title} inline /> : `Workflow run ${r.id.slice(0, 8)}`}
+                      <span className={statusClass(r.status)}>{RUN_STATUS_LABEL[r.status]}</span>
+                      {r.isTest ? <span className="pill pill-muted">test run</span> : null}
+                    </span>
+                    <span className="small muted">
+                      {paid}/{r.steps.length} steps paid{who ? <> · <PlainText text={who} inline /></> : null}
+                      {stamp ? ` · ${when(stamp)}` : ""}
+                    </span>
+                  </span>
+                  <span className="run-card-total">
+                    <Money compact amount={r.total.amount} decimals={decimalsOf(r)} />
+                  </span>
+                  <span className="run-card-chevron" aria-hidden="true">›</span>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </>
   );
 }
 
-function StepOutput({ runId, index }: { runId: string; index: number }) {
-  const [open, setOpen] = useState(false);
-  const out = useResource(
-    () => (open ? api<{ kind: string | null; text: string; sha256: string }>("control", `/workflows/runs/${runId}/steps/${index}/artifact`) : Promise.resolve(null)),
-    `run-artifact:${runId}:${index}:${open}`,
-  );
-  if (!open) {
-    return (
-      <button type="button" className="btn btn-small" onClick={() => setOpen(true)}>
-        Show stored output
-      </button>
-    );
-  }
-  if (out.loading) return <Loading label="output" />;
-  if (out.error || !out.data) return <ErrorNotice error={out.error} what="the stored output could not be loaded" />;
-  return (
-    <div className="artifact">
-      <p className="small">
-        Untrusted output ({out.data.kind ?? "text"}), sha256 <FullValue value={out.data.sha256} />. Links are not opened or loaded.
-      </p>
-      <pre className="plain-text">
-        <PlainText text={out.data.text.slice(0, 20_000)} />
-      </pre>
-    </div>
-  );
+const LIVE_STATUSES: ReadonlyArray<LocalRun["status"]> = ["running", "approved"];
+
+/** Seconds since the page was opened while the run is live; the control service records no start time. */
+function useElapsed(live: boolean): number {
+  const start = useRef(Date.now());
+  const [now, setNow] = useState(start.current);
+  useEffect(() => {
+    if (!live) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [live]);
+  return now - start.current;
 }
 
-/** One run: per-step funding and merchant signatures, the deliverable and why it stopped. */
+/** One run: status, why it stopped or is waiting, and each step's payment and delivery. */
 export function WorkflowRunView({ runId }: { runId: string }) {
   const run = useResource(() => api<{ run: LocalRun }>("control", `/workflows/runs/${runId}`), `workflow-run:${runId}`);
   const act = useAction();
+  const decimalsOf = useRunDecimals();
+  const catalogue = useCatalogue();
+  const status = run.data?.run.status;
+  const live = status !== undefined && LIVE_STATUSES.includes(status);
+  // The same advance the owner would trigger by hand; usePolling never overlaps requests and stops on unmount.
+  usePolling(async () => {
+    await api("control", `/workflows/runs/${runId}/advance`, { method: "POST", body: {} });
+    await run.reload();
+  }, `run-advance:${runId}`, live, 3000);
+  const elapsed = useElapsed(live);
   if (run.loading && !run.data) return <Loading label="run" />;
   if (run.error || !run.data) return <ErrorNotice error={run.error} what="this run could not be loaded" onRetry={run.reload} />;
   const r = run.data.run;
   const paid = r.steps.reduce((n, s) => n + BigInt(s.paid ?? "0"), 0n);
+  const total = BigInt(r.total.amount);
+  const done = r.steps.filter((s) => s.payment === "paid").length;
+  const pct = total > 0n ? Number((paid * 100n) / total) : r.status === "completed" ? 100 : 0;
+  const head = runHeadline(r);
+  const reason = r.waiting?.reason ?? r.stop?.reason ?? null;
+  const decimals = decimalsOf(r);
+  const entry = catalogue.find((w) => w.version_id === r.workflowVersionId);
+  const titles = stepTitles(entry, r.steps.length);
+  const current = Math.min(r.steps.length, done + (r.status === "completed" ? 0 : 1));
   return (
     <>
       <p className="small">
         <Link href="/marketplace/runs">← All runs</Link>
       </p>
-      <h1>
-        Workflow run <span className="mono">{r.id.slice(0, 8)}</span>
-      </h1>
-      <p>
-        <span className={statusClass(r.status)}>{RUN_STATUS_LABEL[r.status]}</span> {r.isTest ? <span className="pill pill-muted">test run</span> : null}
-      </p>
-      <TestTokenNote />
-      <ErrorNotice error={act.error} what="the run could not be updated" />
-      {r.stop ? (
-        <p className={r.status === "halted" ? "notice notice-warn" : "notice notice-error"} role="status">
-          Stopped: {r.stop.code}. <PlainText text={r.stop.reason ?? ""} inline />
+      <h1>{entry ? <PlainText text={entry.title} inline /> : <>Workflow run <span className="mono">{r.id.slice(0, 8)}</span></>}</h1>
+      <div className="run-head">
+        {head === "Running" || head === "Waiting" ? <AgentThinking state={head === "Running" ? "working" : "waiting"} decorative /> : null}
+        <span className={HEAD_CLASS[head]}>{head}</span>
+        {r.isTest ? <span className="pill pill-muted">test run</span> : null}
+        {live ? <span className="small muted" aria-label="Time since you opened this page">{formatElapsed(elapsed)}</span> : null}
+      </div>
+      <div className="run-progress">
+        <div className="progress-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label="Run progress">
+          <span style={{ width: `${pct}%` }} />
+        </div>
+        <p className="small muted flush">
+          Step {current} of {r.steps.length} · Paid <Money compact amount={paid.toString()} decimals={decimals} /> of <Money compact amount={r.total.amount} decimals={decimals} />
         </p>
-      ) : null}
-      <KV
-        rows={[
-          ["Approved total", <Money key="t" amount={r.total.amount} decimals={null} />],
-          ["Paid so far", <Money key="p" amount={paid.toString()} decimals={null} />],
-          ["Approved by", r.approvedBy ? <Address key="a" value={r.approvedBy.startsWith("assignment:") ? null : r.approvedBy} /> : "not yet"],
-          ["Approval digest", <FullValue key="d" value={r.approvalDigest} />],
-        ]}
-      />
+      </div>
+      <p className="run-reason" role="status">
+        {reason ? <Reason text={reason} /> : head === "Completed" ? "All steps are done." : head === "Running" ? "Buying the steps in order." : RUN_STATUS_LABEL[r.status]}
+      </p>
+      <ErrorNotice error={act.error} what="the run could not be updated" />
       <div className="actions">
-        {r.status === "running" || r.status === "approved" ? (
-          <button type="button" className="btn" disabled={act.busy} onClick={async () => (await act.run(() => api("control", `/workflows/runs/${r.id}/advance`, { method: "POST", body: {} }))) && run.reload()}>
-            Check progress
-          </button>
-        ) : null}
         {r.status === "awaiting_approval" || r.status === "halted" ? (
           <>
             <ConfirmButton
@@ -131,44 +206,61 @@ export function WorkflowRunView({ runId }: { runId: string }) {
             />
           </>
         ) : null}
+        <button type="button" className="btn btn-small" disabled={run.loading} onClick={() => run.reload()}>
+          Refresh now
+        </button>
       </div>
-      <Section title="Steps">
-        <ol className="timeline">
-          {r.steps.map((s) => (
-            <li key={s.index} className="timeline-step">
-              <p className="chain-title">
-                Step {s.index + 1} ({s.toolKind}) — payment <span className={s.payment === "paid" ? "pill pill-ok" : s.payment === "paying" ? "pill pill-warn" : "pill pill-muted"}>{PAYMENT_LABEL[s.payment]}</span> · execution{" "}
-                <span className={s.execution === "delivered" ? "pill pill-ok" : s.execution === "failed" ? "pill pill-danger" : "pill pill-muted"}>{EXECUTION_LABEL[s.execution]}</span>
-              </p>
-              <KV
-                rows={[
-                  ["Maximum", <Money key="m" amount={s.max} decimals={null} />],
-                  ["Paid", s.paid ? <Money key="p" amount={s.paid} decimals={null} /> : "—"],
-                  ["Recipient", <Address key="r" value={s.recipient} />],
-                  ["Private funding", <TxLink key="f" signature={s.fundingSignature} label="withdrawal" />],
-                  [
-                    "Merchant payment",
-                    s.merchantSignatures.length === 0 ? (
-                      <span key="ms" className="muted">none recorded</span>
-                    ) : (
-                      <span key="ms">
-                        {s.merchantSignatures.map((sig, i) => (
-                          <span key={sig}>
-                            {i > 0 ? ", " : ""}
-                            <TxLink signature={sig} label={`payment ${i + 1}`} />
-                          </span>
-                        ))}
-                      </span>
-                    ),
-                  ],
-                  ...(s.stop ? ([["Stop reason", <PlainText key="sr" text={`${s.stop.code}: ${s.stop.reason ?? ""}`} inline />]] as Array<[string, React.ReactNode]>) : []),
-                ]}
-              />
-              {s.artifact ? <StepOutput runId={r.id} index={s.index} /> : null}
+      <ol className="stepper" aria-label="Steps">
+        {r.steps.map((s) => {
+          const label = stepStateLabel(s);
+          return (
+            <li key={s.index} className={`stepper-step stepper-${label.toLowerCase().replace(/ /g, "-")}`}>
+              <span className="stepper-num" aria-hidden="true">{s.index + 1}</span>
+              <div className="stepper-card">
+                <p className="chain-title">
+                  <span className="sr-only">Step {s.index + 1}: </span>
+                  <PlainText text={titles[s.index] ?? `Step ${s.index + 1}`} inline /> <span className={STATE_CLASS[label]}>{label}</span>
+                </p>
+                <p className="small flush">
+                  {s.paid ? (
+                    <>
+                      Paid <Money compact amount={s.paid} decimals={decimals} />
+                    </>
+                  ) : (
+                    <>
+                      Up to <Money compact amount={s.max} decimals={decimals} />
+                    </>
+                  )}{" "}
+                  to <Address value={s.recipient} />
+                  {s.fundingSignature ? <> · <TxLink signature={s.fundingSignature} label="Funding" /></> : null}
+                  {s.merchantSignatures.map((sig, i) => (
+                    <span key={sig}> · <TxLink signature={sig} label={s.merchantSignatures.length > 1 ? `Payment ${i + 1}` : "Payment"} /></span>
+                  ))}
+                </p>
+                {s.stop ? (
+                  <p className="small flush">
+                    <span title={s.stop.code}>
+                      <Reason text={s.stop.reason ?? s.stop.code} />
+                    </span>
+                  </p>
+                ) : null}
+                {s.artifact ? <StepOutput runId={r.id} index={s.index} /> : null}
+              </div>
             </li>
-          ))}
-        </ol>
-      </Section>
+          );
+        })}
+      </ol>
+      <details className="tech-details">
+        <summary>Technical details</summary>
+        <KV
+          rows={[
+            ["Approved by", r.approvedBy ? <Address key="a" value={r.approvedBy.startsWith("assignment:") ? null : r.approvedBy} /> : "not yet"],
+            ["Approval digest", <FullValue key="d" value={r.approvalDigest} />],
+            ...(r.stop ? [["Stop code", <span key="c" className="mono">{r.stop.code}</span>] as [string, ReactNode]] : []),
+            ...r.steps.filter((s) => s.stop).map((s): [string, ReactNode] => [`Step ${s.index + 1} code`, <span key={`s${s.index}`} className="mono">{s.stop?.code}</span>]),
+          ]}
+        />
+      </details>
     </>
   );
 }

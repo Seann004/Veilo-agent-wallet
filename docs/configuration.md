@@ -103,6 +103,7 @@ Every process serves `GET /health`.
 | `GATEWAY_PLANNING_CREDENTIAL_PATH` | `<VEILO_SECRETS_DIR>/gateway/planning.token` | Read by control to proxy operator-sponsored planning (`POST /worker/planning`); withheld from the runner. |
 | `CONTROL_PURCHASE_WAIT_MS` | `120000` | How long a purchase request (worker intent, owner reconcile, Shawn check) keeps reconciling a pending chain outcome of the same operation before it replies. Waiting never authorizes, proves or signs anything new. |
 | `CONTROL_PURCHASE_SWEEP_MS` | `15000` | The scheduler reconciles every purchase with unresolved execution at most this often, so a withdrawal or payment that finalizes after its request returned still completes. |
+| `CONTROL_PROVISION_RUNNER_CREDENTIALS` | empty | Single-host local deployments only. With `1` and `RUNNER_WORKER_CREDENTIAL_PATH` set, control issues a worker credential for every active research, content or custom agent that has no live entry in that file (at startup, on policy activation and on resume) and removes the entry when the agent is revoked or archived. The file is replaced atomically (temporary file and rename, mode 0600) and keeps other entries; tokens are never logged. Leave unset when the runner runs on another host or its credentials are managed by hand. |
 
 #### Marketplace controller (control)
 
@@ -180,8 +181,14 @@ The facilitator support check, the fee-payer pin and finality gating are identic
 | `SELLER_HOST_RECIPIENTS` | empty | Optional comma-separated payout owners. When set, a quote naming any other recipient is refused. A seller running their own host should set it to their payout wallet. |
 | `SELLER_HOST_ACCOUNTS_PER_IP_HOUR` | `5` | Self-service account creations allowed per client address per hour. There is also a global cap of 200 per hour. |
 | `HIGGSFIELD_API_KEY_ID`, `HIGGSFIELD_API_KEY_SECRET` | empty | Seller host only: the seller's own Higgsfield key. Without both, its Higgsfield tools report "Provider not configured" and are never quoted. Higgsfield tools are sold only as workflow steps (its terms forbid a bare pass-through). |
-| `HIGGSFIELD_MAX_IMAGES` | `4` | Seller host only: images generated per carousel, clamped to 2–4. A spend cap on the seller's own Higgsfield credits. |
+| `HIGGSFIELD_MAX_IMAGES` | `8` | Seller host only: images generated per carousel, clamped to 2–8. A spend cap on the seller's own Higgsfield credits; slides past the cap are not generated. |
+| `CAROUSEL_SELLER_IDENTITY`, `CAROUSEL_SELLER_RECIPIENTS`, `CAROUSEL_SELLER_TOKEN_PATH`, `CAROUSEL_SELLER_DATABASE_PATH` | empty | With `CAROUSEL_SELLER_ORIGIN`, `pnpm dev` also starts the carousel creator's seller host on that origin's port: its seller identity, payout recipient(s), host credential file (from the repository root) and database (default `data/seller-host-carousel.sqlite`). |
+| `HIGGSFIELD_STYLE` | empty | Seller host only: a visual style (up to 600 characters) appended to every Higgsfield Soul prompt, so all carousel images share one look. |
 | `ZERNIO_API_KEY`, `ZERNIO_TIKTOK_ACCOUNT_ID` | empty | Seller host only: the seller's Zernio key and connected TikTok account. Without both, the TikTok draft tool reports "Provider not configured". Drafts are private (`SELF_ONLY`, `tiktokSettings.draft`) and are never published by Veilo. |
+| `ZERNIO_PUBLISH_MODE` | `draft` | Seller host only: `draft` or `publish` (anything else stops the host at startup). `publish` turns on the separate `publish_tiktok_carousel` tool (provider `zernio_publish`, effect `publish_external`), which posts publicly (`PUBLIC_TO_EVERYONE`, `publishNow`, no draft flag) and only images this host rendered in the last 24 hours of its current process. The draft tool always drafts, whatever this is set to. Under `draft` the publish tool reports "Provider not configured". |
+| `SLIDES_RENDERER` | on | Seller host only: `off` disables the slide designer (`render_carousel_slides`). It is otherwise configured whenever `ZERNIO_API_KEY` and `ZERNIO_TIKTOK_ACCOUNT_ID` are set, since it uploads through Zernio's presigned media upload. |
+| `SLIDES_BROWSER_EXECUTABLE` | installed Chrome | Seller host only: Chrome or Chromium binary for slide rendering (playwright-core). Unset uses the installed Google Chrome channel. Rendering runs with scripts off and every request refused except allowlisted images. |
+| `SLIDES_IMAGE_HOSTS` | empty | Seller host only: comma-separated exact https hostnames a slide's optional `imageUrl` may load from (for example the Higgsfield CDN host). Empty means no slide loads any image. |
 | `CAROUSEL_SELLER_ORIGIN` | empty | Seed only: the seller host origin the carousel tools are listed on. Unset lists them on a placeholder host that cannot be paid. |
 | `MAKEUGC_API_KEY`, `MAKEUGC_AVATAR_ID` | empty | Seller host only: the seller's own MakeUGC key (paid plan) and the avatar its videos use. |
 
@@ -260,7 +267,7 @@ The dashboard only enables or disables controls; control and wallet enforce the 
 
 | Variable | Default | Description |
 |---|---|---|
-| `RUNNER_WORKER_CREDENTIAL_PATH` | empty | Per-agent worker tokens. `demo:seed` writes `<VEILO_SECRETS_DIR>/runner/worker-credentials.json` when unset and prints the path to set here. Format (`{"agents":[{"agentId","role","token"}]}`). The runner polls and claims jobs for these agents only. |
+| `RUNNER_WORKER_CREDENTIAL_PATH` | empty | Per-agent worker tokens. `demo:seed` writes `<VEILO_SECRETS_DIR>/runner/worker-credentials.json` when unset and prints the path to set here. Format (`{"agents":[{"agentId","role","token"}]}`). The runner polls and claims jobs for these agents only, and re-reads the file every 5 seconds (by modification time), so added or removed agents start or stop without a restart. A file that fails to parse keeps the current agents. |
 | `RUNNER_APPROVED_FETCH_ORIGINS` | empty | Exact origins agent tools may fetch (owner-suggested sources). Others are listed as "not fetched". |
 | `RUNNER_LOCAL_SERVICE_ORIGINS` | empty | Subset of approved origins that are configured local demo services and may resolve to loopback/private addresses. All other targets must resolve to public addresses; redirects are not followed. |
 
@@ -276,6 +283,7 @@ The dashboard only enables or disables controls; control and wallet enforce the 
 | `RELAYER_SPONSOR_LAMPORT_CAP` | `100000000` | Total sponsor exposure (fees spent + outstanding rent) the relayer may incur. |
 | `APPROVED_LABELS_PATH` | `artifacts/deployment/approved-labels.json` | Operator-published ordered approved-label list (written by `pnpm --filter @veilo/relayer approve-root`). |
 | `APPROVED_PARTICIPANTS` | empty | Comma-separated synthetic/test participant addresses whose inserted deposits the prototype rule approves. |
+| `RELAYER_AUTO_APPROVE_KEY_PATH` | empty | Relayer only, opt-in: path (from the repository root) to the approval authority keypair. With it and `APPROVED_PARTICIPANTS`, the relayer applies the same rule as `approve-root` on every tick, so a participant's inserted deposit becomes spendable without the manual tool. Without it, approval stays manual. |
 | `VEILO_CIRCUIT_BUILD_DIR` | `circuits/build` | Proving files (hash-checked against `artifacts/circuits/manifest.json`). |
 | `VEILO_CONTROL_URL`, `VEILO_RELAYER_URL` | loopback + service port | Overrides for the wallet's control and relayer clients. |
 | `WALLET_NOTE_SYNC_MS` | `10000` | Interval of the wallet's background note sync against verified public state. Inserted deposits and change notes become spendable, and are reported to control, without an owner session. |
@@ -302,7 +310,16 @@ Nothing here spends money until the last step.
 
 1. Put `ZERNIO_API_KEY`, `ZERNIO_TIKTOK_ACCOUNT_ID`, `HIGGSFIELD_API_KEY_ID`, `HIGGSFIELD_API_KEY_SECRET` and optionally `HIGGSFIELD_MAX_IMAGES=2` in `.env`.
 2. Pick a local origin for Studio North's seller host, for example `http://127.0.0.1:4116`, and set it as `CAROUSEL_SELLER_ORIGIN` and in both `MARKETPLACE_DEV_SELLER_ORIGINS` and `MARKETPLACE_LOCAL_SELLER_ORIGINS`.
-3. `pnpm marketplace:carousel-preflight` — free reads only (Zernio account list and TikTok privacy options). Every line must say `ok`.
-4. Issue the seller host credential: `pnpm marketplace:operator host-credential <studio-north sellerId>` (printed once) and start a second seller host with `GATEWAY_ROLE=seller-host`, `SELLER_HOST_PORT=4116`, `SELLER_HOST_PUBLIC_ORIGIN` equal to the origin above, its own `SELLER_HOST_DATABASE_PATH`, that credential, and `SELLER_HOST_RECIPIENTS` set to Studio North's payout wallet.
+3. `pnpm marketplace:carousel-preflight` — free reads only (Zernio account list and TikTok privacy options). Every line must say `ok`. The draft uses `SELF_ONLY` when the account offers it, otherwise the first offered level; it is still an inbox draft that is never published.
+4. Issue the seller host credential: `pnpm marketplace:operator host-credential <studio-north sellerId>` (printed once) and start a second seller host with `GATEWAY_ROLE=seller-host`, `SELLER_HOST_PORT=4116`, `SELLER_HOST_PUBLIC_ORIGIN` equal to the origin above, `SELLER_HOST_IDENTITY=veilo-remote-<studio-north sellerId>` (quotes for a remote seller name that identity), its own `SELLER_HOST_DATABASE_PATH`, that credential (`MARKETPLACE_SELLER_HOST_TOKEN_PATH` pointing at a 0600 file under `secrets/`), and `SELLER_HOST_RECIPIENTS` set to Studio North's payout wallet.
 5. `pnpm marketplace:seed --confirm` lists the planner, the two provider tools and the workflow "TikTok carousel from a topic".
 6. Run it once from `/marketplace/w/tiktok-carousel-from-topic`. This is the only step that spends: at most 0.23 devnet USDC from the private pool, `HIGGSFIELD_MAX_IMAGES` Higgsfield images, and one private TikTok draft.
+
+### Designed slides and public posting
+
+Requires migration `supabase/migrations/20261018000020_slides_and_publish.sql` (new providers `slides` and `zernio_publish`, effect `publish_external`, and both providers workflow-only), applied before the seed.
+
+- "TikTok carousel from a topic" gets a later version with run inputs `topic`, `style` (free text, or `default`) and `slides` (3 to 8; a missing or out-of-range count gives 6). Its planner writes one image prompt per slide in that style; Higgsfield still stops at `HIGGSFIELD_MAX_IMAGES`.
+- The range is `CAROUSEL_SLIDES` in `packages/contracts/src/marketplace/limits.ts`. The slide designer refuses a plan with fewer than 3 or more than 8 slides before rendering anything. Raising it from 5–7 added new versions of the two planners, the slide designer, the Higgsfield carousel tool and the three carousel workflows (seed state keys `listing.<slug>.v2`, `workflow.tiktok-carousel-from-topic.v3`, `workflow.tiktok-carousel-designed.v2`, `workflow.tiktok-carousel-designed-publish.v2`); provider manifests and their digests did not change.
+- "TikTok carousel (designed slides)": a planner writes a JSON slide plan, the slide designer renders 1080x1920 PNGs from a fixed template on the seller host and uploads them with Zernio's `POST /v1/media/presign` then `PUT uploadUrl`, and the Zernio draft tool sends them to the TikTok inbox. Text on the slides is exact because it is rendered, not generated.
+- "TikTok carousel (designed, posts publicly)": the same, ending in `publish_tiktok_carousel`. It publishes publicly with no review step once the run is approved, so it runs only after the seller host owner sets `ZERNIO_PUBLISH_MODE=publish`. Any buyer who approves a run posts to the seller's account, with buyer-influenced text; turn it on only while you are the only buyer you expect.

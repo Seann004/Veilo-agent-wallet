@@ -14,12 +14,13 @@ import {
 import { api } from "../../lib/api";
 import { marketApi } from "../../lib/market/client";
 import type { SellerDashboard } from "../../lib/market/types";
-import { BADGE_CLASS, BADGE_LABEL, CATEGORIES, WORKFLOW_STATUS_LABEL, type LocalRun, type ToolEntry } from "../../lib/market/workflows";
+import { BADGE_CLASS, BADGE_LABEL, CATEGORIES, hiringAgents, WORKFLOW_STATUS_LABEL, type LocalRun, type ToolEntry } from "../../lib/market/workflows";
 import type { Workspace } from "../../lib/types";
 import { useAction, useResource } from "../hooks";
 import { ErrorNotice, Loading, Section } from "../ui";
 import { useMarket } from "./MarketContext";
-import { Address, Money, PlainText, RequireMarketSession, TestTokenNote } from "./parts";
+import { Address, Money, PlainText, RequireMarketSession } from "./parts";
+import { Select } from "../Select";
 
 interface DraftStep {
   tool: ToolEntry;
@@ -63,7 +64,6 @@ export function WorkflowCreate() {
     <>
       <h1>Create a workflow</h1>
       <p className="small">Chain published tools into a workflow anyone can run. Each step stays its own purchase paid directly to that tool's recipient.</p>
-      <TestTokenNote />
       <RequireMarketSession what="create a workflow">
         <Wizard />
       </RequireMarketSession>
@@ -131,13 +131,13 @@ function Wizard() {
           ))}
           <div className="field">
             <label htmlFor={`${id}-cat`}>Category</label>
-            <select id={`${id}-cat`} value={basics.category} onChange={(e) => setBasics({ ...basics, category: e.target.value as WorkflowCategory })}>
-              {CATEGORIES.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
+            <Select<WorkflowCategory>
+              id={`${id}-cat`}
+              label="Category"
+              value={basics.category}
+              options={CATEGORIES.map((c) => ({ value: c.id, label: c.label }))}
+              onChange={(v) => setBasics({ ...basics, category: v })}
+            />
           </div>
           <div className="field">
             <label htmlFor={`${id}-desc`}>Description</label>
@@ -179,7 +179,7 @@ function Wizard() {
             {steps.map((s, i) => (
               <li key={i} className="chain-step">
                 <p className="chain-title">
-                  Step {i + 1}: <PlainText text={s.tool.title} inline /> <span className={BADGE_CLASS[s.tool.badge]}>{BADGE_LABEL[s.tool.badge]}</span> — max{" "}
+                  Step {i + 1}: <PlainText text={s.tool.title} inline /> <span className={BADGE_CLASS[s.tool.badge]}>{BADGE_LABEL[s.tool.badge]}</span>, max{" "}
                   <Money amount={s.tool.priceBaseUnits} decimals={decimals} />
                 </p>
                 {s.tool.io.inputs.map((want) => {
@@ -192,11 +192,19 @@ function Wizard() {
                         {want.name} ({want.kind}
                         {want.required ? "" : ", optional"})
                       </label>
-                      <select
+                      <Select
                         id={fieldId}
+                        label={want.name}
                         value={value}
-                        onChange={(e) => {
-                          const v = e.target.value;
+                        options={[
+                          { value: "", label: "Not mapped" },
+                          { value: "fixed", label: "Fixed text" },
+                          ...basics.runInputs.filter((r) => r.name !== "").map((r) => ({ value: `run:${r.name}`, label: `Buyer input: ${r.label}` })),
+                          ...steps
+                            .slice(0, i)
+                            .flatMap((prev, k) => (compatible(prev.tool.io.output.kind, want.kind) ? [{ value: `step:${k}`, label: `Output of step ${k + 1} (${prev.tool.io.output.kind})` }] : [])),
+                        ]}
+                        onChange={(v) => {
                           const next: StepInput | undefined =
                             v === "" ? undefined : v === "fixed" ? { from: "fixed", value: "" } : v.startsWith("run:") ? { from: "run_input", name: v.slice(4) } : { from: "step", step: Number(v.slice(5)) };
                           const inputs = { ...s.inputs };
@@ -204,24 +212,7 @@ function Wizard() {
                           else delete inputs[want.name];
                           setSteps(steps.map((x, j) => (j === i ? { ...x, inputs } : x)));
                         }}
-                      >
-                        <option value="">Not mapped</option>
-                        <option value="fixed">Fixed text</option>
-                        {basics.runInputs
-                          .filter((r) => r.name !== "")
-                          .map((r) => (
-                            <option key={r.name} value={`run:${r.name}`}>
-                              Buyer input: {r.label}
-                            </option>
-                          ))}
-                        {steps.slice(0, i).map((prev, k) =>
-                          compatible(prev.tool.io.output.kind, want.kind) ? (
-                            <option key={k} value={`step:${k}`}>
-                              Output of step {k + 1} ({prev.tool.io.output.kind})
-                            </option>
-                          ) : null,
-                        )}
-                      </select>
+                      />
                       {src?.from === "fixed" ? (
                         <input
                           aria-label={`${want.name} fixed text`}
@@ -242,21 +233,16 @@ function Wizard() {
           {steps.length < 8 ? (
             <div className="field">
               <label htmlFor={`${id}-add`}>Add a step from the tool library</label>
-              <select
+              <Select
                 id={`${id}-add`}
+                label="Add a step from the tool library"
                 value=""
-                onChange={(e) => {
-                  const t = usable.find((x) => `${x.toolKind}:${x.toolId}` === e.target.value);
+                options={[{ value: "", label: "Choose a tool" }, ...usable.map((t) => ({ value: `${t.toolKind}:${t.toolId}`, label: `${t.title} · ${BADGE_LABEL[t.badge]}` }))]}
+                onChange={(v) => {
+                  const t = usable.find((x) => `${x.toolKind}:${x.toolId}` === v);
                   if (t) setSteps([...steps, { tool: t, inputs: {} }]);
                 }}
-              >
-                <option value="">Choose a tool</option>
-                {usable.map((t) => (
-                  <option key={`${t.toolKind}:${t.toolId}`} value={`${t.toolKind}:${t.toolId}`}>
-                    {t.title} — {BADGE_LABEL[t.badge]}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
           ) : null}
           <p className="small">
@@ -272,14 +258,13 @@ function Wizard() {
           </p>
           <div className="field">
             <label htmlFor={`${id}-payout`}>Your verified payout wallet</label>
-            <select id={`${id}-payout`} value={payoutVersionId} onChange={(e) => setPayout(e.target.value)}>
-              <option value="">Choose a verified wallet</option>
-              {verified.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.address}
-                </option>
-              ))}
-            </select>
+            <Select
+              id={`${id}-payout`}
+              label="Your verified payout wallet"
+              value={payoutVersionId}
+              options={[{ value: "", label: "Choose a verified wallet" }, ...verified.map((p) => ({ value: p.id, label: p.address }))]}
+              onChange={setPayout}
+            />
             {verified.length === 0 ? (
               <p className="hint">
                 Prove a payout wallet in the <Link href="/marketplace/seller">Seller console</Link> first.
@@ -409,15 +394,21 @@ function TestRun({ created, onCreate, busy }: { created: { versionId: string; de
           }}
         >
           <div className="field">
-            <label htmlFor={`${id}-a`}>Agent whose budget pays</label>
-            <select id={`${id}-a`} required value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-              <option value="">Choose an agent</option>
-              {(ws.data?.agents ?? []).map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+            <label htmlFor={`${id}-a`}>Which agent&apos;s limits cover this run</label>
+            <Select
+              id={`${id}-a`}
+              label="Which agent's limits cover this run"
+              required
+              value={agentId}
+              options={[{ value: "", label: "Choose an agent" }, ...hiringAgents(ws.data?.agents ?? []).map((a) => ({ value: a.id, label: a.name }))]}
+              onChange={setAgentId}
+            />
+            <p className="hint">Paid from your private pool. Only agents that are on and allowed to hire appear here.</p>
+            {ws.data && hiringAgents(ws.data.agents).length === 0 ? (
+              <p className="notice notice-warn" role="note">
+                No agent can hire yet. <Link href="/agents/new">Create an agent</Link> that is allowed to hire specialists, and turn it on.
+              </p>
+            ) : null}
           </div>
           <div className="field">
             <label htmlFor={`${id}-i`}>Buyer inputs (JSON)</label>

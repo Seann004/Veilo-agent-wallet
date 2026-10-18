@@ -9,7 +9,9 @@ import {
   fundingRequestWire,
   healthReport,
   payerBindingRequestWire,
+  swapRequestWire,
   type ServiceHealth,
+  type SwapResult,
 } from "@veilo/contracts";
 import { EncodingError } from "@veilo/privacy-sdk";
 import { ServiceCallError } from "./adapters";
@@ -142,6 +144,14 @@ export function createApp(health: ServiceHealth, deps?: WalletAppDeps): Express 
     res.setHeader("Cache-Control", "no-store");
     res.json(await deps.funding.signExternalCall({ purchaseId: uuidParam(req, "purchaseId"), ...b }));
   });
+  app.post("/fundings/:purchaseId/swap", service, ready, async (req, res) => {
+    const b = parse(swapRequestWire, req.body);
+    res.setHeader("Cache-Control", "no-store");
+    res.json(wireSwap(await deps.funding.signSwap(uuidParam(req, "purchaseId"), b.fundingRef, b.binding)));
+  });
+  app.get("/fundings/:purchaseId/swap", service, async (req, res) => {
+    res.json(wireSwap(await deps.funding.swapOutcome(uuidParam(req, "purchaseId"))));
+  });
   app.get("/fundings/:purchaseId/external-calls/:callIndex", service, async (req, res) => {
     const index = Number(req.params.callIndex);
     if (!Number.isInteger(index) || index < 0 || index > 99) throw new WalletError("INVALID_REQUEST", "invalid call index");
@@ -198,6 +208,16 @@ export function createApp(health: ServiceHealth, deps?: WalletAppDeps): Express 
     res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "internal error" } });
   });
   return app;
+}
+
+function wireSwap(r: SwapResult): unknown {
+  if (r.status !== "submitted" && r.status !== "finalized") return r;
+  return {
+    ...r,
+    minOutLamports: r.minOutLamports.toString(),
+    estOutLamports: r.estOutLamports.toString(),
+    ...(r.status === "finalized" ? { sponsorLamports: r.sponsorLamports.toString() } : {}),
+  };
 }
 
 function wireFunding(r: Awaited<ReturnType<FundingService["status"]>>): unknown {

@@ -1,5 +1,6 @@
 import type { FundingProvider } from "@veilo/contracts";
 import type { Ledger } from "../context";
+import { SwapRunner } from "../swap/service";
 import { ExternalBatchRunner, type ExternalBatchDeps } from "../external/batch";
 import { BridgeHirePort, LocalExternalPort, MarketplaceWorkflowPort } from "../workflows/adapters";
 import { WorkflowRunner } from "../workflows/runner";
@@ -52,6 +53,7 @@ export function createIntegration(
   },
 ): Integration {
   const external = o.external ? new ExternalBatchRunner({ ledger, funding: o.funding, ...o.external }) : undefined;
+  const swap = o.funding.signSwap ? new SwapRunner(ledger, o.funding) : undefined;
   // The orchestrator's hooks reach the bridge, which is built from the orchestrator below.
   const bridgeRef: { current?: MarketplaceBridge } = {};
   const workflowRef: { current?: WorkflowRunner } = {};
@@ -64,6 +66,7 @@ export function createIntegration(
     permits: o.permits,
     funding: o.funding,
     external,
+    swap,
     beforeRelease,
     ...(o.marketplace ? { sellers: o.marketplace.sellers, onPayerKnown: (purchaseId: string, payer: string) => bridgeRef.current?.payerKnown(purchaseId, payer),
           beforeMerchant: (purchaseId: string) => bridgeRef.current?.beforeMerchant(purchaseId) ?? { outcome: "ok" as const },
@@ -93,6 +96,7 @@ export function createIntegration(
           hires: new BridgeHirePort(marketplace, ledger),
           external: new LocalExternalPort(ledger, orchestrator, external, o.workflowLimits?.maxExternalBatchUsdc ?? 100_000n),
           maxRunUsdc: o.workflowLimits?.maxRunUsdc ?? 1_000_000n,
+          log: (line) => console.log(`[control] ${line}`),
         })
       : undefined;
   if (workflows) workflowRef.current = workflows;

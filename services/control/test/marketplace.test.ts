@@ -10,6 +10,7 @@ import { deriveAta as referenceAta } from "@veilo/x402-client";
 import { deriveAta, isPrivateAddress } from "../src/marketplace/addresses";
 import { SellerOriginDenied, SellerOriginPolicy } from "../src/marketplace/origin-policy";
 import { makeMarketStack, PRICE, type MarketStack } from "./fixtures/market-stack";
+import { intentTask } from "./helpers";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -223,6 +224,38 @@ describe("local authorization", () => {
     // The proposal is consumed: a second request for the same listing and brief needs approval.
     const again = s.request({ brief, listingId, requestedBy: { kind: "agent", agentId: null, localAgentId: s.scout.id } });
     expect((await bridge(s).receive(again)).state).toBe("awaiting_approval");
+  });
+
+  it("waits for a covering note that is still on its way instead of rejecting the hire", async () => {
+    s = await makeMarketStack();
+    const listingId = "22222222-2222-4222-8222-222222222222";
+    const brief = "Compare three CRM vendors for a five-person team.";
+    await proposeAsScout(s, listingId, brief);
+    await grant(s, listingId);
+    s.env.db.prepare(`UPDATE note SET state = 'pending_deposit' WHERE state = 'approved'`).run();
+    const req = s.request({ brief, listingId, requestedBy: { kind: "agent", agentId: null, localAgentId: s.scout.id } });
+    s.market.requests = [req];
+    await bridge(s).poll();
+    expect(bridge(s).hire(req.operationId)!.state).toBe("authorized");
+    expect(purchases(s)).toBe(0);
+    s.env.db.prepare(`UPDATE note SET state = 'approved' WHERE state = 'pending_deposit'`).run();
+    await bridge(s).poll();
+    expect(bridge(s).hire(req.operationId)!.state).toBe("paid");
+    expect(s.seller.payments).toBe(1);
+  });
+
+  it("still rejects a hire when no note is on its way", async () => {
+    s = await makeMarketStack();
+    const listingId = "22222222-2222-4222-8222-222222222222";
+    const brief = "Compare three CRM vendors for a five-person team.";
+    await proposeAsScout(s, listingId, brief);
+    await grant(s, listingId);
+    s.env.db.prepare(`UPDATE note SET state = 'exited' WHERE state = 'approved'`).run();
+    const req = s.request({ brief, listingId, requestedBy: { kind: "agent", agentId: null, localAgentId: s.scout.id } });
+    s.market.requests = [req];
+    await bridge(s).poll();
+    expect(bridge(s).hire(req.operationId)!.state).toBe("rejected");
+    expect(purchases(s)).toBe(0);
   });
 
   it("prompt-injected listing text cannot change the granted recipient or price", async () => {
@@ -790,7 +823,7 @@ describe("custom agent tools", () => {
     const r = await s.call("/purchase-intents", {
       method: "POST",
       headers: scout,
-      body: { idempotencyKey: "direct-1", serviceId, sku: "specialist-job", paymentPath: "private_x402", requestDigest: "c".repeat(64) },
+      body: { idempotencyKey: "direct-1", serviceId, sku: "specialist-job", paymentPath: "private_x402", requestDigest: "c".repeat(64), taskId: intentTask(s.env, s.scout.id, "direct-1") },
     });
     expect(r.status).toBe(403);
     expect(r.body.error.code).toBe("SERVICE_NOT_ALLOWED");

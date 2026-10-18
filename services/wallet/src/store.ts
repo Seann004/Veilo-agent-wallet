@@ -41,6 +41,9 @@ export interface NoteRecord {
   queueSeq: bigint | null;
   controlRegistered: boolean;
   spendPurchaseId: string | null;
+  /** When the note was stored and when its state last changed; absent on records built in memory. */
+  createdAtMs?: number;
+  updatedAtMs?: number;
 }
 
 interface NoteSecretPayload {
@@ -98,6 +101,22 @@ export interface ExternalCallRow {
   amount: bigint;
   state: "signed" | "finalized" | "expired_unsettled" | "failed";
   settlement_signature: string | null;
+  signed_at_ms: bigint;
+}
+
+export interface SwapRow {
+  purchase_id: string;
+  swap_id: string;
+  fresh_wallet: string;
+  destination: string;
+  input_amount: bigint;
+  min_out: bigint;
+  est_out: bigint;
+  transaction_b64: string;
+  last_valid_block_height: bigint;
+  signature: string | null;
+  state: "signed" | "submitted" | "finalized" | "failed" | "expired";
+  sponsor_lamports: bigint;
   signed_at_ms: bigint;
 }
 
@@ -283,10 +302,12 @@ export class WalletStore {
       queueSeq: row.queue_seq === null ? null : (row.queue_seq as bigint),
       controlRegistered: num(row.control_registered) === 1,
       spendPurchaseId: (row.spend_purchase_id as string | null) ?? null,
+      ...(row.created_at_ms !== undefined && row.created_at_ms !== null ? { createdAtMs: num(row.created_at_ms) } : {}),
+      ...(row.status_updated_at_ms !== undefined && row.status_updated_at_ms !== null ? { updatedAtMs: num(row.status_updated_at_ms) } : {}),
     };
   }
 
-  private static NOTE_SELECT = `SELECT n.*, s.state, s.leaf_index, s.queue_seq, s.control_registered, s.spend_purchase_id
+  private static NOTE_SELECT = `SELECT n.*, s.state, s.leaf_index, s.queue_seq, s.control_registered, s.spend_purchase_id, s.updated_at_ms AS status_updated_at_ms
     FROM wallet_note n JOIN wallet_note_status s ON s.note_id = n.id`;
 
   note(id: string): NoteRecord | undefined {
@@ -512,6 +533,28 @@ export class WalletStore {
          WHERE purchase_id = ? AND call_index = ? AND state = 'signed'`,
       )
       .run(state, settlementSignature, this.now(), purchaseId, callIndex);
+  }
+
+  // Swaps ---------------------------------------------------------------------------------
+
+  swap(purchaseId: string): SwapRow | undefined {
+    return this.db.prepare(`SELECT * FROM swap WHERE purchase_id = ?`).get(purchaseId) as SwapRow | undefined;
+  }
+
+  insertSwap(s: Omit<SwapRow, "state" | "signature" | "sponsor_lamports" | "signed_at_ms">): void {
+    const now = this.now();
+    this.db
+      .prepare(
+        `INSERT INTO swap (purchase_id, swap_id, fresh_wallet, destination, input_amount, min_out, est_out, transaction_b64, last_valid_block_height, state, signed_at_ms, updated_at_ms)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'signed', ?, ?)`,
+      )
+      .run(s.purchase_id, s.swap_id, s.fresh_wallet, s.destination, s.input_amount, s.min_out, s.est_out, s.transaction_b64, s.last_valid_block_height, now, now);
+  }
+
+  updateSwap(purchaseId: string, f: { state: SwapRow["state"]; signature?: string | null; sponsorLamports?: bigint }): void {
+    this.db
+      .prepare(`UPDATE swap SET state = ?, signature = ifnull(?, signature), sponsor_lamports = ifnull(?, sponsor_lamports), updated_at_ms = ? WHERE purchase_id = ?`)
+      .run(f.state, f.signature ?? null, f.sponsorLamports ?? null, this.now(), purchaseId);
   }
 
   // Deposits, exits, recoveries -----------------------------------------------------------

@@ -1,9 +1,13 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
+import { MARKETPLACE_DELEGATION_DEPTH_KEY } from "@veilo/contracts";
+import { MARKETPLACE_LIMITS } from "@veilo/contracts/marketplace";
+import { big } from "../context";
 import { ControlError } from "../errors";
 import { assertTaskLive, chargeToolCall, ownTask } from "../agents/work";
 import type { Integration } from "../integration";
 import { requireAgent } from "../ledger/workspace";
+import { catalogText } from "../workflows/adapters";
 import type { WorkflowRunner } from "../workflows/runner";
 import { actorOf, requireActor, type AuthDeps } from "./actor";
 
@@ -100,9 +104,15 @@ export function workflowRouter(deps: AuthDeps & { integration?: Integration | un
 
   r.post("/workflows/assignments", owner, async (req, res) => {
     const o = ownerOf(res);
-    const b = parse(z.object({ agentId: uuid, versionId: uuid, budgetUsdc: z.string().regex(/^[1-9][0-9]{0,18}$/) }).strict(), req.body);
+    const b = parse(
+      z
+        .object({ agentId: uuid, versionId: uuid, budgetUsdc: z.string().regex(/^[1-9][0-9]{0,18}$/).optional(), askEachRun: z.boolean().optional() })
+        .strict()
+        .refine((x) => x.askEachRun === true || x.budgetUsdc !== undefined, { message: "a budget is required unless each run is approved" }),
+      req.body,
+    );
     requireAgent(ledger, o.workspaceId, b.agentId);
-    const id = await runner().assign({ agentId: b.agentId, versionId: b.versionId, budgetUsdc: BigInt(b.budgetUsdc), ownerPubkey: o.ownerPubkey });
+    const id = await runner().assign({ agentId: b.agentId, versionId: b.versionId, ...(b.budgetUsdc !== undefined ? { budgetUsdc: BigInt(b.budgetUsdc) } : {}), askEachRun: b.askEachRun === true, ownerPubkey: o.ownerPubkey });
     res.status(201).json({ assignmentId: id });
   });
 
@@ -110,13 +120,13 @@ export function workflowRouter(deps: AuthDeps & { integration?: Integration | un
     const o = ownerOf(res);
     const rows = ledger.db
       .prepare(
-        `SELECT a.id, a.agent_id, a.workflow_id, a.budget_usdc, a.status, a.created_at_ms,
+        `SELECT a.id, a.agent_id, a.workflow_id, a.version_id, a.title, a.budget_usdc, a.ask_each_run, a.status, a.created_at_ms,
                 (SELECT coalesce(sum(total_max_usdc), 0) FROM workflow_run w WHERE w.assignment_id = a.id AND w.status NOT IN ('awaiting_approval', 'rejected')) AS committed
          FROM workflow_assignment a WHERE a.workspace_id = ? ORDER BY a.created_at_ms DESC`,
       )
-      .all(o.workspaceId) as Array<{ id: string; agent_id: string; workflow_id: string; budget_usdc: bigint; status: string; committed: bigint; created_at_ms: bigint }>;
+      .all(o.workspaceId) as Array<{ id: string; agent_id: string; workflow_id: string; version_id: string | null; title: string | null; budget_usdc: bigint; ask_each_run: bigint; status: string; committed: bigint; created_at_ms: bigint }>;
     res.json({
-      assignments: rows.map((a) => ({ id: a.id, agentId: a.agent_id, workflowId: a.workflow_id, budget: a.budget_usdc.toString(), committed: a.committed.toString(), status: a.status })),
+      assignments: rows.map((a) => ({ id: a.id, agentId: a.agent_id, workflowId: a.workflow_id, versionId: a.version_id, title: catalogText(a.title, 120) || null, budget: a.budget_usdc.toString(), askEachRun: a.ask_each_run === 1n, committed: a.committed.toString(), status: a.status })),
     });
   });
 
@@ -130,18 +140,47 @@ export function workflowRouter(deps: AuthDeps & { integration?: Integration | un
     res.json({ ok: true });
   });
 
-  // Agents propose; the run waits for the owner unless an assignment already covers its exact terms.
-  r.post("/worker/workflow-runs", worker, async (req, res) => {
+  const workerAgent = (res: Response) => {
     const a = actorOf(res);
     if (a.kind !== "worker") throw new ControlError("FORBIDDEN", "worker credential required");
     const agent = requireAgent(ledger, a.workspaceId, a.agentId);
     if (agent.status !== "active") throw new ControlError("ACCOUNT_STOPPED", `agent is ${agent.status}`);
-    const b = parse(z.object({ taskId: uuid, versionId: uuid, runInputs }).strict(), req.body);
+    return agent;
+  };
+
+  // Only this agent's active assignments, as captured when the owner assigned them.
+  r.get("/worker/workflows", worker, (_req, res) => {
+    const agent = workerAgent(res);
+    const rows = ledger.db
+      .prepare(
+        `SELECT version_id, title, summary, run_inputs_json, total_usdc FROM workflow_assignment
+         WHERE agent_id = ? AND status = 'active' AND version_id IS NOT NULL ORDER BY created_at_ms DESC LIMIT 5`,
+      )
+      .all(agent.id) as Array<{ version_id: string; title: string | null; summary: string | null; run_inputs_json: string | null; total_usdc: bigint | null }>;
+    res.json({
+      workflows: rows.map((w) => ({
+        versionId: w.version_id,
+        title: catalogText(w.title, 120) || "Assigned workflow",
+        summary: catalogText(w.summary, 300),
+        runInputs: ((JSON.parse(w.run_inputs_json ?? "[]") as Array<{ name: string; label: string; maxChars: number }>) ?? []).slice(0, 4).map((i) => ({ name: i.name, label: catalogText(i.label, 80) || i.name, maxChars: i.maxChars })),
+        total: w.total_usdc === null ? null : w.total_usdc.toString(),
+      })),
+    });
+  });
+
+  // Agents propose; the run waits for the owner unless an assignment already covers its exact terms.
+  r.post("/worker/workflow-runs", worker, async (req, res) => {
+    const agent = workerAgent(res);
+    const b = parse(z.object({ taskId: uuid, versionId: uuid, runInputs, idempotencyKey: z.string().regex(/^[A-Za-z0-9:_-]{8,128}$/).optional() }).strict(), req.body);
     const task = ownTask(ledger, agent.id, b.taskId);
     assertTaskLive(ledger, task);
+    const depth = Number((JSON.parse(task.input_json) as Record<string, unknown>)[MARKETPLACE_DELEGATION_DEPTH_KEY] ?? 0);
+    if (!Number.isInteger(depth) || depth >= MARKETPLACE_LIMITS.maxDelegationDepth) {
+      throw new ControlError("POLICY_DENIED", "delegation depth limit reached: a specialist result cannot start a workflow run");
+    }
     chargeToolCall(ledger, agent.id, task.id, "propose_workflow_run");
-    const run = await runner().propose({ agentId: agent.id, versionId: b.versionId, runInputs: b.runInputs });
-    res.status(202).json({ runId: run.id, status: run.status });
+    const run = await runner().propose({ agentId: agent.id, versionId: b.versionId, runInputs: b.runInputs, taskId: task.id, ...(b.idempotencyKey ? { idempotencyKey: b.idempotencyKey } : {}) });
+    res.status(202).json({ runId: run.id, status: run.status, total: big(run.total_max_usdc).toString(), steps: runner().steps(run.id).length });
   });
 
   return r;

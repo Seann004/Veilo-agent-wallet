@@ -11,11 +11,14 @@ export const TOOL_KINDS = ["managed_template", "remote_endpoint", "provider_adap
 export type ToolKind = (typeof TOOL_KINDS)[number];
 
 /** Provider adapters run on a seller host with the seller's own server-side key. */
-export const TOOL_PROVIDERS = ["higgsfield", "makeugc", "zernio"] as const;
+export const TOOL_PROVIDERS = ["higgsfield", "makeugc", "zernio", "slides", "zernio_publish"] as const;
 export type ToolProvider = (typeof TOOL_PROVIDERS)[number];
 
-/** `draft_external` tools prepare something that would act outside Veilo; they only ever create drafts. */
-export const TOOL_EFFECTS = ["read_only", "draft_external"] as const;
+/**
+ * `draft_external` tools prepare something that would act outside Veilo and only ever create drafts.
+ * `publish_external` tools publish publicly outside Veilo with no further human step.
+ */
+export const TOOL_EFFECTS = ["read_only", "draft_external", "publish_external"] as const;
 export type ToolEffect = (typeof TOOL_EFFECTS)[number];
 
 /** Typed artifacts that pass between workflow steps. They are data, never instructions. */
@@ -171,7 +174,7 @@ export function checkWorkflowPublication(input: WorkflowVersionInput, tools: Rea
     else if (!t.current || t.listingStatus !== "published") problems.push(`step ${i}: tool version is unpublished or superseded`);
     if (BigInt(step.maxBaseUnits) !== t.priceBaseUnits) problems.push(`step ${i}: maximum must equal the tool's published price`);
     total += BigInt(step.maxBaseUnits);
-    if (t.effect === "draft_external") drafts = true;
+    if (t.effect === "draft_external" || t.effect === "publish_external") drafts = true;
 
     const names = new Set(t.io.inputs.map((x) => x.name));
     for (const name of Object.keys(step.inputs)) if (!names.has(name)) problems.push(`step ${i}: unknown input ${name}`);
@@ -198,7 +201,7 @@ export function checkWorkflowPublication(input: WorkflowVersionInput, tools: Rea
   });
 
   if (total !== BigInt(input.totalMaxBaseUnits)) problems.push("total must equal the sum of step maxima");
-  if (drafts && input.safetyPromise.length < 10) problems.push("a workflow with an external drafting step needs a safety promise");
+  if (drafts && input.safetyPromise.length < 10) problems.push("a workflow with an external drafting or publishing step needs a safety promise");
   if (problems.length > 0) return { problems, decision: "rejected" };
   return { problems, decision: pendingTool ? "review" : "live" };
 }

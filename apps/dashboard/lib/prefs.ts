@@ -42,13 +42,27 @@ export function usePref(key: string): string | null {
 
 export type Theme = "light" | "dark";
 
-function systemTheme(): Theme {
-  return typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+const DARK_QUERY = "(prefers-color-scheme: dark)";
+
+function subscribeSystem(cb: () => void): () => void {
+  const media = window.matchMedia?.(DARK_QUERY);
+  media?.addEventListener("change", cb);
+  return () => media?.removeEventListener("change", cb);
+}
+
+/** The server snapshot keeps hydration consistent; the real system theme applies right after. */
+function useSystemTheme(): Theme {
+  return useSyncExternalStore(
+    subscribeSystem,
+    () => (window.matchMedia?.(DARK_QUERY).matches ? "dark" : "light"),
+    () => "light",
+  );
 }
 
 export function useTheme(): [Theme, () => void] {
   const saved = usePref("veilo.theme");
-  const current: Theme = saved === "light" || saved === "dark" ? saved : systemTheme();
+  const system = useSystemTheme();
+  const current: Theme = saved === "light" || saved === "dark" ? saved : system;
   const toggle = () => {
     const next: Theme = current === "dark" ? "light" : "dark";
     document.documentElement.dataset.theme = next;

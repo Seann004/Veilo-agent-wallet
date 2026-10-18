@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../lib/api";
 import { credits, lamports, shortKey, usdc, when } from "../lib/format";
-import { LEG_LABEL, LABEL_CREDITS_NO_CHARGE, legStateLabel, purchaseLabel, reasonGuidance } from "../lib/labels";
+import { LEG_LABEL, LABEL_CREDITS_NO_CHARGE, legStateLabel, isSettled, purchaseLabel, reasonGuidance, skuLabel } from "../lib/labels";
+import { hostOf } from "../lib/connectors";
 import type { Activity, Agent, AuditEvent, PaymentStates, Purchase, Workspace } from "../lib/types";
 import { useCapability } from "./Shell";
 import { useAction } from "./hooks";
@@ -14,6 +15,13 @@ const LEGS: Array<keyof PaymentStates> = ["authorization", "funding", "merchant"
 
 function agentStopped(agent: Agent | undefined, workspaceStopped: boolean): boolean {
   return workspaceStopped || agent === undefined || agent.status !== "active";
+}
+
+/** A purchase that stopped before any money moved, from an agent that is archived or gone. */
+function staleUncharged(p: Purchase, workspace: Workspace): boolean {
+  const agent = workspace.agents.find((a) => a.id === p.agentId);
+  const archived = agent === undefined || agent.status === "archived";
+  return archived && p.states.fulfilment === "abandoned" && p.states.funding !== "finalized" && p.states.merchant !== "finalized";
 }
 
 export function ActivityDrawer({
@@ -67,6 +75,8 @@ export function ActivityDrawer({
   const merchant = sig("merchant");
   const recovery = sig("recovery");
   const prepaid = purchase.paymentPath === "prepaid_credits";
+  // Only a settled merchant leg (or a delivered prepaid call) is a payment that happened.
+  const paid = prepaid ? purchase.states.fulfilment === "delivered" : purchase.states.merchant === "finalized";
   const titleId = `drawer-${purchase.id}`;
   const post = (path: string, body: unknown) =>
     void action.run(async () => {
@@ -77,9 +87,7 @@ export function ActivityDrawer({
     <div className="drawer-backdrop" onClick={onClose}>
       <aside ref={drawerRef} className="drawer" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>
         <div className="panel-head">
-          <h2 id={titleId}>
-            {purchase.sku} · {agent?.name ?? "unknown agent"}
-          </h2>
+          <h2 id={titleId}>{skuLabel(purchase.sku)}</h2>
           <button ref={closeRef} type="button" className="btn" onClick={onClose}>
             Close
           </button>
@@ -87,6 +95,19 @@ export function ActivityDrawer({
         <p className="status-line">
           <strong>{purchaseLabel(purchase, { agentStopped: agentStopped(agent, workspace.workspace.stopped) })}</strong>
         </p>
+        <KV
+          rows={[
+            ["Amount", prepaid ? `Prepaid AI credits (${credits(purchase.usage.amount)})` : usdc(purchase.price.amount)],
+            [paid ? "Paid by" : "Agent", agent?.name ?? "unknown agent"],
+            [paid ? "Paid to" : "Service", service ? hostOf(service.origin) : shortKey(purchase.serviceId)],
+            ["Why", purchase.rationale ?? <span className="muted">no reason given</span>],
+            ["When", when(purchase.settledAt ?? purchase.createdAt)],
+            ...(prepaid ? [] : [["Transaction", <TxLink key="tx" signature={merchant?.signature} />] as [string, ReactNode]]),
+          ]}
+        />
+        {paid && !prepaid ? <p className="small muted">Paid from your private pool. The service saw a fresh one-time wallet, not yours.</p> : null}
+        <details className="disclosure tech-details">
+          <summary>Technical details</summary>
         <StateStrip purchase={purchase} />
         <h3>Payment legs</h3>
         <ol className="legs">
@@ -100,8 +121,7 @@ export function ActivityDrawer({
         {purchase.stateReason ? <p className="small">Reason: {purchase.stateReason}</p> : null}
         <KV
           rows={[
-            ["Payment path", prepaid ? `Prepaid gateway credits — ${LABEL_CREDITS_NO_CHARGE}` : "Private pool → fresh wallet → x402 (USDC)"],
-            ["Rationale", purchase.rationale ?? <span className="muted">none given</span>],
+            ["Payment path", prepaid ? `Prepaid gateway credits: ${LABEL_CREDITS_NO_CHARGE}` : "Private pool → fresh wallet → x402 (USDC)"],
             [
               "Policy result",
               policyEvent
@@ -109,7 +129,6 @@ export function ActivityDrawer({
                 : `authorization ${purchase.states.authorization} (workspace policy v${purchase.policyVersions.workspace}, agent policy v${purchase.policyVersions.agent})`,
             ],
             ["Merchant", service ? `${service.service_key} · ${service.origin}${service.recipient ? ` · recipient ${shortKey(service.recipient)}` : ""}` : shortKey(purchase.serviceId)],
-            ["Price", prepaid ? credits(purchase.usage.amount) : usdc(purchase.price.amount)],
             ["Fee cap (token fees)", usdc(purchase.feeCap.amount)],
             ["Sponsor reservation (SOL)", lamports(purchase.sponsorReservation.amount)],
             ["Reservation", `${purchase.reservation.status}${purchase.reservation.closeReason ? ` (${purchase.reservation.closeReason})` : ""}`],
@@ -127,12 +146,13 @@ export function ActivityDrawer({
             <ul className="plain small">
               {attempts.map((a) => (
                 <li key={`${a.leg}-${a.attempt}`}>
-                  {a.leg} #{a.attempt}: {a.commitment} — <TxLink signature={a.signature} />
+                  {a.leg} #{a.attempt}: {a.commitment} <TxLink signature={a.signature} />
                 </li>
               ))}
             </ul>
           </>
         ) : null}
+        </details>
         <div className="actions">
           {purchase.states.authorization === "awaiting_approval" ? (
             <>
@@ -154,14 +174,17 @@ export function ActivityDrawer({
               </button>
             </>
           ) : null}
-          <button
-            type="button"
-            className="btn"
-            disabled={action.busy || !decide.allowed}
-            onClick={() => post("reconcile", {})}
-          >
-            Reconcile with chain and gateway
-          </button>
+          {/* Re-checking only helps while the outcome is still open. */}
+          {isSettled(purchase.states) ? null : (
+            <button
+              type="button"
+              className="btn"
+              disabled={action.busy || !decide.allowed}
+              onClick={() => post("reconcile", {})}
+            >
+              Check status again
+            </button>
+          )}
         </div>
         <DeniedHint reason={decide.reason} />
         <ErrorNotice error={action.error} />
@@ -198,16 +221,91 @@ export function ActivityList({ activity, workspace, onChanged, limit }: { activi
                 aria-haspopup="dialog"
               >
                 <span className="activity-main">
-                  <strong>{agent?.name ?? "agent"}</strong> · {p.sku} · {p.paymentPath === "prepaid_credits" ? credits(p.usage.amount) : usdc(p.price.amount)}
+                  <strong>{agent?.name ?? "agent"}</strong> · {skuLabel(p.sku)} · {p.paymentPath === "prepaid_credits" ? "prepaid AI credits" : usdc(p.price.amount)}
                 </span>
                 <span className="activity-label">{purchaseLabel(p, { agentStopped: agentStopped(agent, workspace.workspace.stopped) })}</span>
                 <span className="muted small">{when(p.createdAt)}</span>
               </button>
-              <StateStrip purchase={p} />
+              {isSettled(p.states) ? null : <StateStrip purchase={p} />}
             </li>
           );
         })}
       </ul>
+      {open ? <ActivityDrawer purchase={open} events={activity.events} workspace={workspace} onClose={close} onChanged={onChanged} /> : null}
+    </>
+  );
+}
+
+export function ActivityTable({ activity, workspace, onChanged, limit = 8 }: { activity: Activity; workspace: Workspace; onChanged: () => void | Promise<void>; limit?: number }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [showUncharged, setShowUncharged] = useState(false);
+  const triggers = useRef(new Map<string, HTMLButtonElement>());
+  const sorted = [...activity.purchases].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const collapsed = new Set(sorted.filter((p) => staleUncharged(p, workspace)).map((p) => p.id));
+  const rows = (showUncharged ? sorted : sorted.filter((p) => !collapsed.has(p.id))).slice(0, limit);
+  const open = activity.purchases.find((p) => p.id === openId);
+  const close = () => {
+    const id = openId;
+    setOpenId(null);
+    if (id) triggers.current.get(id)?.focus();
+  };
+  const toggle =
+    collapsed.size > 0 ? (
+      <button type="button" className="link-button small muted" onClick={() => setShowUncharged(!showUncharged)}>
+        {showUncharged ? "Hide not-charged attempts" : `Show ${collapsed.size} not-charged attempt${collapsed.size === 1 ? "" : "s"}`}
+      </button>
+    ) : null;
+  if (rows.length === 0) {
+    return (
+      <>
+        <p className="muted flush">No payments yet. They appear here when an agent buys a service.</p>
+        {toggle}
+      </>
+    );
+  }
+  return (
+    <>
+      <div className="table-wrap">
+        <table className="payments-table">
+          <caption className="sr-only">Recent payments, newest first</caption>
+          <thead>
+            <tr>
+              <th scope="col">When</th>
+              <th scope="col">Agent</th>
+              <th scope="col">What</th>
+              <th scope="col">Amount</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p) => {
+              const agent = workspace.agents.find((a) => a.id === p.agentId);
+              return (
+                <tr key={p.id} className={collapsed.has(p.id) ? "muted" : undefined}>
+                  <td className="nowrap small">{when(p.createdAt)}</td>
+                  <td>{agent?.name ?? "agent"}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="link-button"
+                      ref={(el) => {
+                        if (el) triggers.current.set(p.id, el);
+                      }}
+                      onClick={() => setOpenId(p.id)}
+                      aria-haspopup="dialog"
+                    >
+                      {skuLabel(p.sku)}
+                    </button>
+                  </td>
+                  <td className="nowrap">{p.paymentPath === "prepaid_credits" ? "prepaid AI credits" : usdc(p.price.amount)}</td>
+                  <td>{collapsed.has(p.id) ? "Not charged" : purchaseLabel(p, { agentStopped: agentStopped(agent, workspace.workspace.stopped) })}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {toggle}
       {open ? <ActivityDrawer purchase={open} events={activity.events} workspace={workspace} onClose={close} onChanged={onChanged} /> : null}
     </>
   );

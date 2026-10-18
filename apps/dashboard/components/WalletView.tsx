@@ -2,14 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../lib/api";
-import { parseUsdcInput, usdc } from "../lib/format";
+import { parseUsdcInput, usdc, when } from "../lib/format";
 import type { NoteStatus, WalletNote } from "../lib/types";
-import { connect, listWallets, onWalletsChanged, signAndSend, type OwnerWallet } from "../lib/wallet";
+import { connect, lastWallet, listWallets, onWalletsChanged, rememberWallet, signAndSend, type OwnerWallet } from "../lib/wallet";
 import { useCapability, useOwner, type ConnectedWallet } from "./Shell";
 import { useAction, useResource } from "./hooks";
+import { SwapPanel } from "./SwapPanel";
+import { Amount } from "./UsdcIcon";
 import { ErrorNotice, Loading, Section, Spinner, TxLink } from "./ui";
 
 export const DEPOSIT_STAGES = ["submitted", "finalized", "indexed", "approved", "spendable"] as const;
+
+// One silent reconnect per page load, however many components ask for the wallet.
+let silentTried = false;
 
 /** Ensures the owner's wallet is connected for transaction signing; any other account is refused. */
 export function useOwnerWallet(): { connected: ConnectedWallet | null; wallets: OwnerWallet[]; connectTo: (w: OwnerWallet) => Promise<void>; error: ApiError | undefined } {
@@ -21,6 +26,19 @@ export function useOwnerWallet(): { connected: ConnectedWallet | null; wallets: 
     refresh();
     return onWalletsChanged(refresh);
   }, []);
+  // Reconnects the wallet used last time without a prompt; a wallet that would prompt is left alone.
+  useEffect(() => {
+    if (connected || silentTried) return;
+    const name = lastWallet();
+    const w = name ? wallets.find((x) => x.name === name) : undefined;
+    if (!w) return;
+    silentTried = true;
+    connect(w.wallet, true)
+      .then((account) => {
+        if (account.address === workspace.workspace.ownerPubkey) setConnected({ wallet: w.wallet, account });
+      })
+      .catch(() => undefined);
+  }, [connected, wallets, workspace.workspace.ownerPubkey, setConnected]);
   return {
     connected,
     wallets,
@@ -33,6 +51,7 @@ export function useOwnerWallet(): { connected: ConnectedWallet | null; wallets: 
           return;
         }
         setError(undefined);
+        rememberWallet(w.name);
         setConnected({ wallet: w.wallet, account });
       } catch (e) {
         setError(new ApiError(0, "WALLET", (e as Error).message));
@@ -70,6 +89,8 @@ const STAGE_LABEL: Record<(typeof DEPOSIT_STAGES)[number], string> = {
 
 export function DepositStages({ note }: { note: WalletNote }) {
   const stages = note.depositStages ?? {};
+  // A prepared deposit the wallet never sent (for example, the approval was dismissed) moved no funds.
+  if (!DEPOSIT_STAGES.some((s) => stages[s])) return <span className="muted">Not sent; no funds moved</span>;
   return (
     <ol className="stages" aria-label="Deposit progress">
       {DEPOSIT_STAGES.map((s) => (
@@ -82,6 +103,11 @@ export function DepositStages({ note }: { note: WalletNote }) {
   );
 }
 
+/** Newest first; notes from a wallet service without timestamps keep their order at the end. */
+function newestFirst(notes: WalletNote[]): WalletNote[] {
+  return [...notes].sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+}
+
 export function NotesTable({ status }: { status: NoteStatus }) {
   if (status.notes.length === 0) return <p className="muted flush">No deposits yet. Add funds below to get started.</p>;
   return (
@@ -90,6 +116,7 @@ export function NotesTable({ status }: { status: NoteStatus }) {
         <caption className="sr-only">Deposits</caption>
         <thead>
           <tr>
+            <th scope="col">Added</th>
             <th scope="col">Source</th>
             <th scope="col">Amount</th>
             <th scope="col">Ready to spend</th>
@@ -97,8 +124,9 @@ export function NotesTable({ status }: { status: NoteStatus }) {
           </tr>
         </thead>
         <tbody>
-          {status.notes.map((n) => (
+          {newestFirst(status.notes).map((n) => (
             <tr key={n.id}>
+              <td title={n.updatedAt ? `Last change ${when(n.updatedAt)}` : undefined}>{n.createdAt ? when(n.createdAt) : "—"}</td>
               <td>{n.origin === "deposit" ? "Deposit" : "Change"}</td>
               <td>{usdc(n.value.amount)}</td>
               <td>{n.available ? "Yes" : "No"}</td>
@@ -144,22 +172,28 @@ function OwnerWalletView() {
       <div className="stats stats-3">
         <div className="stat">
           <span className="stat-label">Ready to spend</span>
-          <span className="stat-value">{t ? usdc(t.spendable.amount) : "—"}</span>
+          <span className="stat-value">
+            <Amount value={t ? usdc(t.spendable.amount) : "—"} />
+          </span>
         </div>
         <div className="stat">
           <span className="stat-label">Held for purchases</span>
-          <span className="stat-value">{t ? usdc(t.reserved.amount) : "—"}</span>
+          <span className="stat-value">
+            <Amount value={t ? usdc(t.reserved.amount) : "—"} />
+          </span>
         </div>
         <div className="stat">
           <span className="stat-label">On the way</span>
-          <span className="stat-value">{t ? usdc(t.pending.amount) : "—"}</span>
-          <span className="stat-sub">Deposits not ready yet</span>
+          <span className="stat-value">
+            <Amount value={t ? usdc(t.pending.amount) : "—"} />
+          </span>
+          {t && t.pending.amount !== "0" ? <span className="stat-sub">Deposits not ready yet</span> : null}
         </div>
       </div>
       <ErrorNotice error={notes.error} what="wallet service" onRetry={notes.reload} />
 
       <Section title="Add funds">
-        <p className="hint flush">Move USDC into your private pool. It can be spent once it reaches “Ready”.</p>
+        <p className="hint flush">Deposit USDC into your private pool.</p>
         <ConnectWalletPrompt purpose="sign the deposit" />
         <form
           className="inline-form"
@@ -197,14 +231,21 @@ function OwnerWalletView() {
                 onClick={() =>
                   void action.run(async () => {
                     if (!connected) return;
-                    const signature = await signAndSend(connected.wallet, connected.account, prepared.transaction);
+                    let signature: string;
+                    try {
+                      signature = await signAndSend(connected.wallet, connected.account, prepared.transaction);
+                    } catch (e) {
+                      // Nothing was sent; the next attempt prepares a fresh transaction instead of reusing an expired one.
+                      setPrepared(null);
+                      throw e;
+                    }
                     const r = await api<{ state: string }>("wallet", "/deposits/register", { method: "POST", body: { depositId: prepared.depositId, signature } });
                     setSubmitted({ signature, state: r.state });
                     await notes.reload();
                   })
                 }
               >
-                Sign in wallet
+                Deposit with Phantom
               </button>
             </div>
           </div>
@@ -217,6 +258,7 @@ function OwnerWalletView() {
         <ErrorNotice error={action.error} />
       </Section>
 
+      <SwapPanel />
       <Section
         title="Deposits"
         actions={

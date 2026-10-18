@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { computeRequestDigest } from "@veilo/contracts/gateway";
 import { saveArtifact } from "../src/ledger/summaries";
 import { makeStack, type Stack } from "./fixtures/stack";
+import { intentTask } from "./helpers";
 
 let s: Stack | undefined;
 afterEach(async () => {
@@ -22,7 +23,7 @@ async function intent(st: Stack, agent: "Prince" | "Mira" | "Shawn", key: string
   return st.call("/purchase-intents", {
     method: "POST",
     headers: { authorization: `Bearer ${st.worker(agent)}` },
-    body: { idempotencyKey: key, serviceId: serviceId(st, sku, path), sku, paymentPath: path, requestDigest: computeRequestDigest(sku, input), input, ...(taskId ? { taskId } : {}) },
+    body: { idempotencyKey: key, serviceId: serviceId(st, sku, path), sku, paymentPath: path, requestDigest: computeRequestDigest(sku, input), input, taskId: taskId ?? intentTask(st.env, st.env.agents[agent].id, key) },
   });
 }
 
@@ -240,6 +241,7 @@ describe("lease expiry moves a job to reconciliation, not re-execution", () => {
     const W = { authorization: `Bearer ${s.worker("Prince")}` };
     const claim = await s.call("/worker/jobs/claim", { method: "POST", headers: W, body: { workerId: "runner-a", leaseMs: 60_000 } });
     expect(claim.body.job.state).toBe("leased");
+    expect(claim.body.task.agent).toEqual({ name: "Prince", description: "Research agent" });
     s.faults.push({ match: /usage\/execute/, when: "before", remaining: 1 });
     const r = await intent(s, "Prince", "lease-1", "summarize", "prepaid_credits", { text: "x" }, run.body.taskId);
     expect(r.body.execution.blocked.code).toBe("NOT_READY");

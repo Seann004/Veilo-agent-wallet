@@ -2,12 +2,13 @@
 // pool state, writes the ordered approved-label list, and (only with --key <path> --confirm)
 // signs update_approved_root with the approval authority. Without --confirm it changes nothing
 // on chain. Key contents are never printed.
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { address, isAddress } from "@solana/kit";
 import { VeiloConfigError, findRepoRoot, loadConfig, loadDotEnv } from "@veilo/contracts";
 import { PROTOTYPE_APPROVAL_RULE } from "@veilo/contracts/relayer";
-import { buildApprovedTree, getPoseidon, updateApprovedRootInstruction, type PoolReplay } from "@veilo/privacy-sdk";
+import { buildApprovedTree, getPoseidon, updateApprovedRootInstruction } from "@veilo/privacy-sdk";
+import { applyApprovalRule } from "../auto-approve";
 import { createRpcRelayerChain } from "../chain";
 import { openRelayerDb } from "../db";
 import { verifyDeployment } from "../deployment";
@@ -19,21 +20,7 @@ function arg(name: string): string | undefined {
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
 
-/**
- * The prototype rule: labels of inserted (finalized) deposits whose refund authority is one of
- * the configured synthetic/test participants. Previously approved labels keep their positions.
- */
-export function applyApprovalRule(replay: PoolReplay, participants: ReadonlySet<string>, previous: readonly bigint[]): bigint[] {
-  const out = [...previous];
-  const seen = new Set(previous);
-  const ordered = [...replay.deposits.values()].sort((a, b) => (a.queueSeq < b.queueSeq ? -1 : 1));
-  for (const d of ordered) {
-    if (d.state !== "inserted" || !participants.has(d.refundAuthority) || seen.has(d.label)) continue;
-    out.push(d.label);
-    seen.add(d.label);
-  }
-  return out;
-}
+export { applyApprovalRule };
 
 async function main(): Promise<void> {
   const rootDir = findRepoRoot();
@@ -46,7 +33,7 @@ async function main(): Promise<void> {
   const deployment = await verifyDeployment({ manifestPath: config.pool.deploymentManifestPath, repoRoot: rootDir, programId: config.pool.programId, poolId: config.pool.poolId, mint: config.network.mint, chain });
   if (deployment.state !== "verified") throw new VeiloConfigError("INVALID_CONFIG", `deployment not verified: ${deployment.reason}`);
   const m = deployment.manifest;
-  const out = resolve(arg("--out") ?? process.env.APPROVED_LABELS_PATH ?? join(rootDir, "artifacts", "deployment", "approved-labels.json"));
+  const out = arg("--out") !== undefined ? resolve(arg("--out")!) : resolve(rootDir, process.env.APPROVED_LABELS_PATH?.trim() || join("artifacts", "deployment", "approved-labels.json"));
   const p = await getPoseidon();
   const db = openRelayerDb(process.env.RELAYER_DATABASE_PATH?.trim() || join(config.paths.dataDir, "relayer.sqlite"));
   const indexer = new Indexer(db, chain, p, address(m.program.programId), address(m.pool.poolState), address(m.pool.approvalState), out);
@@ -65,7 +52,10 @@ async function main(): Promise<void> {
     console.log("dry run: rerun with --key <approval-authority-keypair> --confirm to publish the list and update the on-chain root");
     return;
   }
-  const key = await loadSponsorKey(arg("--key"));
+  // pnpm runs this from services/relayer; a relative --key is meant from the repository root, like APPROVED_LABELS_PATH.
+  const keyPath = arg("--key") !== undefined ? resolve(rootDir, arg("--key")!) : undefined;
+  if (keyPath !== undefined && !existsSync(keyPath)) throw new VeiloConfigError("INVALID_CONFIG", "--key file is missing");
+  const key = await loadSponsorKey(keyPath);
   if (!key || key.address !== m.authorities.approvalAuthority) throw new VeiloConfigError("INVALID_CONFIG", "--key must be the manifest approval authority keypair");
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, `${JSON.stringify(file, null, 2)}\n`);

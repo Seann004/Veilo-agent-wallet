@@ -63,8 +63,23 @@ Direct reused libraries and toolchain sources
   protocol/client, gateway and local test facilitator integration.
 - Original synthetic research fixtures: CC0-1.0 dedication in
   services/gateway/fixtures/research/LICENSE.md. Fictional demo data only.
+- Brand logos in apps/dashboard/public/logos: SVGs from svgl (MIT,
+  github.com/pheralb/svgl); HubSpot, CoinGecko and Meteora icons are each
+  site's own favicon. Used only to identify each service; the marks remain
+  trademarks of their owners, and showing one does not imply endorsement or a
+  working integration.
 
 Keep upstream copyright/license notices with redistributed dependencies and
 adaptations. Owner review of GPL distribution obligations and the verifier
 license discrepancy remains open before choosing Veilo's license or shipping
 a bundle. See docs/references/attribution.md for source links and scope.
+
+Third-party packages
+
+thinking-orbs 0.3.2 (https://github.com/Jakubantalik/Libraries.dev), MIT License,
+Copyright (c) 2026 Jakub Antalik. Used unmodified as the dashboard's agent
+loading indicator. The full license text ships in the package's LICENSE file.
+
+bot-avatars 0.2.2 (https://github.com/Jakubantalik/Libraries.dev), MIT License,
+Copyright (c) 2026 Jakub Antalik. Used unmodified for the animated avatar shown
+while an agent is working. The full license text ships in the package's LICENSE file.

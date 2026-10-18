@@ -1,3 +1,4 @@
+import "server-only";
 import { upstreamConfig, type UpstreamConfig, type UpstreamService } from "./upstream";
 
 export const SESSION_COOKIE = "veilo_session";
@@ -28,7 +29,8 @@ export const ROUTES: Record<UpstreamService, Route[]> = {
     r("GET", "/session", { public: true }),
     r("POST", "/session/challenge", { public: true }),
     r("POST", "/session/verify", { public: true }),
-    r("POST", "/session/logout"),
+    // Sign-out needs no CSRF token (the Origin check still applies), so a lost token can't trap a session.
+    r("POST", "/session/logout", { public: true }),
     r("GET", "/workspace"),
     r("POST", "/workspace/(stop|resume|policy)"),
     r("GET", "/activity"),
@@ -68,6 +70,20 @@ export const ROUTES: Record<UpstreamService, Route[]> = {
     r("GET", "/external-bindings"),
     r("POST", "/external-bindings"),
     r("POST", `/external-bindings/${ID}/disable`),
+    r("GET", "/ai-provider"),
+    r("PUT", "/ai-provider"),
+    r("DELETE", "/ai-provider"),
+    r("POST", "/ai-provider/test"),
+    r("POST", "/ai-provider/models"),
+    r("GET", "/channels"),
+    r("POST", "/channels"),
+    r("DELETE", `/channels/${ID}`),
+    r("POST", `/channels/${ID}/test`),
+    r("POST", "/channels/telegram/chats"),
+    r("PUT", `/agents/${ID}/delivery`),
+    r("GET", "/swap-service"),
+    r("POST", "/swap-service"),
+    r("DELETE", "/swap-service"),
     r("GET", `/purchases/${ID}/external-calls`),
   ],
   wallet: [
@@ -188,6 +204,5 @@ export async function proxy(req: Request, service: UpstreamService, segments: re
       out.append("set-cookie", csrfCookie("", 0, config.secureCookies));
     }
   }
-  if (upstream.status === 401) out.append("set-cookie", csrfCookie("", 0, config.secureCookies));
   return new Response(upstream.status === 204 ? null : body, { status: upstream.status, headers: out });
 }

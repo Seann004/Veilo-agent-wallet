@@ -25,6 +25,7 @@ import { immediate } from "@veilo/db";
 import { big, iso, num, type Ledger } from "../context";
 import { ControlError } from "../errors";
 import { issueWorkerCredential } from "../auth/credentials";
+import type { RunnerCredentialProvisioner } from "../auth/runner-credentials";
 import {
   DEFAULT_GUEST_RUNS_PER_HOUR,
   SESSION_COOKIE,
@@ -42,10 +43,12 @@ import { enqueueJob, jobView } from "../ledger/jobs";
 import { decidePurchase, getPurchaseRow, purchaseView, type PurchaseRow } from "../ledger/purchases";
 import { activity, agentBudget, createTask, requestHandoff, saveArtifact } from "../ledger/summaries";
 import { chargeToolCall, getTask, validateResearchCitations } from "../agents/work";
+import { parseReferenceImage, saveReferenceImage, type ReferenceImage } from "../agents/attachments";
 import type { Integration } from "../integration";
 import { fullBalances } from "../integration/balances";
 import { RETRY_MARKER } from "../scheduler/scheduler";
 import { LISTING_SERVICE_PREFIX } from "../marketplace/seller-clients";
+import { SWAP_SERVICE_KEY } from "../swap/service";
 import {
   activatePolicyVersion,
   activeAgentPolicy,
@@ -139,7 +142,7 @@ function denyGuestRun(ledger: Ledger, guest: GuestActor, agentId: string, reason
   throw new ControlError("POLICY_DENIED", reason);
 }
 
-export function controlRouter(deps: AuthDeps & { integration?: Integration | undefined }): Router {
+export function controlRouter(deps: AuthDeps & { integration?: Integration | undefined; runnerCredentials?: RunnerCredentialProvisioner | undefined }): Router {
   const { ledger } = deps;
   const integration = deps.integration;
   const r = Router();
@@ -148,7 +151,6 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
   const ownerOrService = requireActor(deps, ["owner", "service"]);
   const reader = requireActor(deps, READERS);
   const runner = requireActor(deps, ["owner", "guest"]);
-  const signedIn = requireActor(deps, ["owner", "guest"]);
   const anyActor = requireActor(deps, ["owner", "guest", "viewer", "worker", "service"]);
   const guestRunLimit = deps.session.guestRunsPerHour ?? DEFAULT_GUEST_RUNS_PER_HOUR;
   const ownerId = (res: Response) => {
@@ -196,7 +198,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     });
   });
 
-  r.post("/session/logout", signedIn, (req, res) => {
+  r.post("/session/logout", requireActor(deps, ["owner", "guest"], { csrf: false }), (req, res) => {
     const a = actorOf(res);
     if (a.kind === "owner" || a.kind === "guest") revokeSession(ledger, a.sessionId);
     res.setHeader("Set-Cookie", clearedSessionCookie(deps.session.secureCookies || req.secure));
@@ -349,6 +351,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
       body.activatePolicyVersion !== undefined
         ? activatePolicyVersion(ledger, workspaceId, agentId, body.activatePolicyVersion, { type: "owner", id: ownerId(res) })
         : null;
+    if (activated) deps.runnerCredentials?.syncQuietly();
     res.json({
       agent: agentView(ledger, requireAgent(ledger, workspaceId, agentId)),
       draft: draft ? policyView(draft) : null,
@@ -416,13 +419,26 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     } else {
       let input: Record<string, unknown>;
       let objective = body.objective;
+      let referenceImage: ReferenceImage | undefined;
       const jobKind = agent.role === "research" ? "research" : agent.role === "custom" ? "custom" : "content";
       if (agent.role === "custom") {
-        const parsed = customTaskInputSchema.safeParse(body.input ?? {});
+        const { referenceImage: rawImage, ...rest } = body.input ?? {};
+        if (rawImage !== undefined) {
+          if (guest) denyGuestRun(ledger, guest, agent.id, "guests cannot attach a reference image");
+          referenceImage = parseReferenceImage(rawImage);
+        }
+        const parsed = customTaskInputSchema.safeParse(rest);
         if (!parsed.success) throw new ControlError("INVALID_REQUEST", parsed.error.issues.map((i) => `input.${i.path.join(".")}: ${i.message}`).join("; "));
         if (objective === undefined) throw new ControlError("INVALID_REQUEST", "objective is required for a custom agent task");
         // Instructions are snapshotted from the owner's agent record; depth 0 marks an owner-started task.
-        input = { ...parsed.data, instructions: agent.instructions, template: agent.template, [MARKETPLACE_DELEGATION_DEPTH_KEY]: 0 };
+        // The image itself is stored apart from the input so worker task reads never carry it.
+        input = {
+          ...parsed.data,
+          instructions: agent.instructions,
+          template: agent.template,
+          [MARKETPLACE_DELEGATION_DEPTH_KEY]: 0,
+          ...(referenceImage ? { hasReferenceImage: true } : {}),
+        };
       } else if (agent.role === "research") {
         const parsed = researchTaskInputSchema.safeParse({ question: objective, ...(body.input ?? {}) });
         if (!parsed.success) throw new ControlError("INVALID_REQUEST", parsed.error.issues.map((i) => `input.${i.path.join(".")}: ${i.message}`).join("; "));
@@ -461,6 +477,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
           limitUsdc: body.taskLimitTestUsdc,
           deadlineMs: body.deadline === undefined ? null : Date.parse(body.deadline),
         });
+        if (referenceImage) saveReferenceImage(ledger, task.id, referenceImage);
         return recordGuestRun(
           enqueueJob(ledger, {
             workspaceId,
@@ -489,11 +506,15 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
   });
 
   r.post("/agents/:id/resume", owner, (req, res) => {
-    res.json({ agent: agentView(ledger, resumeAgent(ledger, wsId(res), param(req, "id"), ownerId(res))) });
+    const agent = resumeAgent(ledger, wsId(res), param(req, "id"), ownerId(res));
+    deps.runnerCredentials?.syncQuietly();
+    res.json({ agent: agentView(ledger, agent) });
   });
 
   r.post("/agents/:id/revoke", owner, (req, res) => {
-    res.json({ agent: agentView(ledger, revokeAgent(ledger, wsId(res), param(req, "id"), ownerId(res))) });
+    const agent = revokeAgent(ledger, wsId(res), param(req, "id"), ownerId(res));
+    deps.runnerCredentials?.syncQuietly();
+    res.json({ agent: agentView(ledger, agent) });
   });
 
   r.post("/agents/:id/worker-credentials", owner, (req, res) => {
@@ -522,6 +543,22 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
       );
       throw new ControlError("POLICY_DENIED", "agent scope mismatch: requests act only for the credential's agent");
     }
+    if (body.taskId === undefined) {
+      // Task budget, purchase count and deadline apply only when a task scopes the purchase.
+      immediate(ledger.db, () =>
+        writeAudit(ledger, {
+          workspaceId: a.workspaceId,
+          scope: `agent:${a.agentId}`,
+          actorType: "worker",
+          actorId: a.agentId,
+          action: "purchase.authorize",
+          policyResult: "denied",
+          reasonCode: "POLICY_DENIED",
+          details: { reason: "task scope required" },
+        }),
+      );
+      throw new ControlError("POLICY_DENIED", "worker purchases must be scoped to one of the agent's running tasks");
+    }
     chargeWorkerCall(ledger, req, a.agentId, body.taskId, body.paymentPath === "prepaid_credits" ? "consume_inference_sku" : "request_purchase");
     const serviceKey = ledger.db.prepare(`SELECT service_key FROM approved_service WHERE id = ?`).pluck().get(body.serviceId) as string | undefined;
     if (serviceKey?.startsWith(LISTING_SERVICE_PREFIX)) {
@@ -542,6 +579,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
       requestDigest: body.requestDigest,
       taskId: body.taskId,
       rationale: body.rationale,
+      ...(serviceKey === SWAP_SERVICE_KEY ? { swapInput: body.input } : {}),
     });
     let purchase = result.purchase;
     let execution: unknown;
@@ -622,7 +660,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     if (a.kind !== "worker") throw new ControlError("FORBIDDEN", "worker credential required");
     chargeWorkerCall(ledger, req, a.agentId, undefined, "catalog_lookup");
     const policy = activeAgentPolicy(ledger, a.agentId);
-    const perms = policy ? agentPermissions(policy) : { allowedSkus: [], allowedPaymentPaths: [] };
+    const perms = policy ? agentPermissions(policy) : { allowedSkus: [] as string[], allowedPaymentPaths: [] as string[], allowBrowsing: false };
     const rows = ledger.db
       .prepare(
         `SELECT a.id AS service_id, a.service_key, a.status, s.sku, s.payment_path, s.price_usdc, s.max_fee_usdc, s.usage_units
@@ -631,7 +669,9 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
          ORDER BY a.service_key, s.sku, s.payment_path`,
       )
       .all(a.workspaceId, LISTING_SERVICE_PREFIX.length, LISTING_SERVICE_PREFIX) as Array<{ service_id: string; service_key: string; status: string; sku: string; payment_path: string; price_usdc: bigint; max_fee_usdc: bigint; usage_units: bigint }>;
+    const workflows = Number(ledger.db.prepare(`SELECT count(*) FROM workflow_assignment WHERE agent_id = ? AND status = 'active' AND version_id IS NOT NULL`).pluck().get(a.agentId));
     res.json({
+      capabilities: { browse: perms.allowBrowsing, workflows },
       items: rows
         .filter((s) => perms.allowedSkus.includes(s.sku) && perms.allowedPaymentPaths.includes(s.payment_path))
         .flatMap((s) => {

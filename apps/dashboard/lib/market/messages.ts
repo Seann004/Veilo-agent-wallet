@@ -10,6 +10,9 @@ export const SIGN_IN_STATEMENT = "Sign in to Veilo marketplace. This is a login 
 export const SPENDING_BOUNDARY =
   "Marketplace sign-in identifies you to the catalogue and job board only. It never authorizes spending: every payment still needs your local controller.";
 
+/** Session key that carries a custom agent's instructions into a new seller listing draft. */
+export const OFFER_DRAFT_KEY = "veilo.offerDraft";
+
 export const DECIMALS_UNVERIFIED = "token decimals not verified by your local controller";
 
 export const NO_BALANCE_NOTE = "Payments settle directly to your payout wallet; Veilo holds no withdrawable balance.";

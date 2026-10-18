@@ -1,0 +1,131 @@
+// @vitest-environment happy-dom
+import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { AgentDetail, ResearchForm } from "../components/AgentDetail";
+import { usePolling } from "../components/hooks";
+import { withRole } from "./access-fixtures";
+import { agent, balancesAfterTopUpAndConsumption, draft, PRINCE, purchase, recordingFetch } from "./fixtures";
+
+vi.mock("next/navigation", () => ({ usePathname: () => `/agents/${PRINCE}`, useParams: () => ({}) }));
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+describe("live agent tasks", () => {
+  it("updates finished work, saved content and payments without navigation, then stops on unmount", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+    let finished = false;
+    const at = "2026-10-15T00:00:00.000Z";
+    const rec = recordingFetch((url) => {
+      if (url.includes("/tasks?")) return { tasks: [], jobs: [{ id: "job-1", agentId: PRINCE, taskId: null, kind: "research", state: finished ? "completed" : "queued", result: finished ? { decision: "Done", detail: "Research is ready" } : null, scheduledAt: at, createdAt: at, updatedAt: at, attempts: 1 }] };
+      if (url.includes("/balances")) return balancesAfterTopUpAndConsumption();
+      if (url.includes("/activity")) return { events: [], purchases: finished ? [purchase({ agentId: PRINCE })] : [] };
+      if (url.includes("/content?")) return { items: finished ? [draft({ title: "Fresh research brief", agent: { id: PRINCE, name: "Prince", role: "research" } })] : [] };
+      return { items: [] };
+    });
+    vi.stubGlobal("fetch", rec.impl);
+    let view!: ReturnType<typeof render>;
+    await act(async () => { view = render(withRole(<AgentDetail agentId={PRINCE} />)); });
+    expect(screen.queryByText("Done: Research is ready")).toBeNull();
+    finished = true;
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(screen.getByText("Done: Research is ready")).toBeTruthy();
+    // The answer bubble shows the answer; its title repeats the owner's message and stays in Outputs.
+    expect(screen.getByText("Original draft text")).toBeTruthy();
+    expect(screen.queryByText("Fresh research brief")).toBeNull();
+    expect(screen.getByRole("button", { name: /Inference credit pack/ })).toBeTruthy();
+    for (const path of ["/tasks?", "/balances", "/activity", "/content?", "/handoffs"]) {
+      expect(rec.calls.filter((call) => call.url.includes(path))).toHaveLength(2);
+    }
+    const completedCount = rec.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+    expect(rec.calls).toHaveLength(completedCount);
+    view.unmount();
+    const count = rec.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+    expect(rec.calls).toHaveLength(count);
+  });
+
+  it("shows how the agent did the work under its answer, without repeating the task", async () => {
+    const content = [
+      "Fees fell 12% this week.",
+      "",
+      "— Details —",
+      "Task: Summarize fee changes",
+      "Made with: Your AI model (deepseek/deepseek-v4-flash), no USDC spent.",
+      "Connector data used: github/list_issues.",
+      "Note: one connector returned no usable result.",
+    ].join("\n");
+    const rec = recordingFetch((url) => {
+      if (url.includes("/tasks?")) return { tasks: [], jobs: [] };
+      if (url.includes("/balances")) return balancesAfterTopUpAndConsumption();
+      if (url.includes("/activity")) return { events: [], purchases: [] };
+      if (url.includes("/content?")) return { items: [draft({ kind: "research_brief", title: "Fee brief", content, agent: { id: PRINCE, name: "Prince", role: "research" } })] };
+      return { items: [] };
+    });
+    vi.stubGlobal("fetch", rec.impl);
+    await act(async () => { render(withRole(<AgentDetail agentId={PRINCE} />)); });
+    expect(screen.getByText("Fees fell 12% this week.")).toBeTruthy();
+    expect(screen.getByText("How I did it")).toBeTruthy();
+    expect(screen.getByText("Connector data used: github/list_issues.")).toBeTruthy();
+    expect(screen.getByText(/Made with: Your AI model/)).toBeTruthy();
+    expect(screen.queryByText("Task: Summarize fee changes")).toBeNull();
+  });
+
+  it("shows a proposed workflow run in the agent's answer with a link to review and approve it", async () => {
+    const taskId = "88888888-8888-4888-8888-888888888888";
+    const runId = "20000000-0000-4000-8000-000000000009";
+    const at = "2026-10-15T00:00:00.000Z";
+    const content = ["I'd like to run 'Carousel from a topic' with topic: Solana validators (1 step, up to 0.23 USDC).", "", "— Details —", `Workflow run: ${runId} (waiting for your approval).`].join("\n");
+    const rec = recordingFetch((url) => {
+      if (url.includes("/tasks?")) return { tasks: [], jobs: [{ id: "job-9", agentId: PRINCE, taskId, kind: "custom", state: "completed", result: { workflowRun: { runId, status: "awaiting_approval", title: "Carousel from a topic" } }, scheduledAt: at, createdAt: at, updatedAt: at, attempts: 1 }] };
+      if (url.includes("/balances")) return balancesAfterTopUpAndConsumption();
+      if (url.includes("/activity")) return { events: [], purchases: [] };
+      if (url.includes("/content?")) return { items: [draft({ kind: "research_brief", title: "Validators", content, taskId, agent: { id: PRINCE, name: "Scout", role: "custom" } })] };
+      return { items: [] };
+    });
+    vi.stubGlobal("fetch", rec.impl);
+    await act(async () => { render(withRole(<AgentDetail agentId={PRINCE} />)); });
+    expect(screen.getByText(/I'd like to run 'Carousel from a topic'/)).toBeTruthy();
+    expect(screen.getByText(/Workflow run waiting for your approval/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Review and approve" }).getAttribute("href")).toBe(`/marketplace/runs/${runId}`);
+  });
+
+  it("does not overlap slow refreshes or continue after unmount", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+    let finish!: () => void;
+    const refresh = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const view = renderHook(() => usePolling(refresh, "agent"));
+    await act(async () => { await vi.advanceTimersByTimeAsync(9000); });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    view.unmount();
+    await act(async () => { finish(); await vi.advanceTimersByTimeAsync(6000); });
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("research task budget", () => {
+  it.each([".01", "$0.01", "0.0000001", "-1", "oops"])("rejects invalid nonblank budget %s before queueing", async (budget) => {
+    const rec = recordingFetch();
+    vi.stubGlobal("fetch", rec.impl);
+    const onQueued = vi.fn();
+    render(withRole(<ResearchForm agent={agent(PRINCE, "Prince", "research")} disabled={false} onQueued={onQueued} />));
+    fireEvent.change(screen.getByLabelText("Research question"), { target: { value: "Find sources" } });
+    fireEvent.change(screen.getByLabelText("Task budget (USDC, optional)"), { target: { value: budget } });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Start research task" })); });
+    expect(screen.getByRole("alert").textContent).toContain("Enter a task budget such as 0.01");
+    expect(rec.calls).toHaveLength(0);
+    expect(onQueued).not.toHaveBeenCalled();
+  });
+
+  it.each([["", undefined], ["   ", undefined], ["0.01", "10000"]])("queues budget %s with the intended limit", async (budget, expected) => {
+    const rec = recordingFetch(() => ({ taskId: "task-1", executor: "queued" }));
+    vi.stubGlobal("fetch", rec.impl);
+    render(withRole(<ResearchForm agent={agent(PRINCE, "Prince", "research")} disabled={false} onQueued={vi.fn()} />));
+    fireEvent.change(screen.getByLabelText("Research question"), { target: { value: "Find sources" } });
+    fireEvent.change(screen.getByLabelText("Task budget (USDC, optional)"), { target: { value: budget } });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Start research task" })); });
+    expect(rec.calls).toHaveLength(1);
+    expect((rec.calls[0]!.body as Record<string, unknown>).taskLimitTestUsdc).toBe(expected);
+  });
+});

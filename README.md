@@ -39,7 +39,7 @@ The [documentation site](docs/index.md) contains [architecture/diagrams](docs/gu
 
 ## Quickstart
 
-Install **Node >=22.14.0 <23**, **pnpm 10.34.6** and **Docker** with a Linux daemon. Rust, Solana, Anchor and circom run in the pinned toolchain image.
+Install **Node 24 LTS** (22.14+ also works; see `.nvmrc`), **pnpm 10.34.6** and **Docker** with a Linux daemon. Rust, Solana, Anchor and circom run in the pinned toolchain image.
 
 ```sh
 corepack enable pnpm

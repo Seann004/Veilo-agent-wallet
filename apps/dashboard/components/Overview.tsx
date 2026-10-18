@@ -2,23 +2,26 @@
 
 import Link from "next/link";
 import { api } from "../lib/api";
-import { credits, usdc } from "../lib/format";
+import { usdc } from "../lib/format";
 import { ROLE_LABEL, agentStateLabel } from "../lib/labels";
 import { summarizeResult } from "../lib/results";
 import type { Activity, Agent, AgentBudget, Balances, Job, Task } from "../lib/types";
-import { ActivityList } from "./Activity";
+import { ActivityTable } from "./Activity";
 import { AgentAvatar } from "./Avatar";
 import { useCapability, useOwner } from "./Shell";
 import { EmergencyStop } from "./StopControls";
 import { TreasurySummary } from "./TreasurySummary";
 import { useAction, useResource } from "./hooks";
 import { DeniedHint, ErrorNotice, Loading, Section } from "./ui";
+import { Amount } from "./UsdcIcon";
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string | undefined }) {
   return (
     <div className="stat">
       <span className="stat-label">{label}</span>
-      <span className="stat-value">{value}</span>
+      <span className="stat-value">
+        <Amount value={value} />
+      </span>
       {sub ? <span className="stat-sub">{sub}</span> : null}
     </div>
   );
@@ -74,7 +77,8 @@ export function Overview() {
   const archived = workspace.agents.filter((a) => a.status === "archived");
   const b = balances.data;
   const wsBudget = b && b.workspace.policyVersion !== null ? b.workspace : null;
-  const gc = b?.gatewayCredits;
+  const ai = useResource(() => api<{ provider: { provider: string; model: string } | null }>("control", "/ai-provider"), "ai-provider");
+  const aiModel = ai.data?.provider ?? null;
 
   return (
     <>
@@ -90,7 +94,7 @@ export function Overview() {
       {draftWs ? (
         <div className="notice notice-warn notice-row" role="status">
           <span>
-            Workspace policy v{draftWs.version} is a draft: {usdc(draftWs.lifetimeTestUsdc)} lifetime, {usdc(draftWs.rolling24hTestUsdc)} per 24 h. No agent can spend until you activate it.
+            <strong>Agents can’t spend yet.</strong> Confirm the workspace limits ({usdc(draftWs.lifetimeTestUsdc)} in total, {usdc(draftWs.rolling24hTestUsdc)} a day) to let them start.
           </span>
           <button
             type="button"
@@ -104,20 +108,34 @@ export function Overview() {
               })
             }
           >
-            Activate workspace policy v{draftWs.version}
+            Confirm limits
           </button>
           <DeniedHint reason={configure.reason} />
         </div>
       ) : null}
       <ErrorNotice error={activate.error} />
-      {!activeWs && !draftWs ? <p className="notice notice-warn">No workspace policy exists; no agent can spend.</p> : null}
+      {!activeWs && !draftWs ? <p className="notice notice-warn">No workspace spending limits are set, so no agent can spend.</p> : null}
 
       <div className="stats">
-        <Stat label="Spendable in pool" value={b?.tokens.buckets ? usdc(b.tokens.buckets.approved_unreserved ?? "0") : "—"} sub="Approved, unreserved notes" />
+        <Stat
+          label="Spendable in pool"
+          value={b?.tokens.buckets ? usdc((BigInt(b.tokens.buckets.approved_unreserved ?? "0") + BigInt(b.tokens.buckets.confirmed_change ?? "0")).toString()) : "—"}
+          sub="Approved deposits and change, not reserved"
+        />
         <Stat label="Left today" value={wsBudget ? usdc(wsBudget.rolling24h.available) : "—"} sub={wsBudget ? `of ${usdc(wsBudget.rolling24h.limit)} per 24 h` : "No active workspace policy"} />
         <Stat label="Cash spent" value={b?.cash ? usdc(b.cash.spent) : "—"} sub={b?.cash ? `${usdc(b.cash.reserved)} reserved` : undefined} />
-        <Stat label="Prepaid credits" value={gc ? (gc.available ? credits(gc.usable) : "Not ready") : "—"} sub="Demo, operator-funded" />
+        <Stat label="AI model" value={ai.data ? (aiModel ? aiModel.model : "Trial") : "—"} sub={aiModel ? "Your own key" : "Add your key in Settings"} />
       </div>
+      {ai.data && !aiModel && configure.allowed ? (
+        <div className="notice notice-row" role="status">
+          <span>
+            <strong>Add your AI key</strong> so agents run on your own model.
+          </span>
+          <Link className="btn btn-small btn-primary" href="/settings">
+            Add key
+          </Link>
+        </div>
+      ) : null}
       <ErrorNotice error={balances.error} what="balances" onRetry={balances.reload} />
 
       <Section title="Agents">
@@ -151,12 +169,12 @@ export function Overview() {
       <Section
         title="Recent payments"
         actions={
-          <Link className="btn btn-small" href="/activity">
+          <Link className="btn btn-small" href="/wallet">
             View all
           </Link>
         }
       >
-        {activity.data ? <ActivityList activity={activity.data} workspace={workspace} onChanged={reloadAll} limit={5} /> : <Loading label="activity" />}
+        {activity.data ? <ActivityTable activity={activity.data} workspace={workspace} onChanged={reloadAll} limit={8} /> : <Loading label="activity" />}
         <ErrorNotice error={activity.error} what="activity" onRetry={activity.reload} />
       </Section>
 

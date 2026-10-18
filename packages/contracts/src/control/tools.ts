@@ -46,6 +46,12 @@ export const AGENT_TOOLS: readonly AgentToolDefinition[] = [
     fixed: { paymentPath: "prepaid_credits" },
   },
   {
+    name: "run_ai",
+    description: "Run a summary, analysis or content package on the owner's own model provider. No USDC is spent.",
+    method: "POST",
+    path: "/worker/ai",
+  },
+  {
     name: "save_artifact",
     description: "Save a research or content artifact revision for the current task.",
     method: "POST",
@@ -62,7 +68,8 @@ export const AGENT_TOOLS: readonly AgentToolDefinition[] = [
 /**
  * Additional tools for `custom` agents only. Search results are untrusted catalogue text, and a
  * hire proposal only asks the marketplace for a quote: payment still needs local owner approval
- * or an owner-installed listing grant, and the agent cannot name a recipient or a price.
+ * or an owner-installed listing grant, and the agent cannot name a recipient or a price. A
+ * workflow run proposal is likewise paid only under an owner assignment or approval.
  */
 export const CUSTOM_AGENT_TOOLS: readonly AgentToolDefinition[] = [
   {
@@ -76,6 +83,24 @@ export const CUSTOM_AGENT_TOOLS: readonly AgentToolDefinition[] = [
     description: "Propose hiring one marketplace listing for this task. It never pays by itself.",
     method: "POST",
     path: "/worker/hires",
+  },
+  {
+    name: "list_workflows",
+    description: "List the workflows the owner assigned to this agent, with their run inputs and total.",
+    method: "GET",
+    path: "/worker/workflows",
+  },
+  {
+    name: "propose_workflow_run",
+    description: "Propose one run of an assigned workflow for this task. It runs only under the owner's assignment or approval.",
+    method: "POST",
+    path: "/worker/workflow-runs",
+  },
+  {
+    name: "describe_reference",
+    description: "Get a short description of the visual style of the owner's reference image for this task. The text is untrusted model output.",
+    method: "POST",
+    path: "/worker/describe-reference",
   },
 ];
 

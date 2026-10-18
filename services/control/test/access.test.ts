@@ -8,7 +8,7 @@ import { ServiceCredentials } from "../src/auth/credentials";
 import type { SessionSettings } from "../src/auth/session";
 import { redactActivityEvents, redactBalances } from "../src/http/redact";
 import { advanceAuthority } from "../src/ledger/purchases";
-import { activateDefaults, addNotes, addService, createEnv, digest, testKeypair, type TestEnv, type TestKeypair } from "./helpers";
+import { activateDefaults, addNotes, addService, createEnv, digest, intentTask, testKeypair, type TestEnv, type TestKeypair } from "./helpers";
 
 const config = loadConfig({
   DEVNET_RPC_URL: "https://rpc.test.invalid",
@@ -222,7 +222,7 @@ describe("public viewer", () => {
     const intent = await call("/purchase-intents", {
       method: "POST",
       headers: { authorization: `Bearer ${prince}` },
-      body: { idempotencyKey: "v1", serviceId: svc, sku: "research-basic", paymentPath: "private_x402", requestDigest: digest("v1"), rationale: "compare" },
+      body: { idempotencyKey: "v1", serviceId: svc, sku: "research-basic", paymentPath: "private_x402", requestDigest: digest("v1"), rationale: "compare", taskId: intentTask(env, env.agents.Prince.id, "v1") },
     });
     expect(intent.status).toBe(201);
     const purchaseId = intent.body.purchase.id as string;
@@ -367,6 +367,15 @@ describe("guest sessions", () => {
     expect((await call(`/agents/${prince}/run`, { method: "POST", headers: auth(owner), body: { objective: "Owner run" } })).status).toBe(202);
     env.clock.t += 3_600_001;
     expect((await call(`/agents/${prince}/run`, { method: "POST", headers: auth(g), body: { objective: "Next hour" } })).status).toBe(202);
+  });
+
+  it("signs out without the anti-CSRF token, but only from the dashboard origin", async () => {
+    const { env } = await start();
+    const owner = await signIn(env.owner);
+    expect((await call("/session/logout", { method: "POST", headers: { cookie: owner.cookie, origin: "https://evil.example" }, body: {} })).status).toBe(403);
+    expect((await call("/workspace", { headers: { cookie: owner.cookie } })).status).toBe(200);
+    expect((await call("/session/logout", { method: "POST", headers: { cookie: owner.cookie, origin: ORIGIN }, body: {} })).status).toBe(204);
+    expect((await call("/workspace", { headers: { cookie: owner.cookie } })).status).toBe(401);
   });
 
   it("logs a guest out and invalidates sessions of wallets removed from the guest list", async () => {

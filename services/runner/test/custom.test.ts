@@ -55,6 +55,9 @@ describe("custom agent (template-driven)", () => {
     expect(summary.hire.proposalId).toBeDefined();
     expect(summary.results).toBe(1);
     expect(summary.toolCalls).toBeLessThanOrEqual(8);
+    // Each step was reported for the owner's live view, and reporting did not use the tool allowance.
+    const steps = s.env.db.prepare("SELECT label FROM task_progress WHERE task_id = ? ORDER BY id").pluck().all(run.body.taskId) as string[];
+    expect(steps).toEqual(["Checking tools and budget", "Planning the task", "Searching the marketplace", "Deciding whether to hire a specialist", "Proposing a specialist hire", "Saving the result"]);
     // The search went to the public catalogue with no controller signature.
     expect(s.market.calls.find((c) => c.path.startsWith("/marketplace/listings"))?.path).toBe("/marketplace/listings?q=crm%20comparison&limit=10");
     // The proposal carries no recipient, price or approval: only the contract fields.
@@ -63,7 +66,7 @@ describe("custom agent (template-driven)", () => {
     expect(proposal.localAgentId).toBe(s.scout.id);
     // The artifact keeps the listing text as data and drops its link.
     const artifact = s.env.db.prepare("SELECT r.content FROM artifact a JOIN artifact_revision r ON r.artifact_id = a.id WHERE a.task_id = ?").pluck().get(run.body.taskId) as string;
-    expect(artifact).toContain("It is not paid");
+    expect(artifact).toContain("It waits for your approval unless you pre-approved this listing");
     expect(artifact).not.toContain("https://evil.example");
 
     // The marketplace turns the proposal into a cloud-approved payment request: still no payment.

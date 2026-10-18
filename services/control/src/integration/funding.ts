@@ -3,8 +3,10 @@ import {
   fundingResultWire,
   merchantSignResultWire,
   payerBindingResultWire,
+  swapResultWire,
   type ExternalCallOutcome,
   type ExternalCallSignRequest,
+  type FundingBinding,
   type FundingProvider,
   type FundingRequest,
   type FundingResult,
@@ -12,6 +14,7 @@ import {
   type MerchantSignResult,
   type PayerBindingRequest,
   type PayerBindingResult,
+  type SwapResult,
 } from "@veilo/contracts";
 import type { FetchLike } from "./gateway-client";
 
@@ -155,6 +158,25 @@ export class WalletFundingProvider implements FundingProvider {
     if (!r.ok) return { status: "recovery_required", reason: r.reason };
     const parsed = merchantSignResultWire.safeParse(r.body);
     return parsed.success ? parsed.data : { status: "recovery_required", reason: "wallet service returned an unrecognized signing state" };
+  }
+
+  /** The wallet stores a swap before submitting it, so a lost reply is safely asked again. */
+  async signSwap(purchaseId: string, fundingRef: string, binding: FundingBinding): Promise<SwapResult> {
+    return this.#swap(await this.#call("POST", `/fundings/${purchaseId}/swap`, { fundingRef, binding }));
+  }
+
+  async swapOutcome(purchaseId: string): Promise<SwapResult> {
+    return this.#swap(await this.#call("GET", `/fundings/${purchaseId}/swap`, undefined));
+  }
+
+  #swap(r: CallResult): SwapResult {
+    if (!r.ok) return { status: "not_ready", reason: r.reason };
+    const parsed = swapResultWire.safeParse(r.body);
+    if (!parsed.success) return { status: "not_ready", reason: "wallet service returned an unrecognized swap state" };
+    const v = parsed.data;
+    if (v.status === "submitted") return { ...v, minOutLamports: BigInt(v.minOutLamports), estOutLamports: BigInt(v.estOutLamports) };
+    if (v.status === "finalized") return { ...v, minOutLamports: BigInt(v.minOutLamports), estOutLamports: BigInt(v.estOutLamports), sponsorLamports: BigInt(v.sponsorLamports) };
+    return v;
   }
 
   /** A transport failure is reported as "signed": the call may have settled and must not be re-signed. */

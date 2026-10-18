@@ -203,6 +203,20 @@ describe("dashboard proxy", () => {
     expect(post.status).toBe(404);
   });
 
+  it("keeps the anti-CSRF cookie on an unrelated 401 and lets sign-out through without the token", async () => {
+    const refused = upstream(() => Response.json({ error: { code: "UNAUTHENTICATED", message: "x" } }, { status: 401 }));
+    const res = await proxy(req("control/workspace", { headers: { cookie: "veilo_session=vos_s; veilo_csrf=c" } }), "control", ["workspace"], { config, fetchImpl: refused.fetchImpl });
+    expect(res.status).toBe(401);
+    expect(res.headers.getSetCookie()).toEqual([]);
+
+    const out = upstream(() => new Response(null, { status: 204 }));
+    const logout = await proxy(req("control/session/logout", { method: "POST", headers: { origin: ORIGIN, cookie: "veilo_session=vos_s" }, body: {} }), "control", ["session", "logout"], { config, fetchImpl: out.fetchImpl });
+    expect(logout.status).toBe(204);
+    expect(logout.headers.getSetCookie().some((c) => c.startsWith("veilo_csrf=;"))).toBe(true);
+    const foreign = await proxy(req("control/session/logout", { method: "POST", headers: { origin: "https://evil.example", cookie: "veilo_session=vos_s" }, body: {} }), "control", ["session", "logout"], { config, fetchImpl: out.fetchImpl });
+    expect(foreign.status).toBe(403);
+  });
+
   it("forwards GET query strings and reports an unreachable service as NOT_READY", async () => {
     const u = upstream();
     await proxy(req(`control/tasks?agentId=${AGENT}&limit=5`), "control", ["tasks"], { config, fetchImpl: u.fetchImpl });
@@ -296,5 +310,24 @@ describe("dashboard proxy", () => {
     expect(c.baseUrl.control).toBe("http://127.0.0.1:5101");
     expect(c.baseUrl.wallet).toBe("http://127.0.0.1:4103");
     expect(c.dashboardOrigin).toBe("http://localhost:3999");
+  });
+});
+
+describe("hosted upstreams", () => {
+  it("uses explicit https service URLs and refuses unsafe ones", async () => {
+    const { upstreamConfig, upstreamUrl } = await import("../lib/server/upstream");
+    const c = upstreamConfig({ VEILO_DASHBOARD_ORIGIN: "https://veilo.vercel.app", VEILO_CONTROL_URL: "https://control.example.com/", VEILO_WALLET_URL: "https://wallet.example.com" } as unknown as NodeJS.ProcessEnv);
+    expect(c.baseUrl.control).toBe("https://control.example.com");
+    expect(c.baseUrl.wallet).toBe("https://wallet.example.com");
+    expect(c.baseUrl.relayer).toBe("http://127.0.0.1:4105");
+    expect(c.secureCookies).toBe(true);
+    expect(upstreamUrl("X", "http://localhost:4101")).toBe("http://localhost:4101");
+    expect(upstreamUrl("X", "https://h.example.com/api/")).toBe("https://h.example.com/api");
+    expect(() => upstreamConfig({ VERCEL: "1", VEILO_CONTROL_URL: "https://c.example.com" } as unknown as NodeJS.ProcessEnv)).toThrow(/missing VEILO_DASHBOARD_ORIGIN, VEILO_WALLET_URL, VEILO_RELAYER_URL/);
+    const { assertHostedConfig } = await import("../lib/server/upstream-url");
+    expect(() => assertHostedConfig({ VEILO_DASHBOARD_ORIGIN: "https://d.example.com", VEILO_CONTROL_URL: "https://c.example.com", VEILO_WALLET_URL: "http://w.example.com", VEILO_RELAYER_URL: "https://r.example.com" } as unknown as NodeJS.ProcessEnv)).toThrow(/VEILO_WALLET_URL/);
+    for (const bad of ["https://h.example.com?", "https://h.example.com#", "http://control.example.com", "https://u:p@control.example.com", "https://control.example.com/?k=1", "ftp://control.example.com", "not a url"]) {
+      expect(() => upstreamUrl("VEILO_CONTROL_URL", bad), bad).toThrow(/VEILO_CONTROL_URL/);
+    }
   });
 });

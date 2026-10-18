@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { clearResourceCache } from "../components/hooks";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentConnectors } from "../components/AgentConnectors";
@@ -94,17 +95,23 @@ describe("Discover", () => {
     expect(screen.getByText(/No connectors match/)).toBeTruthy();
   });
 
-  it("says so when nothing is approved, and when the marketplace isn't configured, without placeholder cards", async () => {
+  it("says so when nothing is approved, and when the marketplace isn't configured, and never offers sign-in apps", async () => {
     serve(catalogue([]));
     render(withRole(<ConnectorsPage />));
     expect(await screen.findByText(/No connectors are approved yet/)).toBeTruthy();
     cleanup();
+    clearResourceCache();
     vi.stubEnv("NEXT_PUBLIC_MARKETPLACE_URL", "");
     const calls = serve(catalogue([SOLANA]));
     render(withRole(<ConnectorsPage />));
     expect(await screen.findByText(/marketplace is not configured/)).toBeTruthy();
     expect(calls.some((c) => c.url.includes("/marketplace/"))).toBe(false);
-    expect(screen.queryByText(/Gmail|Google Drive|Notion/)).toBeNull();
+    // Sign-in apps are listed only as unavailable: no add button and never among usable connectors.
+    const soon = screen.getByRole("list", { name: "Apps that are not available yet" });
+    for (const name of ["Gmail", "Google Drive", "Notion"]) expect(within(soon).getByText(name)).toBeTruthy();
+    expect(within(soon).queryAllByRole("button")).toHaveLength(0);
+    expect(within(soon).getAllByText("Soon").length).toBeGreaterThanOrEqual(3);
+    expect(screen.queryByRole("list", { name: "Approved connectors" })).toBeNull();
   });
 
   it("renders hostile titles, descriptions and endpoints as plain text", async () => {
@@ -123,7 +130,9 @@ describe("Discover", () => {
     const drawer = await screen.findByRole("dialog");
     expect(within(drawer).getByText("https://evil.example/mcp?<b>x</b>")).toBeTruthy();
     for (const root of [container, document.body]) {
-      expect(root.querySelector("img, script, b")).toBeNull();
+      // Our own brand logos are the only images; nothing from connector text becomes markup.
+      expect([...root.querySelectorAll("img")].every((img) => img.classList.contains("brand-img") && img.getAttribute("src")!.startsWith("/logos/"))).toBe(true);
+      expect(root.querySelector("script, b")).toBeNull();
       expect(root.querySelector('a[href^="javascript:"], a[href*="phish"]')).toBeNull();
     }
     expect((globalThis as { pwned?: number }).pwned).toBeUndefined();
@@ -147,6 +156,23 @@ describe("Discover", () => {
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Solana developer docs" }));
   });
 
+  it("labels a templated tool as a fixed Veilo query on the server's code tool", async () => {
+    const market = {
+      ...SOLANA,
+      id: "coingecko-market",
+      title: "CoinGecko market data",
+      endpoint: "https://mcp.api.coingecko.com/mcp",
+      tools: [{ ...tool("coingecko_simple_price", "Live price from CoinGecko's public API."), template: { upstream: "execute", upstreamSha256: "b".repeat(64), codeSha256: "c".repeat(64) } }, tool("search_docs", "Search the CoinGecko docs.")],
+    };
+    serve(catalogue([market]));
+    render(withRole(<ConnectorsPage />));
+    fireEvent.click(await screen.findByRole("button", { name: "CoinGecko market data" }));
+    const drawer = await screen.findByRole("dialog");
+    expect(within(drawer).getByText("coingecko_simple_price")).toBeTruthy();
+    expect(within(drawer).getAllByText(/Fixed Veilo query run through the server/)).toHaveLength(1);
+    expect(within(drawer).getByText("execute").className).toContain("mono");
+  });
+
   it("uses a tablist that moves with the arrow keys", async () => {
     serve(catalogue([SOLANA]));
     render(withRole(<ConnectorsPage />));
@@ -157,7 +183,7 @@ describe("Discover", () => {
     expect(yours.getAttribute("aria-selected")).toBe("true");
     expect(document.activeElement).toBe(yours);
     expect(screen.getByRole("tabpanel", { name: "Yours" })).toBeTruthy();
-    fireEvent.keyDown(yours, { key: "End" });
+    fireEvent.keyDown(yours, { key: "Home" });
     expect(screen.getByRole("tab", { name: "Discover" }).getAttribute("aria-selected")).toBe("true");
   });
 });
@@ -321,7 +347,8 @@ describe("not available yet", () => {
     render(withRole(<ConnectorsPage />));
     fireEvent.click(screen.getByRole("tab", { name: "Yours" }));
     expect(await screen.findByText("Not available yet.")).toBeTruthy();
-    expect(screen.getByText(/proposals appear here once marketplace sign-in/)).toBeTruthy();
+    // Without marketplace sign-in there are no proposals to list, so the section is not shown.
+    expect(screen.queryByText("Your proposals")).toBeNull();
   });
 
   it("lists attached connectors with tool chips and opens the picker with only unattached ones", async () => {

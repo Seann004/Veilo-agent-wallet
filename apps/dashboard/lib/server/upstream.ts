@@ -1,4 +1,9 @@
-/** Loopback upstreams behind the dashboard proxy. The browser never contacts them directly. */
+import "server-only";
+
+/**
+ * Upstreams behind the dashboard proxy; the browser never contacts them directly. Locally they
+ * are loopback ports. A hosted dashboard (e.g. on Vercel) names each one with VEILO_<SERVICE>_URL.
+ */
 export const UPSTREAM_SERVICES = ["control", "wallet", "relayer"] as const;
 export type UpstreamService = (typeof UPSTREAM_SERVICES)[number];
 
@@ -31,11 +36,29 @@ export interface UpstreamConfig {
   baseUrl: Record<UpstreamService, string>;
 }
 
+const URL_ENV: Record<UpstreamService, string> = {
+  control: "VEILO_CONTROL_URL",
+  wallet: "VEILO_WALLET_URL",
+  relayer: "VEILO_RELAYER_URL",
+};
+
+import { upstreamUrl } from "./upstream-url";
+
+export { upstreamUrl };
+
 export function upstreamConfig(env: NodeJS.ProcessEnv = process.env): UpstreamConfig {
   const host = env.VEILO_BIND_HOST?.trim() || "127.0.0.1";
   const loopbackHost = host === "0.0.0.0" ? "127.0.0.1" : host;
+  // Hosted builds must name every upstream; a silent loopback fallback would only fail later.
+  if (env.VERCEL) {
+    const missing = ["VEILO_DASHBOARD_ORIGIN", ...Object.values(URL_ENV)].filter((k) => !env[k]?.trim());
+    if (missing.length > 0) throw new Error(`hosted dashboard is missing ${missing.join(", ")}`);
+  }
   const origin = new URL(env.VEILO_DASHBOARD_ORIGIN?.trim() || `http://localhost:${port(env, "dashboard")}`).origin;
-  const base = (s: UpstreamService) => `http://${loopbackHost}:${port(env, s)}`;
+  const base = (s: UpstreamService) => {
+    const explicit = env[URL_ENV[s]]?.trim();
+    return explicit ? upstreamUrl(URL_ENV[s], explicit) : `http://${loopbackHost}:${port(env, s)}`;
+  };
   return {
     dashboardOrigin: origin,
     secureCookies: origin.startsWith("https:"),

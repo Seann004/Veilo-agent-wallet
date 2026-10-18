@@ -45,6 +45,8 @@ export const agentPolicyInputSchema = z
     allowedPaymentPaths: z.array(z.enum(PAYMENT_PATHS)).max(PAYMENT_PATHS.length),
     roleConfig: creditManagerConfigSchema.optional(),
     expiresAt: isoTimestamp.optional(),
+    /** Read-only web browsing for this agent; off unless the owner turns it on. */
+    allowBrowsing: z.boolean().optional(),
   })
   .strict();
 export type AgentPolicyInput = z.infer<typeof agentPolicyInputSchema>;
@@ -152,8 +154,12 @@ export interface SeedService {
   skus: SeedSku[];
 }
 
-// Sponsor reservation per private purchase covers fresh-wallet ATA rent plus transaction fees.
-const SPONSOR_PER_PRIVATE_PURCHASE = "2100000";
+/**
+ * Sponsor lamports reserved per private purchase: fresh-wallet ATA rent (2,039,280), the spent
+ * nullifier and pending change account rent (3,034,560, never refunded) and both transaction fees.
+ */
+export const SPONSOR_LAMPORTS_PER_PRIVATE_PURCHASE = 5_200_000n;
+const SPONSOR_PER_PRIVATE_PURCHASE = SPONSOR_LAMPORTS_PER_PRIVATE_PURCHASE.toString();
 
 const privateSku = (sku: string, price: string): SeedSku => ({
   sku,

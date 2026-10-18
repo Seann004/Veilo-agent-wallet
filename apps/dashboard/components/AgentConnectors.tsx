@@ -1,12 +1,14 @@
 "use client";
 
+import { BRANDS, NEEDS_SIGN_IN } from "../lib/brands";
 import { useState } from "react";
 import { agentAttachments, attachMany, attachmentStatusText, detachConnector, isActive, isNotAvailable, type AttachOutcome, type Connector } from "../lib/connectors";
 import type { Agent } from "../lib/types";
-import { AttachDialog, ConnectorIcon, ConnectorPicker, NotAvailableYet, useApprovedConnectors } from "./ConnectorFlows";
+import { AttachDialog, BrandLogo, ConnectorIcon, ConnectorPicker, NotAvailableYet, useApprovedConnectors } from "./ConnectorFlows";
 import { Icon } from "./Icon";
 import { useCapability, useOwner } from "./Shell";
 import { useAction, useResource } from "./hooks";
+import { AgentThinking } from "./ThinkingOrb";
 import { ConfirmButton, ErrorNotice, Loading, Spinner } from "./ui";
 
 /** Connectors section on the agent page: confirmed attachments with their tools, add and remove. */
@@ -136,7 +138,7 @@ function ConnectorChoices({ picked, onChange }: { picked: Connector[]; onChange:
   const ids = new Set(picked.map((c) => c.id));
   return (
     <section className="panel">
-      <h2 className="panel-title">Connectors (optional)</h2>
+      <h2 className="panel-title">Connectors</h2>
       {approved.loading && !approved.data ? (
         <Loading label="connectors" />
       ) : approved.error && !approved.data ? (
@@ -154,14 +156,21 @@ function ConnectorChoices({ picked, onChange }: { picked: Connector[]; onChange:
                 aria-pressed={ids.has(c.id)}
                 onClick={() => onChange(ids.has(c.id) ? picked.filter((p) => p.id !== c.id) : [...picked, c])}
               >
-                {ids.has(c.id) ? <Icon name="check" size={14} /> : null}
+                {ids.has(c.id) ? <Icon name="check" size={14} /> : <ConnectorIcon connector={c} size={20} />}
                 <span className="inline-text">{c.title || c.id}</span>
               </button>
             ))}
           </div>
-          <p className="hint">Read-only and keyless. All of a connector&apos;s tools are allowed; narrow them on the agent page.</p>
         </>
       )}
+      <div className="coming-soon-row">
+        <span className="small muted">Coming soon</span>
+        {NEEDS_SIGN_IN.map((a) => (
+          <span key={a.id} className="soon-logo" title={`${BRANDS[a.id].name} (coming soon)`}>
+            <BrandLogo brand={BRANDS[a.id]} size={26} />
+          </span>
+        ))}
+      </div>
     </section>
   );
 }
@@ -180,7 +189,7 @@ export function CreatedConnectors({ agent, picked, outcomes, onRetry }: { agent:
   if (!outcomes) {
     return (
       <p className="small muted" role="status">
-        <Spinner /> Adding connectors…
+        <AgentThinking state="connecting" decorative /> Adding connectors…
       </p>
     );
   }

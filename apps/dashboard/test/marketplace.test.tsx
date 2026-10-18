@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -217,6 +217,7 @@ describe("hire idempotency", () => {
       return {};
     }) as unknown as MarketContextValue["call"];
     render(withMarket(marketValue(call), <ListingDetail slug="research-desk" />));
+    await user.click(within(await screen.findByRole("navigation", { name: "Sections" })).getByRole("button", { name: /^Hire/ }));
     await user.type(await screen.findByLabelText("Brief *"), "Summarize devnet fees");
     await user.click(screen.getByRole("button", { name: "Request quote" }));
     expect(await screen.findByText(/lost reply/)).toBeTruthy();
@@ -257,7 +258,7 @@ describe("job state presenter", () => {
   it("shows a settled but failed job as paid and failed with a refund path", () => {
     const p = presentJob({ state: "failed", financial_state: "settled" });
     expect(p.execution).toMatchObject({ text: "Failed", tone: "problem" });
-    expect(p.financial).toMatchObject({ text: "Paid — settled on chain", tone: "ok" });
+    expect(p.financial).toMatchObject({ text: "Paid: settled on chain", tone: "ok" });
     expect(p.paid).toBe(true);
     expect(p.paidWithoutResult).toBe(true);
     expect(p.notes.join(" ")).toMatch(/Paid; result unavailable.*refund/);
@@ -276,7 +277,7 @@ describe("job state presenter", () => {
   it("renders the two indicators as separate list items", () => {
     render(<JobStates p={presentJob({ state: "failed", financial_state: "settled" })} />);
     const items = within(screen.getByRole("list", { name: "Execution and payment states" })).getAllByRole("listitem");
-    expect(items.map((li) => li.textContent)).toEqual([expect.stringContaining("Failed"), expect.stringContaining("Paid — settled on chain")]);
+    expect(items.map((li) => li.textContent)).toEqual([expect.stringContaining("Failed"), expect.stringContaining("Paid: settled on chain")]);
   });
 });
 
@@ -344,8 +345,16 @@ describe("untrusted content", () => {
     vi.stubGlobal("fetch", async () => Response.json({ listing: listing(), samples: [{ id: "s1", title: "Sample", content: HOSTILE }] }));
     const { container } = render(withMarket(marketValue(vi.fn() as unknown as MarketContextValue["call"]), <ListingDetail slug="research-desk" />));
     await screen.findByText("Research desk");
-    expect(container.querySelectorAll("script, img, b, iframe, object, embed")).toHaveLength(0);
-    expect(screen.getAllByText(HOSTILE).length).toBeGreaterThanOrEqual(4);
+    // The only image is the page's own avatar; every seller field is visited and stays text.
+    const markup = () => [...container.querySelectorAll("script, img, b, iframe, object, embed")].filter((el) => !el.closest(".detail-avatar-bot"));
+    let seen = 0;
+    for (const section of ["About", "Payment and refunds", "Samples"]) {
+      fireEvent.click(within(screen.getByRole("navigation", { name: "Sections" })).getByRole("button", { name: new RegExp(`^${section}`) }));
+      expect(markup(), section).toHaveLength(0);
+      seen += screen.queryAllByText(HOSTILE).length;
+    }
+    expect(seen).toBeGreaterThanOrEqual(4);
+    expect(container.querySelector(".detail-avatar-bot")).not.toBeNull();
     expect((window as unknown as { __pwned?: number }).__pwned).toBeUndefined();
   });
 
@@ -357,7 +366,7 @@ describe("untrusted content", () => {
     expect(screen.getAllByText(HOSTILE).length).toBe(3);
     const states = within(screen.getByRole("list", { name: "Execution and payment states" })).getAllByRole("listitem");
     expect(states[0]!.textContent).toContain("Failed");
-    expect(states[1]!.textContent).toContain("Paid — settled on chain");
+    expect(states[1]!.textContent).toContain("Paid: settled on chain");
     expect(screen.getByRole("heading", { name: "Request a refund" })).toBeTruthy();
     expect(screen.getAllByText(/Solana devnet · USDC/).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /opens Solana devnet explorer/ }).getAttribute("href")).toContain("cluster=devnet");
@@ -456,6 +465,10 @@ describe("local marketplace controls", () => {
     expect(approve.body).toEqual({ quoteDigest: "d".repeat(64), recipient: RECIPIENT, totalUnits: "1500000", agentId });
     expect(approve.csrf).toBe("csrf-market");
     expect(container.querySelectorAll("script, img, b")).toHaveLength(0);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Approvals");
+    expect(screen.getByText("Hires your agents propose wait here. Workflow runs are approved on their run page.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Waiting for you" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Pre-approved listings" })).toBeTruthy();
   });
 });
 
@@ -494,7 +507,7 @@ describe("amount scaling trusts only the local controller", () => {
     const unverified = marketValue(vi.fn() as unknown as MarketContextValue["call"], { token: { network: NETWORK, mint: MINT, decimals: null }, decimalsFor: () => null });
     render(withMarket(unverified, <ListingDetail slug="research-desk" />));
     await screen.findByText("Research desk");
-    expect(screen.getByText(/1500000 base units/)).toBeTruthy();
+    expect(screen.getAllByText(/1500000 base units/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/token decimals not verified by your local controller/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/15,000/)).toBeNull();
     expect(screen.queryByText(/1\.5 USDC/)).toBeNull();
@@ -504,7 +517,8 @@ describe("amount scaling trusts only the local controller", () => {
     vi.stubGlobal("fetch", async () => Response.json({ listing: listing({ decimals: 2, description: "plain" }), samples: [] }));
     render(withMarket(marketValue(vi.fn() as unknown as MarketContextValue["call"]), <ListingDetail slug="research-desk" />));
     await screen.findByText("Research desk");
-    expect(screen.getByText(/1\.5 USDC/).textContent).toContain("= 1500000 base units");
+    // The full price row shows the raw integer next to the scaled amount; the header button is compact.
+    expect(screen.getAllByText(/1\.5 USDC/).some((el) => el.textContent!.includes("= 1500000 base units"))).toBe(true);
     expect(screen.queryByText(/15,000/)).toBeNull();
   });
 });

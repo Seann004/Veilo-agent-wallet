@@ -6,7 +6,7 @@
 
 | Tool | Version | Notes |
 |---|---|---|
-| Node.js | 22.x, >= 22.14.0 (`engines` enforced via `engine-strict`) | Verified on 22.14.0 (Windows 11). |
+| Node.js | 24 LTS recommended; `>=22.14.0 <25` (`engines` enforced via `engine-strict`) | Verified on 24.22.0 (macOS) and 22.14.0 (Windows 11). The toolchain image stays on 22.22.3, the version Anchor 1.2.1 is tested with. |
 | pnpm | 10.34.6 (`packageManager` field) | Provided by Corepack. |
 | Docker | Docker Desktop / Engine with a Linux daemon | Verified with 28.4.0. Runs every Rust/Solana/Anchor/circom command. |
 
@@ -577,3 +577,41 @@ Before the bundle is accepted, it is scanned for:
 - secret-shaped patterns: provider keys, PEM private keys, 64-byte key arrays and bearer tokens
 
 Any hit fails with exit code 1.
+
+## Dashboard on Vercel
+
+Only the dashboard (`apps/dashboard`) runs on Vercel. Control, wallet, relayer, gateway, runner
+and marketplace keep SQLite files, sealed keys and a local Chrome, so they run on a host with a
+persistent disk (a VM or container) and are reached over HTTPS.
+
+1. Import the repository in Vercel and set **Root Directory** to `apps/dashboard`. Vercel detects
+   Next.js and the pnpm workspace; `apps/dashboard/vercel.json` installs only the dashboard and the
+   workspace packages it uses, and the `engines` range selects Node 24. Also set
+   `ENABLE_EXPERIMENTAL_COREPACK=1`, so Vercel runs the pnpm version pinned in `package.json`
+   (`engine-strict` refuses any other).
+2. Set these environment variables on the Vercel project:
+
+   | Variable | Value |
+   | --- | --- |
+   | `VEILO_DASHBOARD_ORIGIN` | The dashboard's public origin, e.g. `https://veilo.vercel.app` |
+   | `VEILO_CONTROL_URL` | HTTPS URL of the control service |
+   | `VEILO_WALLET_URL` | HTTPS URL of the wallet service |
+   | `VEILO_RELAYER_URL` | HTTPS URL of the relayer service |
+   | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_MARKETPLACE_URL` | Marketplace settings, as in `.env` |
+
+   The `VEILO_*_URL` values must be `https://` (plain `http://` is accepted only for localhost) and
+   carry no credentials, query or fragment. On Vercel the build fails if any of the four is missing
+   or invalid. Locally they are optional and the loopback ports are used.
+3. On the services host, set the same `VEILO_DASHBOARD_ORIGIN`, so control accepts the dashboard's
+   requests and builds links to it. Keep the services bound to loopback behind a TLS reverse proxy
+   (or a tunnel) that exposes only control, wallet and relayer.
+
+   Exposing them changes one boundary: locally the dashboard proxy forwards only the routes it
+   lists, so worker and internal endpoints are unreachable from a browser. Once the services are
+   public, those endpoints are reachable directly. They still require their own bearer credentials
+   or owner session, but restrict the reverse proxy to the paths the dashboard uses where you can.
+
+The browser still talks only to the dashboard: its `/api/<service>/…` routes forward the session
+cookie and CSRF header to the configured upstreams, as they do locally. Session cookies become
+`Secure` automatically when the dashboard origin is HTTPS.
+

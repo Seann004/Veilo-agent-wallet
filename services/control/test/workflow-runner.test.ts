@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
+import { ControlError } from "../src/errors";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DEMO_TOKEN_MINT, DEVNET_CAIP2 } from "@veilo/contracts";
 import type { WorkflowApprovalTerms } from "@veilo/contracts/marketplace";
 import {
+  reportPath,
   WorkflowRunner,
   type ExternalPort,
   type ExternalToolFacts,
@@ -12,7 +14,7 @@ import {
   type WorkflowMarketPort,
   type WorkflowVersionFacts,
 } from "../src/workflows/runner";
-import { activateDefaults, createEnv, type TestEnv } from "./helpers";
+import { activateDefaults, createEnv, intentTask, type TestEnv } from "./helpers";
 
 const SELLER = "2LWbc9Mi6dRUrdEHBttoNS4udDtH1A4xwBdm1EKqcT57";
 const OTHER = "CPZSjRmyfTS95UjQD8ZdeTEWbQvW9QvEXnn6aGP7yyMN";
@@ -66,11 +68,22 @@ class FakeMarket implements WorkflowMarketPort {
   async version() {
     return structuredClone(this.v);
   }
+  /** The marketplace's own status, with the same transitions mk_report_workflow_run allows. */
+  cloudStatus = "none";
   async createRun() {
     this.runs += 1;
+    this.cloudStatus = "awaiting_approval";
     return { runId: `cloud-${this.runs}` };
   }
   async report(_id: string, r: { status: string; steps: StepReport[] }) {
+    const allowed: Record<string, string[]> = {
+      awaiting_approval: ["awaiting_approval", "approved", "rejected", "halted"],
+      approved: ["approved", "running", "halted", "failed"],
+      running: ["running", "halted", "failed", "completed"],
+      halted: ["halted", "approved", "failed"],
+    };
+    if (!(allowed[this.cloudStatus] ?? [this.cloudStatus]).includes(r.status)) throw new Error(`run cannot move from ${this.cloudStatus} to ${r.status}`);
+    this.cloudStatus = r.status;
     this.reports.push(r);
   }
   async deliverable(jobId: string) {
@@ -88,7 +101,10 @@ class FakeHires implements HirePort {
   readonly rejected: string[] = [];
   quoteOverride: Partial<HireQuote> | undefined;
   readonly states = new Map<string, string>();
+  /** Like the marketplace, refuse a step hire unless the run is recorded approved there. */
+  gate: () => boolean = () => true;
   async hire(r: { listingId: string; brief: string; idempotencyKey: string }) {
+    if (!this.gate()) throw new ControlError("SERVICE_NOT_ALLOWED", "hire not created: no approved workflow run in this workspace matches the hire key");
     this.hires.push(r);
     const op = `op-${this.hires.length}`;
     const price = r.listingId === "listing-draft" ? "3000" : "10000";
@@ -115,8 +131,10 @@ class FakeExternal implements ExternalPort {
   execution: "pending" | "delivered" | "no_result" = "delivered";
   responses: unknown[] = [{ result: { value: { amount: "1000" } } }, { result: 123 }];
   payerReady = true;
-  async authorize(r: { calls: unknown }) {
+  readonly taskIds: Array<string | undefined> = [];
+  async authorize(r: { calls: unknown; taskId?: string | undefined }) {
     this.calls.push(r.calls);
+    this.taskIds.push(r.taskId);
     return { purchaseId: `ext-purchase-${this.calls.length}` };
   }
   async drive() {}
@@ -141,6 +159,7 @@ beforeEach(() => {
   hires = new FakeHires();
   external = new FakeExternal();
   runner = new WorkflowRunner({ ledger: env.ledger, market, hires, external, maxRunUsdc: 1_000_000n });
+  hires.gate = () => market.cloudStatus === "approved" || market.cloudStatus === "running";
 });
 afterEach(() => env.cleanup());
 
@@ -166,6 +185,17 @@ describe("workflow runner (§26.7)", () => {
     expect(v.steps.map((s) => [s.payment, s.execution])).toEqual([["paid", "delivered"], ["paid", "delivered"]]);
     expect(v.steps[0]!.merchantSignatures).toEqual(["sigA", "sigB"]);
     expect(market.reports.at(-1)?.status).toBe("completed");
+  });
+
+  it("reports approval to the marketplace before the first hire, and walks its allowed statuses", async () => {
+    const run = await approvedRun();
+    expect(market.reports.map((r) => r.status)).toEqual(["approved"]);
+    market.jobs.set("job-1", { state: "succeeded", text: "# Brief\nSupply is 1000 [call 0]." });
+    await runner.advance(run.id);
+    expect(market.reports.map((r) => r.status).slice(-2)).toEqual(["running", "completed"]);
+    expect(reportPath("awaiting_approval", "completed")).toEqual(["approved", "running", "completed"]);
+    expect(reportPath("approved", "failed")).toEqual(["failed"]);
+    expect(reportPath("halted", "running")).toEqual(["approved", "running"]);
   });
 
   it("passes earlier outputs only as fenced data, even when they contain instructions", async () => {
@@ -310,6 +340,69 @@ describe("workflow runner (§26.7)", () => {
     expect(await runner.beforeRelease("ext-purchase-1")).toEqual({ outcome: "ok" });
     expect(market.payers).toEqual([{ index: 0, payer: "FreshPayer" }]);
     expect(await runner.beforeRelease("unrelated-purchase")).toBeNull();
+  });
+
+  it("a run an agent proposed from a task carries that task to its step purchases", async () => {
+    const prince = env.agents.Prince.id;
+    await runner.assign({ agentId: prince, versionId: V1, budgetUsdc: 12_000n, ownerPubkey: OWNER });
+    const taskId = intentTask(env, prince, "wf-run");
+    const run = await runner.propose({ agentId: prince, versionId: V1, runInputs: { mint: "m" }, taskId });
+    expect(run.task_id).toBe(taskId);
+    await runner.advance(run.id);
+    expect(external.taskIds).toEqual([taskId]);
+    expect(() => env.db.prepare(`UPDATE workflow_run SET task_id = NULL WHERE id = ?`).run(run.id)).toThrow(/immutable/);
+  });
+
+  it("refuses a run from a task it cannot fit, before any step pays", async () => {
+    const prince = env.agents.Prince.id;
+    await runner.assign({ agentId: prince, versionId: V1, budgetUsdc: 1_000_000n, ownerPubkey: OWNER });
+    const proposeFrom = async (key: string, edit: string) => {
+      const taskId = intentTask(env, prince, key);
+      env.db.prepare(`UPDATE task SET ${edit} WHERE id = ?`).run(taskId);
+      return runner.propose({ agentId: prince, versionId: V1, runInputs: { mint: key }, taskId });
+    };
+    await expect(proposeFrom("few-left", "purchase_count = max_purchases - 1")).rejects.toMatchObject({ code: "BUDGET_EXCEEDED", message: expect.stringMatching(/remaining purchases/) });
+    await expect(proposeFrom("small-budget", "limit_usdc = 1")).rejects.toMatchObject({ code: "BUDGET_EXCEEDED", message: expect.stringMatching(/remaining budget/) });
+    await expect(proposeFrom("late", `deadline_at_ms = ${env.ledger.now()}`)).rejects.toMatchObject({ code: "POLICY_DENIED" });
+    expect(env.db.prepare(`SELECT group_concat(status) FROM workflow_run`).pluck().get()).toBe("rejected,rejected,rejected");
+    expect(external.calls).toEqual([]);
+    expect(hires.hires).toEqual([]);
+  });
+
+  it("owner approval of a task's run rechecks the task's deadline", async () => {
+    const prince = env.agents.Prince.id;
+    const taskId = intentTask(env, prince, "late-approval");
+    env.db.prepare(`UPDATE task SET deadline_at_ms = ? WHERE id = ?`).run(env.ledger.now() + 1_000, taskId);
+    const run = await runner.propose({ agentId: prince, versionId: V1, runInputs: { mint: "m" }, taskId });
+    expect(run.status).toBe("awaiting_approval");
+    env.clock.t += 1_000;
+    await expect(runner.approve(run.id, OWNER, run.approval_digest)).rejects.toMatchObject({ code: "POLICY_DENIED" });
+    expect(runner.run(run.id)?.status).toBe("awaiting_approval");
+  });
+
+  it("an ask-each-run assignment lets the agent propose but every run waits for the owner", async () => {
+    const prince = env.agents.Prince.id;
+    await expect(runner.assign({ agentId: prince, versionId: V1, ownerPubkey: OWNER })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    await expect(runner.assign({ agentId: prince, versionId: V1, budgetUsdc: 1n, ownerPubkey: OWNER })).rejects.toMatchObject({ code: "BUDGET_EXCEEDED" });
+    await runner.assign({ agentId: prince, versionId: V1, askEachRun: true, ownerPubkey: OWNER });
+    const run = await runner.propose({ agentId: prince, versionId: V1, runInputs: { mint: "m" } });
+    expect(run.status).toBe("awaiting_approval");
+    expect(run.assignment_id).toBeNull();
+    expect(hires.hires).toEqual([]);
+    const approved = await runner.approve(run.id, OWNER, run.approval_digest);
+    expect(approved.status).toBe("approved");
+  });
+
+  it("refuses to release an assignment-approved step's funding once the assignment is revoked", async () => {
+    external.payment = "pending";
+    const prince = env.agents.Prince.id;
+    await runner.assign({ agentId: prince, versionId: V1, budgetUsdc: 12_000n, ownerPubkey: OWNER });
+    const run = await runner.propose({ agentId: prince, versionId: V1, runInputs: { mint: "m" } });
+    expect(run.status).toBe("approved");
+    await runner.advance(run.id);
+    env.db.prepare(`UPDATE workflow_assignment SET status = 'revoked' WHERE agent_id = ?`).run(prince);
+    expect(await runner.beforeRelease("ext-purchase-1")).toMatchObject({ outcome: "refuse" });
+    expect(market.payers).toEqual([]);
   });
 
   it("refuses unknown, missing or oversized run inputs", async () => {
