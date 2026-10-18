@@ -37,6 +37,24 @@ interface Entry {
   chain?: string[];
 }
 
+const FEATURED_PREFERRED = ["token supply brief", "launch content kit", "wallet activity snapshot"];
+const TIKTOK_PREFERENCE = [/designed.*posts publicly|posts publicly.*designed/i, /designed/i, /from a topic/i];
+
+/** At most one TikTok carousel workflow, then varied items; ordering depends only on the entries, never on chance. */
+export function pickFeatured<T extends { key: string; title: string; runs: number }>(flows: T[], starters: T[], limit = 4): T[] {
+  const tiktok = flows.filter((e) => /tiktok/i.test(e.title)).sort((a, b) => a.key.localeCompare(b.key));
+  const lead = TIKTOK_PREFERENCE.map((re) => tiktok.find((e) => re.test(e.title))).find(Boolean) ?? tiktok[0];
+  const rest = flows.filter((e) => !/tiktok/i.test(e.title));
+  const rank = (e: T) => {
+    const i = FEATURED_PREFERRED.indexOf(e.title.toLowerCase());
+    return i === -1 ? FEATURED_PREFERRED.length : i;
+  };
+  rest.sort((a, b) => rank(a) - rank(b) || b.runs - a.runs || a.key.localeCompare(b.key));
+  const starter = starters[0];
+  const room = limit - (starter ? 1 : 0);
+  return [...(lead ? [lead] : []), ...rest].slice(0, room).concat(starter ? [starter] : []);
+}
+
 /**
  * The marketplace: every agent you can add or hire in one list. Category and search filter in
  * place, so nothing reloads or scrolls. Prices are USDC on Solana devnet.
@@ -105,7 +123,13 @@ export function MarketHome({ category }: { category?: string }) {
 
   const q = query.trim().toLowerCase();
   const shown = entries.filter((e) => (!active || e.category === active) && (!q || [e.title, e.by, e.summary].some((f) => f.toLowerCase().includes(q))));
-  const featured = !active && !q ? [...entries].filter((e) => !e.key.startsWith("template:")).sort((a, b) => b.runs - a.runs).slice(0, 4) : [];
+  const featured =
+    !active && !q
+      ? pickFeatured(
+          entries.filter((e) => !e.key.startsWith("template:")),
+          entries.filter((e) => e.key.startsWith("template:")),
+        )
+      : [];
   const loading = (workflows.loading && !workflows.data) || (listings.loading && !listings.data);
 
   return (

@@ -129,6 +129,8 @@ export interface LocalRun {
   agentId: string;
   status: "awaiting_approval" | "approved" | "running" | "halted" | "failed" | "completed" | "rejected";
   isTest: boolean;
+  createdAt?: string;
+  updatedAt?: string;
   requestedBy: "owner" | "agent";
   approvedBy: string | null;
   approvalDigest: string;

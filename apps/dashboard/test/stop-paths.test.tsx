@@ -89,8 +89,8 @@ describe("stop paths", () => {
     const prepare = await screen.findByRole("button", { name: "Prepare recovery" });
     expect((prepare as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByText(/Not yet safe: a payment already sent may still go through/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Prepare public exit" })).toBeTruthy();
-    expect(screen.getByText(/a public exit is linkable/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Withdraw to my wallet" })).toBeTruthy();
+    expect(screen.getByText(/Withdrawing is public/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Resume workspace" })).toBeTruthy();
     await user.click(prepare);
     expect(await screen.findByText(/Recovery is public and linkable/)).toBeTruthy();

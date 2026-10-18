@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../../lib/api";
+import { when } from "../../lib/format";
+import type { Workspace } from "../../lib/types";
 import { marketApi } from "../../lib/market/client";
 import { partitionRuns, plainReason, RUN_STATUS_LABEL, runHeadline, stepStateLabel, stepTitles, type LocalRun, type RunHeadline, type StepStateLabel, type WorkflowEntry } from "../../lib/market/workflows";
 import { useAction, usePolling, useResource } from "../hooks";
@@ -62,39 +64,56 @@ export function WorkflowRunList() {
   const catalogue = useCatalogue();
   const [hideFailed, setHideFailed] = useState(true);
   const parts = partitionRuns(runs.data?.runs ?? [], hideFailed);
+  const agents = useResource(() => api<Workspace>("control", "/workspace").catch(() => null), "workflow-runs-workspace");
+  const agentName = (id: string) => agents.data?.agents?.find((a) => a.id === id)?.name ?? null;
   return (
     <>
-      <h1>Workflow runs</h1>
+      <div className="runs-head">
+        <h1>Workflow runs</h1>
+        {parts.olderFailed.length > 0 ? (
+          <label className="switch" htmlFor="hide-failed-runs" title={hideFailed ? `${parts.olderFailed.length} older failed or rejected run${parts.olderFailed.length === 1 ? "" : "s"} hidden` : undefined}>
+            <input id="hide-failed-runs" type="checkbox" role="switch" checked={hideFailed} onChange={(e) => setHideFailed(e.target.checked)} />
+            Hide failed runs
+          </label>
+        ) : null}
+      </div>
       {runs.loading && !runs.data ? <Loading label="runs" /> : null}
       <ErrorNotice error={runs.error} what="your runs could not be loaded (sign in to the local dashboard first)" onRetry={runs.reload} />
       {runs.data && runs.data.runs.length === 0 ? (
         <EmptyState>
-          No runs yet. <Link href="/marketplace">Browse workflows</Link>.
+          Nothing has run yet. Pick a workflow and your first run will show up here. <Link href="/marketplace">Browse workflows</Link>.
         </EmptyState>
       ) : null}
       {runs.data && runs.data.runs.length > 0 ? (
-        <>
-          {parts.olderFailed.length > 0 ? (
-            <div className="field inline small">
-              <input id="hide-failed-runs" type="checkbox" checked={hideFailed} onChange={(e) => setHideFailed(e.target.checked)} />
-              <label htmlFor="hide-failed-runs">
-                Hide failed runs{hideFailed ? ` (${parts.olderFailed.length} older failed or rejected run${parts.olderFailed.length === 1 ? "" : "s"} hidden)` : ""}
-              </label>
-            </div>
-          ) : null}
-          <ul className="job-list" aria-label="Workflow runs">
-            {parts.shown.map((r) => {
-              const title = catalogue.find((w) => w.version_id === r.workflowVersionId)?.title;
-              return (
-                <li key={r.id} className={parts.olderFailed.includes(r) ? "muted" : undefined}>
-                  <Link href={`/marketplace/runs/${r.id}`}>{title ? <PlainText text={title} inline /> : `Run ${r.id.slice(0, 8)}`}</Link> <span className={statusClass(r.status)}>{RUN_STATUS_LABEL[r.status]}</span>
-                  {r.isTest ? <span className="pill pill-muted"> test run</span> : null} · {r.steps.filter((s) => s.payment === "paid").length}/{r.steps.length} steps paid · total{" "}
-                  <Money compact amount={r.total.amount} decimals={decimalsOf(r)} />
-                </li>
-              );
-            })}
-          </ul>
-        </>
+        <ul className="run-cards" aria-label="Workflow runs">
+          {parts.shown.map((r) => {
+            const title = catalogue.find((w) => w.version_id === r.workflowVersionId)?.title;
+            const paid = r.steps.filter((s) => s.payment === "paid").length;
+            const who = agentName(r.agentId);
+            const stamp = r.updatedAt ?? r.createdAt;
+            return (
+              <li key={r.id}>
+                <Link href={`/marketplace/runs/${r.id}`} className={parts.olderFailed.includes(r) ? "run-card run-card-old" : "run-card"}>
+                  <span className="run-card-main">
+                    <span className="run-card-title">
+                      {title ? <PlainText text={title} inline /> : `Workflow run ${r.id.slice(0, 8)}`}
+                      <span className={statusClass(r.status)}>{RUN_STATUS_LABEL[r.status]}</span>
+                      {r.isTest ? <span className="pill pill-muted">test run</span> : null}
+                    </span>
+                    <span className="small muted">
+                      {paid}/{r.steps.length} steps paid{who ? <> · <PlainText text={who} inline /></> : null}
+                      {stamp ? ` · ${when(stamp)}` : ""}
+                    </span>
+                  </span>
+                  <span className="run-card-total">
+                    <Money compact amount={r.total.amount} decimals={decimalsOf(r)} />
+                  </span>
+                  <span className="run-card-chevron" aria-hidden="true">›</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       ) : null}
     </>
   );

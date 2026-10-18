@@ -80,11 +80,8 @@ export function LocalApproval() {
   const ws = useResource(() => api<Workspace>("control", "/workspace"), "local-approval-workspace");
   return (
     <>
-      <h1>Local approval</h1>
-      <p className="notice" role="note">
-        This is where payments are actually authorized. Approving here lets your <strong>local controller</strong> pay the seller from the chosen
-        agent&apos;s budget, after re-checking the quote and your limits. It uses your local owner sign-in, not your marketplace sign-in.
-      </p>
+      <h1>Approvals</h1>
+      <p className="lede">Hires your agents propose wait here. Workflow runs are approved on their run page.</p>
       {ws.loading && !ws.data ? <Loading label="local workspace" /> : null}
       {ws.error?.status === 401 ? (
         <p className="notice notice-warn" role="status">
@@ -109,13 +106,14 @@ function Hires({ workspace }: { workspace: Workspace }) {
   const hires = useResource(() => api<{ items: LocalHire[] }>("control", `/marketplace/hires${all ? "?state=all" : ""}`), `hires:${all}`);
   return (
     <Section
-      title={all ? "All marketplace hires" : "Hires waiting for local approval"}
+      title={all ? "All hires" : "Waiting for you"}
       actions={
         <button type="button" className="btn btn-small" aria-pressed={all} onClick={() => setAll(!all)}>
           {all ? "Show pending only" : "Show all"}
         </button>
       }
     >
+      <p className="small muted">{all ? "Every hire your agents have proposed, newest first." : "Approving lets your controller pay the seller from the agent's budget, after re-checking the quote and your limits."}</p>
       {hires.loading && !hires.data ? <Loading label="hires" /> : null}
       <ErrorNotice error={hires.error} what="hires could not be loaded" onRetry={hires.reload} />
       {hires.data && hires.data.items.length === 0 ? <EmptyState>{all ? "No marketplace hires yet." : "Nothing is waiting for your approval."}</EmptyState> : null}
@@ -278,11 +276,8 @@ function Grants({ workspace }: { workspace: Workspace }) {
   // Only custom agents propose hires, so a grant on any other role could never match.
   const agents = workspace.agents.filter((a) => a.role === "custom" && a.status !== "revoked" && a.status !== "archived");
   return (
-    <Section title="Local listing grants">
-      <p className="small">
-        A grant lets one local agent hire one listing without asking you each time, up to a maximum total. Grants live in your local controller and
-        replace any cloud proposal; the controller still applies every budget limit.
-      </p>
+    <Section title="Pre-approved listings">
+      <p className="small muted">Listings an agent may hire without asking you each time, up to a maximum total.</p>
       {agents.length === 0 ? <EmptyState>No custom agents. Only custom agents propose hires.</EmptyState> : agents.map((a) => <AgentGrants key={a.id} agentId={a.id} name={a.name} />)}
     </Section>
   );

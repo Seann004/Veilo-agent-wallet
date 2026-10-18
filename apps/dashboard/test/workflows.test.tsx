@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MarketContextProvider, type MarketContextValue } from "../components/market/MarketContext";
 import { MarketAccountBar } from "../components/market/MarketAccountBar";
-import { MarketHome } from "../components/market/MarketHome";
+import { MarketHome, pickFeatured } from "../components/market/MarketHome";
 import { WorkflowRunList, WorkflowRunView } from "../components/market/WorkflowRuns";
 import { partitionRuns, plainReason, stepTitles } from "../lib/market/workflows";
 import { matchRoute } from "../lib/server/proxy";
@@ -207,14 +207,54 @@ describe("workflow run readability", () => {
     const runs = [localRun("20000000-0000-4000-8000-00000000000a", "failed"), localRun("20000000-0000-4000-8000-00000000000b", "completed"), localRun("20000000-0000-4000-8000-00000000000c", "rejected"), localRun("20000000-0000-4000-8000-00000000000d", "failed")];
     vi.stubGlobal("fetch", vi.fn(async (url: string) => (String(url).includes("/marketplace/workflows") ? Response.json({ workflows: [] }) : Response.json({ runs }))));
     render(withMarket(<WorkflowRunList />));
-    const toggle = (await screen.findByLabelText(/Hide failed runs/)) as HTMLInputElement;
+    const toggle = (await screen.findByRole("switch", { name: /Hide failed runs/ })) as HTMLInputElement;
     expect(toggle.checked).toBe(true);
     expect(within(screen.getByRole("list", { name: "Workflow runs" })).getAllByRole("listitem")).toHaveLength(2);
     expect(document.body.textContent).toContain("0.23 USDC");
     fireEvent.click(toggle);
     const items = within(screen.getByRole("list", { name: "Workflow runs" })).getAllByRole("listitem");
     expect(items).toHaveLength(4);
-    expect(items.filter((li) => li.className === "muted")).toHaveLength(2);
+    expect(items.filter((li) => li.querySelector(".run-card-old"))).toHaveLength(2);
+  });
+
+  it("shows each run as a card with its workflow, steps, total, agent and a link", async () => {
+    const runs = [localRun("20000000-0000-4000-8000-00000000000e", "completed", { agentId: "ag1", createdAt: "2026-10-17T10:00:00Z" })];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        String(url).includes("/marketplace/workflows") ? Response.json({ workflows: [workflow(1)] }) : String(url).includes("/workspace") ? Response.json({ agents: [{ id: "ag1", name: "Scout" }] }) : Response.json({ runs }),
+      ),
+    );
+    render(withMarket(<WorkflowRunList />));
+    const link = await screen.findByRole("link", { name: /Token brief 1/ });
+    expect(link.getAttribute("href")).toBe("/marketplace/runs/20000000-0000-4000-8000-00000000000e");
+    expect(link.textContent).not.toMatch(/Run 2000/);
+    expect(link.textContent).toContain("Completed");
+    expect(link.textContent).toContain("steps paid");
+    expect(link.textContent).toContain("17 Oct 2026");
+    await vi.waitFor(() => expect(link.textContent).toContain("Scout"));
+  });
+
+  it("explains an empty run list kindly", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ runs: [] })));
+    render(withMarket(<WorkflowRunList />));
+    expect(await screen.findByText(/Nothing has run yet/)).toBeTruthy();
+  });
+
+  it("features at most one TikTok carousel, preferring the designed public one, plus varied items", () => {
+    const e = (title: string, runs = 0, key = title) => ({ key, title, runs });
+    const flows = [
+      e("TikTok carousel from a topic", 9),
+      e("TikTok carousel (designed slides)", 8),
+      e("TikTok carousel (designed, posts publicly)", 1),
+      e("Token supply brief"),
+      e("Launch content kit"),
+      e("Wallet activity snapshot", 5),
+    ];
+    const picked = pickFeatured(flows, [e("Research", 0, "template:research")]);
+    expect(picked.map((x) => x.title)).toEqual(["TikTok carousel (designed, posts publicly)", "Token supply brief", "Launch content kit", "Research"]);
+    expect(pickFeatured([...flows].reverse(), []).filter((x) => /tiktok/i.test(x.title))).toHaveLength(1);
+    expect(pickFeatured(flows.slice(0, 2), [])[0]!.title).toBe("TikTok carousel (designed slides)");
   });
 
   it("helpers: plain reasons, run partition and step title fallback", () => {

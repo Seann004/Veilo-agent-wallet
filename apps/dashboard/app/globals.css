@@ -1544,6 +1544,11 @@ details > summary {
   min-height: 2.2rem;
 }
 
+.composer-box textarea.composer-grow {
+  min-height: 4.6rem;
+  line-height: 1.5;
+}
+
 .send-btn {
   display: grid;
   place-items: center;
@@ -5192,3 +5197,110 @@ ul.cards {
 .thread-earlier { margin: 0; padding: 0.5rem 1.1rem 0; }
 .thread-earlier .link-btn { min-height: 0; }
 .run-payments { font-size: 0.88rem; color: var(--ink-2); }
+
+.run-cards {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.run-card {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+.run-card:hover {
+  border-color: var(--text-muted, currentColor);
+}
+
+.run-card-old {
+  opacity: 0.65;
+}
+
+.run-card-main {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.run-card-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.run-card-total {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.run-card-chevron {
+  font-size: 1.4rem;
+  line-height: 1;
+  opacity: 0.5;
+}
+
+.runs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.switch input {
+  appearance: none;
+  position: relative;
+  width: 2rem;
+  height: 1.15rem;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--line);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.switch input::after {
+  content: "";
+  position: absolute;
+  top: 0.15rem;
+  left: 0.15rem;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+
+.switch input:checked {
+  background: var(--bubble-owner);
+}
+
+.switch input:checked::after {
+  transform: translateX(0.85rem);
+}
+
+.switch input:focus-visible {
+  outline: 2px solid var(--bubble-owner);
+  outline-offset: 2px;
+}

@@ -297,6 +297,27 @@ describe("custom agent jobs", () => {
     expect((screen.getByLabelText("Message Scout") as HTMLTextAreaElement).value).toBe("");
   });
 
+  it("adds the chosen visual style to the context and keeps stray backticks out of the search words", async () => {
+    const user = userEvent.setup();
+    respond = () => ({ status: 202, body: { taskId: "t1", executor: "queued" } });
+    const onQueued = vi.fn();
+    render(<CustomRunForm agent={customAgent()} disabled={false} onQueued={onQueued} />);
+    expect(screen.getByLabelText("Message Scout").getAttribute("rows")).toBe("3");
+    const search = screen.getByLabelText("Marketplace search words") as HTMLInputElement;
+    expect(search.value).toBe("");
+    expect(search.getAttribute("autocomplete")).toBe("off");
+    await user.type(screen.getByLabelText("Message Scout"), "Make a carousel");
+    await user.type(screen.getByLabelText("Extra context"), "Topic: Solana");
+    await user.type(search, "```");
+    await user.click(screen.getByRole("button", { name: "Style: Default" }));
+    await user.click(screen.getByRole("option", { name: "Clean light (white, black type)" }));
+    await user.click(screen.getByRole("button", { name: "Send job" }));
+    await waitFor(() => expect(onQueued).toHaveBeenCalled());
+    const body = calls[0]!.body as { input: { context: string; searchQuery?: string } };
+    expect(body.input.context).toBe("Topic: Solana\nVisual style: clean white background with black type and generous spacing");
+    expect(body.input.searchQuery).toBeUndefined();
+  });
+
   it("sends only the objective when nothing optional is filled and blocks a stopped agent", async () => {
     const user = userEvent.setup();
     const { rerender } = render(<CustomRunForm agent={customAgent()} disabled={false} onQueued={vi.fn()} />);

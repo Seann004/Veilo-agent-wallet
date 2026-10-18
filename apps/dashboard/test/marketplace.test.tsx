@@ -465,6 +465,10 @@ describe("local marketplace controls", () => {
     expect(approve.body).toEqual({ quoteDigest: "d".repeat(64), recipient: RECIPIENT, totalUnits: "1500000", agentId });
     expect(approve.csrf).toBe("csrf-market");
     expect(container.querySelectorAll("script, img, b")).toHaveLength(0);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Approvals");
+    expect(screen.getByText("Hires your agents propose wait here. Workflow runs are approved on their run page.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Waiting for you" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Pre-approved listings" })).toBeTruthy();
   });
 });
 

@@ -114,7 +114,7 @@ function PublicExit({ notes, onChanged }: { notes: NoteStatus; onChanged: () => 
   return (
     <>
       <p className="hint flush">
-        Sends money back to your wallet. Note: a public exit is linkable. Anyone can see which deposit it was, how much, and roughly how much you spent.
+        Withdrawing is public: it shows which deposit this was and how much is left.
       </p>
       <ConnectWalletPrompt purpose="sign the withdrawal" />
       {exitable.length === 0 ? <p className="muted flush">Nothing to withdraw yet. Deposits can be withdrawn once they&apos;re recorded.</p> : null}
@@ -123,7 +123,7 @@ function PublicExit({ notes, onChanged }: { notes: NoteStatus; onChanged: () => 
           <li key={n.id}>
             {n.origin === "deposit" ? "Deposit" : "Change"} · {usdc(n.value.amount)}{" "}
             <button type="button" className="btn btn-small" disabled={action.busy} onClick={() => void action.run(async () => setPrepared(await api("wallet", "/exits/prepare", { method: "POST", body: { noteId: n.id } })))}>
-              Prepare public exit
+              Withdraw to my wallet
             </button>
           </li>
         ))}
@@ -133,7 +133,7 @@ function PublicExit({ notes, onChanged }: { notes: NoteStatus; onChanged: () => 
           <p>
             Exit of {usdc(prepared.value.amount)} prepared. {prepared.privacyWarning}
           </p>
-          <PrivacyAck checked={ack} onChange={setAck}>I understand this public exit reveals the note&apos;s deposit, value and my refund address.</PrivacyAck>
+          <PrivacyAck checked={ack} onChange={setAck}>I understand this withdrawal is public.</PrivacyAck>
           <button
             type="button"
             className="btn btn-primary"
@@ -148,7 +148,7 @@ function PublicExit({ notes, onChanged }: { notes: NoteStatus; onChanged: () => 
               })
             }
           >
-            Sign exit in wallet
+            Confirm withdrawal in Phantom
           </button>
         </div>
       ) : null}

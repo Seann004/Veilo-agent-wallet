@@ -2,7 +2,7 @@
 
 import { Icon } from "./Icon";
 import Link from "next/link";
-import { useId, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { SPECIALIST_SKU } from "@veilo/contracts/marketplace";
 import { api } from "../lib/api";
 import { formatUnits, parseUnits } from "../lib/market/amounts";
@@ -187,14 +187,37 @@ function GrantDraftPicker({ grants, onChange }: { grants: GrantDraft[]; onChange
   );
 }
 
+export const STYLE_PRESETS = [
+  { value: "default", label: "Default", note: "" },
+  { value: "editorial", label: "Editorial charcoal (dark, terracotta accent)", note: "dark charcoal background, warm terracotta accent, editorial serif headlines" },
+  { value: "light", label: "Clean light (white, black type)", note: "clean white background with black type and generous spacing" },
+  { value: "bold", label: "Bold colour (bright, high contrast)", note: "bright saturated colours with high contrast and heavy type" },
+] as const;
+
+/** Textarea height that follows its content from minRows up to maxRows. */
+function useAutoGrow(ref: RefObject<HTMLTextAreaElement | null>, value: string, maxRows: number) {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const lh = parseFloat(getComputedStyle(el).lineHeight) || 22;
+    const max = lh * maxRows;
+    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+  }, [ref, value, maxRows]);
+}
+
 /** Custom agent job: the objective plus optional context and search terms; instructions come from the agent record. */
 export function CustomRunForm({ agent, disabled, onQueued }: { agent: Agent; disabled: boolean; onQueued: () => void | Promise<void> }) {
   const run = useCapability("run");
   const [objective, setObjective] = useState("");
   const [context, setContext] = useState("");
   const [search, setSearch] = useState("");
+  const [style, setStyle] = useState<string>("default");
+  const objectiveRef = useRef<HTMLTextAreaElement>(null);
+  useAutoGrow(objectiveRef, objective, 10);
   const action = useAction();
-  const ids = { objective: useId(), context: useId(), search: useId() };
+  const ids = { objective: useId(), context: useId(), search: useId(), style: useId() };
   const off = disabled || action.busy;
   return (
     <form
@@ -204,8 +227,12 @@ export function CustomRunForm({ agent, disabled, onQueued }: { agent: Agent; dis
         if (off || objective.trim() === "") return;
         void action.run(async () => {
           const input: Record<string, string> = {};
-          if (context.trim()) input.context = context.trim();
-          if (search.trim()) input.searchQuery = search.trim();
+          const preset = STYLE_PRESETS.find((p) => p.value === style);
+          const styleLine = preset && preset.note ? `Visual style: ${preset.note}` : "";
+          const fullContext = [context.trim().slice(0, CUSTOM_CONTEXT_MAX - styleLine.length - 1), styleLine].filter(Boolean).join("\n");
+          const words = search.replace(/`/g, "").trim();
+          if (fullContext) input.context = fullContext;
+          if (words) input.searchQuery = words;
           await api<{ taskId: string; executor: string }>("control", `/agents/${agent.id}/run`, {
             method: "POST",
             body: { objective: objective.trim(), ...(Object.keys(input).length > 0 ? { input } : {}) },
@@ -221,7 +248,9 @@ export function CustomRunForm({ agent, disabled, onQueued }: { agent: Agent; dis
         </label>
         <textarea
           id={ids.objective}
-          rows={1}
+          ref={objectiveRef}
+          rows={3}
+          className="composer-grow"
           maxLength={CUSTOM_OBJECTIVE_MAX}
           value={objective}
           disabled={off}
@@ -246,7 +275,11 @@ export function CustomRunForm({ agent, disabled, onQueued }: { agent: Agent; dis
         </div>
         <div className="field">
           <label htmlFor={ids.search}>Marketplace search words</label>
-          <input id={ids.search} maxLength={CUSTOM_SEARCH_MAX} value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input id={ids.search} maxLength={CUSTOM_SEARCH_MAX} value={search} autoComplete="off" spellCheck={false} placeholder="e.g. database review" onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor={ids.style}>Style</label>
+          <Select id={ids.style} label="Style" value={style} options={STYLE_PRESETS.map((p) => ({ value: p.value, label: p.label }))} onChange={setStyle} />
         </div>
       </details>
       {!run.allowed ? <DeniedHint reason={run.reason} /> : null}
