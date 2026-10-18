@@ -301,6 +301,20 @@ export class ZernioAdapter extends BaseAdapter {
       return { status: "failed", code: "INPUT_REQUIRED", message: "the carousel needs 2 to 35 https image URLs" };
     }
     const caption = typeof c?.caption === "string" ? c.caption.slice(0, 2200) : "";
+    // TikTok refuses a privacy level the account does not offer; read the options first. Nothing
+    // has been sent yet, so a failure here is a plain refusal, not an uncertain draft.
+    let info;
+    try {
+      info = await this.call(`/accounts/${encodeURIComponent(this.key.tiktokAccountId)}/tiktok/creator-info`, { method: "GET", headers: { authorization: `Bearer ${this.key.apiKey}` } });
+    } catch (error) {
+      return { status: "failed", code: "PROVIDER_UNAVAILABLE", message: `TikTok account check failed: ${(error as Error).name}` };
+    }
+    const levels = Array.isArray(info.body?.privacyLevels) ? (info.body.privacyLevels as Array<{ value?: unknown }>).map((l) => l.value).filter((v): v is string => typeof v === "string") : [];
+    const creator = info.body?.creator as { canPostMore?: unknown } | undefined;
+    if (info.status >= 400 || levels.length === 0) return { status: "failed", code: "PROVIDER_UNAVAILABLE", message: `TikTok account check refused (HTTP ${info.status})` };
+    if (creator?.canPostMore === false) return { status: "failed", code: "PROVIDER_REFUSED", message: "the TikTok account cannot post more right now" };
+    // The draft lands in the creator's inbox either way; the owner picks the final audience in TikTok.
+    const privacy = levels.includes("SELF_ONLY") ? "SELF_ONLY" : levels[0]!;
     const body = {
       content: caption.slice(0, 90),
       mediaItems: images.map((url) => ({ type: "image", url })),
@@ -309,7 +323,7 @@ export class ZernioAdapter extends BaseAdapter {
         media_type: "photo",
         photo_cover_index: 0,
         description: caption,
-        privacy_level: "SELF_ONLY",
+        privacy_level: privacy,
         allow_comment: true,
         auto_add_music: true,
         content_preview_confirmed: true,
