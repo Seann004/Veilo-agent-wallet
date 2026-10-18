@@ -1,3 +1,4 @@
+import "server-only";
 import { upstreamConfig, type UpstreamConfig, type UpstreamService } from "./upstream";
 
 export const SESSION_COOKIE = "veilo_session";

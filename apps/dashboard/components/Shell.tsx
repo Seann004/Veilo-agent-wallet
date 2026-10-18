@@ -59,8 +59,8 @@ const NAV: Array<[string, string, IconName, string[]]> = [
   ["/workspace", "Workspace", "home", []],
   ["/marketplace", "Marketplace", "store", []],
   ["/connectors", "Connectors", "plug", []],
-  ["/outputs", "Outputs", "content", ["/content"]],
-  ["/wallet", "Wallet", "wallet", ["/activity", "/recovery", "/privacy"]],
+  ["/outputs", "Outputs", "content", []],
+  ["/wallet", "Wallet", "wallet", []],
   ["/settings", "Settings", "settings", []],
 ];
 

@@ -298,3 +298,18 @@ describe("dashboard proxy", () => {
     expect(c.dashboardOrigin).toBe("http://localhost:3999");
   });
 });
+
+describe("hosted upstreams", () => {
+  it("uses explicit https service URLs and refuses unsafe ones", async () => {
+    const { upstreamConfig, upstreamUrl } = await import("../lib/server/upstream");
+    const c = upstreamConfig({ VEILO_DASHBOARD_ORIGIN: "https://veilo.vercel.app", VEILO_CONTROL_URL: "https://control.example.com/", VEILO_WALLET_URL: "https://wallet.example.com" } as unknown as NodeJS.ProcessEnv);
+    expect(c.baseUrl.control).toBe("https://control.example.com");
+    expect(c.baseUrl.wallet).toBe("https://wallet.example.com");
+    expect(c.baseUrl.relayer).toBe("http://127.0.0.1:4105");
+    expect(c.secureCookies).toBe(true);
+    expect(upstreamUrl("X", "http://localhost:4101")).toBe("http://localhost:4101");
+    for (const bad of ["http://control.example.com", "https://u:p@control.example.com", "https://control.example.com/?k=1", "ftp://control.example.com", "not a url"]) {
+      expect(() => upstreamUrl("VEILO_CONTROL_URL", bad), bad).toThrow(/VEILO_CONTROL_URL/);
+    }
+  });
+});
