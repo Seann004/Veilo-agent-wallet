@@ -24,8 +24,8 @@ function market(controllerKeyId: string | null, call: ReturnType<typeof vi.fn>):
   } as unknown as MarketContextValue;
 }
 
-async function mount(controllerKeyId: string | null) {
-  const rec = recordingFetch((url) => (url.includes("/registration") ? REG : LOCAL));
+async function mount(controllerKeyId: string | null, local: Record<string, unknown> = LOCAL) {
+  const rec = recordingFetch((url) => (url.includes("/registration") ? REG : local));
   vi.stubGlobal("fetch", rec.impl);
   const call = vi.fn(async () => ({}));
   await act(async () => {
@@ -50,5 +50,16 @@ describe("controller auto-link", () => {
     const { rec, call } = await mount("ctl_other");
     expect(rec.calls.some((c) => c.url.includes("/registration"))).toBe(false);
     expect(call).not.toHaveBeenCalled();
+  });
+
+  it("never moves this computer's controller away from another marketplace workspace", async () => {
+    const { rec, call } = await mount(null, { ...LOCAL, registration: { cloudWorkspaceId: "ws-other", cloudUserId: "user-2" } });
+    expect(rec.calls.some((c) => c.url.includes("/registration"))).toBe(false);
+    expect(call).not.toHaveBeenCalled();
+  });
+
+  it("re-links to the workspace it was already registered with", async () => {
+    const { call } = await mount(null, { ...LOCAL, registration: { cloudWorkspaceId: "ws-1", cloudUserId: "user-1" } });
+    expect(call).toHaveBeenCalledTimes(1);
   });
 });
