@@ -9,7 +9,7 @@ Measured on `59eb491` on macOS (Node 24, pnpm 10.34.6, `.env` loaded):
 | Check | Result | Limit |
 |---|---|---|
 | `pnpm check` (typecheck and lint) | pass | — |
-| `pnpm test` | 921 passed, 9 failed, 1 skipped (115 files). The 9 failures were timeouts (5 s test timeouts and runs lasting about 935 s, consistent with the host pausing); the 8 affected files (6 control, 2 dashboard) were rerun on their own and passed, 153/153 | A rerun of the failed files is weaker evidence than one clean full run |
+| `pnpm test` | 944 passed, 1 skipped (118 files) on the PR #5 head `bff924e`; `16b7f5d` changed one test, which passes | Full runs on a heavily loaded machine time out in several suites; those suites pass when run on their own |
 | `pnpm test:marketplace-rls` | not rerun; 84/84 recorded at `59696dd` | Chain reads in this script use a labeled fixture; it tests identity, RLS, Storage and transitions, not settlement |
 
 `pnpm test:integration`, `pnpm test:program`, `pnpm test:circuits` and a devnet demo run were **not rerun** after PR #3.

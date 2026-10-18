@@ -47,7 +47,7 @@ These features were added after the T00–T26 plan. None is done: each is tested
 | Runner credential provisioning | in-progress | control tests | `CONTROL_PROVISION_RUNNER_CREDENTIALS=1`, single-host only; runner reloads its credential file every 5 s. |
 | Relayer automatic deposit approval | in-progress | relayer auto-approval tests | Opt-in with `RELAYER_AUTO_APPROVE_KEY_PATH` and `APPROVED_PARTICIPANTS`; same prototype rule as `approve-root`. |
 
-Current tree (`59eb491`, macOS, Node 24): `pnpm check` ✓; `pnpm test` 921 passed, 9 failed, 1 skipped. The 9 failures were timeouts during a host pause; the 8 affected files passed when rerun on their own (153/153).
+Current tree (`59eb491`, macOS, Node 24): `pnpm check` ✓; `pnpm test` 944 passed, 1 skipped (118 files) on the PR #5 head `bff924e`; the only later test change (`16b7f5d`) passes on its own. Full runs on a heavily loaded machine (load average about 16, dev stack running) produced timeout failures in control, dashboard, runner and wallet; those suites pass when run on their own.
 
 ## Environment notes
 
