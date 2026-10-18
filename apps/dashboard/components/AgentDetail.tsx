@@ -377,6 +377,19 @@ function buildThread(
   agentStopped: boolean,
   openPurchase: (id: string) => void,
 ): ThreadEntry[] {
+  const runOfTask = new Map<string, string>();
+  for (const j of jobs) {
+    const run = workflowRunOf(j);
+    if (run && j.taskId) runOfTask.set(j.taskId, run.runId);
+  }
+  const byRun = new Map<string, Purchase[]>();
+  for (const p of purchases) {
+    const runId = p.taskId ? runOfTask.get(p.taskId) : undefined;
+    if (runId) byRun.set(runId, [...(byRun.get(runId) ?? []), p]);
+  }
+  const grouped = new Set<string>();
+  for (const [, ps] of byRun) if (ps.length >= 2) for (const p of ps) grouped.add(p.id);
+
   const out: ThreadEntry[] = [];
   for (const t of tasks) {
     out.push({
@@ -407,26 +420,29 @@ function buildThread(
       ),
     });
   }
-  for (const p of purchases) {
+  const card = (p: Purchase): ReactNode => (
+    <li className="thread-item" key={p.id}>
+      <button type="button" className="attachment" aria-haspopup="dialog" onClick={() => openPurchase(p.id)}>
+        <span className="attachment-icon">
+          <Icon name="card" />
+        </span>
+        <span className="attachment-text">
+          <strong>
+            {skuLabel(p.sku)} · {p.paymentPath === "prepaid_credits" ? "prepaid AI credits" : usdc(p.price.amount)}
+          </strong>
+          <span>{purchaseLabel(p, { agentStopped })}</span>
+        </span>
+        <Icon name="arrow" size={16} />
+      </button>
+    </li>
+  );
+  for (const p of purchases.filter((x) => !grouped.has(x.id))) out.push({ at: p.createdAt, key: `p-${p.id}`, node: card(p) });
+  for (const [runId, ps] of byRun) {
+    if (ps.length < 2) continue;
     out.push({
-      at: p.createdAt,
-      key: `p-${p.id}`,
-      node: (
-        <li className="thread-item">
-          <button type="button" className="attachment" aria-haspopup="dialog" onClick={() => openPurchase(p.id)}>
-            <span className="attachment-icon">
-              <Icon name="card" />
-            </span>
-            <span className="attachment-text">
-              <strong>
-                {skuLabel(p.sku)} · {p.paymentPath === "prepaid_credits" ? "prepaid AI credits" : usdc(p.price.amount)}
-              </strong>
-              <span>{purchaseLabel(p, { agentStopped })}</span>
-            </span>
-            <Icon name="arrow" size={16} />
-          </button>
-        </li>
-      ),
+      at: ps.map((p) => p.createdAt).sort().at(-1)!,
+      key: `run-pay-${runId}`,
+      node: <RunPayments runId={runId} purchases={ps} cards={ps.map(card)} />,
     });
   }
   for (const c of items) {
@@ -461,6 +477,46 @@ function buildThread(
     });
   }
   return out.sort((a, b) => a.at.localeCompare(b.at));
+}
+
+const cutoffKey = (agentId: string) => `veilo:chat-cutoff:${agentId}`;
+
+function readCutoff(agentId: string): string | null {
+  try {
+    return window.localStorage.getItem(cutoffKey(agentId));
+  } catch {
+    return null;
+  }
+}
+
+function writeCutoff(agentId: string, at: string | null): void {
+  try {
+    if (at === null) window.localStorage.removeItem(cutoffKey(agentId));
+    else window.localStorage.setItem(cutoffKey(agentId), at);
+  } catch {
+    // Storage can be blocked; the thread then simply shows everything.
+  }
+}
+
+/** Entries from a "New chat" cutoff on; the cutoff is an ISO instant stored per agent. */
+export function afterCutoff<T extends { at: string }>(entries: T[], cutoff: string | null): T[] {
+  if (cutoff === null) return entries;
+  const t = Date.parse(cutoff);
+  return Number.isFinite(t) ? entries.filter((e) => Date.parse(e.at) > t) : entries;
+}
+
+/** Payment cards for a run's step purchases: one summary line once the run completed, else each card. */
+function RunPayments({ runId, purchases, cards }: { runId: string; purchases: Purchase[]; cards: ReactNode }) {
+  const view = useResource(() => api<{ run: LocalRun }>("control", `/workflows/runs/${runId}`), `workflow-run:${runId}`);
+  if (view.data?.run?.status !== "completed") return <>{cards}</>;
+  const total = purchases.reduce((sum, p) => sum + BigInt(p.price.amount), 0n).toString();
+  return (
+    <li className="thread-item run-payments">
+      <span className="small">
+        Workflow run · {purchases.length} payments · {usdc(total)} · <Link href={`/marketplace/runs/${runId}`}>View run</Link>
+      </span>
+    </li>
+  );
 }
 
 /** Share of a limit already used, for the bar only; the text shows the exact amounts. */
@@ -594,6 +650,8 @@ export function AgentDetail({ agentId }: { agentId: string }) {
   const [checkResult, setCheckResult] = useState<string | null>(null);
   const avatar = useAgentAvatar(agentId, agent?.role ?? "research");
   const threadRef = useRef<HTMLOListElement>(null);
+  const [cutoff, setCutoff] = useState<string | null>(null);
+  useEffect(() => setCutoff(readCutoff(agentId)), [agentId]);
   const threadSize = (tasks.data?.tasks.length ?? 0) + (tasks.data?.jobs.length ?? 0) + (content.data?.items.length ?? 0) + (activity.data?.purchases.length ?? 0);
   // Like a chat: open at, and follow, the newest message.
   useEffect(() => {
@@ -631,7 +689,18 @@ export function AgentDetail({ agentId }: { agentId: string }) {
   const openPurchase = purchases.find((p) => p.id === openPurchaseId);
   const current = policyInputOf(agent);
   const loaded = tasks.data !== undefined && activity.data !== undefined && content.data !== undefined;
-  const entries = tasks.data && content.data ? buildThread(tasks.data.tasks, tasks.data.jobs, purchases, content.data.items, agentStopped, setOpenPurchaseId) : [];
+  const allEntries = tasks.data && content.data ? buildThread(tasks.data.tasks, tasks.data.jobs, purchases, content.data.items, agentStopped, setOpenPurchaseId) : [];
+  const entries = afterCutoff(allEntries, cutoff);
+  const hiddenCount = allEntries.length - entries.length;
+  const startNewChat = () => {
+    const at = new Date().toISOString();
+    writeCutoff(agentId, at);
+    setCutoff(at);
+  };
+  const showEarlier = () => {
+    writeCutoff(agentId, null);
+    setCutoff(null);
+  };
   const blocked = runBlockedReason(agent.status, stopped);
   const tz = workspace.workspace.timezone || "UTC";
 
@@ -663,7 +732,18 @@ export function AgentDetail({ agentId }: { agentId: string }) {
             <p className="role">{ROLE_LABEL[agent.role]}</p>
           </div>
           <span className={`pill pill-${canRun ? "ok" : agent.status === "paused" || agent.status === "draft" ? "warn" : "danger"}`}>{agentStateLabel(agent.status, stopped)}</span>
+          <button type="button" className="btn btn-small" onClick={startNewChat} disabled={entries.length === 0}>
+            New chat
+          </button>
         </header>
+        {cutoff !== null && hiddenCount > 0 ? (
+          <p className="small muted thread-earlier">
+            Earlier messages hidden. Tasks, payments and outputs are still in Activity and Outputs.{" "}
+            <button type="button" className="link-btn" onClick={showEarlier}>
+              Show earlier messages
+            </button>
+          </p>
+        ) : null}
         {blocked ? (
           <div className="notice notice-warn thread-notice" role="status">
             {blocked}

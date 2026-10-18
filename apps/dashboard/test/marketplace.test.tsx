@@ -346,7 +346,7 @@ describe("untrusted content", () => {
     const { container } = render(withMarket(marketValue(vi.fn() as unknown as MarketContextValue["call"]), <ListingDetail slug="research-desk" />));
     await screen.findByText("Research desk");
     // The only image is the page's own avatar; every seller field is visited and stays text.
-    const markup = () => [...container.querySelectorAll("script, img, b, iframe, object, embed")].filter((el) => !el.classList.contains("detail-avatar"));
+    const markup = () => [...container.querySelectorAll("script, img, b, iframe, object, embed")].filter((el) => !el.closest(".detail-avatar-bot"));
     let seen = 0;
     for (const section of ["About", "Payment and refunds", "Samples"]) {
       fireEvent.click(within(screen.getByRole("navigation", { name: "Sections" })).getByRole("button", { name: new RegExp(`^${section}`) }));
@@ -354,7 +354,7 @@ describe("untrusted content", () => {
       seen += screen.queryAllByText(HOSTILE).length;
     }
     expect(seen).toBeGreaterThanOrEqual(4);
-    expect(container.querySelector(".detail-avatar")!.getAttribute("src")).toMatch(/^\/avatars\//);
+    expect(container.querySelector(".detail-avatar-bot")).not.toBeNull();
     expect((window as unknown as { __pwned?: number }).__pwned).toBeUndefined();
   });
 

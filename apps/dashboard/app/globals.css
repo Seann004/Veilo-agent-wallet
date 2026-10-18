@@ -2651,7 +2651,7 @@ main:has(.agent-view) {
 }
 
 .featured-avatar {
-  border-radius: 30%;
+  display: block;
   margin-bottom: 0.75rem;
 }
 
@@ -2698,10 +2698,6 @@ main:has(.agent-view) {
   align-items: center;
   gap: 1rem;
   padding: 0.9rem 0;
-}
-
-.market-row .avatar {
-  border-radius: 30%;
 }
 
 .market-row-text {
@@ -4690,8 +4686,8 @@ ul.cards {
   color: var(--ink);
 }
 
-.detail-avatar {
-  border-radius: 30%;
+.detail-avatar-bot {
+  display: block;
   margin-bottom: 0.75rem;
 }
 
@@ -5142,3 +5138,57 @@ ul.cards {
 .gallery-grid { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .gallery-grid img { display: block; width: 6rem; height: 6rem; object-fit: cover; border-radius: 0.5rem; border: 1px solid var(--line-strong); }
 @media (prefers-reduced-motion: reduce) { .progress-bar > span { transition: none; } }
+
+.bot-row {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 0.9rem;
+  margin: 0 0 1.5rem;
+  padding: 0;
+}
+
+.bot-row li { line-height: 0; }
+
+.feature .working-avatar { margin-bottom: 0.75rem; }
+
+.steps {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0 0;
+  padding: 0;
+}
+
+.steps li {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.2rem 1.4rem;
+}
+
+.steps h3 { margin: 0.6rem 0 0.3rem; font-size: 1.05rem; }
+.steps p { margin: 0; color: var(--ink-2); font-size: 0.9rem; }
+
+.step-num {
+  display: inline-grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .steps { grid-template-columns: 1fr; }
+  .bot-row { gap: 0.25rem 0.5rem; }
+}
+
+.thread-earlier { margin: 0; padding: 0.5rem 1.1rem 0; }
+.thread-earlier .link-btn { min-height: 0; }
+.run-payments { font-size: 0.88rem; color: var(--ink-2); }

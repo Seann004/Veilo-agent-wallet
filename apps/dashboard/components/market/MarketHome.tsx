@@ -15,6 +15,7 @@ import { Icon } from "../Icon";
 import { useCapability } from "../Shell";
 import { EmptyState, ErrorNotice, Loading } from "../ui";
 import { useMarket } from "./MarketContext";
+import { AvatarImage } from "../Avatar";
 import { creatorAvatar, Money, PlainText, turnaround } from "./parts";
 
 const TEMPLATE_CATEGORY: Partial<Record<AgentRole, WorkflowCategory>> = { research: "research", content: "content", custom: "operations" };
@@ -140,7 +141,7 @@ export function MarketHome({ category }: { category?: string }) {
             {featured.map((e) => (
               <li key={e.key}>
                 <Link href={e.href} className="featured">
-                  <img className="featured-avatar" src={e.avatar.src} alt="" width={84} height={84} />
+                  <span className="featured-avatar"><AvatarImage avatar={e.avatar} size={84} /></span>
                   <span className="featured-text">
                     <span className="featured-name">
                       <PlainText text={e.title} inline />
@@ -169,7 +170,7 @@ export function MarketHome({ category }: { category?: string }) {
             const starter = e.key.startsWith("template:");
             return (
               <li key={e.key} className="market-row">
-                <img className="avatar" src={e.avatar.src} alt="" width={44} height={44} />
+                <AvatarImage avatar={e.avatar} size={44} />
                 <span className="market-row-text">
                   <strong>
                     <Link href={e.href} className="row-link">

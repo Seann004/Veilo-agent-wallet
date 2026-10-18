@@ -97,3 +97,36 @@ export function AvatarPicker({ value, onChange, label = "Avatar" }: { value: str
     </fieldset>
   );
 }
+
+export interface BotSpec {
+  type: (typeof botAvatarTypes)[number];
+  colour: string;
+  label: string;
+}
+
+/** A decorative bot for marketing pages. Animates only when asked and motion is not reduced. */
+export function BotMark({ bot, size = 64, animated = false }: { bot: BotSpec; size?: number; animated?: boolean }) {
+  const reduced = usePrefersReducedMotion();
+  const paused = reduced || !animated;
+  const fallback = <span className="working-avatar" style={{ width: size, height: size, borderRadius: "50%", background: bot.colour }} />;
+  return (
+    <AnimationBoundary fallback={fallback}>
+      <span className="working-avatar" data-bot={bot.type} data-animated={String(!paused)} aria-hidden="true" style={{ width: size, height: size }}>
+        <BotAvatar type={bot.type} state="default" paused={paused} size={size} color={bot.colour} shading="plastic" ink="#000000" />
+      </span>
+    </AnimationBoundary>
+  );
+}
+
+/** A row of bots; only the first `animate` move, so the page never runs many loops at once. */
+export function BotRow({ bots, size = 72, animate = 3 }: { bots: BotSpec[]; size?: number; animate?: number }) {
+  return (
+    <ul className="bot-row" aria-label="Example agents">
+      {bots.map((bot, i) => (
+        <li key={bot.type} title={bot.label}>
+          <BotMark bot={bot} size={size} animated={i < Math.min(animate, 3)} />
+        </li>
+      ))}
+    </ul>
+  );
+}

@@ -9,6 +9,7 @@ import type { JobPresentation } from "../../lib/market/job-state";
 import { DECIMALS_UNVERIFIED, TEST_TOKEN_LABEL } from "../../lib/market/messages";
 import { toBaseUnits } from "../../lib/market/amounts";
 import { useMarket } from "./MarketContext";
+import { AvatarImage } from "../Avatar";
 import { UsdcIcon } from "../UsdcIcon";
 
 const GLYPH = { ok: "✓", wait: "…", problem: "!", idle: "·" } as const;
@@ -171,7 +172,9 @@ export function DetailHeader({ avatar, title, by, summary, actions }: { avatar: 
       <Link href="/marketplace" className="back-link">
         ← Back to Marketplace
       </Link>
-      <img className="detail-avatar" src={avatar.src} alt="" width={96} height={96} />
+      <span className="detail-avatar-bot">
+        <AvatarImage avatar={avatar} size={96} />
+      </span>
       <h1>
         <PlainText text={title} inline />
       </h1>
