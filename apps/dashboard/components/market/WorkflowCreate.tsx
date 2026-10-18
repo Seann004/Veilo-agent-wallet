@@ -14,7 +14,7 @@ import {
 import { api } from "../../lib/api";
 import { marketApi } from "../../lib/market/client";
 import type { SellerDashboard } from "../../lib/market/types";
-import { BADGE_CLASS, BADGE_LABEL, CATEGORIES, WORKFLOW_STATUS_LABEL, type LocalRun, type ToolEntry } from "../../lib/market/workflows";
+import { BADGE_CLASS, BADGE_LABEL, CATEGORIES, hiringAgents, WORKFLOW_STATUS_LABEL, type LocalRun, type ToolEntry } from "../../lib/market/workflows";
 import type { Workspace } from "../../lib/types";
 import { useAction, useResource } from "../hooks";
 import { ErrorNotice, Loading, Section } from "../ui";
@@ -395,15 +395,21 @@ function TestRun({ created, onCreate, busy }: { created: { versionId: string; de
           }}
         >
           <div className="field">
-            <label htmlFor={`${id}-a`}>Agent whose budget pays</label>
+            <label htmlFor={`${id}-a`}>Which agent&apos;s limits cover this run</label>
             <Select
               id={`${id}-a`}
-              label="Agent whose budget pays"
+              label="Which agent's limits cover this run"
               required
               value={agentId}
-              options={[{ value: "", label: "Choose an agent" }, ...(ws.data?.agents ?? []).map((a) => ({ value: a.id, label: a.name }))]}
+              options={[{ value: "", label: "Choose an agent" }, ...hiringAgents(ws.data?.agents ?? []).map((a) => ({ value: a.id, label: a.name }))]}
               onChange={setAgentId}
             />
+            <p className="hint">Paid from your private pool. Only agents that are on and allowed to hire appear here.</p>
+            {ws.data && hiringAgents(ws.data.agents).length === 0 ? (
+              <p className="notice notice-warn" role="note">
+                No agent can hire yet. <Link href="/agents/new">Create an agent</Link> that is allowed to hire specialists, and turn it on.
+              </p>
+            ) : null}
           </div>
           <div className="field">
             <label htmlFor={`${id}-i`}>Buyer inputs (JSON)</label>

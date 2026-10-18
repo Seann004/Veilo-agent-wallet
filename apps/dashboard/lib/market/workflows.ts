@@ -1,3 +1,4 @@
+import type { Agent } from "../types";
 import type { ArtifactKind, StepInput, ToolIo, WorkflowCategory } from "@veilo/contracts/marketplace";
 
 export const CATEGORIES: ReadonlyArray<{ id: WorkflowCategory; label: string }> = [
@@ -148,3 +149,8 @@ export const RUN_STATUS_LABEL: Record<LocalRun["status"], string> = {
   completed: "Completed",
   rejected: "Rejected — nothing was paid",
 };
+
+/** Agents a workflow run can be charged to: switched on, with an active policy that allows hiring. */
+export function hiringAgents(agents: readonly Agent[]): Agent[] {
+  return agents.filter((a) => a.status === "active" && (a.activePolicy?.permissions?.allowedSkus ?? []).includes("specialist-job"));
+}

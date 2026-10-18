@@ -1,11 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { api } from "../../lib/api";
 import { parseUnits } from "../../lib/market/amounts";
 import { marketApi } from "../../lib/market/client";
-import { categoryLabel, kindGlyph, type LocalRun, type WorkflowEntry } from "../../lib/market/workflows";
+import { categoryLabel, hiringAgents, kindGlyph, type LocalRun, type WorkflowEntry } from "../../lib/market/workflows";
 import type { Workspace } from "../../lib/types";
 import { useAction, useResource } from "../hooks";
 import { ConfirmButton, ErrorNotice, KV, Loading } from "../ui";
@@ -174,7 +175,7 @@ function RunOnce({ w }: { w: WorkflowEntry }) {
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [prepared, setPrepared] = useState<LocalRun | null>(null);
   const formId = useId();
-  const agents = (ws.data?.agents ?? []).filter((a) => a.status === "active");
+  const agents = hiringAgents(ws.data?.agents ?? []);
   const agentOptions = [{ value: "", label: "Choose an agent" }, ...agents.map((a) => ({ value: a.id, label: a.name }))];
   return (
     <div className="stack">
@@ -191,8 +192,14 @@ function RunOnce({ w }: { w: WorkflowEntry }) {
           }}
         >
           <div className="field">
-            <label htmlFor={`${formId}-agent`}>Agent whose budget pays</label>
-            <Select id={`${formId}-agent`} label="Agent whose budget pays" required value={agentId} options={agentOptions} onChange={setAgentId} />
+            <label htmlFor={`${formId}-agent`}>Which agent&apos;s limits cover this run</label>
+            <Select id={`${formId}-agent`} label="Which agent's limits cover this run" required value={agentId} options={agentOptions} onChange={setAgentId} />
+            <p className="hint">Paid from your private pool. Only agents that are on and allowed to hire appear here.</p>
+            {ws.data && agents.length === 0 ? (
+              <p className="notice notice-warn" role="note">
+                No agent can hire yet. <Link href="/agents/new">Create an agent</Link> that is allowed to hire specialists, and turn it on.
+              </p>
+            ) : null}
           </div>
           {(w.run_inputs ?? []).map((ri) => (
             <div className="field" key={ri.name}>
