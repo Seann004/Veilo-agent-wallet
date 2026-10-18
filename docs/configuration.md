@@ -232,7 +232,7 @@ Inference runs at most once per purchase. A crash or a lost lease resumes from t
 
 | Variable | Default | Description |
 |---|---|---|
-| `RUNNER_WORKER_CREDENTIAL_PATH` | empty | Per-agent worker tokens. `demo:seed` writes `<VEILO_SECRETS_DIR>/runner/worker-credentials.json` when unset and prints the path to set here. Format (`{"agents":[{"agentId","role","token"}]}`). The runner polls and claims jobs for these agents only. |
+| `RUNNER_WORKER_CREDENTIAL_PATH` | empty | Per-agent worker tokens. `demo:seed` writes `<VEILO_SECRETS_DIR>/runner/worker-credentials.json` when unset and prints the path to set here. Format (`{"agents":[{"agentId","role","token"}]}`). The runner polls and claims jobs for these agents only, and re-reads the file every 5 seconds (by modification time), so added or removed agents start or stop without a restart. A file that fails to parse keeps the current agents. |
 | `RUNNER_APPROVED_FETCH_ORIGINS` | empty | Exact origins agent tools may fetch (owner-suggested sources). Others are listed as "not fetched". |
 | `RUNNER_LOCAL_SERVICE_ORIGINS` | empty | Subset of approved origins that are configured local demo services and may resolve to loopback/private addresses. All other targets must resolve to public addresses; redirects are not followed. |
 

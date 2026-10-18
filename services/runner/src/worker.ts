@@ -89,15 +89,16 @@ export async function runOnce(cred: AgentCredential, o: WorkerOptions): Promise<
   return { jobId: job.id, outcome: { ...outcome, summary } };
 }
 
-/** Polls each agent's queue until stopped. */
-export function startWorker(creds: AgentCredential[], o: WorkerOptions, intervalMs = 3_000): () => void {
+/** Polls each agent's queue until stopped; a function source is re-read every round, so agents can come and go. */
+export function startWorker(source: AgentCredential[] | (() => AgentCredential[]), o: WorkerOptions, intervalMs = 3_000): () => void {
+  const creds = typeof source === "function" ? source : () => source;
   let stopped = false;
   let busy = false;
   const timer = setInterval(() => {
     if (busy || stopped) return;
     busy = true;
     void (async () => {
-      for (const c of creds) {
+      for (const c of creds()) {
         try {
           await runOnce(c, o);
         } catch (error) {

@@ -7,9 +7,9 @@ import {
   loadDotEnv,
   toRunnerConfig,
 } from "@veilo/contracts";
-import { existsSync, readFileSync } from "node:fs";
 import { createApp } from "./app";
-import { startWorker, type AgentCredential } from "./worker";
+import { startWorker } from "./worker";
+import { CredentialWatcher } from "./credentials";
 import { ChromeReader } from "./browser";
 
 const SERVICE = "runner";
@@ -26,13 +26,13 @@ function main(): void {
   });
   if (process.env.VEILO_LOG_CONFIG === "1") console.log(JSON.stringify(runnerConfig));
 
-  const creds = loadCredentials(runnerConfig.workerCredentialPath);
-  if (creds.length === 0) {
-    console.log(`[${SERVICE}] no worker credentials configured; run pnpm demo:seed. Research and content jobs stay queued`);
-    return;
+  const watcher = new CredentialWatcher(runnerConfig.workerCredentialPath, (l) => console.log(`[${SERVICE}] ${l}`));
+  watcher.start(5_000);
+  if (watcher.current().length === 0) {
+    console.log(`[${SERVICE}] no worker credentials yet; run pnpm demo:seed or enable control provisioning. Agent jobs stay queued until one appears`);
   }
   const list = (v: string | undefined) => (v ?? "").split(",").map((x) => x.trim()).filter((x) => x !== "");
-  startWorker(creds, {
+  startWorker(() => watcher.current(), {
     controlUrl: runnerConfig.controlUrl,
     workerId: `runner-${process.pid}`,
     fetchPolicy: {
@@ -42,7 +42,6 @@ function main(): void {
     // Uses an installed Chrome; RUNNER_BROWSER=off disables browsing for every agent.
     ...(process.env.RUNNER_BROWSER === "off" ? {} : { browser: new ChromeReader({ executablePath: process.env.RUNNER_BROWSER_EXECUTABLE?.trim() || undefined }) }),
   });
-  console.log(`[${SERVICE}] worker started for ${creds.map((c) => c.role).join(", ")}`);
 }
 
 try {
@@ -53,13 +52,4 @@ try {
     process.exit(1);
   }
   throw error;
-}
-
-/** Worker credential file written by demo:seed: {"agents":[{"agentId","role","token"}]}. Tokens are never logged. */
-function loadCredentials(path: string | undefined): AgentCredential[] {
-  if (!path || !existsSync(path)) return [];
-  const parsed = JSON.parse(readFileSync(path, "utf8")) as { agents?: Array<Partial<AgentCredential>> };
-  return (parsed.agents ?? []).filter(
-    (a): a is AgentCredential => typeof a.agentId === "string" && typeof a.token === "string" && (a.role === "research" || a.role === "content" || a.role === "custom"),
-  );
 }
