@@ -4902,3 +4902,23 @@ ul.cards {
 .privacy-title {
   margin: 2.5rem 0 1rem;
 }
+
+.link-button {
+  background: none;
+  border: 0;
+  padding: 0.15rem 0;
+  font: inherit;
+  color: var(--accent);
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.payments-table td {
+  vertical-align: top;
+}
+
+.treasury-details {
+  margin-top: 0.75rem;
+}

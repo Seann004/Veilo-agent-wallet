@@ -229,6 +229,64 @@ export function ActivityList({ activity, workspace, onChanged, limit }: { activi
   );
 }
 
+export function ActivityTable({ activity, workspace, onChanged, limit = 8 }: { activity: Activity; workspace: Workspace; onChanged: () => void | Promise<void>; limit?: number }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const triggers = useRef(new Map<string, HTMLButtonElement>());
+  const rows = [...activity.purchases].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, limit);
+  const open = activity.purchases.find((p) => p.id === openId);
+  const close = () => {
+    const id = openId;
+    setOpenId(null);
+    if (id) triggers.current.get(id)?.focus();
+  };
+  if (rows.length === 0) return <p className="muted flush">No payments yet. They appear here when an agent buys a service.</p>;
+  return (
+    <>
+      <div className="table-wrap">
+        <table className="payments-table">
+          <caption className="sr-only">Recent payments, newest first</caption>
+          <thead>
+            <tr>
+              <th scope="col">When</th>
+              <th scope="col">Agent</th>
+              <th scope="col">What</th>
+              <th scope="col">Amount</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p) => {
+              const agent = workspace.agents.find((a) => a.id === p.agentId);
+              return (
+                <tr key={p.id}>
+                  <td className="nowrap small">{when(p.createdAt)}</td>
+                  <td>{agent?.name ?? "agent"}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="link-button"
+                      ref={(el) => {
+                        if (el) triggers.current.set(p.id, el);
+                      }}
+                      onClick={() => setOpenId(p.id)}
+                      aria-haspopup="dialog"
+                    >
+                      {skuLabel(p.sku)}
+                    </button>
+                  </td>
+                  <td className="nowrap">{p.paymentPath === "prepaid_credits" ? "prepaid AI credits" : usdc(p.price.amount)}</td>
+                  <td>{purchaseLabel(p, { agentStopped: agentStopped(agent, workspace.workspace.stopped) })}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {open ? <ActivityDrawer purchase={open} events={activity.events} workspace={workspace} onClose={close} onChanged={onChanged} /> : null}
+    </>
+  );
+}
+
 export function EventLog({ events }: { events: AuditEvent[] }) {
   if (events.length === 0) return <p className="muted flush">No audit events yet.</p>;
   return (

@@ -6,7 +6,7 @@ import { usdc } from "../lib/format";
 import { ROLE_LABEL, agentStateLabel } from "../lib/labels";
 import { summarizeResult } from "../lib/results";
 import type { Activity, Agent, AgentBudget, Balances, Job, Task } from "../lib/types";
-import { ActivityList } from "./Activity";
+import { ActivityTable } from "./Activity";
 import { AgentAvatar } from "./Avatar";
 import { useCapability, useOwner } from "./Shell";
 import { EmergencyStop } from "./StopControls";
@@ -174,7 +174,7 @@ export function Overview() {
           </Link>
         }
       >
-        {activity.data ? <ActivityList activity={activity.data} workspace={workspace} onChanged={reloadAll} limit={5} /> : <Loading label="activity" />}
+        {activity.data ? <ActivityTable activity={activity.data} workspace={workspace} onChanged={reloadAll} limit={8} /> : <Loading label="activity" />}
         <ErrorNotice error={activity.error} what="activity" onRetry={activity.reload} />
       </Section>
 
