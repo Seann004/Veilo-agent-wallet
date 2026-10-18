@@ -645,18 +645,21 @@ export class FundingService {
         return { status: "not_ready", reason: `control has not authorized the swap (merchant ${cp.states.merchant})` };
       }
       const freshUsdc = (await associatedTokenAddress(address(f.fresh_wallet), ctx.mint)).address;
-      if ((await chain.tokenBalance(freshUsdc)) !== f.payout) return { status: "not_ready", reason: "the fresh wallet does not hold exactly the funded USDC" };
+      // The ATA is public, so anyone can add to it; the swap sells the whole balance because the
+      // same transaction must close the account, which requires it to be empty.
+      const held = (await chain.tokenBalance(freshUsdc)) ?? 0n;
+      if (held < f.payout) return { status: "not_ready", reason: "the fresh wallet does not hold the funded USDC" };
 
       const { address: freshAddress, seed } = store.freshWalletSeed(purchaseId);
       if (freshAddress !== f.fresh_wallet) return { status: "recovery_required", reason: "fresh wallet does not match the funding attempt" };
       let quote;
       try {
-        quote = await this.d.swapQuoter.quote({ fresh: address(freshAddress), usdcMint: ctx.mint, inputAmount: f.payout, slippageBps: terms.slippageBps });
+        quote = await this.d.swapQuoter.quote({ fresh: address(freshAddress), usdcMint: ctx.mint, inputAmount: held, slippageBps: terms.slippageBps });
       } catch (error) {
         return { status: "not_ready", reason: `swap quote unavailable; nothing was signed (${describeError(error)})` };
       }
       if (quote.minOutLamports <= 0n) return { status: "not_ready", reason: "the pool quotes no SOL for this amount; nothing was signed" };
-      const mismatch = await swapInstructionMismatch(quote.swapIx, { fresh: address(freshAddress), usdcMint: ctx.mint, amount: f.payout, minOut: quote.minOutLamports });
+      const mismatch = await swapInstructionMismatch(quote.swapIx, { fresh: address(freshAddress), usdcMint: ctx.mint, amount: held, minOut: quote.minOutLamports });
       if (mismatch) return { status: "not_ready", reason: `the quoted swap was refused (${mismatch}); nothing was signed` };
       const bh = await chain.latestBlockhash();
       const unsigned = await buildSwapTransaction({
@@ -677,7 +680,7 @@ export class FundingService {
           swap_id: randomUUID(),
           fresh_wallet: freshAddress,
           destination,
-          input_amount: f.payout,
+          input_amount: held,
           min_out: quote.minOutLamports,
           est_out: quote.estOutLamports,
           transaction_b64: getBase64EncodedWireTransaction(signed),

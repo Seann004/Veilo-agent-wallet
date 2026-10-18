@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { address, createNoopSigner, getCompiledTransactionMessageDecoder, type Address, type Instruction } from "@solana/kit";
-import { getSwapV2Instruction } from "@orca-so/whirlpools-client";
+import { getSwapV2Instruction, getSwapV2InstructionDataDecoder } from "@orca-so/whirlpools-client";
 import { associatedTokenAddress } from "@veilo/privacy-sdk";
 import { advanceAuthority, recordFundingFinalized } from "@veilo/control/src/ledger/purchases";
 import { DEVNET_SOL_USDC_WHIRLPOOL, ORCA_WHIRLPOOL_PROGRAM, SWAP_SLIPPAGE_BPS, WRAPPED_SOL_MINT, type FundingBinding, type FundingResult } from "@veilo/contracts";
@@ -144,6 +144,23 @@ describe("devnet swap signing", () => {
     expect(world.relayer.swaps.size).toBe(0);
     tamper = {};
     expect((await w.funding.signSwap(id, id, binding)).status).toBe("finalized");
+  });
+
+  it("swaps the whole balance when someone adds USDC to the public fresh-wallet account", async () => {
+    const binding = SWAP();
+    const id = await funded("s8", binding);
+    advanceAuthority(ledger(), id, "sign_merchant");
+    const f = w.store.funding(id)!;
+    const ata = (await associatedTokenAddress(address(f.fresh_wallet), world.ctx.mint)).address;
+    world.chain.balances.set(ata, f.payout - 1n);
+    expect((await w.funding.signSwap(id, id, binding)).status).toBe("not_ready");
+    expect(quotes).toBe(0);
+    world.chain.balances.set(ata, f.payout + 1n);
+    expect((await w.funding.signSwap(id, id, binding)).status).toBe("finalized");
+    expect(w.store.swap(id)!.input_amount).toBe(f.payout + 1n);
+    const { req } = [...world.relayer.swaps.values()][0]!;
+    const msg = getCompiledTransactionMessageDecoder().decode(decodeWireTransaction(req.transaction).messageBytes);
+    expect(getSwapV2InstructionDataDecoder().decode(new Uint8Array(msg.instructions[2]!.data!)).amount).toBe(f.payout + 1n);
   });
 
   it("keeps a signed swap and resubmits the same bytes when the relayer was down", async () => {
