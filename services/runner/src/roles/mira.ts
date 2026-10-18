@@ -1,6 +1,6 @@
 import { SPONSORED_PLANNING_LABEL } from "@veilo/contracts/gateway";
 import type { ControlReply } from "../control-client";
-import { BYOK_LABEL, buy, delivered, outcomeText, plan, runAi, tryTool, type CatalogItem, type RoleContext, type RoleOutcome } from "./common";
+import { BYOK_LABEL, buy, delivered, outcomeText, plan, runAi, step, tryTool, type CatalogItem, type RoleContext, type RoleOutcome } from "./common";
 
 interface Draft {
   channel: string;
@@ -36,6 +36,7 @@ export async function runMira(ctx: RoleContext): Promise<RoleOutcome> {
     startDate?: string;
     handoff?: { title: string; content: string; artifactId: string };
   };
+  await step(ctx, "Checking services and budget");
   const catalogReply = await tryTool(ctx, "catalog_lookup");
   await tryTool(ctx, "budget_summary");
   const catalog: CatalogItem[] = Array.isArray(catalogReply.body?.items) ? catalogReply.body.items : [];
@@ -43,6 +44,7 @@ export async function runMira(ctx: RoleContext): Promise<RoleOutcome> {
 
   let research = "";
   if (brief.handoff) {
+    await step(ctx, "Reading the approved research");
     const planned = await plan(
       ctx,
       "condense approved research",
@@ -62,6 +64,7 @@ export async function runMira(ctx: RoleContext): Promise<RoleOutcome> {
     ...(research ? { brief: `${brief.deliverables ?? ""}\nResearch (owner-approved handoff, demo fixture data):\n${research}`.slice(0, 16_000) } : brief.deliverables ? { brief: brief.deliverables } : {}),
   };
   // The owner's own model first; a paid content package only if no provider is set.
+  await step(ctx, "Writing the content package");
   const own = await runAi(ctx, "content-package", input);
   if (!own && !item) {
     ctx.notes.push("No model provider is set and content-package via direct x402 is not in this agent's approved catalog.");
@@ -99,6 +102,7 @@ export async function runMira(ctx: RoleContext): Promise<RoleOutcome> {
     return { taskState: "incomplete", summary: { purchase: outcomeText(r), artifactId: saved.body?.id ?? null } };
   }
 
+  await step(ctx, "Saving drafts and calendar");
   const draftIds: string[] = [];
   for (const d of result.drafts.slice(0, 3)) {
     const saved = await tryTool(ctx, "save_artifact", {

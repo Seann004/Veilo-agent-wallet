@@ -55,6 +55,9 @@ describe("custom agent (template-driven)", () => {
     expect(summary.hire.proposalId).toBeDefined();
     expect(summary.results).toBe(1);
     expect(summary.toolCalls).toBeLessThanOrEqual(8);
+    // Each step was reported for the owner's live view, and reporting did not use the tool allowance.
+    const steps = s.env.db.prepare("SELECT label FROM task_progress WHERE task_id = ? ORDER BY id").pluck().all(run.body.taskId) as string[];
+    expect(steps).toEqual(["Checking tools and budget", "Planning the task", "Searching the marketplace", "Deciding whether to hire a specialist", "Proposing a specialist hire", "Saving the result"]);
     // The search went to the public catalogue with no controller signature.
     expect(s.market.calls.find((c) => c.path.startsWith("/marketplace/listings"))?.path).toBe("/marketplace/listings?q=crm%20comparison&limit=10");
     // The proposal carries no recipient, price or approval: only the contract fields.

@@ -10,6 +10,7 @@ import {
   parseJsonObject,
   plan,
   runAi,
+  step,
   runProposedCalls,
   stripUnlistedUrls,
   tryTool,
@@ -122,6 +123,7 @@ async function docsEvidence(ctx: RoleContext, question: string): Promise<DocsEvi
 export async function runPrince(ctx: RoleContext, fetchPolicy: SafeFetchPolicy): Promise<RoleOutcome> {
   const input = ctx.task.input as { question: string; sources?: string[]; handoffToAgentId?: string; onchain?: unknown };
   const question = input.question;
+  await step(ctx, "Checking services and budget");
   const catalogReply = await tryTool(ctx, "catalog_lookup");
   const budgetReply = await tryTool(ctx, "budget_summary");
   const catalog: CatalogItem[] = Array.isArray(catalogReply.body?.items) ? catalogReply.body.items : [];
@@ -144,6 +146,7 @@ export async function runPrince(ctx: RoleContext, fetchPolicy: SafeFetchPolicy):
   const comparison = options.map((o) => `- ${o.item.sku}: ${o.price} test-USDC base units, ${o.fits ? "fits the task, per-purchase and agent budgets" : "does not fit the current budget"}`);
 
   // Planning call 1: choose the dataset. Invalid or unavailable output falls back deterministically.
+  await step(ctx, "Planning the research");
   const planText = await plan(
     ctx,
     "choose research dataset",
@@ -163,6 +166,7 @@ export async function runPrince(ctx: RoleContext, fetchPolicy: SafeFetchPolicy):
   let records: EvidenceRecord[] = [];
   let dataPurchaseId: string | null = null;
   if (chosen) {
+    await step(ctx, `Buying research data (${chosen.item.sku})`);
     const r = await buy(ctx, chosen.item, `data:${chosen.item.sku}`, { query: question.slice(0, 500) }, rationale);
     paid.push({ purchaseId: r.body?.purchase?.id ?? null, sku: chosen.item.sku, path: "private_x402", price: chosen.price.toString(), usage: "0", outcome: outcomeText(r) });
     if (delivered(r)) {
@@ -182,6 +186,7 @@ export async function runPrince(ctx: RoleContext, fetchPolicy: SafeFetchPolicy):
       .join("\n")
       .slice(0, 20_000);
     const analyzeInput = { text: evidenceText, question: question.slice(0, 1_000) };
+    await step(ctx, "Analyzing the evidence");
     const own = await runAi(ctx, "analyze", analyzeInput);
     const prepaid = own ? undefined : catalog.find((c) => c.sku === "analyze" && c.paymentPath === "prepaid_credits");
     const perCall = own ? undefined : catalog.find((c) => c.sku === "analyze" && c.paymentPath === "private_x402");

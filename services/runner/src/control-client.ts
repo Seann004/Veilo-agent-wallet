@@ -171,6 +171,11 @@ export class ControlClient {
     return this.request("POST", `/worker/jobs/${jobId}/complete`, body);
   }
 
+  /** Reports one step label for the owner's live view. Not a model tool and not counted against any bound. */
+  progress(taskId: string, label: string): Promise<ControlReply> {
+    return this.request("POST", `/worker/tasks/${taskId}/progress`, { label });
+  }
+
   task(taskId: string): Promise<ControlReply> {
     return this.request("GET", `/worker/tasks/${taskId}`);
   }

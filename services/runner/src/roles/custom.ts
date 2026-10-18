@@ -10,6 +10,8 @@ import {
   plan,
   PLAN_USER_MAX_CHARS,
   runAi,
+  step,
+  hostOf,
   stripUnlistedUrls,
   tryTool,
   type CatalogItem,
@@ -81,6 +83,7 @@ interface PageResult {
 /** Opens one public page read-only after control authorizes it; its text is fenced untrusted data. */
 async function readPage(ctx: RoleContext, url: unknown, index: number): Promise<PageResult | undefined> {
   if (typeof url !== "string" || !ctx.browser) return undefined;
+  await step(ctx, `Reading page ${hostOf(url)}`);
   let permit;
   try {
     permit = await ctx.client.browsePermit(ctx.taskId, url, ctx);
@@ -134,6 +137,7 @@ async function callConnector(ctx: RoleContext, tools: ConnectorTool[], proposed:
     return undefined;
   }
   const args = p?.args !== null && typeof p?.args === "object" && !Array.isArray(p.args) ? (p.args as Record<string, unknown>) : {};
+  await step(ctx, `Calling connector ${match.connectorId} / ${match.tool}`);
   let r;
   try {
     r = await ctx.client.connectorCall(ctx.taskId, { connectorId: match.connectorId, tool: match.tool, args }, ctx);
@@ -233,6 +237,7 @@ const listingLine = (l: ListingResult, i: number): string =>
 
 /** Completes the task with one analysis over the gathered data: the owner's model key first, then prepaid credits, then per call. */
 async function doTheWork(ctx: RoleContext, catalog: CatalogItem[], objective: string, material: string): Promise<{ text: string; purchase: string } | undefined> {
+  await step(ctx, "Working on the answer");
   const own = await runAi(ctx, "analyze", { text: material.slice(0, 20_000), question: objective.slice(0, 1_000) });
   if (own) return { text: stripUnlistedUrls(own.text ?? "", NO_URLS).text, purchase: `${BYOK_LABEL} (${own.model}), no USDC spent` };
   const prepaid = catalog.find((c) => c.sku === "analyze" && c.paymentPath === "prepaid_credits");
@@ -242,6 +247,7 @@ async function doTheWork(ctx: RoleContext, catalog: CatalogItem[], objective: st
     return undefined;
   }
   const input = { text: material.slice(0, 20_000), question: objective.slice(0, 1_000) };
+  await step(ctx, "Buying an analysis");
   let r = prepaid ? await buy(ctx, prepaid, "analyze:prepaid", input, "Complete the owner's task with AI credits") : undefined;
   const refusedBeforeUse = r !== undefined && !delivered(r) && (r.body?.purchase?.states?.fulfilment === "abandoned" || r.body?.purchase === undefined);
   if ((!r || refusedBeforeUse) && perCall) r = await buy(ctx, perCall, "analyze:per-call", input, "Complete the owner's task: AI credits unavailable");
@@ -268,6 +274,7 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
   const instructions = String(input.instructions ?? "").slice(0, 8_000);
   const context = String(input.context ?? "").slice(0, 8_000);
 
+  await step(ctx, "Checking tools and budget");
   const tools = await attachedTools(ctx);
   const catalogReply = await tryTool(ctx, "catalog_lookup");
   const catalog: CatalogItem[] = Array.isArray(catalogReply.body?.items) ? catalogReply.body.items : [];
@@ -287,6 +294,7 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
   let wantsSwap = false;
   let proposedPages: unknown[] = [];
   if (query === undefined || tools.length > 0 || swapItem || canBrowse || workflows.length > 0) {
+    await step(ctx, "Planning the task");
     const planned = parseJsonObject(
       await plan(
         ctx,
@@ -312,6 +320,7 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
   // The swap's terms are the owner's; the agent only decides whether the task calls for it.
   let swap: { outcome: string; result: Record<string, unknown> | null; ok: boolean } | undefined;
   if (wantsSwap && swapItem) {
+    await step(ctx, "Swapping USDC for SOL");
     const r = await buy(ctx, swapItem, "swap", {}, "The owner's task asked for a USDC to SOL swap");
     const p = r.body?.purchase;
     // An authorized swap that is still settling is not a failure: control finishes it after this task ends.
@@ -342,6 +351,7 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
   let listings: ListingResult[] = [];
   let searched = false;
   if (wantsSearch && input.listingId === undefined) {
+    await step(ctx, "Searching the marketplace");
     const search = await tryTool(ctx, "marketplace_search", { q: query });
     searched = search.status === 200;
     listings = listingsFrom(search.body);
@@ -362,6 +372,7 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
   let workflowPick: { workflow: AssignedWorkflow; inputs: Record<string, string> } | undefined;
   if (chosen === undefined && (listings.length > 0 || workflows.length > 0)) {
     const offerWorkflows = workflows.length > 0;
+    await step(ctx, offerWorkflows ? "Choosing a workflow" : "Deciding whether to hire a specialist");
     const picked = parseJsonObject(
       await plan(
         ctx,
@@ -402,6 +413,7 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
   let workflowRun: { runId?: string; status?: string; code?: string; message?: string; steps?: number; total?: string; title: string; versionId: string; inputs: Record<string, string> } | null = null;
   if (workflowPick) {
     const { workflow: wf, inputs } = workflowPick;
+    await step(ctx, `Proposing workflow run: ${wf.title}`);
     const r = await tryTool(ctx, "propose_workflow_run", { versionId: wf.versionId, runInputs: inputs, idempotencyKey: `task:${ctx.taskId}:wfrun:${wf.versionId}` });
     workflowRun =
       r.status === 202
@@ -411,6 +423,7 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
 
   let hire: { proposalId?: string; state?: string; code?: string } | null = null;
   if (chosen !== undefined) {
+    await step(ctx, "Proposing a specialist hire");
     const r = await tryTool(ctx, "propose_hire", { listingId: chosen, brief, idempotencyKey: `task:${ctx.taskId}:hire:${chosen}` });
     hire = r.status === 202 ? { proposalId: r.body.proposalId, state: r.body.state } : { code: r.body?.error?.code ?? `HTTP ${r.status}` };
   }
@@ -463,6 +476,7 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
     ...ctx.notes.map((n) => `Note: ${n}`),
     `${ctx.client.planningCalls} ${SPONSORED_PLANNING_LABEL} call(s).`,
   ];
+  await step(ctx, "Saving the result");
   const saved = await tryTool(ctx, "save_artifact", {
     kind: "research_brief",
     title: clean(objective, 150).slice(0, 200),

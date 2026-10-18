@@ -36,6 +36,27 @@ export interface RoleOutcome {
   summary: Record<string, unknown>;
 }
 
+/** The host of a URL, or a fixed word when it does not parse; progress labels never carry paths or queries. */
+export function hostOf(url: unknown): string {
+  try {
+    return new URL(String(url)).hostname || "a page";
+  } catch {
+    return "a page";
+  }
+}
+
+/**
+ * Reports a step to the owner's live view. Best effort: a failed report never changes the run.
+ * Labels are short fixed phrases plus hosts or IDs; control sanitizes them again.
+ */
+export async function step(ctx: RoleContext, label: string): Promise<void> {
+  try {
+    await ctx.client.progress(ctx.taskId, label.replace(/\s+/g, " ").trim().slice(0, 120));
+  } catch {
+    // Progress is informational only.
+  }
+}
+
 export async function tool(ctx: RoleContext, name: string, args: Record<string, unknown> = {}): Promise<ControlReply> {
   return ctx.client.tool(name, args, { taskId: ctx.taskId, bounds: ctx.bounds, now: ctx.now });
 }
