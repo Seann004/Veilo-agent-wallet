@@ -18,7 +18,7 @@ import { join } from "node:path";
 import { address, createKeyPairSignerFromBytes, createKeyPairSignerFromPrivateKeyBytes, getBase58Decoder, signBytes, type KeyPairSigner } from "@solana/kit";
 import { createClient } from "@supabase/supabase-js";
 import { findRepoRoot, loadConfig, loadDotEnv, verifyChainIdentity } from "@veilo/contracts";
-import { CAROUSEL_SLIDE_COUNT_RULE, CAROUSEL_SLIDES, mcpToolDigest, MARKETPLACE_LIMITS, PROVIDER_MANIFESTS, TEST_TOKEN_LABEL, type ToolIo, type ToolProvider, type WorkflowVersionInput } from "@veilo/contracts/marketplace";
+import { CAROUSEL_SLIDE_COUNT_RULE, CAROUSEL_SLIDES, mcpTemplate, mcpToolDigest, MARKETPLACE_LIMITS, PROVIDER_MANIFESTS, templatedToolPin, TEST_TOKEN_LABEL, type ToolIo, type ToolProvider, type WorkflowVersionInput } from "@veilo/contracts/marketplace";
 import { createApp } from "../../services/marketplace/src/app";
 import { createRpcChain } from "../../services/marketplace/src/chain";
 import type { MarketplaceConfig } from "../../services/marketplace/src/config";
@@ -505,24 +505,43 @@ async function main(): Promise<void> {
     );
     tool.set("qn-wallet", { toolKind: "external", toolId: qnWallet.toolId, price: qnWallet.price });
 
-    // 4b. Remote MCP connectors: only tools that read public documentation are proposed, pinned
-    // to the live tools/list read now, and approved only when the digests still match.
-    const CONNECTORS = [
+    // 4b. Remote MCP connectors: only tools that read public data are proposed, pinned to the live
+    // tools/list read now, and approved only when the digests still match. Templated tools run a
+    // fixed Veilo template through the upstream code tool, whose digest each template pin records;
+    // the code tool itself is never proposed. Connector terms are immutable, so the market-data
+    // tools live under their own id rather than being added to coingecko-docs.
+    const CONNECTORS: Array<{ id: string; title: string; endpoint: string; tools: string[]; templates?: string[]; note?: string }> = [
       { id: "solana-developer-docs", title: "Solana Developer MCP (docs)", endpoint: "https://mcp.solana.com/mcp", tools: ["Solana_Documentation_Search", "get_documentation", "list_sections"] },
       { id: "meteora-docs", title: "Meteora docs MCP", endpoint: "https://docs.meteora.ag/mcp", tools: ["search_meteora_documentation"] },
       { id: "coingecko-docs", title: "CoinGecko MCP (docs search)", endpoint: "https://mcp.api.coingecko.com/mcp", tools: ["search_docs"] },
+      {
+        id: "coingecko-market",
+        title: "CoinGecko market data",
+        endpoint: "https://mcp.api.coingecko.com/mcp",
+        tools: ["search_docs"],
+        templates: ["coingecko_simple_price", "coingecko_trending", "coingecko_search"],
+        note: "read-only CoinGecko public API through fixed Veilo templates on the pinned execute tool; docs search; digests verified against the live tools/list",
+      },
     ];
     for (const c of CONNECTORS) {
       if (done(`connector.${c.id}`)) continue;
       const client = new McpClient(c.endpoint, { timeoutMs: 20_000, maxBytes: 4_000_000, publicOnly: true });
       await client.initialize();
-      const live = (await client.listTools()).filter((t) => c.tools.includes(t.name));
+      const listed = await client.listTools();
+      const live = listed.filter((t) => c.tools.includes(t.name));
       if (live.length !== c.tools.length) throw new Error(`${c.id}: expected tools ${c.tools.join(", ")} not all offered`);
-      await call("POST", "/tools/connectors", sessions.get("ledger-lab")!.token, { id: c.id, title: c.title, endpoint: c.endpoint, tools: live });
+      const upstreamNames = [...new Set((c.templates ?? []).map((n) => mcpTemplate(n)!.upstream))];
+      const upstream = new Map(listed.filter((t) => upstreamNames.includes(t.name)).map((t) => [t.name, mcpToolDigest(t)]));
+      if (upstream.size !== upstreamNames.length) throw new Error(`${c.id}: upstream tools ${upstreamNames.join(", ")} not all offered`);
+      const templated = (c.templates ?? []).map((n) => templatedToolPin(n, upstream.get(mcpTemplate(n)!.upstream)!));
+      await call("POST", "/tools/connectors", sessions.get("ledger-lab")!.token, { id: c.id, title: c.title, endpoint: c.endpoint, tools: [...live, ...templated] });
       const recheck = new Map((await client.listTools()).map((t) => [t.name, mcpToolDigest(t)]));
-      if (!live.every((t) => recheck.get(t.name) === mcpToolDigest(t))) throw new Error(`${c.id}: tools changed during review; not approved`);
-      await call("POST", `/operator/connectors/${c.id}/review`, operatorToken, { approve: true, note: "read-only documentation tools; digests verified against the live tools/list" });
-      step(`connector.${c.id}`, { tools: live.map((t) => ({ name: t.name, sha256: mcpToolDigest(t) })) });
+      if (!live.every((t) => recheck.get(t.name) === mcpToolDigest(t)) || ![...upstream].every(([n, d]) => recheck.get(n) === d)) throw new Error(`${c.id}: tools changed during review; not approved`);
+      await call("POST", `/operator/connectors/${c.id}/review`, operatorToken, { approve: true, note: c.note ?? "read-only documentation tools; digests verified against the live tools/list" });
+      step(`connector.${c.id}`, {
+        tools: [...live, ...templated].map((t) => ({ name: t.name, sha256: mcpToolDigest(t) })),
+        ...(upstream.size > 0 ? { upstream: Object.fromEntries(upstream) } : {}),
+      });
     }
 
     // 5. Workflows. All tools are approved, so each goes live after the automated checks.
