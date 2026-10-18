@@ -242,6 +242,11 @@ export function ConnectorDrawer({
           <li key={t.name}>
             <p className="mono tool-name flush">{t.name}</p>
             <p className="small plain-text flush">{t.description || "No description."}</p>
+            {t.template ? (
+              <p className="small muted flush">
+                Fixed Veilo query run through the server&apos;s <span className="mono">{t.template.upstream}</span> tool. Agents fill in only the inputs below, never code.
+              </p>
+            ) : null}
             <SchemaView schema={t.inputSchema} />
           </li>
         ))}

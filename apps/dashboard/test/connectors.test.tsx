@@ -156,6 +156,23 @@ describe("Discover", () => {
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Solana developer docs" }));
   });
 
+  it("labels a templated tool as a fixed Veilo query on the server's code tool", async () => {
+    const market = {
+      ...SOLANA,
+      id: "coingecko-market",
+      title: "CoinGecko market data",
+      endpoint: "https://mcp.api.coingecko.com/mcp",
+      tools: [{ ...tool("coingecko_simple_price", "Live price from CoinGecko's public API."), template: { upstream: "execute", upstreamSha256: "b".repeat(64), codeSha256: "c".repeat(64) } }, tool("search_docs", "Search the CoinGecko docs.")],
+    };
+    serve(catalogue([market]));
+    render(withRole(<ConnectorsPage />));
+    fireEvent.click(await screen.findByRole("button", { name: "CoinGecko market data" }));
+    const drawer = await screen.findByRole("dialog");
+    expect(within(drawer).getByText("coingecko_simple_price")).toBeTruthy();
+    expect(within(drawer).getAllByText(/Fixed Veilo query run through the server/)).toHaveLength(1);
+    expect(within(drawer).getByText("execute").className).toContain("mono");
+  });
+
   it("uses a tablist that moves with the arrow keys", async () => {
     serve(catalogue([SOLANA]));
     render(withRole(<ConnectorsPage />));
