@@ -39,13 +39,13 @@ describe("marketplace avatars", () => {
 });
 
 describe("landing page", () => {
-  it("shows seven bots with at most three animated, three features and three steps", () => {
+  it("shows seven animated bots, three features and three steps", () => {
     vi.stubGlobal("matchMedia", (q: string) => ({ matches: false, media: q, addEventListener: () => undefined, removeEventListener: () => undefined }));
     render(<Landing />);
     const hero = screen.getByLabelText("Example agents");
     const bots = hero.querySelectorAll("canvas");
     expect(bots.length).toBe(7);
-    expect([...bots].filter((b) => b.getAttribute("data-paused") === "false").length).toBe(3);
+    expect([...bots].filter((b) => b.getAttribute("data-paused") === "false").length).toBe(7);
     expect(screen.getByRole("heading", { name: "Private pool payments" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Per-agent limits" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Hire and run workflows" })).toBeTruthy();
