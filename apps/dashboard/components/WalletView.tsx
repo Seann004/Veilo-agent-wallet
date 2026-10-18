@@ -207,7 +207,14 @@ function OwnerWalletView() {
                 onClick={() =>
                   void action.run(async () => {
                     if (!connected) return;
-                    const signature = await signAndSend(connected.wallet, connected.account, prepared.transaction);
+                    let signature: string;
+                    try {
+                      signature = await signAndSend(connected.wallet, connected.account, prepared.transaction);
+                    } catch (e) {
+                      // Nothing was sent; the next attempt prepares a fresh transaction instead of reusing an expired one.
+                      setPrepared(null);
+                      throw e;
+                    }
                     const r = await api<{ state: string }>("wallet", "/deposits/register", { method: "POST", body: { depositId: prepared.depositId, signature } });
                     setSubmitted({ signature, state: r.state });
                     await notes.reload();

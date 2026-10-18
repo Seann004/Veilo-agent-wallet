@@ -12,7 +12,9 @@ export function errorGuidance(error: ApiError): string | null {
   if (error.code === "NOT_READY") {
     return "This part isn't set up yet. It's not a failed payment or a stopped agent. Start the service (see docs/configuration.md), then retry.";
   }
-  if (error.code === "WALLET_ERROR") return "Your wallet didn't sign in. Check it's unlocked and set to Solana devnet, then try again.";
+  if (error.code === "WALLET_ERROR") {
+    return "Your wallet didn't sign. Check it's unlocked and set to Solana devnet. A prepared transaction expires after about a minute, so prepare it again and sign straight away.";
+  }
   if (error.status === 0 || error.code === "INTERNAL_ERROR") return "Couldn't reach the server. Check it's running, then retry.";
   if (error.status === 403) return "Not allowed. Reload the page; if it keeps happening, sign out and back in.";
   if (error.status >= 500) return "The service hit an error. Check Activity for the real payment state before retrying.";

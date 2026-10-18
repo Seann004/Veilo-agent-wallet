@@ -1,6 +1,7 @@
 "use client";
 
 import { getBase58Decoder } from "@solana/kit";
+import { ApiError } from "./api";
 import {
   SolanaSignAndSendTransaction,
   SolanaSignIn,
@@ -132,7 +133,13 @@ export function base64ToBytes(b64: string): Uint8Array {
 export async function signAndSend(w: Wallet, account: WalletAccount, transactionBase64: string): Promise<string> {
   const feature = (w.features as Partial<SolanaSignAndSendTransactionFeature>)[SolanaSignAndSendTransaction];
   if (!feature) throw new Error("this wallet cannot sign and send transactions");
-  const [out] = await feature.signAndSendTransaction({ account, chain: DEVNET_CHAIN, transaction: base64ToBytes(transactionBase64) });
+  let out;
+  try {
+    [out] = await feature.signAndSendTransaction({ account, chain: DEVNET_CHAIN, transaction: base64ToBytes(transactionBase64) });
+  } catch (e) {
+    // A wallet refusal or failed pre-send check is the wallet's answer, not an unreachable server.
+    throw new ApiError(0, "WALLET_ERROR", (e as Error)?.message || "the wallet did not sign or send the transaction");
+  }
   if (!out) throw new Error("the wallet returned no transaction signature");
   return getBase58Decoder().decode(out.signature);
 }

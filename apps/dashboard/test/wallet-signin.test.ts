@@ -1,6 +1,7 @@
 import type { Wallet, WalletAccount } from "@wallet-standard/base";
 import { describe, expect, it, vi } from "vitest";
-import { web3SignInAdapter } from "../lib/wallet";
+import { errorGuidance } from "../components/ui";
+import { signAndSend, web3SignInAdapter } from "../lib/wallet";
 
 const ADDRESS = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
 const account = { address: ADDRESS, publicKey: new Uint8Array(32), chains: ["solana:devnet"], features: [] } as unknown as WalletAccount;
@@ -31,5 +32,14 @@ describe("marketplace wallet sign-in adapter", () => {
     const adapter = web3SignInAdapter(w, account);
     expect(adapter.signIn).toBeUndefined();
     expect(adapter.publicKey.toBase58()).toBe(ADDRESS);
+  });
+});
+
+describe("wallet transaction signing", () => {
+  it("reports a wallet refusal as a wallet error with the wallet's own message, not an unreachable server", async () => {
+    const w = { features: { "solana:signAndSendTransaction": { version: "1.0.0", signAndSendTransaction: vi.fn(async () => { throw new Error("Unexpected error"); }) } } } as unknown as Wallet;
+    const err = await signAndSend(w, account, "AQ==").catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: "WALLET_ERROR", message: "Unexpected error" });
+    expect(errorGuidance(err as never)).toMatch(/expires after about a minute/);
   });
 });
