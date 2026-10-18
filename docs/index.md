@@ -4,7 +4,7 @@ An owner-controlled workspace for AI agents that buy approved resources within d
 
 ## Current verification status
 
-The recorded M2 pool/Echo smoke and one complete Shawn/Prince/Mira run with live inference (`2026-10-17-1eba868c`, before PR #3 merged) are **verified on devnet**. Integrated payments/recovery are **verified on local test validator** with a **fixture / mock provider**. The marketplace is implemented on `main` and passes its live RLS e2e checks; a private-pool-funded hire, a fresh post-merge run and browser-wallet signing are **not yet run**. See [current status](./guide/status.md), [running Veilo](./guide/running.md), the [demo checklist](./guide/demo.md) and [handoff gaps](./handoff.md). The setup is deterministic and for development test funds only; this is not an audited or mainnet-ready system.
+The recorded M2 pool/Echo smoke and one complete Shawn/Prince/Mira run with live inference (`2026-10-17-1eba868c`, before PR #3 merged) are **verified on devnet**. Integrated payments/recovery are **verified on local test validator** with a **fixture / mock provider**. The marketplace is implemented on `main` and passes its live RLS e2e checks; a private-pool-funded hire, a fresh post-merge run and browser-wallet signing are **not yet run**. Owner-approved devnet swaps, agents on the owner's model key, read-only browsing, reference images and CoinGecko market data are in code and tested against fakes, with no recorded devnet run. See [current status](./guide/status.md), [running Veilo](./guide/running.md), the [demo checklist](./guide/demo.md) and [handoff gaps](./handoff.md). The setup is deterministic and for development test funds only; this is not an audited or mainnet-ready system.
 
 ## Marketplace scope in v3.2
 
@@ -49,7 +49,7 @@ The merchant payment wallet and transfer are public. The intended privacy proper
 
 ## Create your own agents
 
-The workspace lets owners create and configure named agents using credit-manager, research, content and custom role templates. Shawn, Prince and Mira are seeded examples. Custom agents can search the marketplace and propose hires that the owner approves locally. All agents remain subject to workspace-wide limits.
+The workspace lets owners create and configure named agents using research, content and custom role templates (the credit-manager role remains for the seeded Shawn). Shawn, Prince and Mira are seeded examples. Custom agents do the work on the owner's own model key and, when the owner enables them, can read public web pages, call attached read-only connectors such as CoinGecko market data, swap USDC to SOL up to an owner-approved maximum per swap, and propose hires or workflow runs that the owner approves locally. See [agent workflows](./guide/agents.md). All agents remain subject to workspace-wide limits.
 
 ### Demo examples
 
@@ -64,7 +64,7 @@ The model proposes work. An independent wallet/control service authorizes money.
 ## Network and service boundaries
 
 - Settlement uses USDC on Solana devnet, which has no monetary value. SOL pays chain costs separately.
-- Real inference is paid for by the gateway operator's OpenRouter account. Devnet USDC does not replenish commercial provider funds.
+- Agent model work runs on the owner's own provider key, billed by that provider. The operator's OpenRouter account pays only for the sponsored planning trial, paid gateway inference SKUs and the recorded demo run. Devnet USDC does not replenish commercial provider funds.
 - Gateway credits are application service entitlements, not OpenRouter account credits or redeemable money.
 - Research fixtures must be labeled demo data; fixture output does not prove live search.
-- Content scheduling means planning dates and local editable posts. External social publishing is outside the current scope.
+- Content scheduling means planning dates and local editable posts. Agents have no social publishing tool; TikTok drafting and opt-in public posting exist only as marketplace seller-host tools, unverified live.
