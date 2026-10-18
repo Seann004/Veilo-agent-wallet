@@ -791,6 +791,48 @@ The reference's Cardano validators, byte orders, NFT genesis, BLS artifacts and 
 
 ---
 
+## Appendix A. Service rules outside the pool program
+
+These rules are enforced by Veilo services, not by `privacy-pool`, and are not part of protocol v1: changing them needs no new vectors, circuit artifacts or deployment manifest.
+
+### A.1 Devnet swap transaction (relayer co-signing)
+
+A swap is spent from a fresh wallet funded by `spend_private`, after control has recorded `sign_merchant` for the purchase. The relayer (`POST /swaps`, wallet credential) co-signs as fee payer only a v0 transaction with no address lookup tables, the sponsor as account 0, a valid fresh-wallet signature and exactly these instructions:
+
+| # | Program | Rule |
+|---|---|---|
+| 1 | Compute Budget | `SetComputeUnitLimit` (data tag 2, 5 bytes, no accounts) |
+| 2 | Associated Token | `CreateIdempotent` (data `[1]`): payer sponsor, ATA = fresh wallet's wrapped-SOL account, owner fresh wallet, mint wrapped SOL |
+| 3 | Orca Whirlpool `whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc` | One `swapV2`; authority fresh wallet; whirlpool `5GPCnpWwoDayCP5FVCJT1cS7dePufC5FrjPTVvPoUYnm`; mints wrapped SOL and the workspace USDC mint; the fresh wallet's own wrapped-SOL and USDC accounts; `aToB = false`, `amountSpecifiedIsInput = true`, positive amount and minimum output |
+| 4 | SPL Token | `CloseAccount` (data `[9]`) of the wrapped-SOL account to the stated destination, authority fresh wallet |
+| 5 | SPL Token | `CloseAccount` of the emptied USDC account with its rent to the sponsor |
+
+Before signing, the wallet additionally requires that instruction 3 sells exactly the fresh wallet's current USDC balance (at least the funded amount) for exactly the quoted minimum output, with slippage `SWAP_SLIPPAGE_BPS = 100`. The destination is the wallet's `OWNER_RECOVERY_ADDRESS`. The relayer's sponsor cap counts every submitted swap at its worst case (wrapped-SOL rent plus two signature fees).
+
+### A.2 Swap states in control
+
+| Event | Merchant leg | Fulfilment | Recovery |
+|---|---|---|---|
+| `sign_merchant` recorded | `not_started` → `signed` | — | — |
+| Swap finalized (fee read from the finalized transaction) | `signed` → `finalized` | `not_started` → `in_progress` → `delivered` | — |
+| Swap failed on chain, expired, or refused by the relayer before co-signing | `signed` → `expired_unsettled` | `not_started` → `abandoned` | `recoverable` |
+| Owner recovery proves no swap was signed (`POST /internal/wallet/purchases/:id/swap-not-signed`, wallet credential) | `signed` → `expired_unsettled`, reason `swap_never_signed` | `not_started` → `abandoned` | then `recoverable` |
+| Wallet refuses (`recovery_required`) | stays `signed` | — | — |
+
+The wallet records `swap.signature_produced` before the fresh wallet signs; with that record or a stored swap present, the never-signed route is refused (`SETTLEMENT_UNCERTAIN`).
+
+### A.3 Templated connector tools
+
+A templated tool approval records `template = { upstream, upstreamSha256, codeSha256 }`, where `upstreamSha256` is the digest of the live upstream tool definition (for CoinGecko, `execute` on `mcp.api.coingecko.com`) and
+
+```text
+codeSha256 = SHA-256("veilo:mcp-template:v1\n" || canonicalJson({name, host, upstream, code}))
+```
+
+over the template in `packages/contracts/src/marketplace/mcp-templates.ts`. A call validates the agent's arguments against the template's schema, inserts them as JSON literals into the fixed code and sends only `{ code }` to the upstream tool. A changed template, host or upstream digest needs a new approval; code-execution tools themselves are refused when proposed, attached or called.
+
+---
+
 ## References
 
 - circomlib Poseidon template (round table, t = nInputs + 1): https://github.com/iden3/circomlib/blob/master/circuits/poseidon.circom
