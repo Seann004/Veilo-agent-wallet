@@ -158,4 +158,24 @@ describe("privacy membership honesty", () => {
     expect(await screen.findByText(/verify the pool right now/)).toBeTruthy();
     expect(screen.queryByText(/Weak privacy: only/)).toBeNull();
   });
+
+  it("puts the demo-depositor context before a one-line weak-privacy warning", async () => {
+    const { PrivacyPanel } = await import("../components/PrivacyPanel");
+    vi.stubGlobal(
+      "fetch",
+      recordingFetch(() => ({
+        finalizedSlot: "1",
+        consistent: true,
+        pool: { minDeposit: "1", maxDeposit: "2", depositsPaused: false, liability: "700000" },
+        deposits: [{ amount: "200000", refundAuthority: "A", state: "inserted", label: "1" }],
+        spends: [],
+        exits: [],
+        approved: { labels: ["1"], version: "3", consistent: true, rule: "rule" },
+      })).impl,
+    );
+    render(<PrivacyPanel />);
+    const weak = await screen.findByText("Weak privacy: only 1 depositor, so a purchase can likely be traced to you.");
+    const demo = screen.getByText(/Demo depositors are test accounts/);
+    expect(demo.compareDocumentPosition(weak) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });
