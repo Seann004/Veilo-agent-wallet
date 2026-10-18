@@ -46,6 +46,7 @@ interface ConnectorResult {
   /** The unfenced text and fence id, so a shorter excerpt can be fenced again. */
   raw: string;
   callId: string;
+  source?: string;
 }
 
 interface AssignedWorkflow {
@@ -173,7 +174,7 @@ async function callConnector(ctx: RoleContext, tools: ConnectorTool[], proposed:
     ctx.notes.push(`Connector ${match.connectorId} output contained the data fence and was discarded.`);
     return undefined;
   }
-  return { connectorId: match.connectorId, tool: match.tool, citation: r.body.citation, fenced, raw, callId: String(r.body.callId) };
+  return { connectorId: match.connectorId, tool: match.tool, citation: r.body.citation, fenced, raw, callId: String(r.body.callId), ...(typeof r.body.source === "string" ? { source: r.body.source } : {}) };
 }
 
 /**
@@ -556,7 +557,7 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
     kind: "research_brief",
     title: clean(objective, 150).slice(0, 200),
     content,
-    ...(gathered.length > 0 ? { citations: gathered.map((g) => ({ url: g.citation, title: `${g.connectorId}/${g.tool} (read-only connector)` })) } : {}),
+    ...(gathered.length > 0 ? { citations: gathered.map((g) => ({ url: g.citation, title: g.source ? `${g.source} via ${g.connectorId}/${g.tool}` : `${g.connectorId}/${g.tool} (read-only connector)` })) } : {}),
   });
   const ok = saved.status === 201;
   const saveFailure = ok ? null : saveFailureText(saved);

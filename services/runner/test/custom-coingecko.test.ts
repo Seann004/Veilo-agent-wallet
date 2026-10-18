@@ -106,6 +106,6 @@ describe("custom agent reading live prices through a templated connector tool", 
       .prepare("SELECT r.citations_json FROM artifact a JOIN artifact_revision r ON r.artifact_id = a.id AND r.revision = a.current_revision WHERE a.task_id = ?")
       .pluck()
       .get(run.body.taskId) as string;
-    expect(JSON.parse(citations)).toEqual([expect.objectContaining({ url: `mcp:coingecko-market/coingecko_simple_price#call=${callId}` })]);
+    expect(JSON.parse(citations)).toEqual([expect.objectContaining({ url: `mcp:coingecko-market/coingecko_simple_price#call=${callId}`, title: expect.stringContaining("CoinGecko (mcp.api.coingecko.com)") })]);
   });
 });
