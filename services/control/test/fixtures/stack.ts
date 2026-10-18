@@ -27,6 +27,7 @@ import { PermitSigner } from "../../src/integration/permits";
 import { activateDefaults, addNotes, createEnv, type TestEnv } from "../helpers";
 import { TestFundingProvider } from "./test-funding-provider";
 import type { AiService } from "../../src/ai/service";
+import type { WorkflowRunner } from "../../src/workflows/runner";
 
 const config = loadConfig({
   DEVNET_RPC_URL: "https://rpc.test.invalid",
@@ -105,6 +106,8 @@ export interface StackOptions {
   /** The owner's model provider (BYOK); absent means agents fall back to sponsored planning and paid AI. */
   ai?: (ledger: Ledger) => AiService;
   channels?: (ledger: Ledger) => ChannelService;
+  /** A workflow runner on fake marketplace ports; absent means the workflow routes answer NOT_READY. */
+  workflows?: (ledger: Ledger) => WorkflowRunner;
 }
 
 export async function makeStack(options: StackOptions = {}): Promise<Stack> {
@@ -151,6 +154,7 @@ export async function makeStack(options: StackOptions = {}): Promise<Stack> {
     return server;
   };
   const integration = build();
+  if (options.workflows) integration.workflows = options.workflows(env.ledger);
   const server = await listen(integration);
   const tokens = new Map<string, string>();
 

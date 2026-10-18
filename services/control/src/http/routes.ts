@@ -646,8 +646,9 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
          ORDER BY a.service_key, s.sku, s.payment_path`,
       )
       .all(a.workspaceId, LISTING_SERVICE_PREFIX.length, LISTING_SERVICE_PREFIX) as Array<{ service_id: string; service_key: string; status: string; sku: string; payment_path: string; price_usdc: bigint; max_fee_usdc: bigint; usage_units: bigint }>;
+    const workflows = Number(ledger.db.prepare(`SELECT count(*) FROM workflow_assignment WHERE agent_id = ? AND status = 'active' AND version_id IS NOT NULL`).pluck().get(a.agentId));
     res.json({
-      capabilities: { browse: perms.allowBrowsing },
+      capabilities: { browse: perms.allowBrowsing, workflows },
       items: rows
         .filter((s) => perms.allowedSkus.includes(s.sku) && perms.allowedPaymentPaths.includes(s.payment_path))
         .flatMap((s) => {

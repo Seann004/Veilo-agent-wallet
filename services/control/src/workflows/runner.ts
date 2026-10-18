@@ -77,6 +77,8 @@ export interface WorkflowMarketPort {
   report(cloudRunId: string, r: { status: string; stopReason: string | null; steps: StepReport[] }): Promise<void>;
   deliverable(jobId: string): Promise<{ state: string; artifacts: Array<{ sha256: string; mimeType: string; text: string }> }>;
   bindPayer(cloudRunId: string, index: number, payer: string, payerProof: string): Promise<void>;
+  /** Public catalogue title and summary of a live version; null when it is not listed. */
+  catalogEntry?(versionId: string): Promise<{ title: string; summary: string } | null>;
 }
 
 export interface HireQuote {
@@ -136,6 +138,7 @@ export interface RunRow {
   assignment_id: string | null;
   task_id: string | null;
   status: RunStatus;
+  idempotency_key: string | null;
   approved_by: string | null;
   stop_code: string | null;
   stop_reason: string | null;
@@ -281,7 +284,28 @@ export class WorkflowRunner {
   }
 
   /** Builds terms from the server's tool facts and records a run awaiting approval. */
-  async prepare(r: { versionId: string; agentId: string; runInputs: Record<string, string>; isTest: boolean; requestedBy: "owner" | "agent"; taskId?: string }): Promise<RunRow> {
+  async prepare(r: { versionId: string; agentId: string; runInputs: Record<string, string>; isTest: boolean; requestedBy: "owner" | "agent"; taskId?: string; idempotencyKey?: string }): Promise<RunRow> {
+    return (await this.#prepare(r)).run;
+  }
+
+  /**
+   * The run an agent already proposed under this key, or undefined. The same key with a different
+   * version, inputs or task is a conflict, never a second run.
+   */
+  #byKey(r: { agentId: string; versionId: string; runInputs: Record<string, string>; taskId?: string | undefined; idempotencyKey?: string | undefined }): RunRow | undefined {
+    if (r.idempotencyKey === undefined) return undefined;
+    const existing = this.ledger.db.prepare(`SELECT * FROM workflow_run WHERE agent_id = ? AND idempotency_key = ?`).get(r.agentId, r.idempotencyKey) as RunRow | undefined;
+    if (!existing) return undefined;
+    const sameInputs = runInputsDigest(JSON.parse(existing.run_inputs_json) as Record<string, string>) === runInputsDigest(r.runInputs);
+    if (existing.workflow_version_id !== r.versionId || !sameInputs || existing.task_id !== (r.taskId ?? null)) {
+      throw new ControlError("IDEMPOTENCY_CONFLICT", "this workflow run key was already used with different terms");
+    }
+    return existing;
+  }
+
+  async #prepare(r: { versionId: string; agentId: string; runInputs: Record<string, string>; isTest: boolean; requestedBy: "owner" | "agent"; taskId?: string; idempotencyKey?: string }): Promise<{ run: RunRow; existing: boolean }> {
+    const prior = this.#byKey(r);
+    if (prior) return { run: prior, existing: true };
     const v = await this.deps.market.version(r.versionId);
     if (!v.live && !r.isTest) throw new ControlError("SERVICE_NOT_ALLOWED", "workflow version is not live");
     const ws = requireWorkspace(this.ledger);
@@ -322,15 +346,18 @@ export class WorkflowRunner {
     };
     const id = this.ledger.newId();
     const now = this.ledger.now();
-    immediate(this.ledger.db, () => {
+    const raced = immediate(this.ledger.db, () => {
+      // A concurrent proposal under the same key may have been recorded while the version loaded.
+      const again = this.#byKey(r);
+      if (again) return again;
       this.ledger.db
         .prepare(
           `INSERT INTO workflow_run (id, workspace_id, agent_id, workflow_id, workflow_version_id, terms_json, approval_digest, steps_json, total_max_usdc,
-             run_inputs_json, is_test, requested_by, task_id, status, created_at_ms, updated_at_ms)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_approval', ?, ?)`,
+             run_inputs_json, is_test, requested_by, task_id, idempotency_key, status, created_at_ms, updated_at_ms)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_approval', ?, ?)`,
         )
         .run(id, ws.id, agent.id, v.workflowId, v.versionId, JSON.stringify(terms), workflowApprovalDigest(terms), JSON.stringify(stored), total,
-          JSON.stringify(r.runInputs), r.isTest ? 1 : 0, r.requestedBy, r.taskId ?? null, now, now);
+          JSON.stringify(r.runInputs), r.isTest ? 1 : 0, r.requestedBy, r.taskId ?? null, r.idempotencyKey ?? null, now, now);
       terms.steps.forEach((s, i) => {
         this.ledger.db
           .prepare(`INSERT INTO workflow_run_step (run_id, step_index, tool_kind, tool_id, recipient, max_usdc, state, updated_at_ms) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`)
@@ -345,8 +372,9 @@ export class WorkflowRunner {
         policyResult: "not_applicable",
         details: { versionId: v.versionId, total: total.toString(), isTest: r.isTest },
       });
+      return undefined;
     });
-    return this.run(id) as RunRow;
+    return raced ? { run: raced, existing: true } : { run: this.run(id) as RunRow, existing: false };
   }
 
   /** Owner approval of the exact terms; the digest the owner saw must match the stored one. */
@@ -387,6 +415,7 @@ export class WorkflowRunner {
       runInputsDigest: "0".repeat(64),
     };
     if (BigInt(v.totalMaxBaseUnits) > r.budgetUsdc) throw new ControlError("BUDGET_EXCEEDED", "budget is smaller than one run of this workflow");
+    const listed = (await this.deps.market.catalogEntry?.(v.versionId).catch(() => null)) ?? null;
     const ws = requireWorkspace(this.ledger);
     const id = this.ledger.newId();
     immediate(this.ledger.db, () => {
@@ -396,10 +425,12 @@ export class WorkflowRunner {
         .run(now, r.agentId, v.workflowId);
       this.ledger.db
         .prepare(
-          `INSERT INTO workflow_assignment (id, workspace_id, agent_id, workflow_id, approved_terms_digest, budget_usdc, status, owner_pubkey, created_at_ms, updated_at_ms)
-           VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
+          `INSERT INTO workflow_assignment (id, workspace_id, agent_id, workflow_id, approved_terms_digest, budget_usdc, status, owner_pubkey, created_at_ms, updated_at_ms,
+             version_id, title, summary, run_inputs_json, total_usdc)
+           VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run(id, ws.id, r.agentId, v.workflowId, assignmentDigest(terms), r.budgetUsdc, r.ownerPubkey, now, now);
+        .run(id, ws.id, r.agentId, v.workflowId, assignmentDigest(terms), r.budgetUsdc, r.ownerPubkey, now, now,
+          v.versionId, listed ? listed.title.slice(0, 120) : null, listed ? listed.summary.slice(0, 300) : null, JSON.stringify(v.runInputs), BigInt(v.totalMaxBaseUnits));
       writeAudit(this.ledger, { workspaceId: ws.id, scope: `agent:${r.agentId}`, actorType: "owner", actorId: null, action: "workflow.assign", policyResult: "allowed", details: { versionId: v.versionId, budget: r.budgetUsdc.toString() } });
     });
     return id;
@@ -409,8 +440,13 @@ export class WorkflowRunner {
    * An agent's proposal. It is approved without the owner only when an active assignment covers
    * these exact terms and the run fits the assignment's remaining budget; otherwise it waits.
    */
-  async propose(r: { agentId: string; versionId: string; runInputs: Record<string, string>; taskId?: string }): Promise<RunRow> {
-    const run = await this.prepare({ ...r, isTest: false, requestedBy: "agent" });
+  async propose(r: { agentId: string; versionId: string; runInputs: Record<string, string>; taskId?: string; idempotencyKey?: string }): Promise<RunRow> {
+    const prepared = await this.#prepare({ ...r, isTest: false, requestedBy: "agent" });
+    const run = prepared.run;
+    if (prepared.existing) {
+      if (run.status === "rejected" && (run.stop_code === "POLICY_DENIED" || run.stop_code === "BUDGET_EXCEEDED")) throw new ControlError(run.stop_code, run.stop_reason ?? "the run does not fit the task");
+      return run;
+    }
     const unfit = this.#taskProblem(run);
     if (unfit) {
       this.#setStatus(run, "rejected", { stop_code: unfit.code, stop_reason: unfit.reason });

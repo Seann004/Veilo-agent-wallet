@@ -116,6 +116,15 @@ export class MarketplaceWorkflowPort implements WorkflowMarketPort {
   async bindPayer(cloudRunId: string, index: number, payer: string, payerProof: string): Promise<void> {
     ok(await this.client.signed("POST", `/controller/workflow-runs/${cloudRunId}/steps/${index}/payer`, { payer, payerProof }), "payer binding refused");
   }
+
+  async catalogEntry(versionId: string): Promise<{ title: string; summary: string } | null> {
+    const r = await this.client.publicGet("/marketplace/workflows?limit=100");
+    if (r.status !== 200) return null;
+    const list = (r.body as { workflows?: unknown } | undefined)?.workflows;
+    const hit = Array.isArray(list) ? (list as Array<Record<string, unknown>>).find((w) => w.version_id === versionId) : undefined;
+    if (!hit || typeof hit.title !== "string") return null;
+    return { title: hit.title, summary: typeof hit.summary === "string" ? hit.summary : "" };
+  }
 }
 
 /** Listing steps reuse the marketplace bridge: the hire, its quote checks and its private payment. */
