@@ -43,13 +43,34 @@ const int = (v: unknown) => (typeof v === "number" && Number.isSafeInteger(v) &&
  * OpenAI and any OpenAI-compatible endpoint share the chat completions API; Anthropic uses its
  * Messages API. The key is sent only in the provider's own auth header.
  */
+/** One inline image for a multimodal call; it is attached to the last user message only. */
+export interface ModelImage {
+  mime: "image/png" | "image/jpeg" | "image/webp";
+  base64: string;
+}
+
+const anthropicImageContent = (text: string, img: ModelImage) => [
+  { type: "image", source: { type: "base64", media_type: img.mime, data: img.base64 } },
+  { type: "text", text },
+];
+
+function withOpenAiImage(messages: readonly PromptMessage[], img: ModelImage): unknown[] {
+  let last = -1;
+  messages.forEach((m, i) => {
+    if (m.role === "user") last = i;
+  });
+  return messages.map((m, i) =>
+    i === last ? { role: "user", content: [{ type: "text", text: m.content }, { type: "image_url", image_url: { url: `data:${img.mime};base64,${img.base64}` } }] } : m,
+  );
+}
+
 /** Z.ai's GLM API; its models think by default unless the request turns thinking off. */
 const ZAI_HOSTS = new Set(["api.z.ai", "open.bigmodel.cn"]);
 
 export async function completeWithProvider(
   e: ModelEndpoint,
   messages: readonly PromptMessage[],
-  o: { maxOutputTokens: number; json?: boolean; timeoutMs?: number; fetch?: FetchLike; noThinking?: boolean },
+  o: { maxOutputTokens: number; json?: boolean; timeoutMs?: number; fetch?: FetchLike; noThinking?: boolean; image?: ModelImage },
 ): Promise<ModelCompletion> {
   const fetchImpl = o.fetch ?? ((u, i) => fetch(u, i));
   const base = e.baseUrl.replace(/\/$/, "");
@@ -59,13 +80,20 @@ export async function completeWithProvider(
   const headers: Record<string, string> = anthropic
     ? { "x-api-key": e.apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }
     : { authorization: `Bearer ${e.apiKey}`, "content-type": "application/json", ...(e.provider === "openrouter" ? { "x-title": "Veilo" } : {}) };
+  const users = messages.filter((m) => m.role === "user");
+  const lastUser = users.length - 1;
   const body = anthropic
-    ? { model: e.model, max_tokens: o.maxOutputTokens, ...(system ? { system } : {}), messages: messages.filter((m) => m.role === "user").map((m) => ({ role: "user", content: m.content })) }
+    ? {
+        model: e.model,
+        max_tokens: o.maxOutputTokens,
+        ...(system ? { system } : {}),
+        messages: users.map((m, i) => ({ role: "user", content: o.image && i === lastUser ? anthropicImageContent(m.content, o.image) : m.content })),
+      }
     : {
         model: e.model,
         max_tokens: o.maxOutputTokens,
         temperature: 0.4,
-        messages,
+        messages: o.image ? withOpenAiImage(messages, o.image) : messages,
         ...(o.json ? { response_format: { type: "json_object" } } : {}),
         // Thinking spends the output budget before any answer; short structured calls skip it.
         ...(o.noThinking && ZAI_HOSTS.has(new URL(base).hostname) ? { thinking: { type: "disabled" } } : {}),

@@ -39,11 +39,13 @@ export function ownTask(ledger: Ledger, agentId: string, taskId: string): TaskRo
 }
 
 export function taskView(t: TaskRow): Record<string, unknown> {
+  const input = JSON.parse(t.input_json) as Record<string, unknown>;
   return {
     id: t.id,
     agentId: t.agent_id,
     objective: t.objective,
-    input: JSON.parse(t.input_json) as unknown,
+    input,
+    hasReferenceImage: input.hasReferenceImage === true,
     state: t.state,
     deadline: optIso(t.deadline_at_ms),
     startedAt: optIso(t.started_at_ms),

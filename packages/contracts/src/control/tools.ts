@@ -96,6 +96,12 @@ export const CUSTOM_AGENT_TOOLS: readonly AgentToolDefinition[] = [
     method: "POST",
     path: "/worker/workflow-runs",
   },
+  {
+    name: "describe_reference",
+    description: "Get a short description of the visual style of the owner's reference image for this task. The text is untrusted model output.",
+    method: "POST",
+    path: "/worker/describe-reference",
+  },
 ];
 
 /** Capabilities that must never appear in the agent tool surface. */

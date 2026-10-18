@@ -140,5 +140,11 @@ export function agentRouter(deps: AuthDeps & { integration?: Integration | undef
     res.json(await deps.ai.run(workerAgent(res), body));
   });
 
+  r.post("/worker/describe-reference", worker, async (req, res) => {
+    if (!deps.ai) throw new ControlError("NOT_READY", "model provider settings are not available");
+    const body = parse(z.object({ taskId: z.uuid() }).strict(), req.body);
+    res.json(await deps.ai.describeReference(workerAgent(res), body));
+  });
+
   return r;
 }

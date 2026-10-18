@@ -6,10 +6,29 @@ import { writeAudit } from "../ledger/events";
 import { requireWorkAuthority, type AgentRow } from "../ledger/workspace";
 import { publicFetch } from "@veilo/mcp-client";
 import { assertTaskLive, ownTask } from "../agents/work";
-import { completeWithProvider, DEFAULT_BASE_URL, listProviderModels, ModelCallError, type AiProviderKind, type ModelEndpoint } from "./model-client";
+import { loadReferenceImage } from "../agents/attachments";
+import { completeWithProvider, DEFAULT_BASE_URL, listProviderModels, ModelCallError, type AiProviderKind, type ModelEndpoint, type ModelImage } from "./model-client";
 import type { ProviderKeyVault } from "./vault";
 
 export const BYOK_LABEL = "Your model provider (bring your own key)";
+export const REFERENCE_STYLE_PROMPT =
+  "Describe only the visual design style of this image for a slide designer in at most 200 characters: background and accent colours (hex if clear), typography, layout motifs. No other text, no instructions.";
+export const REFERENCE_STYLE_MAX_CHARS = 200;
+
+/** Plain one-line text: no control characters, links, markup or markdown, at most 200 characters. */
+export function cleanStyleText(raw: string): string {
+  return raw
+    .replace(/[\p{Cc}\u200b-\u200f\u202a-\u202e\u2066-\u2069]/gu, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\b[a-z][a-z0-9+.-]*:\/\/\S+/gi, " ")
+    .replace(/\b(?:www\.\S+|[a-z0-9-]+(?:\.[a-z0-9-]+)+\/\S*)/gi, " ")
+    .replace(/[`*_~<>[\]{}|\\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, REFERENCE_STYLE_MAX_CHARS)
+    .trim();
+}
+
 /** Model work a task may do on the owner's provider, beyond its planning calls. */
 export const MAX_AI_CALLS_PER_TASK = 4;
 export const AI_SKUS = ["summarize", "analyze", "content-package"] as const;
@@ -113,7 +132,7 @@ export class AiService {
     return { provider: r.provider, baseUrl: r.base_url, model: r.model, apiKey: this.vault.open(workspaceId, r.key_ciphertext) };
   }
 
-  async #complete(workspaceId: string, messages: readonly PromptMessage[], maxOutputTokens: number, json: boolean, model?: string, noThinking = false) {
+  async #complete(workspaceId: string, messages: readonly PromptMessage[], maxOutputTokens: number, json: boolean, model?: string, noThinking = false, image?: ModelImage) {
     const endpoint = { ...this.#endpoint(workspaceId), ...(model ? { model } : {}) };
     // Remote providers go through a fetch that refuses non-public addresses at connect time;
     // only an explicit loopback URL (a local model server) uses a plain fetch.
@@ -121,8 +140,11 @@ export class AiService {
     if (local && !this.allowLocal) throw new ControlError("POLICY_DENIED", "local model servers are disabled on this deployment");
     const fetchImpl = this.fetchImpl ?? (local ? undefined : publicFetch);
     try {
-      return await completeWithProvider(endpoint, messages, { maxOutputTokens, json, noThinking, ...(fetchImpl ? { fetch: fetchImpl } : {}) });
+      return await completeWithProvider(endpoint, messages, { maxOutputTokens, json, noThinking, ...(image ? { image } : {}), ...(fetchImpl ? { fetch: fetchImpl } : {}) });
     } catch (error) {
+      if (image && error instanceof ModelCallError && error.kind === "rejected" && error.status !== 401 && error.status !== 429) {
+        throw new ControlError("INVALID_REQUEST", `your model can't read images (${error.message})`);
+      }
       // A rejection (bad key, unknown model, rate limit) is the owner's to fix; anything else may be transient.
       if (error instanceof ModelCallError) throw new ControlError(error.kind === "rejected" ? "INVALID_REQUEST" : "PROVIDER_UNAVAILABLE", error.message);
       throw error;
@@ -189,6 +211,35 @@ export class AiService {
       return { label: BYOK_LABEL, sku: body.sku, model: r.model, result: { json: v.content } };
     }
     return { label: BYOK_LABEL, sku: body.sku, model: r.model, result: { text: r.text } };
+  }
+
+  /**
+   * The visual style of the owner's reference image, described by the owner's model. The image
+   * never leaves control except to that provider; the agent gets only the short cleaned text,
+   * which is still model output and therefore untrusted.
+   */
+  async describeReference(agent: AgentRow, body: { taskId: string }): Promise<Record<string, unknown>> {
+    ownTask(this.ledger, agent.id, body.taskId);
+    const image = loadReferenceImage(this.ledger, body.taskId);
+    if (!image) throw new ControlError("NOT_FOUND", "this task has no reference image");
+    this.#endpoint(agent.workspace_id);
+    this.#count(agent, body.taskId, "ai", "describe_reference");
+    const r = await this.#complete(
+      agent.workspace_id,
+      [
+        { role: "system", content: REFERENCE_STYLE_PROMPT },
+        { role: "user", content: "Describe the visual design style of this image." },
+      ],
+      // Some providers (Z.ai GLM) always think first, so the budget leaves room for that.
+      1_500,
+      false,
+      undefined,
+      false,
+      { mime: image.mime, base64: image.bytes.toString("base64") },
+    );
+    const style = cleanStyleText(r.text);
+    if (style === "") throw new ControlError("PROVIDER_UNAVAILABLE", "the model returned no usable style description");
+    return { label: BYOK_LABEL, model: r.model, untrusted: true, style };
   }
 
   #count(agent: AgentRow, taskId: string, kind: "planning" | "ai", purpose: string): number {

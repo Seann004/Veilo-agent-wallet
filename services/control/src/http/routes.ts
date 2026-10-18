@@ -43,6 +43,7 @@ import { enqueueJob, jobView } from "../ledger/jobs";
 import { decidePurchase, getPurchaseRow, purchaseView, type PurchaseRow } from "../ledger/purchases";
 import { activity, agentBudget, createTask, requestHandoff, saveArtifact } from "../ledger/summaries";
 import { chargeToolCall, getTask, validateResearchCitations } from "../agents/work";
+import { parseReferenceImage, saveReferenceImage, type ReferenceImage } from "../agents/attachments";
 import type { Integration } from "../integration";
 import { fullBalances } from "../integration/balances";
 import { RETRY_MARKER } from "../scheduler/scheduler";
@@ -417,13 +418,26 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     } else {
       let input: Record<string, unknown>;
       let objective = body.objective;
+      let referenceImage: ReferenceImage | undefined;
       const jobKind = agent.role === "research" ? "research" : agent.role === "custom" ? "custom" : "content";
       if (agent.role === "custom") {
-        const parsed = customTaskInputSchema.safeParse(body.input ?? {});
+        const { referenceImage: rawImage, ...rest } = body.input ?? {};
+        if (rawImage !== undefined) {
+          if (guest) denyGuestRun(ledger, guest, agent.id, "guests cannot attach a reference image");
+          referenceImage = parseReferenceImage(rawImage);
+        }
+        const parsed = customTaskInputSchema.safeParse(rest);
         if (!parsed.success) throw new ControlError("INVALID_REQUEST", parsed.error.issues.map((i) => `input.${i.path.join(".")}: ${i.message}`).join("; "));
         if (objective === undefined) throw new ControlError("INVALID_REQUEST", "objective is required for a custom agent task");
         // Instructions are snapshotted from the owner's agent record; depth 0 marks an owner-started task.
-        input = { ...parsed.data, instructions: agent.instructions, template: agent.template, [MARKETPLACE_DELEGATION_DEPTH_KEY]: 0 };
+        // The image itself is stored apart from the input so worker task reads never carry it.
+        input = {
+          ...parsed.data,
+          instructions: agent.instructions,
+          template: agent.template,
+          [MARKETPLACE_DELEGATION_DEPTH_KEY]: 0,
+          ...(referenceImage ? { hasReferenceImage: true } : {}),
+        };
       } else if (agent.role === "research") {
         const parsed = researchTaskInputSchema.safeParse({ question: objective, ...(body.input ?? {}) });
         if (!parsed.success) throw new ControlError("INVALID_REQUEST", parsed.error.issues.map((i) => `input.${i.path.join(".")}: ${i.message}`).join("; "));
@@ -462,6 +476,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
           limitUsdc: body.taskLimitTestUsdc,
           deadlineMs: body.deadline === undefined ? null : Date.parse(body.deadline),
         });
+        if (referenceImage) saveReferenceImage(ledger, task.id, referenceImage);
         return recordGuestRun(
           enqueueJob(ledger, {
             workspaceId,

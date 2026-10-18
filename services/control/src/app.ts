@@ -63,6 +63,8 @@ export function createApp(health: ServiceHealth, deps?: ControlDeps): Express {
 
   const log = deps.log ?? ((line: string) => console.log(line));
   app.use(requestLog(log));
+  // An agent run may carry one reference image (at most 1.5 MB decoded); every other body stays small.
+  app.post(/^\/agents\/[0-9a-f-]{36}\/run$/, express.json({ limit: "2200kb", strict: true }));
   app.use(express.json({ limit: "256kb", strict: true }));
   app.use(walletInternalRouter(deps));
   app.use(controlRouter(deps));
