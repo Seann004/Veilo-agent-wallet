@@ -14,8 +14,9 @@ interface SwapService {
 }
 
 /**
- * Owner approval of the devnet swap agents may request: a fixed USDC amount sold on Orca for
- * SOL sent to the owner's address. Agents still need the swap in their allowed purchases.
+ * Owner approval of the devnet swap agents may request: any USDC amount up to the approved
+ * maximum per swap, sold on Orca for SOL sent to the owner's address. Agents still need the swap
+ * in their allowed purchases, and their spending limits still apply.
  */
 export function SwapPanel() {
   const svc = useResource(() => api<SwapService>("control", "/swap-service"), "swap-service");
@@ -26,11 +27,11 @@ export function SwapPanel() {
   return (
     <Section title="Agent swaps">
       <p className="hint flush">
-        Agents can swap USDC for SOL on Orca, paid privately from your pool. The SOL goes to your wallet.
+        Agents can swap USDC for SOL on Orca, paid privately from your pool, choosing any amount up to the maximum you set. The SOL goes to your wallet.
       </p>
       {current ? (
         <p className="small">
-          Approved: <strong>{usdc(current.amount.amount)}</strong> per swap.{" "}
+          Maximum per swap: <strong>{usdc(current.amount.amount)}</strong>.{" "}
           <button
             type="button"
             className="btn btn-small"
@@ -59,17 +60,17 @@ export function SwapPanel() {
         }}
       >
         <label className="sr-only" htmlFor="swap-amount">
-          USDC per swap
+          Maximum USDC per swap
         </label>
         <span className="input-unit">
-          <input id="swap-amount" inputMode="decimal" placeholder={current ? "New amount" : "1.00"} value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <input id="swap-amount" inputMode="decimal" placeholder={current ? "New maximum" : "1.00"} value={amount} onChange={(e) => setAmount(e.target.value)} />
           <span aria-hidden="true">USDC</span>
         </span>
         <button type="submit" className="btn btn-primary" disabled={!base || action.busy}>
           {current ? "Update" : "Approve swaps"}
         </button>
       </form>
-      {svc.data ? <p className="hint">Up to {usdc(svc.data.maxAmount.amount)} per swap. Devnet prices aren&apos;t real market prices.</p> : null}
+      {svc.data ? <p className="hint">You can set a maximum of up to {usdc(svc.data.maxAmount.amount)} per swap. Devnet prices aren&apos;t real market prices.</p> : null}
       <ErrorNotice error={svc.error ?? action.error} what="agent swaps" />
     </Section>
   );
