@@ -29,7 +29,7 @@ function BotFace({ avatar, size, paused }: { avatar: AvatarOption; size: number;
   const { type, colour } = botFor(avatar);
   return (
     <span className="working-avatar" data-bot={type} aria-hidden={paused ? true : undefined} style={{ width: size, height: size }}>
-      <BotAvatar type={type} state={paused ? "default" : "working"} paused={paused} size={size} color={colour} shading="plastic" ink="#000000" />
+      <BotAvatar type={type} state={paused ? "default" : "working"} paused={paused} size={size} color={colour} shading="plastic" ink="#ffffff" />
     </span>
   );
 }
@@ -112,7 +112,7 @@ export function BotMark({ bot, size = 64, animated = false }: { bot: BotSpec; si
   return (
     <AnimationBoundary fallback={fallback}>
       <span className="working-avatar" data-bot={bot.type} data-animated={String(!paused)} aria-hidden="true" style={{ width: size, height: size }}>
-        <BotAvatar type={bot.type} state="default" paused={paused} size={size} color={bot.colour} shading="plastic" ink="#000000" />
+        <BotAvatar type={bot.type} state="default" paused={paused} size={size} color={bot.colour} shading="plastic" ink="#ffffff" />
       </span>
     </AnimationBoundary>
   );

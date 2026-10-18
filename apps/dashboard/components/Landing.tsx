@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AVATARS, ROLE_AVATAR } from "../lib/avatar-options";
 import { ROLE_LABEL } from "../lib/labels";
 import { ROLE_ORDER, ROLE_TAGLINE } from "../lib/roles";
-import { BotMark, BotRow, type BotSpec } from "./Avatar";
+import { AvatarImage, BotMark, BotRow, type BotSpec } from "./Avatar";
 import { SitePage } from "./Site";
 
 export const HERO_BOTS: BotSpec[] = [
@@ -94,7 +94,7 @@ export function Landing() {
             const avatar = AVATARS.find((a) => a.id === ROLE_AVATAR[role]) ?? AVATARS[0]!;
             return (
               <Link key={role} href={`/market#${role}`} className="roster-card">
-                <img className="avatar" src={avatar.src} alt="" width={56} height={56} />
+                <AvatarImage avatar={avatar} size={56} />
                 <h3>{ROLE_LABEL[role]}</h3>
                 <p>{ROLE_TAGLINE[role]}</p>
               </Link>
