@@ -18,6 +18,18 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   agentRules: false,
   transpilePackages: ["@veilo/contracts"],
+  // Shared contracts import "node:crypto"; in browser bundles webpack resolves the bare name to
+  // Next's crypto polyfill, matching what Turbopack does for the same import.
+  webpack(config, { isServer, webpack }) {
+    if (!isServer) {
+      config.plugins.push(
+        new webpack.NormalModuleReplacementPlugin(/^node:/, (resource: { request: string }) => {
+          resource.request = resource.request.replace(/^node:/, "");
+        }),
+      );
+    }
+    return config;
+  },
   // Workspace packages live above this app; trace from the repo root so hosted builds include them.
   outputFileTracingRoot: fileURLToPath(new URL("../..", import.meta.url)),
   // Old page addresses, kept working after pages were merged.
