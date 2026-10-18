@@ -1,5 +1,5 @@
 import type { Agent } from "../types";
-import type { ArtifactKind, StepInput, ToolIo, WorkflowCategory } from "@veilo/contracts/marketplace";
+import type { ArtifactKind, StepInput, ToolEffect, ToolIo, WorkflowCategory } from "@veilo/contracts/marketplace";
 
 export const CATEGORIES: ReadonlyArray<{ id: WorkflowCategory; label: string }> = [
   { id: "research", label: "Research" },
@@ -23,7 +23,7 @@ export interface PublicStep {
   slug: string | null;
   kind: string;
   provider: string | null;
-  effect: "read_only" | "draft_external";
+  effect: ToolEffect;
   priceBaseUnits: string;
   recipient: string | null;
   inputs: Record<string, StepInput>;
@@ -63,7 +63,7 @@ export interface ToolEntry {
   by: string;
   kind: string;
   provider: string | null;
-  effect: "read_only" | "draft_external";
+  effect: ToolEffect;
   io: ToolIo;
   priceBaseUnits: string;
   recipient: string;
@@ -93,11 +93,25 @@ export const BADGE_CLASS: Record<ToolEntry["badge"], string> = {
 export function kindGlyph(kind: string, provider: string | null): string {
   if (provider === "higgsfield") return "IMG";
   if (provider === "makeugc") return "VID";
-  if (provider === "zernio") return "POST";
+  if (provider === "zernio" || provider === "zernio_publish") return "POST";
+  if (provider === "slides") return "SLD";
   if (kind === "external_x402") return "RPC";
   if (kind === "mcp") return "MCP";
   if (kind === "managed_template") return "LLM";
   return "API";
+}
+
+/** What a tool does outside Veilo, in the words shown on cards and approval terms. */
+export function effectLabel(effect: string, provider: string | null): string {
+  if (effect === "publish_external") return provider === "zernio_publish" ? "Publishes publicly to TikTok" : "Publishes publicly";
+  if (effect === "draft_external") return "Drafts only";
+  return "Read-only";
+}
+
+export function effectPillClass(effect: string): string {
+  if (effect === "publish_external") return "pill pill-danger";
+  if (effect === "draft_external") return "pill pill-warn";
+  return "pill pill-muted";
 }
 
 export const WORKFLOW_STATUS_LABEL: Record<string, string> = {

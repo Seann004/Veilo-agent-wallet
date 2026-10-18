@@ -4,7 +4,7 @@ import { useId, useState } from "react";
 import type { ToolManifest } from "@veilo/contracts/marketplace";
 import { marketApi } from "../../lib/market/client";
 import type { SellerDashboard } from "../../lib/market/types";
-import { BADGE_CLASS, BADGE_LABEL, kindGlyph, type ToolEntry } from "../../lib/market/workflows";
+import { BADGE_CLASS, BADGE_LABEL, effectLabel, effectPillClass, kindGlyph, type ToolEntry } from "../../lib/market/workflows";
 import { useAction, useResource } from "../hooks";
 import { EmptyState, ErrorNotice, Loading, Section } from "../ui";
 import { useMarket } from "./MarketContext";
@@ -46,7 +46,7 @@ export function ToolLibrary() {
                   {kindGlyph(t.kind, t.provider)}
                 </span>{" "}
                 <PlainText text={t.title} inline /> <span className={BADGE_CLASS[t.badge]}>{BADGE_LABEL[t.badge]}</span>
-                {t.effect === "draft_external" ? <span className="pill pill-warn"> drafts only</span> : null}
+                {t.effect !== "read_only" ? <span className={effectPillClass(t.effect)}>{effectLabel(t.effect, t.provider)}</span> : null}
               </p>
               <p className="role">
                 by <PlainText text={t.by} inline />
@@ -298,7 +298,7 @@ function ProviderToolForm({ providers }: { providers: ToolsResponse["providers"]
               value={choice}
               options={[
                 { value: "", label: "Choose a tool" },
-                ...options.map((o) => ({ value: o.key, label: `${o.provider}: ${o.tool.name} (${o.tool.effect === "draft_external" ? "drafts only" : "read-only"})` })),
+                ...options.map((o) => ({ value: o.key, label: `${o.provider}: ${o.tool.name} (${effectLabel(o.tool.effect, o.provider).toLowerCase()})` })),
               ]}
               onChange={setChoice}
             />

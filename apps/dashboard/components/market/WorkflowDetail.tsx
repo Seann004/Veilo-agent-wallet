@@ -7,7 +7,7 @@ import { api } from "../../lib/api";
 import { parseUnits } from "../../lib/market/amounts";
 import { marketApi } from "../../lib/market/client";
 import { localControllerStatus } from "../../lib/market/controller-registration";
-import { categoryLabel, hiringAgents, kindGlyph, workflowAgents, type LocalRun, type WorkflowEntry } from "../../lib/market/workflows";
+import { categoryLabel, effectLabel, effectPillClass, hiringAgents, kindGlyph, workflowAgents, type LocalRun, type WorkflowEntry } from "../../lib/market/workflows";
 import type { Workspace } from "../../lib/types";
 import { useAction, useResource } from "../hooks";
 import { ConfirmButton, ErrorNotice, KV, Loading } from "../ui";
@@ -17,16 +17,18 @@ import { Select } from "../Select";
 
 function willAndWont(w: WorkflowEntry): { will: string[]; wont: string[] } {
   const drafts = w.steps.some((s) => s.effect === "draft_external");
+  const publishes = w.steps.filter((s) => s.effect === "publish_external");
   return {
     will: [
       `Buy ${w.steps.length} step${w.steps.length === 1 ? "" : "s"} in order, each as its own payment to the recipient shown`,
       "Stop before paying any step whose price or recipient changed",
       "Pass earlier outputs to later steps only as stored data",
       ...(drafts ? ["Prepare a draft you can review"] : []),
+      ...publishes.map((s) => `${effectLabel(s.effect, s.provider)} in step ${s.index + 1}, with no review step after you approve the run`),
     ],
     wont: [
       "Spend more than the total you approve",
-      "Post, publish or send anything on your behalf",
+      publishes.length > 0 ? "Post or send anything except the publishing step named above" : "Post, publish or send anything on your behalf",
       "Buy later steps after a step fails or is uncertain",
       "Charge a platform fee",
     ],
@@ -101,7 +103,8 @@ export function WorkflowDetail({ slug }: { slug: string }) {
                 </span>
                 <div>
                   <p className="chain-title">
-                    Step {s.index + 1}: <PlainText text={s.title ?? "Unknown tool"} inline /> {s.effect === "draft_external" ? <span className="pill pill-warn">drafts only</span> : null}
+                    Step {s.index + 1}: <PlainText text={s.title ?? "Unknown tool"} inline />{" "}
+                    {s.effect !== "read_only" ? <span className={effectPillClass(s.effect)}>{effectLabel(s.effect, s.provider)}</span> : null}
                     {s.providerStatus === "not_configured" || s.providerStatus === "unknown" ? <span className="pill pill-muted">Provider not configured</span> : null}
                     {s.providerStatus === "manifest_changed" ? <span className="pill pill-danger">Manifest changed</span> : null}
                   </p>
@@ -236,15 +239,22 @@ function RunOnce({ w }: { w: WorkflowEntry }) {
 export function RunTermsView({ run, w, onApprove, busy }: { run: LocalRun; w: WorkflowEntry; onApprove: () => void; busy: boolean }) {
   const m = useMarket();
   const decimals = m.decimalsFor(w.mint, w.network);
+  const publishes = w.steps.filter((s) => s.effect === "publish_external");
   return (
     <div className="stack local-approval">
       <p className="small flush">You approve these exact steps. If a price changes, the run stops and asks again.</p>
+      {publishes.length > 0 ? (
+        <p className="notice notice-warn flush" role="note">
+          {publishes.map((s) => `Step ${s.index + 1}: ${effectLabel(s.effect, s.provider)}.`).join(" ")} Approving this run lets it post without asking again.
+        </p>
+      ) : null}
       <div className="table-wrap">
         <table className="terms-table">
           <thead>
             <tr>
               <th scope="col">#</th>
               <th scope="col">What</th>
+              <th scope="col">Effect</th>
               <th scope="col">Paid to</th>
               <th scope="col" className="num">
                 Up to (USDC)
@@ -256,6 +266,7 @@ export function RunTermsView({ run, w, onApprove, busy }: { run: LocalRun; w: Wo
               <tr key={i}>
                 <td>{i + 1}</td>
                 <td>{w.steps[i]?.title ? <PlainText text={w.steps[i]!.title ?? ""} inline /> : `Step ${i + 1}`}</td>
+                <td>{w.steps[i] ? <span className={effectPillClass(w.steps[i]!.effect)}>{effectLabel(w.steps[i]!.effect, w.steps[i]!.provider)}</span> : "Unknown"}</td>
                 <td>
                   <Address value={s.recipient} />
                 </td>
