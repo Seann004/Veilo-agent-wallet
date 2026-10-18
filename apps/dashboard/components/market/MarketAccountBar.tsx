@@ -6,6 +6,7 @@ import { listWallets, onWalletsChanged, type OwnerWallet } from "../../lib/walle
 import { useAction } from "../hooks";
 import { ErrorNotice } from "../ui";
 import { useMarket } from "./MarketContext";
+import { shortKey } from "../../lib/format";
 import { Address } from "./parts";
 
 /** Marketplace sign-in status, the wallet-switch pause and the sign-in/sign-out controls. */
@@ -52,8 +53,11 @@ export function MarketAccountBar() {
       ) : m.me ? (
         <div className="account-row">
           <p className="account-who small" role="status">
-            Marketplace account <Address value={m.me.address} />
-            {m.wallet ? null : <span className="muted"> · wallet not connected in this tab</span>}
+            Signed in to the marketplace as{" "}
+            <span className="mono" title={m.me.address} aria-label={m.me.address}>
+              {shortKey(m.me.address, 6)}
+            </span>
+            {m.wallet ? null : <span className="muted"> · no wallet needed to browse</span>}
           </p>
           <div className="actions">
             <button type="button" className="btn btn-small" disabled={action.busy} onClick={() => void action.run(() => m.signOut())}>

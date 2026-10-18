@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MarketContextProvider, type MarketContextValue } from "../components/market/MarketContext";
+import { MarketAccountBar } from "../components/market/MarketAccountBar";
 import { MarketHome } from "../components/market/MarketHome";
 import { WorkflowRunList, WorkflowRunView } from "../components/market/WorkflowRuns";
 import { partitionRuns, plainReason, stepTitles } from "../lib/market/workflows";
@@ -223,6 +224,16 @@ describe("workflow run readability", () => {
     expect(p.shown.map((r) => r.status)).toEqual(["failed", "running"]);
     expect(p.olderFailed).toHaveLength(1);
     expect(stepTitles(undefined, 2)).toEqual(["Step 1", "Step 2"]);
+  });
+});
+
+describe("marketplace header", () => {
+  it("shows the short address once and says no wallet is needed to browse", () => {
+    const me = { userId: "u", address: RECIPIENT, workspace: null } as unknown as MarketContextValue["me"];
+    render(<MarketContextProvider value={{ ...market(), me, canAct: true }}><MarketAccountBar /></MarketContextProvider>);
+    const who = screen.getByRole("status");
+    expect(who.textContent).toBe("Signed in to the marketplace as 9xQeWv…usVFin · no wallet needed to browse");
+    expect(who.textContent).not.toContain("wallet not connected");
   });
 });
 
