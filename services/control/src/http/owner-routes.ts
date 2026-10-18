@@ -4,6 +4,7 @@ import { immediate } from "@veilo/db";
 import { iso, num, type Ledger } from "../context";
 import { ControlError } from "../errors";
 import type { RunnerCredentialProvisioner } from "../auth/runner-credentials";
+import { progressFor } from "../agents/progress";
 import { taskView, type TaskRow } from "../agents/work";
 import { revokeAgent } from "../ledger/authority";
 import { writeAudit } from "../ledger/events";
@@ -66,8 +67,9 @@ export function ownerRouter(deps: AuthDeps & { runnerCredentials?: RunnerCredent
         `SELECT * FROM task WHERE workspace_id = ? AND (? IS NULL OR agent_id = ?) ORDER BY created_at_ms DESC LIMIT ?`,
       )
       .all(o.workspaceId, q.agentId ?? null, q.agentId ?? null, q.limit) as Array<TaskRow & { updated_at_ms: bigint }>;
+    const progress = progressFor(ledger, tasks.map((t) => t.id));
     res.json({
-      tasks: tasks.map((t) => ({ ...taskView(t), updatedAt: iso(t.updated_at_ms) })),
+      tasks: tasks.map((t) => ({ ...taskView(t), updatedAt: iso(t.updated_at_ms), progress: progress.get(t.id) ?? [] })),
       jobs: jobsFor(ledger, o.workspaceId, q.agentId, q.limit),
     });
   });

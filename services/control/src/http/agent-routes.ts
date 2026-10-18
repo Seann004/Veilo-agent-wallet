@@ -19,6 +19,7 @@ import { requireAgent } from "../ledger/workspace";
 import { READERS, actorOf, requireActor, type AuthDeps } from "./actor";
 import { AI_SKUS, type AiService } from "../ai/service";
 import { browsePermit } from "../agents/browse";
+import { recordProgress } from "../agents/progress";
 
 function parse<S extends z.ZodType>(schema: S, value: unknown): z.infer<S> {
   const r = schema.safeParse(value ?? {});
@@ -113,6 +114,11 @@ export function agentRouter(deps: AuthDeps & { integration?: Integration | undef
 
   r.get("/worker/tasks/:id", worker, (req, res) => {
     res.json({ task: taskView(ownTask(ledger, workerAgent(res).id, param(req, "id"))) });
+  });
+
+  r.post("/worker/tasks/:id/progress", worker, (req, res) => {
+    const body = parse(z.object({ label: z.string().min(1).max(1_000) }).strict(), req.body);
+    res.status(201).json(recordProgress(ledger, workerAgent(res), param(req, "id"), body.label));
   });
 
   r.post("/worker/planning", worker, async (req, res) => {
