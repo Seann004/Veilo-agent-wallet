@@ -2,7 +2,12 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("bot-avatars", () => ({
+  botAvatarTypes: ["clover", "flower", "star"],
+  BotAvatar: (props: { type: string; color?: string }) => <canvas data-testid="bot" data-type={props.type} data-color={props.color} />,
+}));
 import { AvatarPicker, AgentAvatar } from "../components/Avatar";
 import { AVATAR_COLOURS } from "../lib/avatar-art";
 import { avatarChoice, encodeAvatar, resolveAvatar } from "../lib/avatar-customization";
@@ -14,11 +19,13 @@ describe("avatar display preferences", () => {
   it("keeps existing IDs and role defaults usable", () => {
     expect(resolveAvatar("avatar-04").src).toBe("/avatars/avatar-04.svg");
     render(<AgentAvatar agent={{ id: "saved", role: "content" }} />);
-    expect(document.querySelector("img")!.getAttribute("src")).toBe("/avatars/avatar-08.svg");
+    expect(screen.getByTestId("bot").getAttribute("data-type")).toBe("flower");
+    expect(screen.getByTestId("bot").getAttribute("data-color")).toBe(avatarChoice("avatar-08").colour);
     setAgentAvatar("saved", "avatar-03");
     cleanup();
     render(<AgentAvatar agent={{ id: "saved", role: "content" }} />);
-    expect(document.querySelector("img")!.getAttribute("src")).toBe("/avatars/avatar-03.svg");
+    expect(screen.getByTestId("bot").getAttribute("data-type")).toBe("star");
+    expect(screen.getByTestId("bot").getAttribute("data-color")).toBe(avatarChoice("avatar-03").colour);
   });
 
   it("rejects corrupt storage values and SVG injection", () => {
@@ -34,15 +41,13 @@ describe("avatar display preferences", () => {
     const value = encodeAvatar({ avatarId: "avatar-02", colour: "#14a38b", presentation: "tuft", gender: "woman" });
     render(<><AgentAvatar agent={agent} /><AgentAvatar agent={agent} /></>);
     act(() => setAgentAvatar(agent.id, value));
-    for (const image of document.querySelectorAll("img")) {
-      const source = decodeURIComponent(image.getAttribute("src")!);
-      expect(source).toContain('fill="#14a38b"');
-      expect(source).toContain("M40 23Q28 6 41 8Q49 7 53 23Z");
-      expect(source).toContain('data-accessory="ribbon"');
+    for (const bot of screen.getAllByTestId("bot")) {
+      expect(bot.getAttribute("data-color")).toBe("#14a38b");
+      expect(bot.getAttribute("data-type")).toBe("flower");
     }
     cleanup();
     render(<AgentAvatar agent={agent} />);
-    expect(document.querySelector("img")!.getAttribute("src")).toBe(resolveAvatar(value).src);
+    expect(screen.getByTestId("bot").getAttribute("data-color")).toBe("#14a38b");
   });
 
   it("leaves man, non-binary and unspecified choices without a ribbon", () => {

@@ -5125,3 +5125,20 @@ ul.cards {
 .md th, .md td { border: 1px solid var(--line); padding: 0.25rem 0.5rem; text-align: left; }
 .md-host { color: var(--ink-3); font-size: 0.82em; }
 .md-bubble { font-size: 0.9rem; }
+
+/* ---- workflow run stepper ---- */
+.run-progress { margin: 0.5rem 0; }
+.progress-bar { height: 0.5rem; border-radius: 999px; background: var(--line-strong); overflow: hidden; margin-bottom: 0.3rem; }
+.progress-bar > span { display: block; height: 100%; background: var(--accent); transition: width 0.4s ease; }
+.stepper { list-style: none; margin: 1rem 0; padding: 0; display: grid; gap: 0.75rem; }
+.stepper-step { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: 0.75rem; position: relative; }
+.stepper-step:not(:last-child)::before { content: ""; position: absolute; left: 0.95rem; top: 2rem; bottom: -0.75rem; width: 2px; background: var(--line-strong); }
+.stepper-num { width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; font-weight: 600; font-size: 0.85rem; border: 2px solid var(--line-strong); background: var(--surface); }
+.stepper-paid .stepper-num, .stepper-delivered .stepper-num { background: var(--accent); color: var(--on-ink); border-color: var(--accent); }
+.stepper-failed .stepper-num { border-color: var(--danger-solid); color: var(--danger-solid); }
+.stepper-card { border: 1px solid var(--line-strong); border-radius: 0.75rem; padding: 0.75rem; min-width: 0; overflow-wrap: anywhere; display: grid; gap: 0.35rem; }
+.step-output { border: 0; padding: 0; display: grid; gap: 0.4rem; }
+.output-clamp { max-height: 6.5rem; overflow: hidden; }
+.gallery-grid { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.gallery-grid img { display: block; width: 6rem; height: 6rem; object-fit: cover; border-radius: 0.5rem; border: 1px solid var(--line-strong); }
+@media (prefers-reduced-motion: reduce) { .progress-bar > span { transition: none; } }

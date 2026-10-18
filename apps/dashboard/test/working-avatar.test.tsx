@@ -5,14 +5,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const bot = vi.hoisted(() => ({ fail: false }));
 vi.mock("bot-avatars", () => ({
   botAvatarTypes: ["clover", "flower", "star"],
-  BotAvatar: (props: { type: string; state: string }) => {
+  BotAvatar: (props: { type: string; state: string; paused?: boolean; color?: string }) => {
     if (bot.fail) throw new Error("canvas unavailable");
-    return <canvas data-testid="bot" data-type={props.type} data-state={props.state} />;
+    return <canvas data-testid="bot" data-type={props.type} data-state={props.state} data-paused={String(!!props.paused)} data-color={props.color} />;
   },
 }));
 vi.mock("thinking-orbs", () => ({ ThinkingOrb: () => <canvas /> }));
 
-import { AgentAvatar, WorkingAvatar, botTypeFor } from "../components/Avatar";
+import { AgentAvatar, WorkingAvatar, botFor } from "../components/Avatar";
 
 const agent = { id: "agent-1", role: "research" } as const;
 
@@ -27,21 +27,27 @@ afterEach(() => {
 });
 
 describe("WorkingAvatar", () => {
-  it("shows the static avatar when idle and the animated bot while working", () => {
+  it("shows the same bot paused when idle and animated while working", () => {
     media(false);
-    const idle = render(<AgentAvatar agent={agent} size={36} />);
-    expect(idle.container.querySelector("img.avatar")).toBeTruthy();
-    expect(screen.queryByTestId("bot")).toBeNull();
+    render(<AgentAvatar agent={agent} size={36} />);
+    const idle = screen.getByTestId("bot");
+    expect(idle.getAttribute("data-paused")).toBe("true");
+    const shape = idle.getAttribute("data-type");
+    const colour = idle.getAttribute("data-color");
     cleanup();
     render(<WorkingAvatar agent={agent} />);
-    expect(screen.getByTestId("bot").getAttribute("data-state")).toBe("working");
+    const live = screen.getByTestId("bot");
+    expect(live.getAttribute("data-state")).toBe("working");
+    expect(live.getAttribute("data-paused")).toBe("false");
+    expect(live.getAttribute("data-type")).toBe(shape);
+    expect(live.getAttribute("data-color")).toBe(colour);
   });
 
   it("keeps the static avatar when reduced motion is preferred", () => {
     media(true);
     const { container } = render(<WorkingAvatar agent={agent} />);
-    expect(screen.queryByTestId("bot")).toBeNull();
-    expect(container.querySelector("img.avatar")).toBeTruthy();
+    expect(screen.getByTestId("bot").getAttribute("data-paused")).toBe("true");
+    expect(container.querySelector("img.avatar")).toBeNull();
   });
 
   it("falls back to the static avatar if the animation throws", () => {
@@ -52,7 +58,9 @@ describe("WorkingAvatar", () => {
     expect(container.querySelector("img.avatar")).toBeTruthy();
   });
 
-  it("maps an agent to the same bot shape every time", () => {
-    expect(botTypeFor("agent-1")).toBe(botTypeFor("agent-1"));
+  it("maps an avatar choice to a stable bot shape and its colour", () => {
+    const a = { id: "avatar-02", src: "", label: "" };
+    expect(botFor(a)).toEqual(botFor(a));
+    expect(botFor(a).type).not.toBe(botFor({ id: "avatar-03", src: "", label: "" }).type);
   });
 });

@@ -130,7 +130,7 @@ describe("workflow run view", () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ run })));
     render(<WorkflowRunView runId={run.id} />);
     expect((await screen.findAllByText("Failed")).length).toBeGreaterThan(0);
-    const steps = screen.getAllByRole("listitem").filter((li) => li.className === "timeline-step");
+    const steps = screen.getAllByRole("listitem").filter((li) => li.classList.contains("stepper-step"));
     expect(steps).toHaveLength(2);
     const pills = [...steps[1]!.querySelectorAll(".pill")].map((p) => p.textContent);
     expect(pills).toEqual(["Failed"]);
@@ -159,9 +159,9 @@ describe("workflow run progress", () => {
     render(<WorkflowRunView runId={run.id} />);
     expect(await screen.findByText("Waiting for your private balance to settle.")).toBeTruthy();
     expect(document.querySelector(".run-head .pill")?.textContent).toBe("Waiting");
-    const pills = [...document.querySelectorAll(".timeline-step .pill")].map((p) => p.textContent);
+    const pills = [...document.querySelectorAll(".stepper-step .pill")].map((p) => p.textContent);
     expect(pills).toEqual(["Delivered", "Getting a quote", "Not started"]);
-    expect(screen.getByRole("button", { name: "Refresh" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Refresh now" })).toBeTruthy();
   });
 });
 

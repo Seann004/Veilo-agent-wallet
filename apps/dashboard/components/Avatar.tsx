@@ -9,12 +9,11 @@ import { AVATAR_COLOURS, GENDERS, PRESENTATIONS } from "../lib/avatar-art";
 import { avatarChoice, encodeAvatar } from "../lib/avatar-customization";
 import { Select } from "./Select";
 
-export function AvatarImage({ avatar, size = 36 }: { avatar: AvatarOption; size?: number }) {
-  return <img className="avatar" src={avatar.src} alt="" width={size} height={size} />;
-}
-
-export function AgentAvatar({ agent, size = 36 }: { agent: Pick<Agent, "id" | "role">; size?: number }) {
-  return <AvatarImage avatar={useAgentAvatar(agent.id, agent.role)} size={size} />;
+/** Shape and colour of the bot for an avatar choice; the same mapping serves static and animated spots. */
+export function botFor(avatar: AvatarOption): { type: (typeof botAvatarTypes)[number]; colour: string } {
+  const choice = avatarChoice(avatar.id);
+  const index = Math.max(0, AVATARS.findIndex((a) => a.id === choice.avatarId));
+  return { type: botAvatarTypes[index % botAvatarTypes.length]!, colour: choice.colour };
 }
 
 class AnimationBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
@@ -27,23 +26,38 @@ class AnimationBoundary extends Component<{ fallback: ReactNode; children: React
   }
 }
 
-/** The same agent always gets the same bot shape. */
-export function botTypeFor(agentId: string): (typeof botAvatarTypes)[number] {
-  let h = 0;
-  for (let i = 0; i < agentId.length; i++) h = (Math.imul(h, 31) + agentId.charCodeAt(i)) >>> 0;
-  return botAvatarTypes[h % botAvatarTypes.length]!;
+function BotFace({ avatar, size, paused }: { avatar: AvatarOption; size: number; paused: boolean }) {
+  const { type, colour } = botFor(avatar);
+  return (
+    <span className="working-avatar" data-bot={type} aria-hidden={paused ? true : undefined} style={{ width: size, height: size }}>
+      <BotAvatar type={type} state={paused ? "default" : "working"} paused={paused} size={size} color={colour} />
+    </span>
+  );
+}
+
+/** Static avatar: the paused bot, so it matches the animated one; a flat image only if the canvas fails. */
+export function AvatarImage({ avatar, size = 36 }: { avatar: AvatarOption; size?: number }) {
+  const fallback = <img className="avatar" src={avatar.src} alt="" width={size} height={size} />;
+  return (
+    <AnimationBoundary fallback={fallback}>
+      <BotFace avatar={avatar} size={size} paused />
+    </AnimationBoundary>
+  );
+}
+
+export function AgentAvatar({ agent, size = 36 }: { agent: Pick<Agent, "id" | "role">; size?: number }) {
+  return <AvatarImage avatar={useAgentAvatar(agent.id, agent.role)} size={size} />;
 }
 
 /** Animated avatar for an agent that is working; static when motion is reduced or the animation fails. */
 export function WorkingAvatar({ agent, size = 48 }: { agent: Pick<Agent, "id" | "role">; size?: number }) {
   const avatar = useAgentAvatar(agent.id, agent.role);
   const reduced = usePrefersReducedMotion();
-  const fallback = <AvatarImage avatar={avatar} size={size} />;
-  if (reduced) return fallback;
+  if (reduced) return <AvatarImage avatar={avatar} size={size} />;
   return (
-    <AnimationBoundary fallback={fallback}>
-      <span className="working-avatar" role="img" aria-label="Working" style={{ width: size, height: size }}>
-        <BotAvatar type={botTypeFor(agent.id)} state="working" size={size} color={avatarChoice(avatar.id).colour} />
+    <AnimationBoundary fallback={<img className="avatar" src={avatar.src} alt="" width={size} height={size} />}>
+      <span role="img" aria-label="Working">
+        <BotFace avatar={avatar} size={size} paused={false} />
       </span>
     </AnimationBoundary>
   );
