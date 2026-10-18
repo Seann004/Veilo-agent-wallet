@@ -82,6 +82,18 @@ describe("runner credential provisioning", () => {
     expect(env.db.prepare("SELECT count(*) AS n FROM worker_credential").get()).toEqual({ n: 0n });
   });
 
+  it("logs a fixed message for a malformed file and never its contents", () => {
+    env = createEnv();
+    activateDefaults(env);
+    const path = join(env.dir, "worker-credentials.json");
+    const broken = '{"agents":[{"agentId":"a","token":"vwk_leakcheck123" oops';
+    writeFileSync(path, broken);
+    const logs: string[] = [];
+    new RunnerCredentialProvisioner({ ledger: env.ledger, path, log: (l) => logs.push(l) }).syncQuietly();
+    expect(logs).toEqual(["runner credential provisioning failed: runner credential file is not valid JSON; it was left unchanged"]);
+    expect(readFileSync(path, "utf8")).toBe(broken);
+  });
+
   it("drops a revoked agent's entry", () => {
     env = createEnv();
     activateDefaults(env);

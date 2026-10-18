@@ -92,16 +92,37 @@ export class RunnerCredentialProvisioner {
     try {
       this.sync();
     } catch (error) {
-      this.o.log?.(`runner credential provisioning failed: ${(error as Error).name}: ${(error as Error).message}`);
+      const detail = error instanceof RunnerCredentialFileError ? error.message : (error as Error).name;
+      this.o.log?.(`runner credential provisioning failed: ${detail}`);
     }
+  }
+}
+
+/** A credential file problem whose message is fixed text and never includes file contents. */
+export class RunnerCredentialFileError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RunnerCredentialFileError";
   }
 }
 
 function readFile(path: string): { agents: FileEntry[]; rest: Record<string, unknown> } {
   if (!existsSync(path)) return { agents: [], rest: {} };
-  const parsed = JSON.parse(readFileSync(path, "utf8")) as unknown;
+  // Parser messages can quote file contents, which hold tokens; only fixed messages leave here.
+  let text: string;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch {
+    throw new RunnerCredentialFileError("could not read runner credential file");
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new RunnerCredentialFileError("runner credential file is not valid JSON; it was left unchanged");
+  }
   if (parsed === null || typeof parsed !== "object" || !Array.isArray((parsed as { agents?: unknown }).agents)) {
-    throw new Error("runner credential file has no agents list; it was left unchanged");
+    throw new RunnerCredentialFileError("runner credential file has no agents list; it was left unchanged");
   }
   const { agents, ...rest } = parsed as { agents: FileEntry[] };
   return { agents, rest };

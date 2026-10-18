@@ -36,10 +36,11 @@ describe("worker credential reload", () => {
     expect(w.reload().added.map((c) => c.agentId)).toEqual([B]);
     expect(w.current().map((c) => c.agentId)).toEqual([A, B]);
 
-    writeFileSync(path, "{ not json");
+    writeFileSync(path, '{"agents":[{"agentId":"a","token":"vwk_leakcheck123" oops');
     utimesSync(path, 3_000, 3_000);
     expect(w.reload()).toEqual({ added: [], removed: [] });
     expect(w.current().map((c) => c.agentId)).toEqual([A, B]);
+    expect(logs.some((l) => l.includes("could not be read or parsed"))).toBe(true);
 
     write(path, [{ agentId: B, role: "custom", token: "vwk_b" }], 4_000);
     expect(w.reload().removed.map((c) => c.agentId)).toEqual([A]);

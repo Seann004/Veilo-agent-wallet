@@ -4,7 +4,16 @@ import type { AgentCredential } from "./worker";
 /** Worker credential file: {"agents":[{"agentId","role","token"}]}. Tokens are never logged. */
 export function loadCredentials(path: string | undefined): AgentCredential[] {
   if (!path || !existsSync(path)) return [];
-  const parsed = JSON.parse(readFileSync(path, "utf8")) as { agents?: Array<Partial<AgentCredential>> };
+  // Parser messages can quote file contents, which hold tokens; only fixed messages leave here.
+  let parsed: { agents?: Array<Partial<AgentCredential>> } | null;
+  try {
+    parsed = JSON.parse(readFileSync(path, "utf8")) as { agents?: Array<Partial<AgentCredential>> } | null;
+  } catch {
+    throw new Error("worker credential file could not be read or is not valid JSON");
+  }
+  if (parsed === null || typeof parsed !== "object" || (parsed.agents !== undefined && !Array.isArray(parsed.agents))) {
+    throw new Error("worker credential file has no agents list");
+  }
   return (parsed.agents ?? []).flatMap((a) =>
     typeof a.agentId === "string" && typeof a.token === "string" && (a.role === "research" || a.role === "content" || a.role === "custom")
       ? [{ agentId: a.agentId, role: a.role, token: a.token }]
@@ -45,8 +54,9 @@ export class CredentialWatcher {
     let next: AgentCredential[];
     try {
       next = loadCredentials(this.path);
-    } catch (error) {
-      this.log(`worker credential file could not be read (${(error as Error).name}); keeping the current agents`);
+    } catch {
+      this.#stamp = stamp;
+      this.log("worker credential file could not be read or parsed; keeping the current agents");
       return none;
     }
     this.#stamp = stamp;
