@@ -47,7 +47,9 @@ export function purchaseLabel(p: Pick<Purchase, "states" | "label" | "paymentPat
   if (ctx.agentStopped && hasLiveAuthority(s)) return LABEL_STOPPED_AUTHORIZED;
   if (p.paymentPath === "prepaid_credits" && s.authorization !== "rejected" && s.authorization !== "awaiting_approval") {
     if (s.fulfilment === "uncertain" || s.fulfilment === "in_progress") return LABEL_WAITING;
-    return LABEL_CREDITS_NO_CHARGE;
+    // Only a delivered call used credits; an abandoned one keeps control's own label.
+    if (s.fulfilment === "delivered") return LABEL_CREDITS_NO_CHARGE;
+    return p.label;
   }
   return p.label;
 }
@@ -227,6 +229,7 @@ export const taskStateLabel = (state: string): string => TASK_STATE[state] ?? st
 
 const CODE_TEXT: Record<string, string> = {
   BUDGET_EXCEEDED: "over its budget",
+  NOTE_PENDING: "no spendable USDC in the pool",
   SERVICE_NOT_ALLOWED: "not allowed by its limits",
   POLICY_DENIED: "not allowed",
   ACCOUNT_STOPPED: "agent is off",

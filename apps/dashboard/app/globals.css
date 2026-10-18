@@ -3176,7 +3176,7 @@ main:has(.agent-view) {
 
 .money-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 0 1rem;
 }
 
@@ -4877,4 +4877,16 @@ ul.cards {
 .chip-toggle .connector-icon {
   border: 0;
   background: none;
+}
+
+.app-card-clickable {
+  cursor: pointer;
+}
+
+.app-card-clickable:hover {
+  background: var(--surface-2);
+}
+
+.privacy-title {
+  margin: 2.5rem 0 1rem;
 }

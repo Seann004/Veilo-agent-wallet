@@ -33,6 +33,7 @@ export function PrivacyPanel() {
   const verified = ps.data ? ps.data.consistent && ps.data.approved.consistent : false;
   return (
     <>
+      <h2 className="section-title privacy-title">Privacy</h2>
       <p className="lede page-lede">Agents pay from a shared private pool. Here&apos;s what that hides, and what it doesn&apos;t.</p>
       <div className="grid-2 privacy-cards">
         <section className="panel">

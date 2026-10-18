@@ -375,9 +375,10 @@ function buildThread(
       ),
     });
   }
-  // A finished job that saved an output is shown by that output; the rest say how they ended.
+  // A finished job that saved an output is shown by that output, which carries the task's state;
+  // jobs without one say how they ended.
   const shown = new Set(items.map((c) => c.taskId));
-  for (const j of jobs.filter((x) => (x.state === "completed" || x.state === "failed") && !(x.state === "completed" && x.taskId && shown.has(x.taskId) && tasks.find((t) => t.id === x.taskId)?.state === "completed"))) {
+  for (const j of jobs.filter((x) => (x.state === "completed" || x.state === "failed") && !(x.taskId && shown.has(x.taskId)))) {
     out.push({
       at: j.updatedAt,
       key: `j-${j.id}`,
@@ -413,6 +414,7 @@ function buildThread(
   }
   for (const c of items) {
     const answer = c.kind === "content_calendar" ? "" : answerOf(c.content);
+    const taskState = tasks.find((t) => t.id === c.taskId)?.state;
     out.push({
       at: c.createdAt,
       key: `c-${c.id}`,
@@ -421,6 +423,7 @@ function buildThread(
           <strong className="bubble-title">{c.title}</strong>
           {answer ? <span className="plain-text">{answer}</span> : null}
           <span className="bubble-meta">
+            {taskState && taskState !== "completed" ? `${taskStateLabel(taskState)} · ` : ""}
             {REVIEW_LABEL[c.reviewState] ?? c.reviewState} · <Link href="/outputs">Open in Outputs</Link>
           </span>
         </li>
@@ -506,7 +509,12 @@ export function AgentDetail({ agentId }: { agentId: string }) {
     await Promise.all([reloadWorkspace(), balances.reload(), activity.reload(), content.reload(), handoffs.reload()]);
   };
   const activeJob = tasks.data?.jobs.find((j) => j.state === "queued" || j.state === "leased" || j.state === "reconciling");
-  usePolling(reloadAll, agentId, activeJob !== undefined);
+  // Keep refreshing while a job runs or one of this agent's payments is in flight on chain;
+  // payments waiting on the owner do not need polling.
+  const unsettled = (activity.data?.purchases ?? []).some(
+    (p) => p.agentId === agentId && (["in_progress", "uncertain"].includes(p.states.fulfilment) || ["submitted", "signed", "uncertain", "proof_released"].includes(p.states.merchant)),
+  );
+  usePolling(reloadAll, agentId, activeJob !== undefined || unsettled);
   if (!agent) return <p className="notice notice-error">Agent not found in this workspace.</p>;
   const activateDraft = (version: number) =>
     void save.run(async () => {
@@ -669,8 +677,6 @@ export function AgentDetail({ agentId }: { agentId: string }) {
           <KV
             rows={[
               ["Job", agent.description ?? "—"],
-              ["Trigger", Object.entries(agent.trigger).map(([k, v]) => `${k}: ${String(v)}`).join(", ") || "—"],
-              ["Model profile", agent.modelProfile ?? "default"],
             ]}
           />
           {current ? <PolicyReview policy={agent.activePolicy!} workspacePolicy={wsPolicy} title={`Active policy v${agent.activePolicy!.version}`} /> : <p className="notice notice-warn">No active policy: this agent cannot spend.</p>}

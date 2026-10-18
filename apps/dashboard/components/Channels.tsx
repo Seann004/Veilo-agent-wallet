@@ -34,7 +34,8 @@ export function useChannels(enabled = true) {
 
 function AppCard({ kind, title, summary, by, status, onAdd, disabled }: { kind: keyof typeof BRANDS; title: string; summary: string; by?: string; status: "added" | "add" | "soon"; onAdd?: () => void; disabled?: boolean }) {
   return (
-    <li className={`app-card${status === "soon" ? " app-card-soon" : ""}`}>
+    // The whole card opens setup for mouse users; the + button is the keyboard and screen-reader control.
+    <li className={`app-card${status === "soon" ? " app-card-soon" : onAdd && !disabled ? " app-card-clickable" : ""}`} onClick={status !== "soon" && !disabled ? onAdd : undefined}>
       <BrandLogo brand={BRANDS[kind]} size={44} />
       <span className="app-card-text">
         <strong>{title}</strong>
@@ -44,11 +45,11 @@ function AppCard({ kind, title, summary, by, status, onAdd, disabled }: { kind: 
       {status === "soon" ? (
         <span className="pill pill-muted">Soon</span>
       ) : status === "added" ? (
-        <button type="button" className="icon-btn app-card-state" aria-label={`Add another ${title} destination`} disabled={disabled} onClick={onAdd} title="Connected · add another">
+        <button type="button" className="icon-btn app-card-state" aria-label={`Add another ${title} destination`} disabled={disabled} onClick={(e) => { e.stopPropagation(); onAdd?.(); }} title="Connected · add another">
           <Icon name="check" size={18} />
         </button>
       ) : (
-        <button type="button" className="icon-btn app-card-add" aria-label={`Add ${title}`} disabled={disabled} onClick={onAdd}>
+        <button type="button" className="icon-btn app-card-add" aria-label={`Add ${title}`} disabled={disabled} onClick={(e) => { e.stopPropagation(); onAdd?.(); }}>
           <Icon name="plus" size={18} />
         </button>
       )}
