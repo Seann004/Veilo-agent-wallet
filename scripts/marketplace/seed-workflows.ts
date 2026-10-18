@@ -1,7 +1,7 @@
 /**
  * Seeds the workflow marketplace with demo creators, tools and workflows so the catalogue is not
  * empty. Every creator and listing is labeled demo. Managed tools run on Veilo's seller host with
- * operator-funded inference; provider tools (Higgsfield, MakeUGC, Zernio) point at a placeholder
+ * operator-funded inference; provider tools (Higgsfield, MakeUGC, Zernio, slides) point at a placeholder
  * host and stay "Provider not configured" until a seller connects a key, so nothing is faked; the
  * QuickNode tool is the real per-request x402 resource on devnet.
  *
@@ -18,7 +18,7 @@ import { join } from "node:path";
 import { address, createKeyPairSignerFromBytes, createKeyPairSignerFromPrivateKeyBytes, getBase58Decoder, signBytes, type KeyPairSigner } from "@solana/kit";
 import { createClient } from "@supabase/supabase-js";
 import { findRepoRoot, loadConfig, loadDotEnv, verifyChainIdentity } from "@veilo/contracts";
-import { mcpToolDigest, MARKETPLACE_LIMITS, PROVIDER_MANIFESTS, TEST_TOKEN_LABEL, type ToolProvider, type WorkflowVersionInput } from "@veilo/contracts/marketplace";
+import { mcpToolDigest, MARKETPLACE_LIMITS, PROVIDER_MANIFESTS, TEST_TOKEN_LABEL, type ToolIo, type ToolProvider, type WorkflowVersionInput } from "@veilo/contracts/marketplace";
 import { createApp } from "../../services/marketplace/src/app";
 import { createRpcChain } from "../../services/marketplace/src/chain";
 import type { MarketplaceConfig } from "../../services/marketplace/src/config";
@@ -114,7 +114,10 @@ interface ManagedTool {
   price: string;
   sections: string[];
   sellerInstructions?: string;
+  /** Named inputs, each passed to the template as its own brief section; one "brief" input when omitted. */
+  io?: ToolIo;
 }
+const NUMBERED_SLIDES = "N is the number in the slides section; use 6 when it is not 5, 6 or 7.";
 const MANAGED: ManagedTool[] = [
   { creator: "ledger-lab", slug: "demo-onchain-brief-writer", title: "On-chain brief writer (demo)", summary: "Writes a cited brief from purchased on-chain data with DeepSeek V4 Flash.", template: "research-summary", price: "20000", sections: ["Summary", "Key points", "Sources"] },
   { creator: "ledger-lab", slug: "demo-wallet-analyst", title: "Wallet activity analyst (demo)", summary: "Turns wallet balance and recent signatures into a structured analysis.", template: "structured-analysis", price: "20000", sections: ["Findings", "Risks"] },
@@ -146,6 +149,59 @@ const MANAGED: ManagedTool[] = [
       "Under Slides write exactly three lines, each in the form \"Slide N: <edit instruction>\".",
       "Each instruction restages the owner's own product photo for a vertical 9:16 ad: keep the product exactly as it is and change the scene, light and mood (for example a sunlit cafe table, a clean studio, an outdoor lifestyle shot). No added text, logos or real people's names.",
       "Under Caption write one TikTok caption under 300 characters with at most five hashtags.",
+    ].join(" "),
+  },
+  {
+    creator: "studio-north",
+    slug: "tiktok-carousel-planner-styled",
+    title: "TikTok carousel planner (style and slide count)",
+    summary: "Turns a topic, a visual style and a slide count (5 to 7) into image prompts and a caption for a TikTok photo carousel.",
+    template: "content-package",
+    price: "20000",
+    sections: ["Slides", "Caption"],
+    io: {
+      inputs: [
+        { name: "topic", kind: "text", required: true, maxChars: 500 },
+        { name: "style", kind: "text", required: true, maxChars: 200 },
+        { name: "slides", kind: "text", required: true, maxChars: 1 },
+      ],
+      output: { kind: "markdown" },
+    },
+    sellerInstructions: [
+      "The buyer brief has three sections: topic, style and slides.",
+      `Under Slides write exactly N lines, each in the form "Slide N: <prompt>". ${NUMBERED_SLIDES}`,
+      "Slide 1 is the hook and the last slide is the takeaway; each slide carries one idea that builds on the one before.",
+      "Each prompt describes one vertical 9:16 image for an image model: subject, setting, light and the visual style from the style section, applied the same way on every slide.",
+      "When the style section says default, use: minimal charcoal editorial, terracotta accent, soft daylight.",
+      "No text, letters, logos or real people's names in any image.",
+      "Under Caption write one TikTok caption under 300 characters with at most five hashtags.",
+    ].join(" "),
+  },
+  {
+    creator: "studio-north",
+    slug: "tiktok-slide-planner",
+    title: "TikTok slide planner (designed slides)",
+    summary: "Turns a topic and a slide count (5 to 7) into headline, accent and supporting text for each designed TikTok slide, plus a caption.",
+    template: "content-package",
+    price: "20000",
+    sections: ["Slides", "Caption"],
+    io: {
+      inputs: [
+        { name: "topic", kind: "text", required: true, maxChars: 500 },
+        { name: "slides", kind: "text", required: true, maxChars: 1 },
+      ],
+      output: { kind: "markdown" },
+    },
+    sellerInstructions: [
+      "The buyer brief has two sections: topic and slides.",
+      'Under Slides write only one JSON object inside a ```json fence: {"slides": [...], "caption": "..."} with exactly N slides.',
+      NUMBERED_SLIDES,
+      'Each slide is {"label", "headline", "accent", "body"}: label is one to three lowercase words naming the slide\'s role (for example hook, the problem, repo, verdict) with no number;',
+      "headline is at most 60 characters, punchy and lowercase; accent is one or two words copied exactly from the headline to highlight; body is one supporting sentence under 140 characters.",
+      "Slide 1 is the hook and the last slide is the takeaway or a call to follow.",
+      'Only for a slide about a specific GitHub repository named in the brief, add "card": {"owner", "repo", "description", "language"}; add "stars" only when the brief states the star count and "score" (1 to 10) only when the brief gives one.',
+      "Never invent repositories, numbers, quotes or image URLs.",
+      'The JSON "caption" and the text under Caption are the same TikTok caption: under 300 characters with at most five hashtags.',
     ].join(" "),
   },
 ];
@@ -198,6 +254,26 @@ const PROVIDERS: ProviderTool[] = [
     price: "10000",
     origin: CAROUSEL_HOST,
   },
+  {
+    creator: "studio-north",
+    slug: "tiktok-slide-designer",
+    title: "TikTok slide designer",
+    summary: "Renders 2 to 7 designed 1080x1920 slides (dark panel, terracotta accent, optional repo card) from a JSON slide plan and hosts them for posting. Workflow step only.",
+    provider: "slides",
+    toolName: "render_carousel_slides",
+    price: "10000",
+    origin: CAROUSEL_HOST,
+  },
+  {
+    creator: "studio-north",
+    slug: "zernio-tiktok-carousel-publish",
+    title: "TikTok carousel publish (Zernio)",
+    summary: "Publishes slides rendered by the same seller host publicly to the creator's TikTok account at once. There is no draft or review step. Workflow step only.",
+    provider: "zernio_publish",
+    toolName: "publish_tiktok_carousel",
+    price: "10000",
+    origin: CAROUSEL_HOST,
+  },
 ];
 
 async function main(): Promise<void> {
@@ -223,7 +299,7 @@ async function main(): Promise<void> {
         managedTools: MANAGED.length,
         providerTools: PROVIDERS.length,
         externalTools: 2,
-        workflows: 6,
+        workflows: "8, plus a second version of tiktok-carousel-from-topic",
       },
       null,
       2,
@@ -337,7 +413,7 @@ async function main(): Promise<void> {
         inputSchema: { briefHint: "Topic or purchased data to work from", maxBriefChars: MARKETPLACE_LIMITS.maxBriefChars },
         outputSchema: { format: "markdown", sections: t.sections },
         priceBaseUnits: t.price,
-      }, null);
+      }, t.io ? { toolKind: "managed_template", provider: null, toolName: null, effect: "read_only", io: t.io } : null);
       tool.set(t.slug, { toolKind: "listing", toolId: id, price: t.price });
     }
     for (const t of PROVIDERS) {
@@ -441,6 +517,17 @@ async function main(): Promise<void> {
       const pub = await call<{ status: string }>("POST", `/creator/versions/${ver.versionId}/publish`, s.token);
       step(`workflow.${slug}`, { workflowId: w.workflowId, versionId: ver.versionId, status: pub.status });
     };
+    /** A later version of a seeded workflow, recorded under its own state key. */
+    const workflowVersion = async (creator: string, slug: string, key: string, v: Omit<WorkflowVersionInput, "payoutVersionId" | "totalMaxBaseUnits">) => {
+      if (done(key)) return;
+      const s = sessions.get(creator)!;
+      const prior = done<{ workflowId: string }>(`workflow.${slug}`);
+      if (!prior) throw new Error(`${key}: workflow ${slug} has not been seeded`);
+      const total = v.steps.reduce((n, x) => n + BigInt(x.maxBaseUnits), 0n).toString();
+      const ver = await call<{ versionId: string }>("POST", `/creator/workflows/${prior.workflowId}/versions`, s.token, { ...v, totalMaxBaseUnits: total, payoutVersionId: s.payoutVersionId });
+      const pub = await call<{ status: string }>("POST", `/creator/versions/${ver.versionId}/publish`, s.token);
+      step(key, { workflowId: prior.workflowId, versionId: ver.versionId, status: pub.status });
+    };
     await workflow("ledger-lab", "token-supply-brief", {
       category: "research",
       title: "Token supply brief",
@@ -483,6 +570,61 @@ async function main(): Promise<void> {
         step_("tiktok-carousel-planner", { brief: { from: "run_input", name: "topic" } }),
         step_("higgsfield-carousel-images", { slides: { from: "step", step: 0 } }),
         step_("zernio-tiktok-carousel-draft", { carousel: { from: "step", step: 1 } }),
+      ],
+      sampleOutput: null,
+    });
+    await workflowVersion("studio-north", "tiktok-carousel-from-topic", "workflow.tiktok-carousel-from-topic.v2", {
+      category: "social",
+      title: "TikTok carousel from a topic",
+      summary: "DeepSeek plans 5 to 7 slides in your visual style, Higgsfield makes the images, Zernio puts a photo draft in your TikTok inbox.",
+      description:
+        "Step 1 writes one image prompt per slide (5 to 7, in the style you give) and a caption with DeepSeek V4 Flash. Step 2 generates the vertical images with Higgsfield Soul on the seller's key, up to the seller's image cap. Step 3 sends them to the seller's TikTok inbox as a private draft through Zernio; a person publishes it in the TikTok app.",
+      safetyPromise: "Draft only: the carousel lands in a TikTok inbox as a private draft and is never published by this workflow.",
+      runInputs: [
+        { name: "topic", label: "Topic", maxChars: 500 },
+        { name: "style", label: "Visual style (or \"default\")", maxChars: 200 },
+        { name: "slides", label: "Number of slides (5, 6 or 7)", maxChars: 1 },
+      ],
+      steps: [
+        step_("tiktok-carousel-planner-styled", { topic: { from: "run_input", name: "topic" }, style: { from: "run_input", name: "style" }, slides: { from: "run_input", name: "slides" } }),
+        step_("higgsfield-carousel-images", { slides: { from: "step", step: 0 } }),
+        step_("zernio-tiktok-carousel-draft", { carousel: { from: "step", step: 1 } }),
+      ],
+      sampleOutput: null,
+    });
+    await workflow("studio-north", "tiktok-carousel-designed", {
+      category: "social",
+      title: "TikTok carousel (designed slides)",
+      summary: "DeepSeek writes 5 to 7 slides, the slide designer renders them in Studio North's style, Zernio puts a photo draft in your TikTok inbox.",
+      description:
+        "Step 1 writes each slide's label, headline, accent word and supporting line (plus a repo card for a GitHub repository named in your topic) and a caption with DeepSeek V4 Flash. Step 2 renders 1080x1920 slides from a fixed template on the seller's host, so the text is exact, and hosts them through Zernio media. Step 3 sends them to the seller's TikTok inbox as a private draft; a person publishes it in the TikTok app.",
+      safetyPromise: "Draft only: the slides land in a TikTok inbox as a private draft and are never published by this workflow.",
+      runInputs: [
+        { name: "topic", label: "Topic", maxChars: 500 },
+        { name: "slides", label: "Number of slides (5, 6 or 7)", maxChars: 1 },
+      ],
+      steps: [
+        step_("tiktok-slide-planner", { topic: { from: "run_input", name: "topic" }, slides: { from: "run_input", name: "slides" } }),
+        step_("tiktok-slide-designer", { plan: { from: "step", step: 0 } }),
+        step_("zernio-tiktok-carousel-draft", { carousel: { from: "step", step: 1 } }),
+      ],
+      sampleOutput: null,
+    });
+    await workflow("studio-north", "tiktok-carousel-designed-publish", {
+      category: "social",
+      title: "TikTok carousel (designed, posts publicly)",
+      summary: "DeepSeek writes 5 to 7 slides, the slide designer renders them, and Zernio publishes the carousel publicly on the creator's TikTok at once.",
+      description:
+        "Step 1 writes each slide's text and a caption with DeepSeek V4 Flash. Step 2 renders 1080x1920 slides from a fixed template on the seller's host and hosts them through Zernio media. Step 3 publishes them publicly to the seller's TikTok account through Zernio straight away: there is no draft and no review after you approve the run. The seller host refuses to publish unless its owner turned public posting on, and posts only slides it rendered itself.",
+      safetyPromise: "Publishes publicly to the creator's TikTok at once after you approve the run; there is no draft or review step.",
+      runInputs: [
+        { name: "topic", label: "Topic", maxChars: 500 },
+        { name: "slides", label: "Number of slides (5, 6 or 7)", maxChars: 1 },
+      ],
+      steps: [
+        step_("tiktok-slide-planner", { topic: { from: "run_input", name: "topic" }, slides: { from: "run_input", name: "slides" } }),
+        step_("tiktok-slide-designer", { plan: { from: "step", step: 0 } }),
+        step_("zernio-tiktok-carousel-publish", { carousel: { from: "step", step: 1 } }),
       ],
       sampleOutput: null,
     });
