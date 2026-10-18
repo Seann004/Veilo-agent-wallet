@@ -6,6 +6,8 @@ import { activatePolicyVersion, insertAgent } from "../../control/src/ledger/wor
 import type { WorkflowRunner } from "../../control/src/workflows/runner";
 import { FakeWorkflowMarket, fakeWorkflowRunner, WF_OWNER, WF_V1 } from "../../control/test/fixtures/fake-workflow-market";
 import { makeStack, type Stack } from "../../control/test/fixtures/stack";
+import { ControlClient } from "../src/control-client";
+import { runCustom } from "../src/roles/custom";
 import { runOnce } from "../src/worker";
 
 let s: Stack | undefined;
@@ -131,5 +133,69 @@ describe("custom agent with a reference image", () => {
     s = undefined;
     const tooBig = await runWithImage({ image: `data:image/png;base64,${Buffer.concat([big, Buffer.alloc(3)]).toString("base64")}` });
     expect(tooBig.run.status).toBe(400);
+  });
+});
+
+describe("custom agent hire brief with a reference image", () => {
+  const LISTING = "66666666-6666-4666-8666-666666666666";
+  const TASK = "77777777-7777-4777-8777-777777777777";
+
+  /** A control stand-in with one marketplace listing; it records the proposed hire. */
+  async function proposeHire(o: { image: boolean; plannerBrief: string }) {
+    const planner = ['{"searchQuery":"carousel designer"}', JSON.stringify({ listingId: LISTING, brief: o.plannerBrief })];
+    const hires: Array<{ brief: string }> = [];
+    const fake = async (input: string, init?: RequestInit) => {
+      const path = input.replace("http://control.test", "");
+      const body = typeof init?.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : undefined;
+      const json = (status: number, b: unknown) => new Response(JSON.stringify(b), { status });
+      if (path.startsWith("/worker/planning")) return json(200, { label: "TEST planner", gateway: { outcome: { status: "succeeded", text: planner.shift() ?? "{}" } } });
+      if (path.startsWith("/worker/catalog")) return json(200, { items: [], capabilities: { browse: false, workflows: 0 } });
+      if (path.startsWith("/worker/connectors")) return json(200, { connectors: [] });
+      if (path.startsWith("/worker/describe-reference")) return json(200, { style: STYLE });
+      if (path.startsWith("/worker/marketplace/search")) {
+        return json(200, { items: [{ listingId: LISTING, title: "Carousel design", summary: "Slides", description: null, sellerName: "Seller", priceBaseUnits: "1000", turnaroundMinutes: 5, inputHint: null, outputFormat: null }] });
+      }
+      if (path.startsWith("/worker/hires")) {
+        hires.push(body as { brief: string });
+        return json(202, { proposalId: "h1", state: "awaiting_approval" });
+      }
+      if (path.startsWith("/worker/artifacts")) return json(201, { id: "a1" });
+      return json(200, {});
+    };
+    const client = new ControlClient({ baseUrl: "http://control.test", token: "unused", customTools: true, fetch: fake });
+    await runCustom({
+      client,
+      taskId: TASK,
+      agentId: "agent",
+      task: { objective: "Make a carousel about Solana validators.", input: { instructions: "Make carousels." }, ...(o.image ? { hasReferenceImage: true } : {}) },
+      bounds: { maxToolCalls: 12, maxPaidPurchases: 3, maxPlanningCalls: 3, deadlineMs: Number.MAX_SAFE_INTEGER },
+      now: () => 0,
+      notes: [],
+      sleep: async () => {},
+    });
+    expect(hires).toHaveLength(1);
+    return hires[0]!.brief;
+  }
+
+  it("adds the reference image's style to the specialist brief, with or without a planner brief", async () => {
+    const line = `Visual style to match (described from the owner's reference image): ${STYLE}`;
+    const planned = await proposeHire({ image: true, plannerBrief: "Design five slides." });
+    expect(planned).toContain("Design five slides.");
+    expect(planned).toContain(line);
+    const unplanned = await proposeHire({ image: true, plannerBrief: "" });
+    expect(unplanned).toContain("Make a carousel about Solana validators.");
+    expect(unplanned).toContain(line);
+  });
+
+  it("keeps the style line within the brief limit", async () => {
+    const brief = await proposeHire({ image: true, plannerBrief: "x".repeat(4_000) });
+    expect(brief.length).toBeLessThanOrEqual(16_000);
+    expect(brief.endsWith(STYLE)).toBe(true);
+  });
+
+  it("adds no style line when no image is attached", async () => {
+    const brief = await proposeHire({ image: false, plannerBrief: "Design five slides." });
+    expect(brief).not.toContain("Visual style to match");
+    expect(brief).not.toContain(STYLE);
   });
 });

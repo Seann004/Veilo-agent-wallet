@@ -482,7 +482,10 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
   let hire: { proposalId?: string; state?: string; code?: string } | null = null;
   if (chosen !== undefined) {
     await step(ctx, "Proposing a specialist hire");
-    const r = await tryTool(ctx, "propose_hire", { listingId: chosen, brief, idempotencyKey: `task:${ctx.taskId}:hire:${chosen}` });
+    // The style line is appended after clipping, so the brief stays within its limit and keeps it.
+    const styleLine = style ? `\n\nVisual style to match (described from the owner's reference image): ${style}` : "";
+    const hireBrief = `${brief.slice(0, 16_000 - styleLine.length)}${styleLine}`;
+    const r = await tryTool(ctx, "propose_hire", { listingId: chosen, brief: hireBrief, idempotencyKey: `task:${ctx.taskId}:hire:${chosen}` });
     hire = r.status === 202 ? { proposalId: r.body.proposalId, state: r.body.state } : { code: r.body?.error?.code ?? `HTTP ${r.status}` };
   }
 
