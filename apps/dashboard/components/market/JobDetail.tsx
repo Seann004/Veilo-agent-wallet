@@ -14,6 +14,7 @@ import { POLL_MS } from "./JobBoard";
 import { useMarket } from "./MarketContext";
 import { Countdown, FullValue, JobStates, Money, PausedNotice, PlainText, RequireMarketSession } from "./parts";
 import { Select } from "../Select";
+import { AgentThinking } from "../ThinkingOrb";
 
 const CANCELLABLE = new Set(["created", "awaiting_approval", "awaiting_payment", "queued", "running", "input_required"]);
 const LIVE_REFUND = new Set(["requested", "approved", "submitted", "uncertain", "finalized"]);
@@ -65,7 +66,7 @@ function JobView({ jobId }: { jobId: string }) {
       <ErrorNotice error={res.error} what="refresh failed; showing the last loaded state" onRetry={res.reload} />
       {live ? (
         <p className="small muted" role="status">
-          Refreshing every {POLL_MS / 1000} seconds until the job and its payment settle.
+          <AgentThinking state="waiting" decorative /> Refreshing every {POLL_MS / 1000} seconds until the job and its payment settle.
         </p>
       ) : null}
       <PausedNotice />

@@ -8,6 +8,7 @@ import { AttachDialog, BrandLogo, ConnectorIcon, ConnectorPicker, NotAvailableYe
 import { Icon } from "./Icon";
 import { useCapability, useOwner } from "./Shell";
 import { useAction, useResource } from "./hooks";
+import { AgentThinking } from "./ThinkingOrb";
 import { ConfirmButton, ErrorNotice, Loading, Spinner } from "./ui";
 
 /** Connectors section on the agent page: confirmed attachments with their tools, add and remove. */
@@ -188,7 +189,7 @@ export function CreatedConnectors({ agent, picked, outcomes, onRetry }: { agent:
   if (!outcomes) {
     return (
       <p className="small muted" role="status">
-        <Spinner /> Adding connectors…
+        <AgentThinking state="connecting" decorative /> Adding connectors…
       </p>
     );
   }

@@ -5005,3 +5005,10 @@ ul.cards {
 .treasury-details {
   margin-top: 0.75rem;
 }
+
+.thinking-orb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  vertical-align: middle;
+}

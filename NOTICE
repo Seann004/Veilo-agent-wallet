@@ -73,3 +73,9 @@ Keep upstream copyright/license notices with redistributed dependencies and
 adaptations. Owner review of GPL distribution obligations and the verifier
 license discrepancy remains open before choosing Veilo's license or shipping
 a bundle. See docs/references/attribution.md for source links and scope.
+
+Third-party packages
+
+thinking-orbs 0.3.2 (https://github.com/Jakubantalik/Libraries.dev), MIT License,
+Copyright (c) 2026 Jakub Antalik. Used unmodified as the dashboard's agent
+loading indicator. The full license text ships in the package's LICENSE file.

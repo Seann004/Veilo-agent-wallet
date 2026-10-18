@@ -7,6 +7,7 @@ import { marketApi } from "../../lib/market/client";
 import { partitionRuns, plainReason, RUN_STATUS_LABEL, runHeadline, stepStateLabel, stepTitles, type LocalRun, type RunHeadline, type StepStateLabel, type WorkflowEntry } from "../../lib/market/workflows";
 import { useAction, useResource } from "../hooks";
 import { ConfirmButton, EmptyState, ErrorNotice, KV, Loading, Section, TxLink } from "../ui";
+import { AgentThinking } from "../ThinkingOrb";
 import { useOptionalMarket } from "./MarketContext";
 import { Address, FullValue, Money, PlainText } from "./parts";
 
@@ -153,6 +154,7 @@ export function WorkflowRunView({ runId }: { runId: string }) {
         </span>
       </div>
       <p className="run-reason" role="status">
+        {head === "Running" || head === "Waiting" ? <AgentThinking state={head === "Running" ? "working" : "waiting"} decorative /> : null}{" "}
         {reason ? <Reason text={reason} /> : head === "Completed" ? "All steps are done." : head === "Running" ? "Buying the steps in order." : RUN_STATUS_LABEL[r.status]}
       </p>
       <ErrorNotice error={act.error} what="the run could not be updated" />
