@@ -225,7 +225,7 @@ function RunOnce({ w }: { w: WorkflowEntry }) {
           </button>
         </form>
       ) : (
-        <RunTerms run={prepared} w={w} onApprove={async () => {
+        <RunTermsView run={prepared} w={w} onApprove={async () => {
           const r = await act.run(() => api<{ run: LocalRun }>("control", `/workflows/runs/${prepared.id}/approve`, { method: "POST", body: { approvalDigest: prepared.approvalDigest } }));
           if (r) router.push(`/marketplace/runs/${r.run.id}`);
         }} busy={act.busy} />
@@ -234,25 +234,53 @@ function RunOnce({ w }: { w: WorkflowEntry }) {
   );
 }
 
-function RunTerms({ run, w, onApprove, busy }: { run: LocalRun; w: WorkflowEntry; onApprove: () => void; busy: boolean }) {
+export function RunTermsView({ run, w, onApprove, busy }: { run: LocalRun; w: WorkflowEntry; onApprove: () => void; busy: boolean }) {
   const m = useMarket();
   const decimals = m.decimalsFor(w.mint, w.network);
   return (
     <div className="stack local-approval">
-      <p>You are approving these exact terms. Any step whose quote differs stops the run for a fresh approval.</p>
-      <ol>
-        {run.terms.steps.map((s, i) => (
-          <li key={i}>
-            Step {i + 1}: up to <Money amount={s.maxBaseUnits} decimals={decimals} /> to <Address value={s.recipient} /> ({s.toolKind})
-          </li>
-        ))}
-      </ol>
-      <KV
-        rows={[
-          ["Total", <Money key="t" amount={run.terms.totalMaxBaseUnits} decimals={decimals} />],
-          ["Approval digest", <FullValue key="d" value={run.approvalDigest} />],
-        ]}
-      />
+      <p className="small flush">You approve these exact steps. If a price changes, the run stops and asks again.</p>
+      <div className="table-wrap">
+        <table className="terms-table">
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">What</th>
+              <th scope="col">Paid to</th>
+              <th scope="col" className="num">
+                Up to (USDC)
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {run.terms.steps.map((s, i) => (
+              <tr key={i}>
+                <td>{i + 1}</td>
+                <td>{w.steps[i]?.title ? <PlainText text={w.steps[i]!.title ?? ""} inline /> : `Step ${i + 1}`}</td>
+                <td>
+                  <Address value={s.recipient} />
+                </td>
+                <td className="num">
+                  <Money compact amount={s.maxBaseUnits} decimals={decimals} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="terms-total">
+        Total up to <Money compact amount={run.terms.totalMaxBaseUnits} decimals={decimals} /> · Solana devnet
+      </p>
+      <details className="tech-details">
+        <summary>Technical details</summary>
+        <KV
+          rows={[
+            ["Total (base units)", <span key="tb" className="mono">{run.terms.totalMaxBaseUnits}</span>],
+            ...run.terms.steps.map((s, i): [string, React.ReactNode] => [`Step ${i + 1} (base units)`, <span key={i} className="mono">{s.maxBaseUnits} · {s.toolKind}</span>]),
+            ["Approval digest", <FullValue key="d" value={run.approvalDigest} />],
+          ]}
+        />
+      </details>
       <ConfirmButton label="Approve and run" confirmLabel="Confirm approval" onConfirm={onApprove} disabled={busy} />
     </div>
   );

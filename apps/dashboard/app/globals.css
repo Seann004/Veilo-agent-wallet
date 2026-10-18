@@ -4273,9 +4273,81 @@ h4 {
 .local-approval {
   border: 2px solid var(--accent);
   border-radius: 8px;
-  padding: 0.5rem 0.75rem;
+  padding: 0.75rem 0.9rem;
   margin-top: 0.75rem;
-  background: #f5f6ff;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.terms-table td.num,
+.terms-table th.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.terms-total {
+  font-weight: 700;
+  margin: 0;
+}
+
+.tech-details summary {
+  cursor: pointer;
+  color: var(--ink-2);
+  font-size: 0.85rem;
+}
+
+.review-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.review-col {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.review-group {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.8rem;
+  background: var(--surface);
+}
+
+.review-group h4 {
+  margin: 0 0 0.3rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+}
+
+.review-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.run-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.run-reason {
+  margin: 0.25rem 0 0.75rem;
+  color: var(--ink-2);
+}
+
+@media (max-width: 700px) {
+  .review-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ---- workflow marketplace ------------------------------------------------------------------ */

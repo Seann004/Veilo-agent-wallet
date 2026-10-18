@@ -127,15 +127,39 @@ describe("workflow run view", () => {
     };
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ run })));
     render(<WorkflowRunView runId={run.id} />);
-    expect(await screen.findByText(/Stopped — later steps were not bought/)).toBeTruthy();
+    expect((await screen.findAllByText("Failed")).length).toBeGreaterThan(0);
     const steps = screen.getAllByRole("listitem").filter((li) => li.className === "timeline-step");
     expect(steps).toHaveLength(2);
     const pills = [...steps[1]!.querySelectorAll(".pill")].map((p) => p.textContent);
-    expect(pills).toEqual(["Paid", "Failed"]);
+    expect(pills).toEqual(["Failed"]);
+    expect(within(steps[0]!).getByText("Delivered")).toBeTruthy();
     const links = within(steps[0]!).getAllByRole("link");
     expect(links.every((a) => (a.getAttribute("href") ?? "").includes("cluster=devnet"))).toBe(true);
     expect(screen.getAllByText((t) => t.includes(HOSTILE)).length).toBeGreaterThan(0);
     expect(document.querySelector("script")).toBeNull();
+  });
+});
+
+describe("workflow run progress", () => {
+  it("shows the waiting reason and plain step states", async () => {
+    const base = (i: number, state: string, payment: LocalRun["steps"][number]["payment"], execution: LocalRun["steps"][number]["execution"]): LocalRun["steps"][number] => ({
+      index: i, toolKind: "external", toolId: `t${i}`, recipient: RECIPIENT, max: "3000", state, payment, execution, paid: payment === "paid" ? "3000" : null, jobId: null, purchaseId: null, fundingSignature: null, merchantSignatures: [], artifact: null, stop: null,
+    });
+    const run: LocalRun = {
+      id: "20000000-0000-4000-8000-000000000002", cloudRunId: "c", workflowVersionId: "v", agentId: "a", status: "running", isTest: false, requestedBy: "owner", approvedBy: RECIPIENT, approvalDigest: "a".repeat(64),
+      terms: { steps: [], totalMaxBaseUnits: "9000", network: NETWORK, mint: MINT },
+      total: { amount: "9000", unit: "usdc_base_units" },
+      stop: null,
+      waiting: { code: "PRIVATE_POOL_PENDING", reason: "Waiting for your private balance to settle.", since: "2026-10-18T00:00:00Z" },
+      steps: [base(0, "paid", "paid", "delivered"), base(1, "hiring", "not_paid", "not_run"), base(2, "pending", "not_paid", "not_run")],
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ run })));
+    render(<WorkflowRunView runId={run.id} />);
+    expect(await screen.findByText("Waiting for your private balance to settle.")).toBeTruthy();
+    expect(document.querySelector(".run-head .pill")?.textContent).toBe("Waiting");
+    const pills = [...document.querySelectorAll(".timeline-step .pill")].map((p) => p.textContent);
+    expect(pills).toEqual(["Delivered", "Getting a quote", "Not started"]);
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeTruthy();
   });
 });
 

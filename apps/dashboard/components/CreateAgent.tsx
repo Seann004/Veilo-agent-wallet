@@ -11,7 +11,7 @@ import type { Agent, AgentRole } from "../lib/types";
 import type { AttachOutcome, Connector } from "../lib/connectors";
 import { draftPolicyFromText, type PolicyDraftResult } from "../lib/policy-draft";
 import { CustomAgentFields, EMPTY_CUSTOM, RunnerCredentialNote, grantBody, withHiring, type CustomDraft } from "./CustomAgentFields";
-import { PolicyForm, PolicyReview, ROLE_TEMPLATES, type AgentPolicyInput } from "./Policy";
+import { PolicyForm, PolicyReviewGroups, ROLE_TEMPLATES, type AgentPolicyInput } from "./Policy";
 import { AvatarImage, AvatarPicker } from "./Avatar";
 import { CreateConnectorsStep, CreatedConnectors, attachPicked } from "./AgentConnectors";
 import { useCapability, useOwner } from "./Shell";
@@ -327,10 +327,9 @@ function CreateAgentForm() {
         ) : effective ? (
           <section className="panel">
             <h2 className="panel-title">Review</h2>
-            {isCustom ? <p className="small">Marketplace hiring: {custom.hiring ? `allowed, ${custom.grants.length} pre-approved listing(s)` : "off"}.</p> : null}
-            <PolicyReview policy={effective} workspacePolicy={wsPolicy} title={name} />
-            <p className="small muted">The agent starts switched off. You can activate it on the next screen.</p>
+            <PolicyReviewGroups policy={effective} workspacePolicy={wsPolicy} title={name} hiring={isCustom ? { allowed: custom.hiring, grants: custom.grants.length } : null} />
             <CreateConnectorsStep picked={connectors} onChange={setConnectors} readOnly />
+            <p className="small muted">Starts switched off — turn it on on the next screen. Connectors can be added later.</p>
           </section>
         ) : null}
         <div className="form-footer">

@@ -287,3 +287,72 @@ export function PolicyReview({ policy, workspacePolicy, title }: { policy: Polic
       </div>
     );
 }
+
+/** Review summary for a new agent: the same facts as PolicyReview, grouped into short sections. */
+export function PolicyReviewGroups({
+  policy,
+  workspacePolicy,
+  title,
+  hiring,
+}: {
+  policy: Policy | AgentPolicyInput;
+  workspacePolicy: Policy | undefined;
+  title: string;
+  hiring?: { allowed: boolean; grants: number } | null;
+}) {
+  const p = policy as Partial<Policy> & Partial<AgentPolicyInput>;
+  const skus = p.permissions?.allowedSkus ?? p.allowedSkus ?? [];
+  const paths = p.permissions?.allowedPaymentPaths ?? p.allowedPaymentPaths ?? [];
+  const browsing = (p.permissions as { allowBrowsing?: boolean } | undefined)?.allowBrowsing ?? p.allowBrowsing;
+  const cap = (v: string | null | undefined) => (workspacePolicy ? <span className="muted"> · workspace cap {usdc(v)}</span> : null);
+  const role = p.roleConfig;
+  const topUp = role && typeof role.creditPackUnits === "string" && /^\d+$/.test(role.creditPackUnits)
+    && typeof role.creditLowWatermark === "string" && /^\d+$/.test(role.creditLowWatermark)
+    && typeof role.pollSeconds === "number" && Number.isSafeInteger(role.pollSeconds) && role.pollSeconds > 0
+    ? `Buy ${credits(role.creditPackUnits)} when below ${credits(role.creditLowWatermark)}; checks every ${role.pollSeconds} s`
+    : null;
+  return (
+    <div className="review-groups">
+      <h3>{title}</h3>
+      <div className="review-grid">
+        <section className="review-group" aria-label="Spending">
+          <h4>Spending</h4>
+          <KV
+            rows={[
+              ["Spends", TIER_OPTIONS.find((t) => t.value === p.tier)?.label ?? String(p.tier)],
+              ["Per purchase", usdc(p.maxPurchaseTestUsdc)],
+              ["Per task", usdc(p.taskLimitTestUsdc)],
+              ["Per day", <>{usdc(p.rolling24hTestUsdc)}{cap(workspacePolicy?.rolling24hTestUsdc)}</>],
+              ["Total budget", <>{usdc(p.lifetimeTestUsdc)}{cap(workspacePolicy?.lifetimeTestUsdc)}</>],
+              ...(topUp ? [["Top-up rule", topUp] as [string, string]] : []),
+            ]}
+          />
+        </section>
+        <div className="review-col">
+          <section className="review-group" aria-label="Can buy">
+            <h4>Can buy</h4>
+            {skus.length ? (
+              <ul className="review-chips">
+                {skus.map((s) => (
+                  <li key={s} className="pill pill-muted">{skuLabel(s)}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="small muted">Nothing</p>
+            )}
+          </section>
+          <section className="review-group" aria-label="Access">
+            <h4>Access</h4>
+            <KV
+              rows={[
+                ["Web browsing", browsing ? "On (read-only)" : "Off"],
+                ...(hiring ? ([["Marketplace hiring", hiring.allowed ? `Allowed · ${hiring.grants} pre-approved listing${hiring.grants === 1 ? "" : "s"}` : "Off"]] as Array<[string, string]>) : []),
+                ["Pays with", paths.length ? paths.map((x) => PATH_LABEL[x as keyof typeof PATH_LABEL] ?? x).join(", ") : "Nothing"],
+              ]}
+            />
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}

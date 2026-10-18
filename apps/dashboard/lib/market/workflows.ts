@@ -121,6 +121,8 @@ export interface LocalRun {
   terms: { steps: Array<{ toolKind: string; toolId: string; recipient: string; maxBaseUnits: string; toolDigest: string }>; totalMaxBaseUnits: string; network: string; mint: string };
   total: { amount: string; unit: string };
   stop: { code: string; reason: string | null } | null;
+  /** Why the run is temporarily paused; null when it is not waiting. */
+  waiting?: { code: string; reason: string | null; since: string | null } | null;
   steps: Array<{
     index: number;
     toolKind: string;
@@ -138,6 +140,28 @@ export interface LocalRun {
     artifact: { kind: string | null; sha256: string; untrusted: true } | null;
     stop: { code: string; reason: string | null } | null;
   }>;
+}
+
+export type StepStateLabel = "Not started" | "Getting a quote" | "Paying" | "Paid" | "Delivered" | "Failed";
+
+/** One plain state per step, taken from what the controller recorded. */
+export function stepStateLabel(s: Pick<LocalRun["steps"][number], "state" | "payment" | "execution" | "stop">): StepStateLabel {
+  if (s.execution === "delivered") return "Delivered";
+  if (s.execution === "failed" || s.state === "failed" || s.stop) return "Failed";
+  if (s.state === "paying" || s.payment === "paying") return "Paying";
+  if (s.payment === "paid") return "Paid";
+  if (s.state === "hiring") return "Getting a quote";
+  return "Not started";
+}
+
+export type RunHeadline = "Running" | "Waiting" | "Completed" | "Failed" | "Halted";
+
+export function runHeadline(r: Pick<LocalRun, "status" | "waiting">): RunHeadline {
+  if (r.status === "completed") return "Completed";
+  if (r.status === "failed" || r.status === "rejected") return "Failed";
+  if (r.status === "halted") return "Halted";
+  if (r.status === "awaiting_approval" || r.waiting) return "Waiting";
+  return "Running";
 }
 
 export const RUN_STATUS_LABEL: Record<LocalRun["status"], string> = {
