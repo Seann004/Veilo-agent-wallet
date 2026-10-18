@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { canonicalJson } from "@veilo/contracts/gateway";
-import { mcpEndpointProblem, mcpToolDigest, mcpToolPinSchema } from "@veilo/contracts/marketplace";
+import { mcpEndpointProblem, mcpTemplate, mcpTemplateRefSchema, mcpToolDigest, mcpToolPinProblem, mcpToolPinSchema, renderTemplatedCall, type McpTemplateRef } from "@veilo/contracts/marketplace";
 import { immediate } from "@veilo/db";
 import { callPinnedTool, McpError, type McpClient } from "@veilo/mcp-client";
 import { DAY_MS, iso, num, type Ledger } from "../context";
@@ -19,7 +19,7 @@ const catalogSchema = z.object({
       id: z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/),
       endpoint: z.string().max(300),
       risk: z.string(),
-      tools: z.array(z.object({ name: z.string(), description: z.string(), inputSchema: z.record(z.string(), z.unknown()), sha256: z.string() })).max(32),
+      tools: z.array(z.object({ name: z.string(), description: z.string(), inputSchema: z.record(z.string(), z.unknown()), template: mcpTemplateRefSchema.optional(), sha256: z.string() })).max(32),
     }),
   ),
 });
@@ -37,6 +37,8 @@ interface PinnedTool {
   inputSchema: Record<string, unknown>;
   /** The approved description covered by the digest; attachments made before it was kept have none. */
   description?: string;
+  /** A Veilo templated tool: calls go to `template.upstream`, pinned to `template.upstreamSha256`. */
+  template?: McpTemplateRef;
 }
 
 interface AttachmentRow {
@@ -157,9 +159,11 @@ export class AgentConnectors {
     const pins: PinnedTool[] = tools.map((name) => {
       const t = c.tools.find((x) => x.name === name);
       if (!t) throw new ControlError("INVALID_REQUEST", `tool ${name} is not in the approved connector`);
-      const parsed = mcpToolPinSchema.safeParse({ name: t.name, description: t.description, inputSchema: t.inputSchema });
+      const parsed = mcpToolPinSchema.safeParse({ name: t.name, description: t.description, inputSchema: t.inputSchema, ...(t.template ? { template: t.template } : {}) });
       if (!parsed.success || mcpToolDigest(parsed.data) !== t.sha256) throw new ControlError("SERVICE_NOT_ALLOWED", `tool ${name} does not match its approved digest`);
-      return { name: t.name, sha256: t.sha256, inputSchema: t.inputSchema, description: parsed.data.description.slice(0, 1_000) };
+      const problem = mcpToolPinProblem(parsed.data, c.endpoint);
+      if (problem) throw new ControlError("SERVICE_NOT_ALLOWED", problem);
+      return { name: t.name, sha256: t.sha256, inputSchema: t.inputSchema, description: parsed.data.description.slice(0, 1_000), ...(parsed.data.template ? { template: parsed.data.template } : {}) };
     });
     immediate(ledger.db, () => {
       const agent = assertAttachable();
@@ -217,7 +221,7 @@ export class AgentConnectors {
     const audit = (agent: AgentRow, policyResult: "allowed" | "denied", details: Record<string, unknown>, reasonCode: string | null = null) =>
       writeAudit(ledger, { workspaceId: agent.workspace_id, scope: `agent:${agent.id}`, actorType: "worker", actorId: agent.id, action: "connector.call", policyResult, reasonCode, details });
     const ref = { taskId: body.taskId, connectorId: body.connectorId, tool: body.tool };
-    let reserved: { callId: string; endpoint: string; pin: PinnedTool; agent: AgentRow };
+    let reserved: { callId: string; endpoint: string; pin: PinnedTool; agent: AgentRow; upstream: { toolName: string; toolSha256: string; args: Record<string, unknown> } };
     try {
       reserved = immediate(ledger.db, () => {
         const agent = this.#assertAuthority(agentId);
@@ -228,8 +232,19 @@ export class AgentConnectors {
         if (row.status === "changed") throw new ControlError("SERVICE_NOT_ALLOWED", "connector tools changed since they were attached; the owner must attach it again");
         const pin = (JSON.parse(row.tools_json) as PinnedTool[]).find((t) => t.name === body.tool);
         if (!pin) throw new ControlError("POLICY_DENIED", "tool is not attached to this agent");
-        const problem = connectorArgsProblem(body.args, pin.inputSchema);
-        if (problem) throw new ControlError("INVALID_REQUEST", problem);
+        // Re-checked on every call: a template changed in this build, or a code tool, is refused.
+        const pinProblem = mcpToolPinProblem({ name: pin.name, description: pin.description ?? "", inputSchema: pin.inputSchema, ...(pin.template ? { template: pin.template } : {}) }, row.endpoint);
+        if (pinProblem) throw new ControlError("SERVICE_NOT_ALLOWED", pinProblem);
+        let upstream: { toolName: string; toolSha256: string; args: Record<string, unknown> };
+        if (pin.template) {
+          const rendered = renderTemplatedCall(pin.name, body.args);
+          if (!rendered.ok) throw new ControlError("INVALID_REQUEST", rendered.problem);
+          upstream = { toolName: pin.template.upstream, toolSha256: pin.template.upstreamSha256, args: rendered.args };
+        } else {
+          const problem = connectorArgsProblem(body.args, pin.inputSchema);
+          if (problem) throw new ControlError("INVALID_REQUEST", problem);
+          upstream = { toolName: pin.name, toolSha256: pin.sha256, args: body.args };
+        }
         const perTask = num(ledger.db.prepare(`SELECT count(*) FROM agent_connector_call WHERE task_id = ?`).pluck().get(task.id));
         if (perTask >= this.deps.limits.perTask) throw new ControlError("BUDGET_EXCEEDED", "task connector-call limit reached");
         const since = ledger.now() - DAY_MS;
@@ -244,7 +259,7 @@ export class AgentConnectors {
           )
           .run(callId, agent.workspace_id, agent.id, task.id, body.connectorId, body.tool, sha256(canonicalJson(body.args)), ledger.now());
         audit(agent, "allowed", { ...ref, callId });
-        return { callId, endpoint: row.endpoint, pin, agent };
+        return { callId, endpoint: row.endpoint, pin, agent, upstream };
       });
     } catch (error) {
       const agent = getAgent(ledger, agentId);
@@ -252,13 +267,13 @@ export class AgentConnectors {
       throw error;
     }
 
-    const { callId, endpoint, pin, agent } = reserved;
+    const { callId, endpoint, pin, agent, upstream } = reserved;
     const finish = (outcome: "ok" | "tool_error" | "changed" | "failed", text?: string) =>
       ledger.db
         .prepare(`UPDATE agent_connector_call SET outcome = ?, result_sha256 = ?, result_chars = ?, finished_at_ms = ? WHERE id = ?`)
         .run(outcome, text === undefined ? null : sha256(text), text === undefined ? null : text.length, ledger.now(), callId);
     try {
-      const r = await callPinnedTool(this.deps.client(endpoint), { toolName: pin.name, toolSha256: pin.sha256 }, body.args, {
+      const r = await callPinnedTool(this.deps.client(endpoint), upstream, upstream.args, {
         // The listing round trip is awaited, so stop and pause are checked again just before the call.
         beforeCall: () => void this.#assertAuthority(agent.id),
         maxChars: this.deps.limits.maxTextChars,
@@ -271,6 +286,7 @@ export class AgentConnectors {
         callId,
         connectorId: body.connectorId,
         tool: pin.name,
+        ...(pin.template ? { source: mcpTemplate(pin.name)?.source ?? null } : {}),
         isError: r.isError,
         citation: r.isError ? null : connectorCitation(body.connectorId, pin.name, callId),
         text: r.text,
