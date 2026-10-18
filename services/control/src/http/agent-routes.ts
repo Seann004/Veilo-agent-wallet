@@ -18,7 +18,7 @@ import type { Integration } from "../integration";
 import { requireAgent } from "../ledger/workspace";
 import { READERS, actorOf, requireActor, type AuthDeps } from "./actor";
 import { AI_SKUS, type AiService } from "../ai/service";
-import { browsePermit } from "../agents/browse";
+import { browseLanded, browsePermit } from "../agents/browse";
 import { recordProgress } from "../agents/progress";
 
 function parse<S extends z.ZodType>(schema: S, value: unknown): z.infer<S> {
@@ -132,6 +132,11 @@ export function agentRouter(deps: AuthDeps & { integration?: Integration | undef
   r.post("/worker/browse-permit", worker, (req, res) => {
     const body = parse(z.object({ taskId: z.uuid(), url: z.string().min(1).max(2048) }).strict(), req.body);
     res.json(browsePermit(ledger, workerAgent(res), body));
+  });
+
+  r.post("/worker/browse-landed", worker, (req, res) => {
+    const body = parse(z.object({ taskId: z.uuid(), permittedUrl: z.string().min(1).max(2048), finalUrl: z.string().min(1).max(2048) }).strict(), req.body);
+    res.json(browseLanded(ledger, workerAgent(res), body));
   });
 
   r.post("/worker/ai", worker, async (req, res) => {

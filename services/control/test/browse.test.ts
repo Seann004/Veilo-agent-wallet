@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { DEFAULT_AGENTS } from "@veilo/contracts";
-import { browsePermit, browseUrlProblem, MAX_BROWSE_PAGES_PER_TASK } from "../src/agents/browse";
+import { browseLanded, browsePermit, browseUrlProblem, MAX_BROWSE_PAGES_PER_TASK } from "../src/agents/browse";
+import { validateResearchCitations } from "../src/agents/work";
 import { getAgent, requireWorkAuthority } from "../src/ledger/workspace";
 import { activateDefaults, createEnv, intentTask, type TestEnv } from "./helpers";
 
@@ -61,5 +62,43 @@ describe("read-only browsing permits", () => {
     expect(() => requireWorkAuthority(env.ledger, prince2)).not.toThrow();
     env.clock.t += 60_000;
     expect(() => requireWorkAuthority(env.ledger, prince2)).toThrow(/workspace policy has expired/);
+  });
+});
+
+describe("landed pages after a redirect", () => {
+  function setup(key: string) {
+    env = createEnv();
+    activateDefaults(env, { agents: { Prince: { ...prince(), allowBrowsing: true } } });
+    const agent = getAgent(env.ledger, env.agents.Prince.id)!;
+    const task = runningTask(env, key);
+    browsePermit(env.ledger, agent, { taskId: task, url: "https://CoinGecko.com/en/coins/thetanuts" });
+    return { agent, task };
+  }
+  const brief = (task: string, content: string, citations: Array<{ url: string }> = []) => ({ taskId: task, content, citations, sourcePurchaseIds: [] });
+
+  it("lets a brief cite the URL a permitted page landed on, and still refuses unrelated links", () => {
+    const { agent, task } = setup("landed");
+    expect(browseLanded(env.ledger, agent, { taskId: task, permittedUrl: "https://coingecko.com/en/coins/thetanuts", finalUrl: "https://www.coingecko.com/en/coins/thetanuts" }).url).toBe(
+      "https://www.coingecko.com/en/coins/thetanuts",
+    );
+    const ok = "Price below.\n\nWeb pages read (read-only):\n- https://www.coingecko.com/en/coins/thetanuts/: https://www.coingecko.com/en/coins/thetanuts\n- also https://COINGECKO.com/en/coins/thetanuts.";
+    expect(() => validateResearchCitations(env.ledger, agent.id, brief(task, ok, [{ url: "https://www.coingecko.com/en/coins/thetanuts/" }]))).not.toThrow();
+    expect(() => validateResearchCitations(env.ledger, agent.id, brief(task, `${ok}\nhttps://evil.example/x`))).toThrow(/not purchased evidence/);
+    expect(() => validateResearchCitations(env.ledger, agent.id, brief(task, ok, [{ url: "https://www.coingecko.com/en/coins/other" }]))).toThrow(/permitted page/);
+    expect(env.db.prepare("SELECT browse_calls FROM task WHERE id = ?").pluck().get(task)).toBe(1n);
+  });
+
+  it("refuses a landing for a page that was never permitted, a private landing and a second landing", () => {
+    const { agent, task } = setup("landed-refusals");
+    expect(() => browseLanded(env.ledger, agent, { taskId: task, permittedUrl: "https://solana.com/docs", finalUrl: "https://solana.com/docs/x" })).toThrow(/not permitted/);
+    expect(() => browseLanded(env.ledger, agent, { taskId: task, permittedUrl: "https://coingecko.com/en/coins/thetanuts", finalUrl: "http://127.0.0.1/admin" })).toThrow(/private/);
+    browseLanded(env.ledger, agent, { taskId: task, permittedUrl: "https://coingecko.com/en/coins/thetanuts", finalUrl: "https://www.coingecko.com/a" });
+    expect(browseLanded(env.ledger, agent, { taskId: task, permittedUrl: "https://coingecko.com/en/coins/thetanuts", finalUrl: "https://www.coingecko.com/a" }).url).toBe("https://www.coingecko.com/a");
+    expect(() => browseLanded(env.ledger, agent, { taskId: task, permittedUrl: "https://coingecko.com/en/coins/thetanuts", finalUrl: "https://www.coingecko.com/b" })).toThrow(/already recorded/);
+    // A landed URL is not itself a permit to record further landings.
+    expect(() => browseLanded(env.ledger, agent, { taskId: task, permittedUrl: "https://www.coingecko.com/a", finalUrl: "https://www.coingecko.com/c" })).toThrow(/not permitted/);
+    const audit = env.db.prepare("SELECT group_concat(details_json) FROM audit_event WHERE action = 'browse.landed'").pluck().get() as string;
+    expect(audit).toContain("www.coingecko.com");
+    expect(audit).not.toContain("/a");
   });
 });

@@ -58,3 +58,41 @@ export function browsePermit(ledger: Ledger, agent: AgentRow, body: { taskId: st
     return { url, remaining: MAX_BROWSE_PAGES_PER_TASK - used - 1 };
   });
 }
+
+/**
+ * Records the URL a permitted page landed on after redirects, so a brief may cite the page that
+ * was actually read. The landed URL must pass the same public-URL rules, the permitted URL must be
+ * one control authorized for this running task, and each permitted URL gets one landed URL.
+ */
+export function browseLanded(ledger: Ledger, agent: AgentRow, body: { taskId: string; permittedUrl: string; finalUrl: string }): { url: string } {
+  const problem = browseUrlProblem(body.finalUrl);
+  if (problem) throw new ControlError("POLICY_DENIED", `landed page refused: ${problem}`);
+  if (browseUrlProblem(body.permittedUrl)) throw new ControlError("POLICY_DENIED", "page was not permitted for this task");
+  const permitted = new URL(body.permittedUrl).toString();
+  const landed = new URL(body.finalUrl).toString();
+  return immediate(ledger.db, () => {
+    const t = ownTask(ledger, agent.id, body.taskId);
+    assertTaskLive(ledger, t);
+    const policy = requireWorkAuthority(ledger, agent);
+    if (!agentPermissions(policy).allowBrowsing) throw new ControlError("POLICY_DENIED", "web browsing is off for this agent");
+    const row = ledger.db.prepare(`SELECT 1 FROM browse_page WHERE task_id = ? AND url = ? AND redirected_from IS NULL`).get(t.id, permitted);
+    if (!row) throw new ControlError("POLICY_DENIED", "page was not permitted for this task");
+    if (landed === permitted) return { url: landed };
+    const prior = ledger.db.prepare(`SELECT url FROM browse_page WHERE task_id = ? AND redirected_from = ?`).pluck().get(t.id, permitted) as string | undefined;
+    if (prior !== undefined) {
+      if (prior === landed) return { url: landed };
+      throw new ControlError("POLICY_DENIED", "a landed page is already recorded for this permitted page");
+    }
+    ledger.db.prepare(`INSERT OR IGNORE INTO browse_page (task_id, url, permitted_at_ms, redirected_from) VALUES (?, ?, ?, ?)`).run(t.id, landed, ledger.now(), permitted);
+    writeAudit(ledger, {
+      workspaceId: t.workspace_id,
+      scope: `agent:${agent.id}`,
+      actorType: "worker",
+      actorId: agent.id,
+      action: "browse.landed",
+      policyResult: "allowed",
+      details: { taskId: t.id, fromHost: new URL(permitted).hostname, host: new URL(landed).hostname },
+    });
+    return { url: landed };
+  });
+}

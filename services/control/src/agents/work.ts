@@ -188,6 +188,23 @@ export function connectorCitation(connectorId: string, tool: string, callId: str
 const URL_PATTERN = /\b(?:https?|fixture):\/\/[^\s)\]>"']+/g;
 
 /**
+ * Comparison form of a cited or mentioned link: sentence punctuation after a link in prose is not
+ * part of it, and web URLs compare with a lower-case host and without a trailing path slash.
+ * Other schemes (connector citations, fixtures) compare as written.
+ */
+export function citationKey(raw: string): string {
+  const trimmed = raw.replace(/[.,;:!?]+$/, "");
+  if (!/^https?:\/\//i.test(trimmed)) return trimmed;
+  try {
+    const u = new URL(trimmed);
+    if (u.pathname.length > 1 && u.pathname.endsWith("/")) u.pathname = u.pathname.replace(/\/+$/, "") || "/";
+    return u.toString();
+  } catch {
+    return trimmed;
+  }
+}
+
+/**
  * Research briefs may cite only evidence delivered by this agent's purchased datasets, and
  * may mention no other URL except owner-supplied sources from the task input.
  */
@@ -206,21 +223,22 @@ export function validateResearchCitations(
     if (!row || row.agent_id !== agentId) throw new ControlError("POLICY_DENIED", "source purchase scope mismatch");
     if (row.fulfilment_state !== "delivered" || !row.result_json) continue;
     const result = JSON.parse(row.result_json) as { records?: Array<{ source?: { url?: string } }> };
-    for (const r of result.records ?? []) if (typeof r.source?.url === "string") evidence.add(r.source.url);
+    for (const r of result.records ?? []) if (typeof r.source?.url === "string") evidence.add(citationKey(r.source.url));
   }
   // Free connector output is citable only from this task's own successful calls.
   const calls = ledger.db
     .prepare(`SELECT id, connector_id, tool FROM agent_connector_call WHERE agent_id = ? AND task_id = ? AND outcome = 'ok'`)
     .all(agentId, a.taskId) as Array<{ id: string; connector_id: string; tool: string }>;
-  for (const c of calls) evidence.add(connectorCitation(c.connector_id, c.tool, c.id));
-  // Pages control authorized this task to read are citable; any other link is not.
-  for (const url of ledger.db.prepare(`SELECT url FROM browse_page WHERE task_id = ?`).pluck().all(a.taskId) as string[]) evidence.add(url);
+  for (const c of calls) evidence.add(citationKey(connectorCitation(c.connector_id, c.tool, c.id)));
+  // Pages control authorized this task to read, and where they landed, are citable; any other link is not.
+  for (const url of ledger.db.prepare(`SELECT url FROM browse_page WHERE task_id = ?`).pluck().all(a.taskId) as string[]) evidence.add(citationKey(url));
   for (const c of a.citations) {
-    if (!evidence.has(c.url)) throw new ControlError("POLICY_DENIED", "citation does not map to purchased evidence, a connector call or a permitted page of this task");
+    if (!evidence.has(citationKey(c.url))) throw new ControlError("POLICY_DENIED", "citation does not map to purchased evidence, a connector call or a permitted page of this task");
   }
   const task = ownTask(ledger, agentId, a.taskId);
-  const ownerSources = new Set<string>(((JSON.parse(task.input_json) as { sources?: string[] }).sources ?? []).map(String));
+  const ownerSources = new Set<string>(((JSON.parse(task.input_json) as { sources?: string[] }).sources ?? []).map((u) => citationKey(String(u))));
   for (const url of a.content.match(URL_PATTERN) ?? []) {
-    if (!evidence.has(url) && !ownerSources.has(url)) throw new ControlError("POLICY_DENIED", "brief references a URL that is not purchased evidence");
+    const key = citationKey(url);
+    if (!evidence.has(key) && !ownerSources.has(key)) throw new ControlError("POLICY_DENIED", "brief references a URL that is not purchased evidence");
   }
 }
