@@ -42,6 +42,9 @@ describe("worker workflow routes", () => {
     expect(listed.body.workflows).toEqual([
       { versionId: V1, title: "Carousel from a topic", summary: "Researches a topic and drafts a carousel.", runInputs: [{ name: "topic", label: "Topic", maxChars: 500 }], total: "230000" },
     ]);
+    const owner = await st.login();
+    const forOwner = await st.call("/workflows/assignments", { headers: st.ownerHeaders(owner) });
+    expect(forOwner.body.assignments.find((x: { agentId: string }) => x.agentId === mira)).toMatchObject({ versionId: V1, title: "Carousel from a topic", budget: "500000", status: "active" });
     st.env.db.prepare(`UPDATE workflow_assignment SET status = 'revoked' WHERE agent_id = ?`).run(mira);
     expect((await st.call("/worker/workflows", { headers })).body.workflows).toEqual([]);
     const prince = await st.call("/worker/workflows", { headers: { authorization: `Bearer ${st.worker("Prince")}` } });

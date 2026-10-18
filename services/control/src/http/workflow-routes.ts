@@ -114,13 +114,13 @@ export function workflowRouter(deps: AuthDeps & { integration?: Integration | un
     const o = ownerOf(res);
     const rows = ledger.db
       .prepare(
-        `SELECT a.id, a.agent_id, a.workflow_id, a.budget_usdc, a.status, a.created_at_ms,
+        `SELECT a.id, a.agent_id, a.workflow_id, a.version_id, a.title, a.budget_usdc, a.status, a.created_at_ms,
                 (SELECT coalesce(sum(total_max_usdc), 0) FROM workflow_run w WHERE w.assignment_id = a.id AND w.status NOT IN ('awaiting_approval', 'rejected')) AS committed
          FROM workflow_assignment a WHERE a.workspace_id = ? ORDER BY a.created_at_ms DESC`,
       )
-      .all(o.workspaceId) as Array<{ id: string; agent_id: string; workflow_id: string; budget_usdc: bigint; status: string; committed: bigint; created_at_ms: bigint }>;
+      .all(o.workspaceId) as Array<{ id: string; agent_id: string; workflow_id: string; version_id: string | null; title: string | null; budget_usdc: bigint; status: string; committed: bigint; created_at_ms: bigint }>;
     res.json({
-      assignments: rows.map((a) => ({ id: a.id, agentId: a.agent_id, workflowId: a.workflow_id, budget: a.budget_usdc.toString(), committed: a.committed.toString(), status: a.status })),
+      assignments: rows.map((a) => ({ id: a.id, agentId: a.agent_id, workflowId: a.workflow_id, versionId: a.version_id, title: catalogText(a.title, 120) || null, budget: a.budget_usdc.toString(), committed: a.committed.toString(), status: a.status })),
     });
   });
 
