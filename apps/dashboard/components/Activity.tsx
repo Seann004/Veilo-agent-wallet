@@ -17,6 +17,13 @@ function agentStopped(agent: Agent | undefined, workspaceStopped: boolean): bool
   return workspaceStopped || agent === undefined || agent.status !== "active";
 }
 
+/** A purchase that stopped before any money moved, from an agent that is archived or gone. */
+function staleUncharged(p: Purchase, workspace: Workspace): boolean {
+  const agent = workspace.agents.find((a) => a.id === p.agentId);
+  const archived = agent === undefined || agent.status === "archived";
+  return archived && p.states.fulfilment === "abandoned" && p.states.funding !== "finalized" && p.states.merchant !== "finalized";
+}
+
 export function ActivityDrawer({
   purchase,
   events,
@@ -231,15 +238,31 @@ export function ActivityList({ activity, workspace, onChanged, limit }: { activi
 
 export function ActivityTable({ activity, workspace, onChanged, limit = 8 }: { activity: Activity; workspace: Workspace; onChanged: () => void | Promise<void>; limit?: number }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [showUncharged, setShowUncharged] = useState(false);
   const triggers = useRef(new Map<string, HTMLButtonElement>());
-  const rows = [...activity.purchases].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, limit);
+  const sorted = [...activity.purchases].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const collapsed = new Set(sorted.filter((p) => staleUncharged(p, workspace)).map((p) => p.id));
+  const rows = (showUncharged ? sorted : sorted.filter((p) => !collapsed.has(p.id))).slice(0, limit);
   const open = activity.purchases.find((p) => p.id === openId);
   const close = () => {
     const id = openId;
     setOpenId(null);
     if (id) triggers.current.get(id)?.focus();
   };
-  if (rows.length === 0) return <p className="muted flush">No payments yet. They appear here when an agent buys a service.</p>;
+  const toggle =
+    collapsed.size > 0 ? (
+      <button type="button" className="link-button small muted" onClick={() => setShowUncharged(!showUncharged)}>
+        {showUncharged ? "Hide not-charged attempts" : `Show ${collapsed.size} not-charged attempt${collapsed.size === 1 ? "" : "s"}`}
+      </button>
+    ) : null;
+  if (rows.length === 0) {
+    return (
+      <>
+        <p className="muted flush">No payments yet. They appear here when an agent buys a service.</p>
+        {toggle}
+      </>
+    );
+  }
   return (
     <>
       <div className="table-wrap">
@@ -258,7 +281,7 @@ export function ActivityTable({ activity, workspace, onChanged, limit = 8 }: { a
             {rows.map((p) => {
               const agent = workspace.agents.find((a) => a.id === p.agentId);
               return (
-                <tr key={p.id}>
+                <tr key={p.id} className={collapsed.has(p.id) ? "muted" : undefined}>
                   <td className="nowrap small">{when(p.createdAt)}</td>
                   <td>{agent?.name ?? "agent"}</td>
                   <td>
@@ -275,13 +298,14 @@ export function ActivityTable({ activity, workspace, onChanged, limit = 8 }: { a
                     </button>
                   </td>
                   <td className="nowrap">{p.paymentPath === "prepaid_credits" ? "prepaid AI credits" : usdc(p.price.amount)}</td>
-                  <td>{purchaseLabel(p, { agentStopped: agentStopped(agent, workspace.workspace.stopped) })}</td>
+                  <td>{collapsed.has(p.id) ? "Not charged" : purchaseLabel(p, { agentStopped: agentStopped(agent, workspace.workspace.stopped) })}</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+      {toggle}
       {open ? <ActivityDrawer purchase={open} events={activity.events} workspace={workspace} onClose={close} onChanged={onChanged} /> : null}
     </>
   );

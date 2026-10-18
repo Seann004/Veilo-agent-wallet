@@ -57,4 +57,27 @@ describe("recent payments table", () => {
     render(withRole(<ActivityTable activity={{ events: [], purchases: [] }} workspace={ws} onChanged={vi.fn()} />, "owner", ws));
     expect(screen.getByText(/No payments yet/)).toBeTruthy();
   });
+
+  it("collapses not-charged attempts from archived agents behind a toggle and labels them Not charged", async () => {
+    const user = userEvent.setup();
+    const ws = workspace();
+    const gone = "99999999-9999-4999-8999-999999999999";
+    const stopped = { authorization: "released", funding: "not_started", merchant: "not_started", fulfilment: "abandoned" } as const;
+    const purchases = [
+      purchase(),
+      purchase({ id: "00000000-0000-4000-8000-0000000000a1", agentId: gone, label: "Stopped; nothing was paid", states: stopped }),
+      purchase({ id: "00000000-0000-4000-8000-0000000000a2", agentId: gone, label: "Stopped; nothing was paid", states: stopped }),
+      // A stopped attempt from a live agent stays visible with control's own label.
+      purchase({ id: "00000000-0000-4000-8000-0000000000a3", label: "Stopped; nothing was paid", states: stopped }),
+    ];
+    render(withRole(<ActivityTable activity={{ events: [], purchases }} workspace={ws} onChanged={vi.fn()} />, "owner", ws));
+    expect(screen.getAllByRole("row").slice(1)).toHaveLength(2);
+    expect(screen.queryByText("Not charged")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Show 2 not-charged attempts" }));
+    const rows = screen.getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(4);
+    expect(screen.getAllByText("Not charged")).toHaveLength(2);
+    expect(rows.filter((r) => r.className === "muted")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Hide not-charged attempts" })).toBeTruthy();
+  });
 });
