@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ApiError, api } from "../lib/api";
 import { parseUsdcInput, usdc } from "../lib/format";
 import type { NoteStatus, WalletNote } from "../lib/types";
-import { connect, listWallets, onWalletsChanged, signAndSend, type OwnerWallet } from "../lib/wallet";
+import { connect, lastWallet, listWallets, onWalletsChanged, rememberWallet, signAndSend, type OwnerWallet } from "../lib/wallet";
 import { useCapability, useOwner, type ConnectedWallet } from "./Shell";
 import { useAction, useResource } from "./hooks";
 import { SwapPanel } from "./SwapPanel";
@@ -12,6 +12,9 @@ import { Amount } from "./UsdcIcon";
 import { ErrorNotice, Loading, Section, Spinner, TxLink } from "./ui";
 
 export const DEPOSIT_STAGES = ["submitted", "finalized", "indexed", "approved", "spendable"] as const;
+
+// One silent reconnect per page load, however many components ask for the wallet.
+let silentTried = false;
 
 /** Ensures the owner's wallet is connected for transaction signing; any other account is refused. */
 export function useOwnerWallet(): { connected: ConnectedWallet | null; wallets: OwnerWallet[]; connectTo: (w: OwnerWallet) => Promise<void>; error: ApiError | undefined } {
@@ -23,6 +26,19 @@ export function useOwnerWallet(): { connected: ConnectedWallet | null; wallets: 
     refresh();
     return onWalletsChanged(refresh);
   }, []);
+  // Reconnects the wallet used last time without a prompt; a wallet that would prompt is left alone.
+  useEffect(() => {
+    if (connected || silentTried) return;
+    const name = lastWallet();
+    const w = name ? wallets.find((x) => x.name === name) : undefined;
+    if (!w) return;
+    silentTried = true;
+    connect(w.wallet, true)
+      .then((account) => {
+        if (account.address === workspace.workspace.ownerPubkey) setConnected({ wallet: w.wallet, account });
+      })
+      .catch(() => undefined);
+  }, [connected, wallets, workspace.workspace.ownerPubkey, setConnected]);
   return {
     connected,
     wallets,
@@ -35,6 +51,7 @@ export function useOwnerWallet(): { connected: ConnectedWallet | null; wallets: 
           return;
         }
         setError(undefined);
+        rememberWallet(w.name);
         setConnected({ wallet: w.wallet, account });
       } catch (e) {
         setError(new ApiError(0, "WALLET", (e as Error).message));
@@ -109,6 +126,7 @@ export function NotesTable({ status }: { status: NoteStatus }) {
               <td>{n.origin === "deposit" ? <DepositStages note={n} /> : n.state.replace(/_/g, " ")}</td>
             </tr>
           ))}
+              <td title={n.updatedAt ? `Last change ${when(n.updatedAt)}` : undefined}>{n.createdAt ? when(n.createdAt) : "—"}</td>
         </tbody>
       </table>
     </div>

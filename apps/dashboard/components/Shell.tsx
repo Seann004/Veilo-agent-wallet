@@ -15,6 +15,7 @@ import { NetworkStatus } from "./NetworkStatus";
 import { Icon, type IconName } from "./Icon";
 import { clearResourceCache, useResource } from "./hooks";
 import { setPref, usePref, useTheme } from "../lib/prefs";
+import { rememberWallet } from "../lib/wallet";
 import { ErrorNotice, Loading } from "./ui";
 
 export interface ConnectedWallet {
@@ -201,6 +202,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <ConnectScreen
           onSignedIn={async (c) => {
             clearResourceCache();
+            rememberWallet(c.wallet.name);
             setConnected(c);
             setSigningIn(false);
             await reloadAccess();
@@ -326,6 +328,7 @@ export function Shell({ children }: { children: ReactNode }) {
                     await api("control", "/session/logout", { method: "POST" });
                   } finally {
                     clearResourceCache();
+                    rememberWallet(null);
                     setConnected(null);
                     await reloadAccess();
                   }

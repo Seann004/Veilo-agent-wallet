@@ -25,6 +25,26 @@ export interface OwnerWallet {
   wallet: Wallet;
 }
 
+const LAST_WALLET_KEY = "veilo.ownerWallet";
+
+/** Remembers which wallet the owner connected, so a reload can reconnect it silently. */
+export function rememberWallet(name: string | null): void {
+  try {
+    if (name) localStorage.setItem(LAST_WALLET_KEY, name);
+    else localStorage.removeItem(LAST_WALLET_KEY);
+  } catch {
+    // Storage can be unavailable (private windows); the owner just connects by hand.
+  }
+}
+
+export function lastWallet(): string | null {
+  try {
+    return localStorage.getItem(LAST_WALLET_KEY);
+  } catch {
+    return null;
+  }
+}
+
 /** Wallets that can connect and sign messages on devnet (Phantom and other Wallet Standard wallets). */
 export function listWallets(): OwnerWallet[] {
   return getWallets()
@@ -43,9 +63,10 @@ export function onWalletsChanged(cb: () => void): () => void {
   };
 }
 
-export async function connect(w: Wallet): Promise<WalletAccount> {
+/** With `silent`, the wallet reconnects only if this site was approved before and never prompts. */
+export async function connect(w: Wallet, silent = false): Promise<WalletAccount> {
   const feature = (w.features as StandardConnectFeature)[StandardConnect];
-  const { accounts } = await feature.connect();
+  const { accounts } = await feature.connect(silent ? { silent: true } : undefined);
   const account = accounts.find((a) => a.chains.includes(DEVNET_CHAIN)) ?? accounts[0];
   if (!account) throw new Error("the wallet returned no account");
   return account;
