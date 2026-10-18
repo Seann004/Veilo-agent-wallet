@@ -23,8 +23,11 @@ export interface Deps {
 }
 
 const JOB_FILES = "job-files";
-/** Higgsfield's terms forbid acting as a pass-through with no added value, so it is never hired on its own. */
-const WORKFLOW_ONLY_PROVIDERS: ReadonlySet<string> = new Set(["higgsfield"]);
+/**
+ * Never hired on their own: Higgsfield's terms forbid a bare pass-through, and the slide renderer
+ * and the public publisher act on the seller's own media storage and account.
+ */
+const WORKFLOW_ONLY_PROVIDERS: ReadonlySet<string> = new Set(["higgsfield", "slides", "zernio_publish"]);
 
 interface CatalogRow {
   listing_id: string;

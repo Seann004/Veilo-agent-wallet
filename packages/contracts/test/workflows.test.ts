@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   checkWorkflowPublication,
+  PROVIDER_MANIFESTS,
+  toolManifestSchema,
   stepQuoteProblem,
   toolKey,
   toolManifestDigest,
@@ -115,8 +117,19 @@ describe("workflow publication checks (§26.7)", () => {
     w.totalMaxBaseUnits = "15000";
     const f = facts();
     f.set(`listing:${DRAFT}`, tool(DRAFT, { priceBaseUnits: 2000n, effect: "draft_external", io: { inputs: [{ name: "query", kind: "text", required: true, maxChars: 2000 }], output: { kind: "draft_post" } } }));
-    expect(checkWorkflowPublication(w, f, true).problems).toContain("a workflow with an external drafting step needs a safety promise");
+    expect(checkWorkflowPublication(w, f, true).problems).toContain("a workflow with an external drafting or publishing step needs a safety promise");
     w.safetyPromise = "Drafts only; nothing posts without your approval.";
+    expect(checkWorkflowPublication(w, f, true).decision).toBe("live");
+  });
+
+  it("requires a safety promise for an external publishing step", () => {
+    const w = base();
+    w.steps.push({ toolKind: "listing", toolId: DRAFT, maxBaseUnits: "2000", inputs: { query: { from: "step", step: 1 } } });
+    w.totalMaxBaseUnits = "15000";
+    const f = facts();
+    f.set(`listing:${DRAFT}`, tool(DRAFT, { priceBaseUnits: 2000n, effect: "publish_external", io: { inputs: [{ name: "query", kind: "text", required: true, maxChars: 2000 }], output: { kind: "draft_post" } } }));
+    expect(checkWorkflowPublication(w, f, true).problems).toContain("a workflow with an external drafting or publishing step needs a safety promise");
+    w.safetyPromise = "Publishes publicly to the seller's TikTok account.";
     expect(checkWorkflowPublication(w, f, true).decision).toBe("live");
   });
 });
@@ -163,5 +176,19 @@ describe("workflow approval terms", () => {
     };
     expect(toolManifestDigest(m)).toMatch(/^[0-9a-f]{64}$/);
     expect(toolManifestDigest({ ...m, adapterVersion: "1.0.1" })).not.toBe(toolManifestDigest(m));
+  });
+
+  it("keeps the reviewed Higgsfield, MakeUGC and Zernio draft manifests unchanged", () => {
+    // A change here disables every listing reviewed under these digests until it is reviewed again.
+    expect(toolManifestDigest(PROVIDER_MANIFESTS.higgsfield)).toBe("7d134b902b57572ef5ea17a627ecd45f6f38d15032c880bb783db738452ccb3b");
+    expect(toolManifestDigest(PROVIDER_MANIFESTS.makeugc)).toBe("7879703730329aec0d4be309738edce88674b4df348ed630e7cac40322c3c28b");
+    expect(toolManifestDigest(PROVIDER_MANIFESTS.zernio)).toBe("e7de6ad95d22de9bb161e1c817dd3fb8b30eb8a933bde15f79289e5337e0b366");
+  });
+
+  it("declares the public publishing tool with the publish_external effect", () => {
+    const tools = PROVIDER_MANIFESTS.zernio_publish.tools;
+    expect(tools.map((t) => [t.name, t.effect])).toEqual([["publish_tiktok_carousel", "publish_external"]]);
+    expect(PROVIDER_MANIFESTS.slides.tools.map((t) => [t.name, t.effect])).toEqual([["render_carousel_slides", "read_only"]]);
+    for (const m of Object.values(PROVIDER_MANIFESTS)) expect(toolManifestSchema.parse(m)).toEqual(m);
   });
 });

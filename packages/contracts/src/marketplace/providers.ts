@@ -18,7 +18,7 @@ export const PROVIDER_MANIFESTS: Readonly<Record<ToolProvider, ToolManifest>> = 
         io: { inputs: [{ name: "prompt", kind: "text", required: true, maxChars: 2000 }], output: { kind: "image_url" } },
       },
       {
-        // Reads "Slide N:" lines (2 to 4) and an optional "Caption:" line; outputs {"images", "caption"}.
+        // Reads "Slide N:" lines (2 to 7, capped by the seller) and an optional "Caption:" line; outputs {"images", "caption"}.
         name: "generate_carousel_images",
         effect: "read_only",
         io: { inputs: [{ name: "slides", kind: "text", required: true, maxChars: 4000 }], output: { kind: "json" } },
@@ -63,5 +63,32 @@ export const PROVIDER_MANIFESTS: Readonly<Record<ToolProvider, ToolManifest>> = 
       },
     ],
   },
+  slides: {
+    provider: "slides",
+    adapterVersion: "1.0.0",
+    // Slides are rendered locally; only the finished PNGs are uploaded, through Zernio media storage.
+    upstream: "https://zernio.com/api/v1",
+    tools: [
+      {
+        // Renders a JSON slide plan ({"slides": [...], "caption"}, 2 to 7 slides) into 1080x1920 PNGs
+        // from a fixed template and uploads them; outputs {"images": public URLs, "caption"}.
+        name: "render_carousel_slides",
+        effect: "read_only",
+        io: { inputs: [{ name: "plan", kind: "text", required: true, maxChars: 12000 }], output: { kind: "json" } },
+      },
+    ],
+  },
+  zernio_publish: {
+    provider: "zernio_publish",
+    adapterVersion: "1.0.0",
+    upstream: "https://zernio.com/api/v1",
+    tools: [
+      {
+        // Publishes {"images", "caption"} publicly to the seller's TikTok account at once; no draft step.
+        name: "publish_tiktok_carousel",
+        effect: "publish_external",
+        io: { inputs: [{ name: "carousel", kind: "json", required: true, maxChars: 8000 }], output: { kind: "draft_post" } },
+      },
+    ],
+  },
 };
-
