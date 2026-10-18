@@ -120,6 +120,8 @@ abstract class BaseAdapter implements ProviderAdapter {
 }
 
 const MAX_SLIDES = 4;
+/** Keeps prompt plus style within the 2,000-character prompt input. */
+const MAX_STYLE_CHARS = 600;
 /** Edits per photo. */
 const MAX_EDITS = 3;
 
@@ -153,12 +155,15 @@ export class HiggsfieldAdapter extends BaseAdapter {
   readonly provider = "higgsfield" as const;
   /** Seller's own spend cap: images generated per carousel, 2 to 4. */
   readonly maxImages: number;
+  /** Seller's visual style, added to every generated image's prompt; empty when unset. */
+  readonly style: string;
   constructor(
     private readonly key: { id: string; secret: string } | null,
-    o: AdapterOptions & { maxImages?: number } = {},
+    o: AdapterOptions & { maxImages?: number; style?: string | undefined } = {},
   ) {
     super(o);
     this.maxImages = Math.min(MAX_SLIDES, Math.max(2, Math.trunc(o.maxImages ?? MAX_SLIDES)));
+    this.style = (o.style ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_STYLE_CHARS);
   }
 
   get configured(): boolean {
@@ -213,6 +218,7 @@ export class HiggsfieldAdapter extends BaseAdapter {
   }
 
   private generate(prompt: string, idempotencyKey: string): Promise<ProviderResult> {
+    if (this.style) prompt = `${prompt.slice(0, 2_000 - this.style.length - 9)}\n\nStyle: ${this.style}`;
     return this.submitAndPoll("/higgsfield-ai/soul/v2/standard", { prompt, aspect_ratio: "9:16" }, idempotencyKey);
   }
 
@@ -427,7 +433,7 @@ export function providerAdaptersFromEnv(env: NodeJS.ProcessEnv, o: AdapterOption
   const ugc = v("MAKEUGC_API_KEY") && v("MAKEUGC_AVATAR_ID") ? { apiKey: v("MAKEUGC_API_KEY")!, avatarId: v("MAKEUGC_AVATAR_ID")! } : null;
   const zernio = v("ZERNIO_API_KEY") && v("ZERNIO_TIKTOK_ACCOUNT_ID") ? { apiKey: v("ZERNIO_API_KEY")!, tiktokAccountId: v("ZERNIO_TIKTOK_ACCOUNT_ID")! } : null;
   return new Map<ToolProvider, ProviderAdapter>([
-    ["higgsfield", new HiggsfieldAdapter(hf, { ...o, maxImages: Number(v("HIGGSFIELD_MAX_IMAGES") ?? MAX_SLIDES) || MAX_SLIDES })],
+    ["higgsfield", new HiggsfieldAdapter(hf, { ...o, maxImages: Number(v("HIGGSFIELD_MAX_IMAGES") ?? MAX_SLIDES) || MAX_SLIDES, style: v("HIGGSFIELD_STYLE") })],
     ["makeugc", new MakeUgcAdapter(ugc, o)],
     ["zernio", new ZernioAdapter(zernio, o)],
   ]);

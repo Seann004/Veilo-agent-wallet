@@ -181,6 +181,7 @@ The facilitator support check, the fee-payer pin and finality gating are identic
 | `SELLER_HOST_ACCOUNTS_PER_IP_HOUR` | `5` | Self-service account creations allowed per client address per hour. There is also a global cap of 200 per hour. |
 | `HIGGSFIELD_API_KEY_ID`, `HIGGSFIELD_API_KEY_SECRET` | empty | Seller host only: the seller's own Higgsfield key. Without both, its Higgsfield tools report "Provider not configured" and are never quoted. Higgsfield tools are sold only as workflow steps (its terms forbid a bare pass-through). |
 | `HIGGSFIELD_MAX_IMAGES` | `4` | Seller host only: images generated per carousel, clamped to 2–4. A spend cap on the seller's own Higgsfield credits. |
+| `HIGGSFIELD_STYLE` | empty | Seller host only: a visual style (up to 600 characters) appended to every Higgsfield Soul prompt, so all carousel images share one look. |
 | `ZERNIO_API_KEY`, `ZERNIO_TIKTOK_ACCOUNT_ID` | empty | Seller host only: the seller's Zernio key and connected TikTok account. Without both, the TikTok draft tool reports "Provider not configured". Drafts are private (`SELF_ONLY`, `tiktokSettings.draft`) and are never published by Veilo. |
 | `CAROUSEL_SELLER_ORIGIN` | empty | Seed only: the seller host origin the carousel tools are listed on. Unset lists them on a placeholder host that cannot be paid. |
 | `MAKEUGC_API_KEY`, `MAKEUGC_AVATAR_ID` | empty | Seller host only: the seller's own MakeUGC key (paid plan) and the avatar its videos use. |

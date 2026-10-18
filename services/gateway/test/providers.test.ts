@@ -195,6 +195,15 @@ describe("TikTok carousel tools", () => {
     expect(JSON.parse(priv.calls[1]!.init!.body as string).tiktokSettings.privacy_level).toBe("SELF_ONLY");
   });
 
+  it("adds the seller's style to every generated image prompt, within the prompt bound", async () => {
+    const f = fakeFetch([[200, { request_id: "r1" }], [200, { status: "completed", images: [{ url: "https://cdn.example/1.png" }] }]]);
+    await new HiggsfieldAdapter({ id: "k", secret: "s" }, { ...opts(f.fn), style: "  matte charcoal,\n terracotta accent " }).run("generate_image", { prompt: "a mug" }, ctx);
+    expect(JSON.parse(f.calls[0]!.init!.body as string).prompt).toBe("a mug\n\nStyle: matte charcoal, terracotta accent");
+    const long = fakeFetch([[200, { request_id: "r2" }], [200, { status: "completed", images: [{ url: "https://cdn.example/2.png" }] }]]);
+    await new HiggsfieldAdapter({ id: "k", secret: "s" }, { ...opts(long.fn), style: "s".repeat(900) }).run("generate_image", { prompt: "p".repeat(2000) }, ctx);
+    expect((JSON.parse(long.calls[0]!.init!.body as string).prompt as string).length).toBeLessThanOrEqual(2000);
+  });
+
   it("names the provider's own refusal reason, bounded and as plain text", async () => {
     expect(refusalReason({ detail: "not_enough_credits" })).toBe(": not_enough_credits");
     expect(refusalReason({ detail: "<script>alert(1)</script>" })).toBe("");
