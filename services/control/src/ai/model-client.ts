@@ -43,10 +43,13 @@ const int = (v: unknown) => (typeof v === "number" && Number.isSafeInteger(v) &&
  * OpenAI and any OpenAI-compatible endpoint share the chat completions API; Anthropic uses its
  * Messages API. The key is sent only in the provider's own auth header.
  */
+/** Z.ai's GLM API; its models think by default unless the request turns thinking off. */
+const ZAI_HOSTS = new Set(["api.z.ai", "open.bigmodel.cn"]);
+
 export async function completeWithProvider(
   e: ModelEndpoint,
   messages: readonly PromptMessage[],
-  o: { maxOutputTokens: number; json?: boolean; timeoutMs?: number; fetch?: FetchLike },
+  o: { maxOutputTokens: number; json?: boolean; timeoutMs?: number; fetch?: FetchLike; noThinking?: boolean },
 ): Promise<ModelCompletion> {
   const fetchImpl = o.fetch ?? ((u, i) => fetch(u, i));
   const base = e.baseUrl.replace(/\/$/, "");
@@ -58,7 +61,15 @@ export async function completeWithProvider(
     : { authorization: `Bearer ${e.apiKey}`, "content-type": "application/json", ...(e.provider === "openrouter" ? { "x-title": "Veilo" } : {}) };
   const body = anthropic
     ? { model: e.model, max_tokens: o.maxOutputTokens, ...(system ? { system } : {}), messages: messages.filter((m) => m.role === "user").map((m) => ({ role: "user", content: m.content })) }
-    : { model: e.model, max_tokens: o.maxOutputTokens, temperature: 0.4, messages, ...(o.json ? { response_format: { type: "json_object" } } : {}) };
+    : {
+        model: e.model,
+        max_tokens: o.maxOutputTokens,
+        temperature: 0.4,
+        messages,
+        ...(o.json ? { response_format: { type: "json_object" } } : {}),
+        // Thinking spends the output budget before any answer; short structured calls skip it.
+        ...(o.noThinking && ZAI_HOSTS.has(new URL(base).hostname) ? { thinking: { type: "disabled" } } : {}),
+      };
   let res: Response;
   try {
     res = await fetchImpl(url, { method: "POST", headers, body: JSON.stringify(body), redirect: "error", signal: AbortSignal.timeout(o.timeoutMs ?? 60_000) });

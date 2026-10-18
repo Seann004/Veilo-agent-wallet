@@ -78,6 +78,24 @@ describe("bring your own model key", () => {
     await expect(ai.run({ ...agent, status: "paused" }, { taskId: paused, sku: "summarize", input: { text: "x" } })).rejects.toBeInstanceOf(ControlError);
   });
 
+  it("plans on Z.ai GLM with thinking off and room to answer; other calls and providers keep defaults", async () => {
+    env = createEnv();
+    activateDefaults(env);
+    const p = fakeProvider(() => openaiReply("{\"plan\":true}"));
+    const ai = new AiService(env.ledger, ProviderKeyVault.ephemeral(), p.fetchImpl);
+    ai.set(env.ws.id, "owner", { provider: "openai_compatible", baseUrl: "https://api.z.ai/api/coding/paas/v4", apiKey: KEY, model: "glm-5.3-flash" });
+    const agent = getAgent(env.ledger, env.agents.Prince.id)!;
+    const taskId = runningTask(env, agent.id, "zai");
+    await ai.plan(agent, { taskId, purpose: "plan", messages: [{ role: "user", content: "Plan it." }] });
+    expect(p.calls[0]!.body).toMatchObject({ thinking: { type: "disabled" }, max_tokens: 1_200 });
+    await ai.run(agent, { taskId, sku: "summarize", input: { text: "x" } });
+    expect(p.calls[1]!.body.thinking).toBeUndefined();
+
+    ai.set(env.ws.id, "owner", { provider: "openai", apiKey: KEY, model: "gpt-4.1-mini" });
+    await ai.plan(agent, { taskId, purpose: "plan", messages: [{ role: "user", content: "Plan it." }] });
+    expect(p.calls[2]!.body.thinking).toBeUndefined();
+  });
+
   it("speaks the Anthropic Messages API with the key in its own header", async () => {
     env = createEnv();
     activateDefaults(env);

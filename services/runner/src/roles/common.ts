@@ -188,7 +188,9 @@ export async function plan(ctx: RoleContext, purpose: string, system: string, us
   const outcome = r.body?.gateway?.outcome;
   if (r.status === 200 && outcome?.status === "succeeded" && typeof outcome.text === "string") return outcome.text;
   const code = r.body?.error?.code ?? r.body?.gateway?.error?.code ?? outcome?.code ?? outcome?.status ?? `HTTP ${r.status}`;
-  ctx.notes.push(`Operator-sponsored planning unavailable for "${purpose}" (${code}); a deterministic plan was used and the call was not retried.`);
+  const who = typeof r.body?.label === "string" && /own|your/i.test(r.body.label) ? "Planning on your model" : "Operator-sponsored planning";
+  const why = typeof outcome?.message === "string" ? `: ${outcome.message.replace(/\s+/g, " ").slice(0, 160)}` : "";
+  ctx.notes.push(`${who} failed for "${purpose}" (${code}${why}); a fixed plan was used and the call was not retried.`);
   return undefined;
 }
 

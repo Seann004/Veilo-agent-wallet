@@ -308,7 +308,7 @@ describe("LLM-01 at runner level", () => {
     expect(done.outcome.taskState).toBe("incomplete");
     expect(analyzeCalls).toBe(1);
     const b = brief(s, run.body.taskId);
-    expect(b.content).toContain("Operator-sponsored planning unavailable");
+    expect(b.content).toContain("Operator-sponsored planning failed");
     expect(b.content).toContain("analyze via prepaid_credits: 200000 gateway microcredits — Waiting for confirmation");
     expect(b.content).toContain("[incomplete] No paid analysis result is available.");
     // The uncertain usage keeps its credits reserved; no per-call fallback purchase was made.

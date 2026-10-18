@@ -113,7 +113,7 @@ export class AiService {
     return { provider: r.provider, baseUrl: r.base_url, model: r.model, apiKey: this.vault.open(workspaceId, r.key_ciphertext) };
   }
 
-  async #complete(workspaceId: string, messages: readonly PromptMessage[], maxOutputTokens: number, json: boolean, model?: string) {
+  async #complete(workspaceId: string, messages: readonly PromptMessage[], maxOutputTokens: number, json: boolean, model?: string, noThinking = false) {
     const endpoint = { ...this.#endpoint(workspaceId), ...(model ? { model } : {}) };
     // Remote providers go through a fetch that refuses non-public addresses at connect time;
     // only an explicit loopback URL (a local model server) uses a plain fetch.
@@ -121,7 +121,7 @@ export class AiService {
     if (local && !this.allowLocal) throw new ControlError("POLICY_DENIED", "local model servers are disabled on this deployment");
     const fetchImpl = this.fetchImpl ?? (local ? undefined : publicFetch);
     try {
-      return await completeWithProvider(endpoint, messages, { maxOutputTokens, json, ...(fetchImpl ? { fetch: fetchImpl } : {}) });
+      return await completeWithProvider(endpoint, messages, { maxOutputTokens, json, noThinking, ...(fetchImpl ? { fetch: fetchImpl } : {}) });
     } catch (error) {
       // A rejection (bad key, unknown model, rate limit) is the owner's to fix; anything else may be transient.
       if (error instanceof ModelCallError) throw new ControlError(error.kind === "rejected" ? "INVALID_REQUEST" : "PROVIDER_UNAVAILABLE", error.message);
@@ -166,7 +166,8 @@ export class AiService {
   async plan(agent: AgentRow, body: { taskId: string; purpose: string; messages: PromptMessage[]; maxOutputTokens?: number | undefined }): Promise<{ status: number; body: Record<string, unknown> }> {
     const callIndex = this.#count(agent, body.taskId, "planning", body.purpose);
     try {
-      const r = await this.#complete(agent.workspace_id, body.messages, Math.min(body.maxOutputTokens ?? 800, 1_000), false);
+      // Planning answers in short structured text, so it gets a little more room and no thinking.
+      const r = await this.#complete(agent.workspace_id, body.messages, Math.min(Math.max(body.maxOutputTokens ?? 800, 1_200), 2_000), false, undefined, true);
       return { status: 200, body: { label: BYOK_LABEL, callIndex, gateway: { outcome: { status: "succeeded", text: r.text, model: r.model, mode: "byok" } } } };
     } catch (error) {
       if (!(error instanceof ControlError)) throw error;
