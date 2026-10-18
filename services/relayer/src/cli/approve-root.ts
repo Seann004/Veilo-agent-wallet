@@ -7,7 +7,8 @@ import { dirname, join, resolve } from "node:path";
 import { address, isAddress } from "@solana/kit";
 import { VeiloConfigError, findRepoRoot, loadConfig, loadDotEnv } from "@veilo/contracts";
 import { PROTOTYPE_APPROVAL_RULE } from "@veilo/contracts/relayer";
-import { buildApprovedTree, getPoseidon, updateApprovedRootInstruction, type PoolReplay } from "@veilo/privacy-sdk";
+import { buildApprovedTree, getPoseidon, updateApprovedRootInstruction } from "@veilo/privacy-sdk";
+import { applyApprovalRule } from "../auto-approve";
 import { createRpcRelayerChain } from "../chain";
 import { openRelayerDb } from "../db";
 import { verifyDeployment } from "../deployment";
@@ -19,21 +20,7 @@ function arg(name: string): string | undefined {
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
 
-/**
- * The prototype rule: labels of inserted (finalized) deposits whose refund authority is one of
- * the configured synthetic/test participants. Previously approved labels keep their positions.
- */
-export function applyApprovalRule(replay: PoolReplay, participants: ReadonlySet<string>, previous: readonly bigint[]): bigint[] {
-  const out = [...previous];
-  const seen = new Set(previous);
-  const ordered = [...replay.deposits.values()].sort((a, b) => (a.queueSeq < b.queueSeq ? -1 : 1));
-  for (const d of ordered) {
-    if (d.state !== "inserted" || !participants.has(d.refundAuthority) || seen.has(d.label)) continue;
-    out.push(d.label);
-    seen.add(d.label);
-  }
-  return out;
-}
+export { applyApprovalRule };
 
 async function main(): Promise<void> {
   const rootDir = findRepoRoot();

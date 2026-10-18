@@ -247,6 +247,7 @@ Inference runs at most once per purchase. A crash or a lost lease resumes from t
 | `RELAYER_SPONSOR_LAMPORT_CAP` | `100000000` | Total sponsor exposure (fees spent + outstanding rent) the relayer may incur. |
 | `APPROVED_LABELS_PATH` | `artifacts/deployment/approved-labels.json` | Operator-published ordered approved-label list (written by `pnpm --filter @veilo/relayer approve-root`). |
 | `APPROVED_PARTICIPANTS` | empty | Comma-separated synthetic/test participant addresses whose inserted deposits the prototype rule approves. |
+| `RELAYER_AUTO_APPROVE_KEY_PATH` | empty | Relayer only, opt-in: path (from the repository root) to the approval authority keypair. With it and `APPROVED_PARTICIPANTS`, the relayer applies the same rule as `approve-root` on every tick, so a participant's inserted deposit becomes spendable without the manual tool. Without it, approval stays manual. |
 | `VEILO_CIRCUIT_BUILD_DIR` | `circuits/build` | Proving files (hash-checked against `artifacts/circuits/manifest.json`). |
 | `VEILO_CONTROL_URL`, `VEILO_RELAYER_URL` | loopback + service port | Overrides for the wallet's control and relayer clients. |
 | `WALLET_NOTE_SYNC_MS` | `10000` | Interval of the wallet's background note sync against verified public state. Inserted deposits and change notes become spendable, and are reported to control, without an owner session. |
