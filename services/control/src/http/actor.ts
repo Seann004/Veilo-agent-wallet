@@ -83,7 +83,11 @@ export function assertOrigin(deps: AuthDeps, req: Request): void {
   }
 }
 
-export function requireActor(deps: AuthDeps, allowed: readonly ActorKind[]) {
+/**
+ * `csrf: false` is only for ending the caller's own session: the Origin check still applies, and
+ * a forged request can at most sign the owner out, which must stay possible without the token.
+ */
+export function requireActor(deps: AuthDeps, allowed: readonly ActorKind[], opts: { csrf?: boolean } = {}) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const actor = resolveActor(deps, req);
     if (!actor) throw new ControlError("UNAUTHENTICATED", "valid credentials are required");
@@ -95,7 +99,7 @@ export function requireActor(deps: AuthDeps, allowed: readonly ActorKind[]) {
     if ((actor.kind === "owner" || actor.kind === "guest") && MUTATING.has(req.method)) {
       assertOrigin(deps, req);
       const header = req.headers[CSRF_HEADER];
-      if (typeof header !== "string" || !safeEqualHex(sha256Hex(header), actor.csrfHash)) {
+      if (opts.csrf !== false && (typeof header !== "string" || !safeEqualHex(sha256Hex(header), actor.csrfHash))) {
         throw new ControlError("FORBIDDEN", "missing or invalid anti-CSRF token");
       }
     }

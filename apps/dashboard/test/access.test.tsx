@@ -162,6 +162,23 @@ describe("shell access", () => {
     expect(screen.queryByText("Read-only public view.")).toBeNull();
   });
 
+  it("ends a signed-in session whose anti-CSRF cookie is missing, once, so the owner signs in again", async () => {
+    const f = shellFetch({ role: "guest", address: GUEST_ADDRESS, expiresAt: "2026-10-18T00:00:00.000Z", publicView: false });
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(`${init?.method ?? "GET"} ${String(input)}`);
+      return f(input, init);
+    });
+    render(
+      <Shell>
+        <p>page body</p>
+      </Shell>,
+    );
+    await waitFor(() => expect(calls).toContain("POST /api/control/session/logout"));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(calls.filter((c) => c === "POST /api/control/session/logout")).toHaveLength(1);
+  });
+
   it("asks for sign-in when there is no session and public view is off", async () => {
     vi.stubGlobal("fetch", shellFetch({ role: "none", address: null, expiresAt: null, publicView: false }, 401));
     render(

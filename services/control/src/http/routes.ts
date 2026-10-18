@@ -196,7 +196,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     });
   });
 
-  r.post("/session/logout", signedIn, (req, res) => {
+  r.post("/session/logout", requireActor(deps, ["owner", "guest"], { csrf: false }), (req, res) => {
     const a = actorOf(res);
     if (a.kind === "owner" || a.kind === "guest") revokeSession(ledger, a.sessionId);
     res.setHeader("Set-Cookie", clearedSessionCookie(deps.session.secureCookies || req.secure));

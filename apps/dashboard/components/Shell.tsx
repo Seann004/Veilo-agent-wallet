@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Wallet, WalletAccount } from "@wallet-standard/base";
 import { NO_ACCESS, ROLE_TITLE, can, deniedReason, type Access, type Capability, type SessionInfo } from "../lib/access";
-import { api, health as fetchHealth } from "../lib/api";
+import { api, csrfToken, health as fetchHealth } from "../lib/api";
 import { shortKey } from "../lib/format";
 import { ROLE_LABEL, agentStateLabel } from "../lib/labels";
 import type { Agent, Health, Workspace } from "../lib/types";
@@ -167,6 +167,25 @@ export function Shell({ children }: { children: ReactNode }) {
   const reloadAccess = async () => {
     await Promise.all([session.reload(), ws.reload()]);
   };
+  // A session whose anti-CSRF cookie is gone can read but every action fails; end it cleanly (once
+  // per page load) so the owner signs in again instead of hitting "missing anti-CSRF token".
+  const healing = useRef(false);
+  useEffect(() => {
+    if (!signedIn || healing.current || csrfToken() !== undefined) return;
+    healing.current = true;
+    void (async () => {
+      try {
+        await api("control", "/session/logout", { method: "POST" });
+      } catch {
+        // Already ended upstream; reloading access shows the sign-in screen either way.
+      } finally {
+        clearResourceCache();
+        rememberWallet(null);
+        setConnected(null);
+        await reloadAccess();
+      }
+    })();
+  });
   useEffect(() => setNavOpen(false), [pathname]);
   useEffect(() => {
     const media = window.matchMedia("(max-width: 900px)");

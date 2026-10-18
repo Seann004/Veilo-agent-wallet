@@ -203,6 +203,20 @@ describe("dashboard proxy", () => {
     expect(post.status).toBe(404);
   });
 
+  it("keeps the anti-CSRF cookie on an unrelated 401 and lets sign-out through without the token", async () => {
+    const refused = upstream(() => Response.json({ error: { code: "UNAUTHENTICATED", message: "x" } }, { status: 401 }));
+    const res = await proxy(req("control/workspace", { headers: { cookie: "veilo_session=vos_s; veilo_csrf=c" } }), "control", ["workspace"], { config, fetchImpl: refused.fetchImpl });
+    expect(res.status).toBe(401);
+    expect(res.headers.getSetCookie()).toEqual([]);
+
+    const out = upstream(() => new Response(null, { status: 204 }));
+    const logout = await proxy(req("control/session/logout", { method: "POST", headers: { origin: ORIGIN, cookie: "veilo_session=vos_s" }, body: {} }), "control", ["session", "logout"], { config, fetchImpl: out.fetchImpl });
+    expect(logout.status).toBe(204);
+    expect(logout.headers.getSetCookie().some((c) => c.startsWith("veilo_csrf=;"))).toBe(true);
+    const foreign = await proxy(req("control/session/logout", { method: "POST", headers: { origin: "https://evil.example", cookie: "veilo_session=vos_s" }, body: {} }), "control", ["session", "logout"], { config, fetchImpl: out.fetchImpl });
+    expect(foreign.status).toBe(403);
+  });
+
   it("forwards GET query strings and reports an unreachable service as NOT_READY", async () => {
     const u = upstream();
     await proxy(req(`control/tasks?agentId=${AGENT}&limit=5`), "control", ["tasks"], { config, fetchImpl: u.fetchImpl });

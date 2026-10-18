@@ -369,6 +369,15 @@ describe("guest sessions", () => {
     expect((await call(`/agents/${prince}/run`, { method: "POST", headers: auth(g), body: { objective: "Next hour" } })).status).toBe(202);
   });
 
+  it("signs out without the anti-CSRF token, but only from the dashboard origin", async () => {
+    const { env } = await start();
+    const owner = await signIn(env.owner);
+    expect((await call("/session/logout", { method: "POST", headers: { cookie: owner.cookie, origin: "https://evil.example" }, body: {} })).status).toBe(403);
+    expect((await call("/workspace", { headers: { cookie: owner.cookie } })).status).toBe(200);
+    expect((await call("/session/logout", { method: "POST", headers: { cookie: owner.cookie, origin: ORIGIN }, body: {} })).status).toBe(204);
+    expect((await call("/workspace", { headers: { cookie: owner.cookie } })).status).toBe(401);
+  });
+
   it("logs a guest out and invalidates sessions of wallets removed from the guest list", async () => {
     const { guest, env, session } = await start();
     const g = await signIn(guest);
