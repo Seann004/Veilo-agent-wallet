@@ -45,6 +45,30 @@ A marketplace quote must bind the reviewed listing, runtime and payout versions,
 
 Managed listings settle on the seller-host gateway profile to the listing's verified payout address, never through the operator's gateway merchant. Receipt-to-job uniqueness is enforced in the database (checked in the live RLS e2e script). Two devnet smokes settled directly to a seller's payout ATA with a publicly funded payer; a private-pool-funded hire is not yet run on devnet. One finalized receipt may fund one job and one earnings event. Refunds are separate seller-funded, finalized transfers to an owner-verified destination, cumulatively capped at the settled amount; failed delivery must remain visibly paid. Refund rules pass the live RLS e2e script; no live refund transfer is recorded. See the [marketplace guide](./marketplace.md).
 
+## Devnet swap
+
+An owner-approved swap is a private purchase whose second leg is an Orca swap instead of an x402 payment. It exists only on Solana devnet and has **not yet run** end to end on devnet; it is unit-tested in control, wallet, relayer and runner against fakes.
+
+1. **Approval.** The owner approves one service, `swap:orca-devnet-sol-usdc` with SKU `swap-usdc-to-sol`, whose price is a **maximum per swap** (at most 5,000,000 base units). The pool (whirlpool `5GPCnpWwoDayCP5FVCJT1cS7dePufC5FrjPTVvPoUYnm`), direction (USDC to wrapped SOL), slippage (100 bps) and destination (`OWNER_RECOVERY_ADDRESS`) are fixed in code.
+2. **Authorization.** The agent's input is exactly `{"amountUsdc": "<base units>"}`; any other field is refused. Control checks that the input matches the request digest and does not exceed the approved maximum, then prices the purchase at the requested amount, so the usual atomic reservation applies every cap to it. A swap is funded only through `private_x402`.
+3. **Private funding.** The pool withdrawal funds a fresh wallet exactly as for an x402 purchase; the stored funding binding names the whirlpool and swap terms.
+4. **Authority before signing.** Control records `sign_merchant` (rechecking policy and revocation) and asks the wallet to sign (`POST /fundings/:id/swap`).
+5. **Wallet checks.** The wallet requires control's funding `finalized` and merchant `signed`. It reads the fresh wallet's USDC balance and swaps the **whole balance**, because anyone can send tokens to the public account and the same transaction must close it empty. It quotes on Orca, decodes the quoted `swapV2` and refuses it unless it sells exactly that balance of the fresh wallet's own USDC on the pinned whirlpool for the quoted minimum. It records `swap.signature_produced` before signing, so a crash never leads to a second signature.
+6. **Relayer co-signing (`POST /swaps`).** The relayer accepts exactly five instructions: compute-unit limit; the sponsor creating the fresh wallet's wrapped-SOL account; one Orca `swapV2` on the pinned whirlpool; closing the wrapped-SOL account to the stated destination; closing the emptied USDC account with its rent to the sponsor. It verifies the fresh-wallet signature, checks the sponsor cap counting in-flight swaps at their worst case, and rechecks both the swap id and the cap inside the transaction that records it, so a concurrent retry neither re-broadcasts nor counts twice. Its crank marks a swap finalized only once it can read the fee from the finalized transaction.
+7. **Settlement.** A finalized swap records the merchant leg finalized at the requested amount and the fulfilment delivered, with the minimum and estimated SOL output and the signature. A failed or expired swap moves the merchant leg to `expired_unsettled` and fulfilment to `abandoned`, and marks the purchase recoverable; the USDC stays in the fresh wallet. A wallet refusal (`recovery_required`) keeps the merchant leg `signed`, because the refusal alone does not prove whether a signature exists.
+
+**Recovery of a swap that was never signed.** If the wallet holds no stored swap and no `swap.signature_produced` record for the purchase, owner recovery calls control's `POST /internal/wallet/purchases/:id/swap-not-signed` under the same lock that signs swaps. Control moves the merchant leg from `signed` to `expired_unsettled` with reason `swap_never_signed` and abandons fulfilment, and the wallet refuses to sign afterwards. The funded USDC is then recovered to `OWNER_RECOVERY_ADDRESS` like any funded wallet.
+
+**Withdrawing approval** refuses new swaps at authorization and cancels a reserved swap whose proof was not released. A swap already released keeps settling or becomes recoverable.
+
+**Privacy.** The swap is paid by a fresh wallet funded from the pool, but the SOL lands publicly at the owner's configured address, which links that swap to the owner.
+
+**Known gaps (in code, not fixed):**
+
+- The relayer does not reserve sponsor capacity for the later swap when it accepts the funding withdrawal, so a swap can be refused `BUDGET_EXCEEDED` after its funding settled; the USDC then stays recoverable in the fresh wallet.
+- A failed swap's sponsor fee is recorded by the relayer but not passed to control's purchase record.
+- In `services/relayer/src/withdrawals.ts`, a withdrawal fee is not recorded, and a recovery fee is recorded as 0, when `getTransaction` returns nothing.
+
 ## Recovery and failure handling
 
 | Boundary | Required handling |
@@ -55,6 +79,8 @@ Managed listings settle on the seller-host gateway profile to the listing's veri
 | Settlement finalized, issuance interrupted | Reconcile and issue the same pack once |
 | Provider request outcome unknown | Record uncertain or paid-without-result; no blind retry without upstream idempotency |
 | Agent stopped with a funded wallet | Recover only to the configured owner destination after conflicting authority is resolved |
+| Swap leg never signed | Owner recovery records `swap_never_signed` in control, then recovers the funded USDC |
+| Swap failed or expired on chain | Merchant leg `expired_unsettled`; USDC stays in the fresh wallet, recoverable by the owner |
 
 Quote expiry, transaction last-valid block height and proof `valid_until_slot` are different bounds. Expiring a transaction does not necessarily invalidate a released proof that can be placed in another transaction. Release its reservation only after finalized chain evidence proves the authorization is no longer usable and no spend settled.
 
