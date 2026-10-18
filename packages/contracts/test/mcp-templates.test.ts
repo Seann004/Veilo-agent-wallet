@@ -74,7 +74,6 @@ describe("templated MCP tools", () => {
     expect(pin.template.codeSha256).toBe(mcpTemplateCodeDigest(MCP_TEMPLATES[0]!));
     // The tool digest covers the upstream digest, so approval records it.
     expect(mcpToolDigest(templatedToolPin(pin.name, "b".repeat(64)))).not.toBe(mcpToolDigest(pin));
-    const { template: _t, ...plain } = pin;
-    expect(mcpToolDigest(plain)).not.toBe(mcpToolDigest(pin));
+    expect(mcpToolDigest({ ...pin, template: undefined })).not.toBe(mcpToolDigest(pin));
   });
 });
