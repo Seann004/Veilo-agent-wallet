@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  CAROUSEL_SLIDE_COUNT_RULE,
+  CAROUSEL_SLIDES,
   checkWorkflowPublication,
   PROVIDER_MANIFESTS,
   toolManifestSchema,
@@ -190,5 +192,19 @@ describe("workflow approval terms", () => {
     expect(tools.map((t) => [t.name, t.effect])).toEqual([["publish_tiktok_carousel", "publish_external"]]);
     expect(PROVIDER_MANIFESTS.slides.tools.map((t) => [t.name, t.effect])).toEqual([["render_carousel_slides", "read_only"]]);
     for (const m of Object.values(PROVIDER_MANIFESTS)) expect(toolManifestSchema.parse(m)).toEqual(m);
+  });
+
+  it("keeps the slide designer and public publish manifests unchanged when the slide range moves", () => {
+    expect(toolManifestDigest(PROVIDER_MANIFESTS.slides)).toBe("33eb1d6eb7c1e8630e0b3d3dd48c16a7d89c935ff5097ec87d5515c102f2711c");
+    expect(toolManifestDigest(PROVIDER_MANIFESTS.zernio_publish)).toBe("e55fc504ed93decfd5d800d5398d47a6f006783c20c907bb3613f03bc3e4cf5e");
+  });
+});
+
+describe("carousel slide count", () => {
+  it("lets buyers ask for 3 to 8 slides and falls back to 6", () => {
+    expect(CAROUSEL_SLIDES).toEqual({ min: 3, max: 8, fallback: 6 });
+    expect(CAROUSEL_SLIDE_COUNT_RULE).toBe("N is the number in the slides section, a whole number from 3 to 8; when it is missing or outside 3 to 8 use 6.");
+    // The run input is one character wide, so the maximum must stay a single digit.
+    expect(String(CAROUSEL_SLIDES.max)).toHaveLength(1);
   });
 });

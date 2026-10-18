@@ -5,14 +5,18 @@ const NO_HOSTS = new Set<string>();
 const slide = (over: Partial<Slide> = {}): Slide => ({ label: "hook", headline: "Five repos I use every day", accent: "every day", body: "Small tools.", card: null, score: "", imageUrl: null, ...over });
 
 describe("slide plan", () => {
-  it("accepts 2 to 7 slides, drops extras and refuses fewer or a missing headline", () => {
-    const many = Array.from({ length: 9 }, (_, i) => ({ headline: `slide ${i}` }));
-    const p = parseSlidePlan({ slides: many, caption: "c" }, NO_HOSTS);
-    expect("slides" in p && p.slides.length).toBe(MAX_SLIDES);
-    expect(parseSlidePlan({ slides: [{ headline: "one" }] }, NO_HOSTS)).toHaveProperty("problem");
+  it("accepts 3 to 8 slides and refuses more, fewer or a missing headline", () => {
+    const n = (count: number) => Array.from({ length: count }, (_, i) => ({ headline: `slide ${i}` }));
+    expect(MAX_SLIDES).toBe(8);
+    for (const count of [3, 8]) {
+      const p = parseSlidePlan({ slides: n(count), caption: "c" }, NO_HOSTS);
+      expect("slides" in p && p.slides.length).toBe(count);
+    }
+    expect(parseSlidePlan({ slides: n(9) }, NO_HOSTS)).toEqual({ problem: 'the plan needs a "slides" array of 3 to 8 slides' });
+    expect(parseSlidePlan({ slides: n(2) }, NO_HOSTS)).toHaveProperty("problem");
     expect(parseSlidePlan({ slides: "x" }, NO_HOSTS)).toHaveProperty("problem");
     expect(parseSlidePlan(null, NO_HOSTS)).toHaveProperty("problem");
-    expect(parseSlidePlan({ slides: [{ headline: "a" }, { body: "no headline" }] }, NO_HOSTS)).toEqual({ problem: "slide 2 has no headline" });
+    expect(parseSlidePlan({ slides: [{ headline: "a" }, { body: "no headline" }, { headline: "c" }] }, NO_HOSTS)).toEqual({ problem: "slide 2 has no headline" });
   });
 
   it("bounds and flattens every field, keeps a card only with a repo, and drops non-allowlisted images", () => {
@@ -21,6 +25,7 @@ describe("slide plan", () => {
         slides: [
           { headline: `a\n‮b ${"x".repeat(200)}`, card: { owner: "o", description: "no repo" }, imageUrl: "https://cdn.higgsfield.ai/a.png" },
           { headline: "b", card: { owner: "BurntSushi", repo: "ripgrep", stars: 50000 }, imageUrl: "https://evil.example/a.png" },
+          { headline: "c" },
         ],
       },
       new Set(["cdn.higgsfield.ai"]),

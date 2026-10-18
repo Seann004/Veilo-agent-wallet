@@ -20,6 +20,16 @@ export const MARKETPLACE_LIMITS = {
   maxDelegationDepth: 1,
 } as const;
 
+/**
+ * Slides a buyer may ask for in a TikTok carousel workflow. The seller host refuses a designed
+ * slide plan outside this range and caps Higgsfield images at `max`; a planner given a missing or
+ * out-of-range count writes `fallback` slides.
+ */
+export const CAROUSEL_SLIDES = { min: 3, max: 8, fallback: 6 } as const;
+
+/** Planner instruction for the buyer's slide count, matching CAROUSEL_SLIDES. */
+export const CAROUSEL_SLIDE_COUNT_RULE = `N is the number in the slides section, a whole number from ${CAROUSEL_SLIDES.min} to ${CAROUSEL_SLIDES.max}; when it is missing or outside ${CAROUSEL_SLIDES.min} to ${CAROUSEL_SLIDES.max} use ${CAROUSEL_SLIDES.fallback}.`;
+
 /** Platform fee in basis points. This release enforces zero; any other value is refused. */
 export const MARKETPLACE_FEE_BPS = 0;
 

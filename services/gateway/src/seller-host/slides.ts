@@ -1,9 +1,10 @@
+import { CAROUSEL_SLIDES } from "@veilo/contracts/marketplace";
 import type { Browser } from "playwright-core";
 
 export const SLIDE_WIDTH = 1080;
 export const SLIDE_HEIGHT = 1920;
-export const MIN_SLIDES = 2;
-export const MAX_SLIDES = 7;
+export const MIN_SLIDES = CAROUSEL_SLIDES.min;
+export const MAX_SLIDES = CAROUSEL_SLIDES.max;
 
 export interface RepoCard {
   owner: string;
@@ -66,14 +67,14 @@ export function allowedImageUrl(value: unknown, hosts: ReadonlySet<string>): str
 }
 
 /**
- * Reads a slide plan object ({"slides": [...], "caption"}). Slides beyond the seventh are
- * dropped; fewer than two, or a slide without a headline, is refused.
+ * Reads a slide plan object ({"slides": [...], "caption"}). A plan outside MIN_SLIDES to
+ * MAX_SLIDES slides, or a slide without a headline, is refused before anything is rendered.
  */
 export function parseSlidePlan(plan: Record<string, unknown> | null, imageHosts: ReadonlySet<string>): SlidePlan | { problem: string } {
   const raw = Array.isArray(plan?.slides) ? (plan.slides as unknown[]) : [];
-  if (raw.length < MIN_SLIDES) return { problem: `the plan needs a "slides" array of ${MIN_SLIDES} to ${MAX_SLIDES} slides` };
+  if (raw.length < MIN_SLIDES || raw.length > MAX_SLIDES) return { problem: `the plan needs a "slides" array of ${MIN_SLIDES} to ${MAX_SLIDES} slides` };
   const slides: Slide[] = [];
-  for (const [i, item] of raw.slice(0, MAX_SLIDES).entries()) {
+  for (const [i, item] of raw.entries()) {
     const s = typeof item === "object" && item !== null && !Array.isArray(item) ? (item as Record<string, unknown>) : {};
     const headline = clean(s.headline, LIMITS.headline);
     if (headline === "") return { problem: `slide ${i + 1} has no headline` };

@@ -152,6 +152,11 @@ describe("TikTok carousel tools", () => {
     expect(f.calls.filter((c) => c.init?.method === "POST")).toHaveLength(2);
   });
 
+  it("clamps the seller's image cap to 2 to 8, defaulting to 8", () => {
+    const cap = (v?: string) => (providerAdaptersFromEnv({ HIGGSFIELD_API_KEY_ID: "k", HIGGSFIELD_API_KEY_SECRET: "s", ...(v === undefined ? {} : { HIGGSFIELD_MAX_IMAGES: v }) }).get("higgsfield") as HiggsfieldAdapter).maxImages;
+    expect([cap(), cap("8"), cap("9"), cap("35"), cap("1"), cap("5")]).toEqual([8, 8, 8, 8, 2, 5]);
+  });
+
   it("Higgsfield refuses a plan with fewer than two slides and makes no request", async () => {
     const f = fakeFetch([]);
     expect(await new HiggsfieldAdapter({ id: "k", secret: "s" }, opts(f.fn)).run("generate_carousel_images", { slides: "Slide 1: only one" }, ctx)).toMatchObject({ status: "failed", code: "INPUT_REQUIRED" });
@@ -255,6 +260,7 @@ describe("designed slides and public publishing", () => {
     slides: [
       { label: "hook", headline: "Five repos I use every day", accent: "every day", body: "Small tools, big wins." },
       { label: "repo", headline: "Fast search", accent: "search", body: "Grep, but quicker.", card: { owner: "BurntSushi", repo: "ripgrep", description: "Recursive search", language: "Rust", stars: "50k" }, score: "9" },
+      { label: "verdict", headline: "Try one today", accent: "today", body: "Start with search." },
     ],
     caption: "my daily repos #dev",
   };
@@ -275,19 +281,21 @@ describe("designed slides and public publishing", () => {
 
   it("renders every slide before uploading, presigns on the Zernio origin and PUTs each PNG without the API key", async () => {
     const r = fakeRenderer();
-    const f = fakeFetch([presign(1), [200, {}], presign(2), [200, {}]]);
+    const f = fakeFetch([presign(1), [200, {}], presign(2), [200, {}], presign(3), [200, {}]]);
     const media = new RenderedMedia();
     const a = new SlidesAdapter({ apiKey: "zk-secret" }, { ...opts(f.fn), renderer: r, media });
     const out = await a.run("render_carousel_slides", { plan: fenced(PLAN) }, ctx);
     expect(out).toMatchObject({ status: "succeeded", artifact: { kind: "json" } });
-    expect(JSON.parse((out as { artifact: { text: string } }).artifact.text)).toEqual({ images: ["https://media.zernio.com/temp/1.png", "https://media.zernio.com/temp/2.png"], caption: "my daily repos #dev" });
-    expect(r.pages).toHaveLength(2);
+    expect(JSON.parse((out as { artifact: { text: string } }).artifact.text)).toEqual({ images: ["https://media.zernio.com/temp/1.png", "https://media.zernio.com/temp/2.png", "https://media.zernio.com/temp/3.png"], caption: "my daily repos #dev" });
+    expect(r.pages).toHaveLength(3);
     expect(r.pages[1]).toContain("ripgrep");
     expect(f.calls.map((c) => [c.init?.method, c.url.split("?")[0]])).toEqual([
       ["POST", "https://zernio.com/api/v1/media/presign"],
       ["PUT", "https://uploads.storage.example/put/1"],
       ["POST", "https://zernio.com/api/v1/media/presign"],
       ["PUT", "https://uploads.storage.example/put/2"],
+      ["POST", "https://zernio.com/api/v1/media/presign"],
+      ["PUT", "https://uploads.storage.example/put/3"],
     ]);
     expect(JSON.parse(f.calls[0]!.init!.body as string)).toMatchObject({ contentType: "image/png", size: 4 });
     expect(new Headers(f.calls[1]!.init?.headers).get("authorization")).toBeNull();
@@ -301,6 +309,8 @@ describe("designed slides and public publishing", () => {
     const a = new SlidesAdapter({ apiKey: "zk" }, { ...opts(f.fn), renderer: fakeRenderer() });
     expect(await a.run("render_carousel_slides", { plan: fenced({ slides: [PLAN.slides[0]] }) }, ctx)).toMatchObject({ status: "failed", code: "INPUT_REQUIRED" });
     expect(await a.run("render_carousel_slides", { plan: "no json here" }, ctx)).toMatchObject({ status: "failed", code: "INPUT_REQUIRED" });
+    const nine = { slides: Array.from({ length: 9 }, (_, i) => ({ headline: `slide ${i + 1}` })), caption: "c" };
+    expect(await a.run("render_carousel_slides", { plan: fenced(nine) }, ctx)).toMatchObject({ status: "failed", code: "INPUT_REQUIRED" });
     expect(f.calls).toHaveLength(0);
   });
 

@@ -158,7 +158,7 @@ export function parseCarouselPlan(text: string): { slides: string[]; caption: st
 /** Higgsfield Soul text-to-image: submit, then poll the request status. Server-side key only. */
 export class HiggsfieldAdapter extends BaseAdapter {
   readonly provider = "higgsfield" as const;
-  /** Seller's own spend cap: images generated per carousel, 2 to 7. */
+  /** Seller's own spend cap: images generated per carousel, 2 to MAX_SLIDES (8). */
   readonly maxImages: number;
   /** Seller's visual style, added to every generated image's prompt; empty when unset. */
   readonly style: string;
