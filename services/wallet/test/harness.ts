@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { address, getAddressDecoder, getBase58Decoder, getCompiledTransactionMessageDecoder, SOLANA_ERROR__RPC__TRANSPORT_HTTP_ERROR, SolanaError, type Address } from "@solana/kit";
-import { createServiceHealth, DEMO_TOKEN_MINT, DEVNET_CAIP2, DEVNET_GENESIS_HASH, loadConfig, type FundingBinding } from "@veilo/contracts";
+import { createServiceHealth, DEFAULT_AGENTS, DEMO_TOKEN_MINT, DEVNET_CAIP2, DEVNET_GENESIS_HASH, loadConfig, type FundingBinding } from "@veilo/contracts";
 import { PROTOTYPE_APPROVAL_RULE, swapRequestWire, withdrawalRequestWire, type PublicStateWire, type RecoveryRequestWire, type RecoveryViewWire, type SwapRequestWire, type SwapViewWire, type WithdrawalRequestWire, type WithdrawalViewWire } from "@veilo/contracts/relayer";
 import { openSecretsDatabase } from "@veilo/db";
 import {
@@ -32,6 +32,7 @@ import { ServiceCredentials } from "@veilo/control/src/auth/credentials";
 import { authorizePurchase } from "@veilo/control/src/ledger/authorize";
 import { reservedNoteFor } from "@veilo/control/src/ledger/notes";
 import { getPurchaseRow } from "@veilo/control/src/ledger/purchases";
+import { SWAP_SKU } from "@veilo/control/src/swap/service";
 import { activateDefaults, addService, createEnv, digest, type TestEnv } from "@veilo/control/test/helpers";
 import { HttpControlPort, ServiceCallError } from "../src/adapters";
 import type { MerchantSigner, WalletDeps } from "../src/deps";
@@ -388,7 +389,8 @@ export interface ControlHarness {
 
 export async function startControl(): Promise<ControlHarness> {
   const env = createEnv();
-  activateDefaults(env);
+  const prince = DEFAULT_AGENTS.find((a) => a.name === "Prince")!;
+  activateDefaults(env, { agents: { Prince: { allowedSkus: [...prince.policy.allowedSkus, SWAP_SKU] } } });
   const serviceId = addService(env, [{ sku: "research-basic", paymentPath: "private_x402", price: 100_000n, lamports: 3_000_000n }]);
   const config = loadConfig({ DEVNET_RPC_URL: "https://rpc.test.invalid", EXPECTED_DEVNET_GENESIS_HASH: DEVNET_GENESIS_HASH, DEMO_TOKEN_MINT, FACILITATOR_URL: "https://facilitator.payai.network" });
   const app = createControlApp(createServiceHealth("control", config, false), {

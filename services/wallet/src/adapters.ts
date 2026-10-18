@@ -106,6 +106,9 @@ export class HttpControlPort implements ControlPort {
   async merchantExpired(purchaseId: string) {
     return (await this.c.call<{ purchase: ControlPurchase }>("POST", `/internal/wallet/purchases/${purchaseId}/merchant-expired`, {}))!.purchase;
   }
+  async swapNotSigned(purchaseId: string) {
+    return (await this.c.call<{ purchase: ControlPurchase }>("POST", `/internal/wallet/purchases/${purchaseId}/swap-not-signed`, {}))!.purchase;
+  }
   async markRecoverable(purchaseId: string, reason: string) {
     return (await this.c.call<{ purchase: ControlPurchase }>("POST", `/internal/wallet/purchases/${purchaseId}/recoverable`, { reason }))!.purchase;
   }

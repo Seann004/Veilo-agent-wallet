@@ -234,6 +234,9 @@ class SmokeAuthority implements ControlPort {
   async merchantExpired(id: string) {
     return this.purchase(id);
   }
+  async swapNotSigned(id: string) {
+    return this.purchase(id);
+  }
   async markRecoverable(id: string) {
     return this.purchase(id);
   }

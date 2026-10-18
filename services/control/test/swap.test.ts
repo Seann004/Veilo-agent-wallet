@@ -6,7 +6,8 @@ import { computeRequestDigest } from "@veilo/contracts/gateway";
 import { PurchaseOrchestrator } from "../src/integration/orchestrator";
 import { authorizePurchase } from "../src/ledger/authorize";
 import { pauseAgent } from "../src/ledger/authority";
-import { getPurchaseRow } from "../src/ledger/purchases";
+import { getPurchaseRow, markRecoverable } from "../src/ledger/purchases";
+import { walletRecordSwapNotSigned } from "../src/ledger/wallet-bridge";
 import { approveSwapService, disableSwapService, SWAP_SKU, SwapRunner } from "../src/swap/service";
 import { activateDefaults, addNotes, createEnv, intentTask, type TestEnv } from "./helpers";
 
@@ -115,6 +116,20 @@ describe("devnet swap purchase", () => {
     const failed = swapPurchase("swap-3");
     await orchestrator.drive(failed);
     expect(getPurchaseRow(env.ledger, failed)).toMatchObject({ merchant_state: "expired_unsettled", fulfilment_state: "abandoned", recovery_state: "recoverable" });
+  });
+
+  it("moves a swap the wallet never signed out of signed so its funded wallet becomes recoverable", async () => {
+    funding.outcome = "not_ready";
+    const id = swapPurchase("swap-6");
+    await orchestrator.drive(id).catch(() => undefined);
+    expect(getPurchaseRow(env.ledger, id)).toMatchObject({ funding_state: "finalized", merchant_state: "signed" });
+    expect(() => markRecoverable(env.ledger, id, "owner recovery")).toThrow(/may still settle/);
+    walletRecordSwapNotSigned(env.ledger, id);
+    expect(walletRecordSwapNotSigned(env.ledger, id)).toMatchObject({ merchant_state: "expired_unsettled", fulfilment_state: "abandoned" });
+    expect(markRecoverable(env.ledger, id, "owner recovery")).toMatchObject({ recovery_state: "recoverable" });
+
+    const unfunded = swapPurchase("swap-7");
+    expect(() => walletRecordSwapNotSigned(env.ledger, unfunded)).toThrow(/swap leg is not_started/);
   });
 
   it("blocks a swap the wallet refused as RECOVERY_REQUIRED without forging a settlement state", async () => {

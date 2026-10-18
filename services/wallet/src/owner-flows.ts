@@ -16,7 +16,7 @@ import {
 } from "@solana/kit";
 import { getSetComputeUnitLimitInstruction } from "@solana-program/compute-budget";
 import { getCloseAccountInstruction, getCreateAssociatedTokenIdempotentInstruction, getTransferCheckedInstruction } from "@solana-program/token";
-import { DEMO_TOKEN_DECIMALS } from "@veilo/contracts";
+import { DEMO_TOKEN_DECIMALS, type FundingBinding } from "@veilo/contracts";
 import {
   associatedTokenAddress,
   exitPublicInstruction,
@@ -144,6 +144,9 @@ export class OwnerFlows {
     let cp = await this.d.control.purchase(purchaseId);
     if ((merchant === "expired_unsettled" || merchant === "failed") && ["signed", "submitted", "uncertain"].includes(cp.states.merchant)) {
       cp = await this.d.control.merchantExpired(purchaseId);
+    }
+    if (merchant === "none" && cp.states.merchant === "signed" && (JSON.parse(f.binding_json) as FundingBinding).swap) {
+      cp = await this.funding.recordSwapNotSigned(purchaseId);
     }
     if (cp.states.recovery === "none") cp = await this.d.control.markRecoverable(purchaseId, `merchant ${merchant === "none" ? "not signed" : merchant}`);
     if (cp.states.recovery !== "recoverable") throw new WalletError("RECOVERY_REQUIRED", `purchase recovery state is ${cp.states.recovery}`);

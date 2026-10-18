@@ -42,6 +42,7 @@ export interface ControlPort {
   confirmChange(purchaseId: string): Promise<void>;
   noteExited(commitment: string, observedAtMs: number): Promise<void>;
   merchantExpired(purchaseId: string): Promise<ControlPurchase>;
+  swapNotSigned(purchaseId: string): Promise<ControlPurchase>;
   markRecoverable(purchaseId: string, reason: string): Promise<ControlPurchase>;
   recordRecovery(purchaseId: string, r: { recoveredPrincipal: bigint; tokenFeesPaid: bigint; sponsorLamportsSpent: bigint; observedAtMs: number }): Promise<void>;
   livePurchases(): Promise<LivePurchaseRef[]>;

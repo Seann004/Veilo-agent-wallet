@@ -32,7 +32,7 @@ import { hex64, hexToField, KeyedMutex, type MerchantSigner, type WalletDeps } f
 import { describeError, isTransientRpcError } from "./diagnostics";
 import { WalletError } from "./errors";
 import { verifiedPublicState, type PoolContext, type VerifiedPublicState } from "./pool";
-import { PortUnavailableError } from "./ports";
+import { PortUnavailableError, type ControlPurchase } from "./ports";
 import type { ExternalCallRow, FundingRow, NoteRecord, SwapRow } from "./store";
 import { buildSwapTransaction, swapInstructionMismatch } from "./swap";
 
@@ -692,6 +692,21 @@ export class FundingService {
     });
   }
 
+  /**
+   * Tells control this purchase's swap was never signed, so its funded wallet can be recovered.
+   * Runs under the lock signSwap holds, and signSwap refuses once control records it, so no
+   * swap can be signed after this check.
+   */
+  async recordSwapNotSigned(purchaseId: string): Promise<ControlPurchase> {
+    return this.mutex.run(`${purchaseId}:merchant`, async () => {
+      const { store } = this.d;
+      if (store.swap(purchaseId) || store.events(purchaseId).some((e) => e.kind === SWAP_SIGNATURE_PRODUCED)) {
+        throw new WalletError("SETTLEMENT_UNCERTAIN", "a swap signature was produced; recovery waits for its outcome");
+      }
+      return this.d.control.swapNotSigned(purchaseId);
+    });
+  }
+
   async swapOutcome(purchaseId: string): Promise<SwapResult> {
     const s = this.d.store.swap(purchaseId);
     if (!s) return { status: "not_ready", reason: "no swap was signed for this purchase" };
@@ -750,6 +765,8 @@ export class FundingService {
       // An expired swap never landed, so the fresh wallet still holds its USDC.
       return this.d.store.swap(purchaseId)!.state === "expired" ? "expired_unsettled" : "failed";
     }
+    // Signed but never stored: it may have reached the relayer, so it is never treated as unsigned.
+    if (this.d.store.events(purchaseId).some((e) => e.kind === SWAP_SIGNATURE_PRODUCED)) return "signed";
     const calls = this.d.store.externalCalls(purchaseId);
     if (calls.length > 0) {
       const outcomes = await Promise.all(calls.map((c) => this.#externalOutcome(c)));

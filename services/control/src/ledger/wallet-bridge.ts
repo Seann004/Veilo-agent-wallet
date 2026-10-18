@@ -4,6 +4,7 @@ import { ControlError } from "../errors";
 import { writeAudit } from "./events";
 import { appendTokenEvent, confirmChangeInserted, registerApprovedNote, type NoteRow } from "./notes";
 import { getPurchaseRow, markRecoverable, recordExternalRecovery, transition, type PurchaseRow } from "./purchases";
+import { SWAP_SERVICE_KEY } from "../swap/service";
 import { requireWorkspace } from "./workspace";
 
 /**
@@ -89,6 +90,26 @@ export function walletRecordMerchantExpired(ledger: Ledger, purchaseId: string):
       throw new ControlError("IDEMPOTENCY_CONFLICT", `merchant leg is ${p.merchant_state}`);
     }
     transition(ledger, p.id, "merchant", p.merchant_state, "expired_unsettled", "merchant_signature_expired");
+    return getPurchaseRow(ledger, p.id);
+  });
+}
+
+/**
+ * The wallet proved its swap was never signed (no stored swap and no record of producing a
+ * signature), checked under the same lock that signs swaps. The signed merchant leg can then
+ * settle nothing; the wallet refuses to sign once this is recorded.
+ */
+export function walletRecordSwapNotSigned(ledger: Ledger, purchaseId: string): PurchaseRow {
+  return immediate(ledger.db, () => {
+    const p = getPurchaseRow(ledger, purchaseId);
+    const svc = ledger.db.prepare(`SELECT service_key FROM approved_service WHERE id = ?`).pluck().get(p.service_id) as string | undefined;
+    if (svc !== SWAP_SERVICE_KEY) throw new ControlError("POLICY_DENIED", "purchase is not a swap");
+    if (p.merchant_state === "expired_unsettled") return p;
+    if (p.funding_state !== "finalized" || p.merchant_state !== "signed") {
+      throw new ControlError("IDEMPOTENCY_CONFLICT", `swap leg is ${p.merchant_state} with funding ${p.funding_state}`);
+    }
+    transition(ledger, p.id, "merchant", "signed", "expired_unsettled", "swap_never_signed");
+    if (p.fulfilment_state === "not_started") transition(ledger, p.id, "fulfilment", "not_started", "abandoned");
     return getPurchaseRow(ledger, p.id);
   });
 }

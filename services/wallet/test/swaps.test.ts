@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { address, createNoopSigner, getCompiledTransactionMessageDecoder, type Address, type Instruction } from "@solana/kit";
 import { getSwapV2Instruction, getSwapV2InstructionDataDecoder } from "@orca-so/whirlpools-client";
 import { associatedTokenAddress } from "@veilo/privacy-sdk";
-import { advanceAuthority, recordFundingFinalized } from "@veilo/control/src/ledger/purchases";
+import { authorizePurchase } from "@veilo/control/src/ledger/authorize";
+import { advanceAuthority, getPurchaseRow, recordFundingFinalized } from "@veilo/control/src/ledger/purchases";
+import { approveSwapService, SWAP_SKU } from "@veilo/control/src/swap/service";
+import { digest } from "@veilo/control/test/helpers";
 import { DEVNET_SOL_USDC_WHIRLPOOL, ORCA_WHIRLPOOL_PROGRAM, SWAP_SLIPPAGE_BPS, WRAPPED_SOL_MINT, type FundingBinding, type FundingResult } from "@veilo/contracts";
 import { decodeWireTransaction } from "@veilo/x402-client";
 import { SWAP_SIGNATURE_PRODUCED } from "../src/funding";
@@ -63,9 +66,24 @@ const SWAP = (): FundingBinding => ({
   swap: { dex: "orca_whirlpool", whirlpool: DEVNET_SOL_USDC_WHIRLPOOL, inputMint: world.ctx.mint, outputMint: WRAPPED_SOL_MINT, slippageBps: SWAP_SLIPPAGE_BPS },
 });
 
-async function funded(key: string, binding: FundingBinding): Promise<string> {
+/** A purchase of the owner-approved swap service itself, rather than the harness's research SKU. */
+function authorizeSwap(key: string): string {
+  const { env } = world.control;
+  const { serviceId } = approveSwapService(env.ledger, env.ws.id, 100_000n, "owner");
+  return authorizePurchase(env.ledger, {
+    workspaceId: env.ws.id,
+    agentId: env.agents.Prince.id,
+    idempotencyKey: key,
+    serviceId,
+    sku: SWAP_SKU,
+    paymentPath: "private_x402",
+    requestDigest: digest(key),
+  }).purchase.id;
+}
+
+async function funded(key: string, binding: FundingBinding, swapService = false): Promise<string> {
   await depositAndApprove(world, w, 1_000_000n);
-  const p = authorize(world, key);
+  const p = { id: swapService ? authorizeSwap(key) : authorize(world, key).id };
   advanceAuthority(ledger(), p.id, "prepare_proof");
   expect((await w.funding.prepare({ ...fundingInput(world, p.id), binding })).status).toBe("prepared");
   advanceAuthority(ledger(), p.id, "release_proof");
@@ -161,6 +179,42 @@ describe("devnet swap signing", () => {
     const { req } = [...world.relayer.swaps.values()][0]!;
     const msg = getCompiledTransactionMessageDecoder().decode(decodeWireTransaction(req.transaction).messageBytes);
     expect(getSwapV2InstructionDataDecoder().decode(new Uint8Array(msg.instructions[2]!.data!)).amount).toBe(f.payout + 1n);
+  });
+
+  it("lets the owner recover a swap the wallet provably never signed, and never signs it afterwards", async () => {
+    const binding = SWAP();
+    const id = await funded("s9", binding, true);
+    advanceAuthority(ledger(), id, "sign_merchant");
+    expect(await w.funding.merchantOutcome(id)).toBe("none");
+    const prep = await w.owner.prepareRecovery(id);
+    expect(prep.state).toBe("prepared");
+    const p = getPurchaseRow(ledger(), id);
+    expect([p.merchant_state, p.fulfilment_state, p.recovery_state]).toEqual(["expired_unsettled", "abandoned", "recoverable"]);
+    expect((await w.funding.signSwap(id, id, binding)).status).toBe("not_ready");
+    expect(quotes).toBe(0);
+    expect(world.relayer.swaps.size).toBe(0);
+  });
+
+  it("treats a produced but unstored swap signature as possibly signed and keeps recovery waiting", async () => {
+    const binding = SWAP();
+    const id = await funded("s10", binding, true);
+    advanceAuthority(ledger(), id, "sign_merchant");
+    w.store.event(SWAP_SIGNATURE_PRODUCED, id, {});
+    expect(await w.funding.merchantOutcome(id)).toBe("signed");
+    await expect(w.owner.prepareRecovery(id)).rejects.toMatchObject({ code: "SETTLEMENT_UNCERTAIN" });
+    await expect(w.funding.recordSwapNotSigned(id)).rejects.toMatchObject({ code: "SETTLEMENT_UNCERTAIN" });
+    expect(getPurchaseRow(ledger(), id).merchant_state).toBe("signed");
+  });
+
+  it("serializes the never-signed check with signing, so a racing swap keeps recovery waiting", async () => {
+    const binding = SWAP();
+    const id = await funded("s11", binding, true);
+    advanceAuthority(ledger(), id, "sign_merchant");
+    const [signed, recovery] = await Promise.allSettled([w.funding.signSwap(id, id, binding), w.owner.prepareRecovery(id)]);
+    expect(signed).toMatchObject({ status: "fulfilled", value: { status: "finalized" } });
+    expect(recovery).toMatchObject({ status: "rejected", reason: { code: "SETTLEMENT_UNCERTAIN" } });
+    expect(getPurchaseRow(ledger(), id).recovery_state).toBe("none");
+    expect(world.relayer.swaps.size).toBe(1);
   });
 
   it("keeps a signed swap and resubmits the same bytes when the relayer was down", async () => {
