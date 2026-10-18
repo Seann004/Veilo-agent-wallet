@@ -230,7 +230,7 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
   }
 
   // The swap's terms are the owner's; the agent only decides whether the task calls for it.
-  let swap: { outcome: string; result: Record<string, unknown> | null } | undefined;
+  let swap: { outcome: string; result: Record<string, unknown> | null; ok: boolean } | undefined;
   if (wantsSwap && swapItem) {
     const r = await buy(ctx, swapItem, "swap", {}, "The owner's task asked for a USDC to SOL swap");
     const p = r.body?.purchase;
@@ -239,6 +239,7 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
     swap = {
       outcome: delivered(r) ? "Swapped" : settling ? "Requested; settling privately" : outcomeText(r),
       result: (r.body?.execution?.result as Record<string, unknown> | undefined) ?? null,
+      ok: delivered(r) || settling,
     };
     if (settling) ctx.notes.push("The swap is still settling on devnet. Control completes it on its own; the final transaction appears under Activity.");
     else if (!delivered(r)) ctx.notes.push(`The swap did not go through (${outcomeText(r)}).`);
@@ -311,7 +312,7 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
     }
   }
 
-  const failure = work === undefined && swap === undefined && !hire?.proposalId ? plainFailure(ctx.notes) : null;
+  const failure = work === undefined && !swap?.ok && !hire?.proposalId ? plainFailure(ctx.notes) : null;
   const lines = [
     ...(work ? [work.text, ""] : []),
     ...(swap
@@ -323,9 +324,9 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
         ]
       : []),
     ...(failure ? [failure, ""] : []),
-    ...(hire?.proposalId ? ["I'd like to hire a specialist for this. Nothing is paid until you approve it.", ""] : hire?.code ? [`I couldn't propose a hire (${hire.code}).`, ""] : []),
+    ...(hire?.proposalId ? ["I'd like to hire a specialist for this. It waits for your approval unless you pre-approved this listing.", ""] : hire?.code ? [`I couldn't propose a hire (${hire.code}).`, ""] : []),
     ...(pages.length > 0 ? ["Web pages read (read-only):", ...pages.map((p) => `- ${p.title}: ${p.url}`), ""] : []),
-    "Details",
+    DETAILS_MARKER,
     `Task: ${clean(objective, 500)}`,
     ...(work ? [`Made with: ${work.purchase}.`] : []),
     ...(gathered.length > 0 ? [`Connector data used: ${gathered.map((g) => `${g.connectorId}/${g.tool}`).join(", ")}.`] : []),
@@ -346,20 +347,25 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
   });
   const ok = saved.status === 201;
   // A job counts as done only if the agent produced something; a search alone is not an answer.
-  const progressed = work !== undefined || hire?.proposalId !== undefined || swap !== undefined;
+  const progressed = work !== undefined || hire?.proposalId !== undefined || swap?.ok === true;
   return {
     taskState: ok && progressed ? "completed" : ok ? "incomplete" : "failed",
     summary: { query, results: listings.length, hire, didWork: work !== undefined, swap: swap?.outcome ?? null, connectorCalls: gathered.length, pagesRead: pages.length, artifactId: saved.body?.id ?? null, notes: ctx.notes },
   };
 }
 
+/** Separates the answer from how it was made; the dashboard shows only what comes before it. */
+export const DETAILS_MARKER = "— Details —";
+
 const lamportsToSol = (raw: string): string => (Number(BigInt(raw)) / 1e9).toFixed(4);
 
 /** Why a job produced nothing, in the owner's terms; the raw notes stay in the details. */
-function plainFailure(notes: string[]): string {
+export function plainFailure(notes: string[]): string {
   const all = notes.join(" ");
-  if (/BUDGET_EXCEEDED|allocation would be exceeded|budget/i.test(all)) return "I couldn't finish: I've reached my spending limit. Raise my limits, or add your AI key in Settings so thinking costs no USDC.";
-  if (/does not allow the Analyze service|SERVICE_NOT_ALLOWED/.test(all)) return "I couldn't finish: I'm not allowed to buy the AI work this needs. Add your AI key in Settings, or let me buy Analysis.";
+  if (/BUDGET_EXCEEDED|allocation would be exceeded/.test(all)) return "I couldn't finish: I've reached my spending limit. Raise my limits, or add your AI key in Settings so thinking costs no USDC.";
+  if (/still settling/.test(all)) return "Still working: a payment is settling, and the result will follow under Activity.";
+  if (/do(es)? not allow the Analyze service|SERVICE_NOT_ALLOWED/.test(all)) return "I couldn't finish: I'm not allowed to buy the AI work this needs. Add your AI key in Settings, or let me buy Analysis.";
   if (/tool-call allowance/.test(all)) return "I couldn't finish within this job's step limit.";
+  if (/The swap did not go through/.test(all)) return "The swap didn't go through. The details below say why.";
   return "I couldn't finish this job. The details below say why.";
 }

@@ -63,7 +63,7 @@ describe("custom agent (template-driven)", () => {
     expect(proposal.localAgentId).toBe(s.scout.id);
     // The artifact keeps the listing text as data and drops its link.
     const artifact = s.env.db.prepare("SELECT r.content FROM artifact a JOIN artifact_revision r ON r.artifact_id = a.id WHERE a.task_id = ?").pluck().get(run.body.taskId) as string;
-    expect(artifact).toContain("Nothing is paid until you approve it");
+    expect(artifact).toContain("It waits for your approval unless you pre-approved this listing");
     expect(artifact).not.toContain("https://evil.example");
 
     // The marketplace turns the proposal into a cloud-approved payment request: still no payment.
