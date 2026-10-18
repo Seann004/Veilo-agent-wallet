@@ -348,7 +348,7 @@ describe("custom agent page", () => {
     expect(link.getAttribute("href")).toBe("/marketplace/seller");
     await user.click(link);
     expect(JSON.parse(sessionStorage.getItem("veilo.offerDraft") ?? "{}")).toEqual({ title: customAgent().name, sellerInstructions: customAgent().instructions });
-    expect(screen.getByText(/don.t use this agent.s connectors, AI credits or your private pool/)).toBeTruthy();
+    expect(screen.getByText(/don.t use this agent.s connectors, your model key or your private pool/)).toBeTruthy();
   });
 
   it("lets a guest run jobs but not edit instructions or hiring", async () => {

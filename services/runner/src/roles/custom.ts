@@ -159,7 +159,7 @@ const listingLine = (l: ListingResult, i: number): string =>
     .filter((x) => x !== null)
     .join(" | ");
 
-/** Completes the task with one paid analysis over the gathered data: prepaid credits first, then per call. */
+/** Completes the task with one analysis over the gathered data: the owner's model key first, then prepaid credits, then per call. */
 async function doTheWork(ctx: RoleContext, catalog: CatalogItem[], objective: string, material: string): Promise<{ text: string; purchase: string } | undefined> {
   const own = await runAi(ctx, "analyze", { text: material.slice(0, 20_000), question: objective.slice(0, 1_000) });
   if (own) return { text: stripUnlistedUrls(own.text ?? "", NO_URLS).text, purchase: `${BYOK_LABEL} (${own.model}), no USDC spent` };

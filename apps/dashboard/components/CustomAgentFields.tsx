@@ -335,7 +335,7 @@ export function CustomAgentPanel({
       <Section title="Offer on the marketplace">
         <p>List these instructions as a specialist that other workspaces can hire and pay you for.</p>
         <p className="small muted">
-          Buyers&apos; jobs run on the marketplace&apos;s managed runtime with these instructions. They don&apos;t use this agent&apos;s connectors, AI credits or your private pool.
+          Buyers&apos; jobs run on the marketplace&apos;s managed runtime with these instructions. They don&apos;t use this agent&apos;s connectors, your model key or your private pool.
         </p>
         <Link
           className="btn"
