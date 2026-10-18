@@ -9,7 +9,8 @@ import { pauseAgent } from "../src/ledger/authority";
 import { getPurchaseRow, markRecoverable } from "../src/ledger/purchases";
 import { walletRecordSwapNotSigned } from "../src/ledger/wallet-bridge";
 import { approveSwapService, disableSwapService, SWAP_SKU, SwapRunner } from "../src/swap/service";
-import { activateDefaults, addNotes, createEnv, intentTask, type TestEnv } from "./helpers";
+import { makeStack, type Stack } from "./fixtures/stack";
+import { activateDefaults, addNotes, addService, createEnv, intentTask, type TestEnv } from "./helpers";
 
 /** Funding stand-in: a synthetic finalized withdrawal and a scripted swap outcome. */
 class SwapTestFunding implements FundingProvider {
@@ -78,21 +79,28 @@ beforeEach(() => {
 });
 afterEach(() => env.cleanup());
 
-function swapPurchase(key: string): string {
-  const input = {};
-  const { purchase } = authorizePurchase(env.ledger, {
+function authorizeSwap(key: string, swapInput: unknown, o: { taskId?: string; digestOf?: unknown } = {}) {
+  return authorizePurchase(env.ledger, {
     workspaceId: env.ws.id,
     agentId: env.agents.Prince.id,
     idempotencyKey: key,
     serviceId,
     sku: SWAP_SKU,
     paymentPath: "private_x402",
-    requestDigest: computeRequestDigest(SWAP_SKU, input),
-    taskId: intentTask(env, env.agents.Prince.id, key),
-  });
+    requestDigest: computeRequestDigest(SWAP_SKU, "digestOf" in o ? o.digestOf : swapInput),
+    taskId: o.taskId ?? intentTask(env, env.agents.Prince.id, key),
+    swapInput,
+  }).purchase;
+}
+
+function swapPurchase(key: string, amount = 500_000n): string {
+  const input = { amountUsdc: amount.toString() };
+  const purchase = authorizeSwap(key, input);
   orchestrator.storeInput(purchase, input);
   return purchase.id;
 }
+
+const purchaseCount = () => env.db.prepare(`SELECT COUNT(*) FROM purchase`).pluck().get();
 
 describe("devnet swap purchase", () => {
   it("funds privately, swaps on the pinned pool and settles the amount and sponsor cost once", async () => {
@@ -198,9 +206,149 @@ describe("devnet swap purchase", () => {
         serviceId,
         sku: SWAP_SKU,
         paymentPath: "private_x402",
-        requestDigest: computeRequestDigest(SWAP_SKU, {}),
+        requestDigest: computeRequestDigest(SWAP_SKU, { amountUsdc: "1000" }),
         taskId: intentTask(env, env.agents.Mira.id, "mira-swap"),
+        swapInput: { amountUsdc: "1000" },
       }),
-    ).toThrow();
+    ).toThrow(/does not permit this SKU/);
+  });
+});
+
+describe("agent-chosen swap amount", () => {
+  it("prices, reserves, funds and settles exactly the requested amount below the approved maximum", async () => {
+    const id = swapPurchase("small", 10_000n);
+    const p = getPurchaseRow(env.ledger, id);
+    expect(p.price_usdc).toBe(10_000n);
+    expect(env.db.prepare(`SELECT reserved_usdc FROM reservation WHERE purchase_id = ?`).pluck().get(id)).toBe(10_000n);
+    await orchestrator.drive(id);
+    expect(funding.reqs.get(id)!.payoutUsdc).toBe(10_000n);
+    expect(getPurchaseRow(env.ledger, id)).toMatchObject({ merchant_state: "finalized", fulfilment_state: "delivered" });
+    const settled = env.db.prepare(`SELECT amount FROM financial_event WHERE purchase_id = ? AND kind = 'expense_settled' AND asset = 'usdc'`).pluck().all(id);
+    expect(settled.map((v) => BigInt(v as bigint))).toEqual([10_000n]);
+  });
+
+  it("accepts the approved maximum itself and refuses one base unit more", () => {
+    expect(getPurchaseRow(env.ledger, swapPurchase("at-max", 500_000n)).price_usdc).toBe(500_000n);
+    const before = purchaseCount();
+    expect(() => authorizeSwap("over-max", { amountUsdc: "500001" })).toThrow(/exceeds the owner-approved maximum per swap/);
+    expect(purchaseCount()).toBe(before);
+  });
+
+  it("refuses zero and anything that is not a canonical base-unit integer string", () => {
+    for (const amountUsdc of ["0", "0.01", "-5", "01", "1e3", " 100", "", 100, 1.5, null]) {
+      expect(() => authorizeSwap(`bad-${String(amountUsdc)}`, { amountUsdc })).toThrow(/base unit/);
+    }
+    expect(purchaseCount()).toBe(0n);
+  });
+
+  it("never lets the agent supply the pool, direction, slippage or destination", () => {
+    const extras = [
+      {},
+      undefined,
+      { amountUsdc: "1000", whirlpool: "Other1111111111111111111111111111111111111" },
+      { amountUsdc: "1000", outputMint: env.ws.mint, inputMint: WRAPPED_SOL_MINT },
+      { amountUsdc: "1000", destination: "Attacker11111111111111111111111111111111111" },
+      { amountUsdc: "1000", slippageBps: 10_000 },
+      ["1000"],
+    ];
+    for (const [i, input] of extras.entries()) {
+      expect(() => authorizeSwap(`extra-${i}`, input)).toThrow(/carries only amountUsdc/);
+    }
+    expect(purchaseCount()).toBe(0n);
+    // A purchase authorized for the amount alone still cannot be given other terms later.
+    const purchase = authorizeSwap("store-extra", { amountUsdc: "1000" });
+    expect(() => orchestrator.storeInput(purchase, { amountUsdc: "1000", destination: "Attacker11111111111111111111111111111111111" })).toThrow(/carries only amountUsdc/);
+    expect(orchestrator.input(purchase.id)).toBeUndefined();
+  });
+
+  it("binds the amount to the request digest at authorization and when the input is stored", () => {
+    expect(() => authorizeSwap("mismatch", { amountUsdc: "400000" }, { digestOf: { amountUsdc: "1000" } })).toThrow(/does not match the purchase request digest/);
+    expect(purchaseCount()).toBe(0n);
+    const purchase = authorizeSwap("bound", { amountUsdc: "1000" });
+    expect(() => orchestrator.storeInput(purchase, { amountUsdc: "400000" })).toThrow(/swap amount differs from the authorized price/);
+    // Replaying the key with another amount is a different request, not a re-price.
+    expect(() => authorizeSwap("bound", { amountUsdc: "2000" })).toThrow(/different request/);
+    expect(getPurchaseRow(env.ledger, purchase.id).price_usdc).toBe(1_000n);
+  });
+
+  it("refuses a swap amount on any service other than the approved swap", () => {
+    const research = addService(env, [{ sku: "research-basic", paymentPath: "private_x402", price: 1_000n }]);
+    expect(() =>
+      authorizePurchase(env.ledger, {
+        workspaceId: env.ws.id,
+        agentId: env.agents.Prince.id,
+        idempotencyKey: "research-with-amount",
+        serviceId: research,
+        sku: "research-basic",
+        paymentPath: "private_x402",
+        requestDigest: computeRequestDigest("research-basic", { question: "q" }),
+        taskId: intentTask(env, env.agents.Prince.id, "research-with-amount"),
+        swapInput: { amountUsdc: "1000" },
+      }),
+    ).toThrow(/only the owner-approved swap takes a swap amount/);
+  });
+
+  it("applies the per-purchase, task and agent lifetime caps to the requested amount", () => {
+    approveSwapService(env.ledger, env.ws.id, 2_000_000n, "owner");
+    addNotes(env, [1_000_000n, 1_000_000n, 1_000_000n, 1_000_000n, 1_000_000n, 1_000_000n]);
+    // Prince: 0.50 USDC per purchase, 1.00 per task, 2.00 lifetime and rolling.
+    expect(() => authorizeSwap("per-purchase", { amountUsdc: "500001" })).toThrow(/per-purchase limit/);
+    const task = intentTask(env, env.agents.Prince.id, "one-task");
+    authorizeSwap("t-1", { amountUsdc: "400000" }, { taskId: task });
+    authorizeSwap("t-2", { amountUsdc: "400000" }, { taskId: task });
+    expect(() => authorizeSwap("t-3", { amountUsdc: "400000" }, { taskId: task })).toThrow(/task budget would be exceeded/);
+    expect(authorizeSwap("t-4", { amountUsdc: "200000" }, { taskId: task }).price_usdc).toBe(200_000n);
+    authorizeSwap("l-1", { amountUsdc: "500000" });
+    authorizeSwap("l-2", { amountUsdc: "400000" });
+    expect(() => authorizeSwap("l-3", { amountUsdc: "200000" })).toThrow(/agent lifetime allocation would be exceeded/);
+    expect(authorizeSwap("l-4", { amountUsdc: "100000" }).price_usdc).toBe(100_000n);
+  });
+
+  it("checks the amount against the maximum in force at authorization", () => {
+    approveSwapService(env.ledger, env.ws.id, 1_000n, "owner");
+    expect(() => authorizeSwap("lowered", { amountUsdc: "1001" })).toThrow(/exceeds the owner-approved maximum/);
+    expect(authorizeSwap("within", { amountUsdc: "1000" }).price_usdc).toBe(1_000n);
+  });
+});
+
+describe("swap purchase requests over HTTP", () => {
+  let st: Stack | undefined;
+  afterEach(async () => {
+    await st?.close();
+    st = undefined;
+  });
+
+  it("prices the purchase from the requested amount and refuses any other swap term", async () => {
+    const prince = DEFAULT_AGENTS.find((a) => a.name === "Prince")!;
+    st = await makeStack({ agents: { Prince: { allowedSkus: [...prince.policy.allowedSkus, SWAP_SKU] } } });
+    const swapService = approveSwapService(st.env.ledger, st.env.ws.id, 500_000n, "owner").serviceId;
+    const request = (key: string, input: Record<string, unknown> | undefined) =>
+      st!.call("/purchase-intents", {
+        method: "POST",
+        headers: { authorization: `Bearer ${st!.worker("Prince")}` },
+        body: {
+          idempotencyKey: key,
+          serviceId: swapService,
+          sku: SWAP_SKU,
+          paymentPath: "private_x402",
+          requestDigest: computeRequestDigest(SWAP_SKU, input ?? {}),
+          taskId: intentTask(st!.env, st!.env.agents.Prince.id, key),
+          ...(input !== undefined ? { input } : {}),
+        },
+      });
+    const ok = await request("http-small", { amountUsdc: "10000" });
+    expect(ok.status).toBeLessThan(300);
+    expect((ok.body as { purchase: { price: { amount: string } } }).purchase.price.amount).toBe("10000");
+    for (const [key, input] of [
+      ["http-none", undefined],
+      ["http-empty", {}],
+      ["http-pool", { amountUsdc: "10000", whirlpool: "Other1111111111111111111111111111111111111" }],
+      ["http-over", { amountUsdc: "500001" }],
+      ["http-decimal", { amountUsdc: "0.01" }],
+    ] as const) {
+      const r = await request(key, input);
+      expect(r.status, key).toBeGreaterThanOrEqual(400);
+    }
+    expect(st.count(`SELECT count(*) FROM purchase WHERE sku = '${SWAP_SKU}'`)).toBe(1);
   });
 });

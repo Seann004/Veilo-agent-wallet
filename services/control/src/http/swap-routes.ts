@@ -6,8 +6,9 @@ import { approveSwapService, disableSwapService, MAX_SWAP_USDC, SWAP_SERVICE_KEY
 import { actorOf, requireActor, type AuthDeps } from "./actor";
 
 /**
- * Owner approval of the devnet swap. Agents can request it within their policy once approved
- * and listed in their allowed SKUs; they can never change the pool, amount or destination.
+ * Owner approval of the devnet swap. Once approved and listed in an agent's allowed SKUs, the
+ * agent may request any amount up to the approved maximum per swap, within its policy; it can
+ * never change the pool, direction or destination.
  */
 export function swapRouter(deps: AuthDeps): Router {
   const { ledger } = deps;

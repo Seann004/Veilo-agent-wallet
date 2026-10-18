@@ -1,5 +1,6 @@
 import {
   DEVNET_SOL_USDC_WHIRLPOOL,
+  parseBaseUnits,
   SPONSOR_LAMPORTS_PER_PRIVATE_PURCHASE,
   SWAP_SLIPPAGE_BPS,
   WRAPPED_SOL_MINT,
@@ -22,8 +23,9 @@ const SWAP_SPONSOR_LAMPORTS = SPONSOR_LAMPORTS_PER_PRIVATE_PURCHASE + 2_039_280n
 export const MAX_SWAP_USDC = 5_000_000n;
 
 /**
- * Owner approval of the devnet swap: a fixed USDC amount sold on the pinned Orca whirlpool for
- * SOL delivered to the owner's configured address. Re-approving changes only the amount.
+ * Owner approval of the devnet swap on the pinned Orca whirlpool, USDC to SOL delivered to the
+ * owner's configured address. The SKU price is the maximum per swap; each purchase is priced at
+ * the amount the agent requested within it. Re-approving changes only that maximum.
  */
 export function approveSwapService(ledger: Ledger, workspaceId: string, amountUsdc: bigint, ownerId: string): { serviceId: string } {
   if (amountUsdc <= 0n || amountUsdc > MAX_SWAP_USDC) throw new ControlError("INVALID_REQUEST", `swap amount must be between 1 base unit and ${MAX_SWAP_USDC} base units`);
@@ -59,6 +61,25 @@ export function approveSwapService(ledger: Ledger, workspaceId: string, amountUs
     });
     return { serviceId };
   });
+}
+
+/**
+ * The USDC amount from an agent's swap input, the only term an agent supplies. Any other field
+ * (pool, direction, slippage, destination) is refused rather than ignored.
+ */
+export function swapInputAmount(input: unknown): bigint {
+  const keys = input !== null && typeof input === "object" && !Array.isArray(input) ? Object.keys(input) : [];
+  if (keys.length !== 1 || keys[0] !== "amountUsdc") {
+    throw new ControlError("SERVICE_NOT_ALLOWED", "a swap input carries only amountUsdc; the owner fixed the pool, direction and destination");
+  }
+  let amount: bigint;
+  try {
+    amount = parseBaseUnits((input as { amountUsdc: unknown }).amountUsdc);
+  } catch {
+    throw new ControlError("INVALID_REQUEST", "amountUsdc must be a whole number of USDC base units as a decimal string");
+  }
+  if (amount <= 0n) throw new ControlError("INVALID_REQUEST", "swap amount must be at least 1 base unit");
+  return amount;
 }
 
 /**

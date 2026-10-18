@@ -5,8 +5,8 @@ import { associatedTokenAddress } from "@veilo/privacy-sdk";
 import { authorizePurchase } from "@veilo/control/src/ledger/authorize";
 import { advanceAuthority, getPurchaseRow, recordFundingFinalized } from "@veilo/control/src/ledger/purchases";
 import { approveSwapService, SWAP_SKU } from "@veilo/control/src/swap/service";
-import { digest } from "@veilo/control/test/helpers";
 import { DEVNET_SOL_USDC_WHIRLPOOL, ORCA_WHIRLPOOL_PROGRAM, SWAP_SLIPPAGE_BPS, WRAPPED_SOL_MINT, type FundingBinding, type FundingResult } from "@veilo/contracts";
+import { computeRequestDigest } from "@veilo/contracts/gateway";
 import { decodeWireTransaction } from "@veilo/x402-client";
 import { SWAP_SIGNATURE_PRODUCED } from "../src/funding";
 import type { SwapQuoter } from "../src/swap";
@@ -77,7 +77,8 @@ function authorizeSwap(key: string): string {
     serviceId,
     sku: SWAP_SKU,
     paymentPath: "private_x402",
-    requestDigest: digest(key),
+    requestDigest: computeRequestDigest(SWAP_SKU, { amountUsdc: "100000" }),
+    swapInput: { amountUsdc: "100000" },
   }).purchase.id;
 }
 

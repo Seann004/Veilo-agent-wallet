@@ -48,6 +48,7 @@ import type { Integration } from "../integration";
 import { fullBalances } from "../integration/balances";
 import { RETRY_MARKER } from "../scheduler/scheduler";
 import { LISTING_SERVICE_PREFIX } from "../marketplace/seller-clients";
+import { SWAP_SERVICE_KEY } from "../swap/service";
 import {
   activatePolicyVersion,
   activeAgentPolicy,
@@ -578,6 +579,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
       requestDigest: body.requestDigest,
       taskId: body.taskId,
       rationale: body.rationale,
+      ...(serviceKey === SWAP_SERVICE_KEY ? { swapInput: body.input } : {}),
     });
     let purchase = result.purchase;
     let execution: unknown;

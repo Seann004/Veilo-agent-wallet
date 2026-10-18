@@ -25,7 +25,7 @@ import { KeyedLock } from "./locks";
 import type { PermitSigner } from "./permits";
 import { LISTING_SERVICE_PREFIX, type SellerClients } from "../marketplace/seller-clients";
 import type { ExternalBatchRunner } from "../external/batch";
-import { SWAP_SERVICE_KEY, swapFundingBinding, type SwapRunner } from "../swap/service";
+import { SWAP_SERVICE_KEY, swapFundingBinding, swapInputAmount, type SwapRunner } from "../swap/service";
 import {
   EXTERNAL_BATCH_SKU,
   EXTERNAL_SERVICE_PREFIX,
@@ -172,8 +172,8 @@ export class PurchaseOrchestrator {
       const problem = p.sku === EXTERNAL_BATCH_SKU ? externalInputProblem(external, input) : "external services sell only batches";
       if (problem) throw new ControlError("SERVICE_NOT_ALLOWED", `external purchase input refused: ${problem}`);
     } else if (this.#service(p).service_key === SWAP_SERVICE_KEY) {
-      // The owner fixed the amount, pool and destination; an agent supplies nothing.
-      if (Object.keys(input).length > 0) throw new ControlError("SERVICE_NOT_ALLOWED", "a swap takes no input; the owner fixed its terms");
+      // The agent supplies only the amount, which authorization already priced the purchase at.
+      if (swapInputAmount(input) !== big(p.price_usdc)) throw new ControlError("IDEMPOTENCY_CONFLICT", "swap amount differs from the authorized price");
     } else if (!isGatewaySku(p.sku)) {
       throw new ControlError("IDEMPOTENCY_CONFLICT", "input does not match the purchase request digest");
     }

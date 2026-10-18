@@ -1,4 +1,5 @@
 import { checkedAdd, type PaymentPath } from "@veilo/contracts";
+import { computeRequestDigest } from "@veilo/contracts/gateway";
 import { immediate } from "@veilo/db";
 import { big, num, type Ledger } from "../context";
 import { ControlError } from "../errors";
@@ -6,6 +7,7 @@ import { fits, lifetimeUsage, rollingUsage, type Scope } from "./accounting";
 import { appendFinancialEvent, enqueueOutbox, redactText, writeAudit } from "./events";
 import { reserveNote } from "./notes";
 import { getPurchaseRow, type PurchaseRow } from "./purchases";
+import { SWAP_SERVICE_KEY, swapInputAmount } from "../swap/service";
 import {
   activeAgentPolicy,
   activeWorkspacePolicy,
@@ -33,6 +35,12 @@ export interface AuthorizeInput {
   proposedByTask?: boolean | undefined;
   jobId?: string | undefined;
   rationale?: string | undefined;
+  /**
+   * The agent's input for the owner-approved swap, required for that service and refused for any
+   * other. It must hash to requestDigest; its amount, bounded by the approved maximum, becomes the
+   * purchase price.
+   */
+  swapInput?: unknown;
 }
 
 export interface AuthorizeResult {
@@ -56,6 +64,7 @@ interface TaskRow {
 interface SkuRow {
   service_id: string;
   service_status: string;
+  service_key: string;
   service_workspace: string;
   network: string;
   mint: string;
@@ -157,7 +166,7 @@ function authorizeInTransaction(ledger: Ledger, input: AuthorizeInput): Authoriz
 
   const sku = db
     .prepare(
-      `SELECT s.service_id, a.status AS service_status, a.workspace_id AS service_workspace, a.network, a.mint, s.sku,
+      `SELECT s.service_id, a.status AS service_status, a.service_key, a.workspace_id AS service_workspace, a.network, a.mint, s.sku,
               s.payment_path, s.price_usdc, s.max_fee_usdc, s.usage_units, s.sponsor_lamports, s.enabled
        FROM service_sku s JOIN approved_service a ON a.id = s.service_id
        WHERE s.service_id = ? AND s.sku = ? AND s.payment_path = ?`,
@@ -174,7 +183,20 @@ function authorizeInTransaction(ledger: Ledger, input: AuthorizeInput): Authoriz
     throw new ControlError("SERVICE_NOT_ALLOWED", "agent policy does not permit this SKU or payment path");
   }
 
-  const exposure = checkedAdd(big(sku.price_usdc), big(sku.max_fee_usdc));
+  let price = big(sku.price_usdc);
+  if (sku.service_key === SWAP_SERVICE_KEY) {
+    // The approved price is the owner's maximum per swap; this purchase is priced at the requested amount.
+    const amount = swapInputAmount(input.swapInput);
+    if (computeRequestDigest(sku.sku, input.swapInput) !== input.requestDigest) {
+      throw new ControlError("IDEMPOTENCY_CONFLICT", "swap input does not match the purchase request digest");
+    }
+    if (amount > price) throw new ControlError("POLICY_DENIED", "swap amount exceeds the owner-approved maximum per swap");
+    price = amount;
+  } else if (input.swapInput !== undefined) {
+    throw new ControlError("SERVICE_NOT_ALLOWED", "only the owner-approved swap takes a swap amount");
+  }
+
+  const exposure = checkedAdd(price, big(sku.max_fee_usdc));
   const lamports = big(sku.sponsor_lamports);
   const units = big(sku.usage_units);
 
@@ -241,7 +263,7 @@ function authorizeInTransaction(ledger: Ledger, input: AuthorizeInput): Authoriz
     sku.sku,
     sku.payment_path,
     input.requestDigest,
-    sku.price_usdc,
+    price,
     sku.max_fee_usdc,
     lamports,
     units,
