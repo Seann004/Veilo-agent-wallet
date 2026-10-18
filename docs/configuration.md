@@ -45,6 +45,7 @@ Control, wallet, gateway and relayer run the live check; their `/health` is 200 
 | `OPENROUTER_API_KEY` | empty | Operator-funded provider key. Secret. Delivered only to the gateway process; every other process deletes it from its environment at startup. Never printed (summaries show `set`/`unset`). |
 | `PLANNER_MODEL_ID` | empty | Pinned model for bounded sponsored planning calls. |
 | `INFERENCE_MODEL_ID` | empty | Pinned model for paid inference SKUs. |
+| `AI_ALLOW_LOCAL_PROVIDER` | empty | Control only. `1` lets the owner's model provider URL point at a loopback model server on this machine; otherwise such a URL is refused. |
 | `OPERATOR_MAX_REAL_USD_MICRO` | `0` | Operator real-dollar ceiling in micro-USD (non-negative integer). `0` or missing disables real inference. Real inference is enabled only when this is positive **and** a provider key is set. |
 
 ### Secret file paths
@@ -73,6 +74,8 @@ The runner process deletes `SPONSOR_KEY_PATH`, `OWNER_SERVICE_SECRET_PATH` and t
 | `VEILO_SECRETS_DIR` | `secrets` | Created by `setup:local` with owner-only permissions; gitignored. |
 
 Relative paths resolve against the repository root.
+
+The owner's own model key is not an environment variable. The owner enters provider, model and key in the dashboard **Settings**; control seals the key with AES-256-GCM under `<VEILO_SECRETS_DIR>/control/ai-provider.key` (created by control at startup when missing, mode 0600) and never returns it. The same vault seals result-destination secrets (Telegram bot token, Slack/Discord webhook). Agents use the owner's provider for planning and model work; without one, planning uses the operator-sponsored trial above.
 
 ### Service listeners
 
@@ -179,6 +182,7 @@ The facilitator support check, the fee-payer pin and finality gating are identic
 | `MARKETPLACE_SELLER_HOST_TOKEN_PATH` | empty | File holding the seller-host bearer credential (preferred). |
 | `MARKETPLACE_SELLER_HOST_TOKEN` | empty | The same credential as an environment value. If both are set, they must agree. The credential is never printed. |
 | `SELLER_HOST_RECIPIENTS` | empty | Optional comma-separated payout owners. When set, a quote naming any other recipient is refused. A seller running their own host should set it to their payout wallet. |
+| `SELLER_HOST_MCP_ENDPOINTS` | empty | Comma-separated MCP endpoints this seller host may contact for workflow connector steps. A bearer key, if a server needs one, is read from `MCP_BEARER_<CONNECTOR_ID>` (upper case, non-alphanumerics as `_`) and stays in this process. |
 | `SELLER_HOST_ACCOUNTS_PER_IP_HOUR` | `5` | Self-service account creations allowed per client address per hour. There is also a global cap of 200 per hour. |
 | `HIGGSFIELD_API_KEY_ID`, `HIGGSFIELD_API_KEY_SECRET` | empty | Seller host only: the seller's own Higgsfield key. Without both, its Higgsfield tools report "Provider not configured" and are never quoted. Higgsfield tools are sold only as workflow steps (its terms forbid a bare pass-through). |
 | `HIGGSFIELD_MAX_IMAGES` | `8` | Seller host only: images generated per carousel, clamped to 2–8. A spend cap on the seller's own Higgsfield credits; slides past the cap are not generated. |
@@ -189,6 +193,7 @@ The facilitator support check, the fee-payer pin and finality gating are identic
 | `SLIDES_RENDERER` | on | Seller host only: `off` disables the slide designer (`render_carousel_slides`). It is otherwise configured whenever `ZERNIO_API_KEY` and `ZERNIO_TIKTOK_ACCOUNT_ID` are set, since it uploads through Zernio's presigned media upload. |
 | `SLIDES_BROWSER_EXECUTABLE` | installed Chrome | Seller host only: Chrome or Chromium binary for slide rendering (playwright-core). Unset uses the installed Google Chrome channel. Rendering runs with scripts off and every request refused except allowlisted images. |
 | `SLIDES_IMAGE_HOSTS` | empty | Seller host only: comma-separated exact https hostnames a slide's optional `imageUrl` may load from (for example the Higgsfield CDN host). Empty means no slide loads any image. |
+| `VEILO_KEYS_ROOT` | repository root | Seed only: the checkout whose relative key paths (`FUNDING_KEY_PATH`) `pnpm marketplace:seed` uses. |
 | `CAROUSEL_SELLER_ORIGIN` | empty | Seed only: the seller host origin the carousel tools are listed on. Unset lists them on a placeholder host that cannot be paid. |
 | `MAKEUGC_API_KEY`, `MAKEUGC_AVATAR_ID` | empty | Seller host only: the seller's own MakeUGC key (paid plan) and the avatar its videos use. |
 
@@ -269,6 +274,8 @@ The dashboard only enables or disables controls; control and wallet enforce the 
 |---|---|---|
 | `RUNNER_WORKER_CREDENTIAL_PATH` | empty | Per-agent worker tokens. `demo:seed` writes `<VEILO_SECRETS_DIR>/runner/worker-credentials.json` when unset and prints the path to set here. Format (`{"agents":[{"agentId","role","token"}]}`). The runner polls and claims jobs for these agents only, and re-reads the file every 5 seconds (by modification time), so added or removed agents start or stop without a restart. A file that fails to parse keeps the current agents. |
 | `RUNNER_APPROVED_FETCH_ORIGINS` | empty | Exact origins agent tools may fetch (owner-suggested sources). Others are listed as "not fetched". |
+| `RUNNER_BROWSER` | on | `off` disables read-only web browsing for every agent. Otherwise the runner opens permitted pages in an installed Chrome through playwright-core. |
+| `RUNNER_BROWSER_EXECUTABLE` | installed Chrome | Chrome or Chromium binary for agent browsing. |
 | `RUNNER_LOCAL_SERVICE_ORIGINS` | empty | Subset of approved origins that are configured local demo services and may resolve to loopback/private addresses. All other targets must resolve to public addresses; redirects are not followed. |
 
 ### Wallet and relayer services
@@ -278,14 +285,14 @@ The dashboard only enables or disables controls; control and wallet enforce the 
 | `OWNER_SERVICE_SECRET_PATH` | empty | Wallet-service root secret (32 random bytes). `setup:local` creates it once with owner-only permissions and never prints it. Note secrets, one-time keys and backups are encrypted under keys derived from it; keep a separate copy. Unset: the wallet serves only `/health`. |
 | `WALLET_SERVICE_CREDENTIAL_PATH` | empty | Bearer token the wallet presents to control (`/internal/wallet/*`) and the relayer. |
 | `CONTROL_SERVICE_CREDENTIAL_PATH` | empty | Bearer token control presents to the wallet funding API (`/fundings*`). |
-| `OWNER_RECOVERY_ADDRESS` | empty | The only destination owner recovery may pay (its exact-mint ATA must exist). Unset: recovery is unavailable. |
+| `OWNER_RECOVERY_ADDRESS` | empty | The only destination owner recovery may pay (its exact-mint ATA must exist), and the address that receives the SOL from an owner-approved devnet swap. Unset: recovery and swaps are unavailable. |
 | `RELAYER_DATABASE_PATH` | `<VEILO_DATA_DIR>/relayer.sqlite` | Relayer withdrawals, attempts, sponsor lamport ledger and indexed transaction cache. |
 | `RELAYER_SPONSOR_LAMPORT_CAP` | `100000000` | Total sponsor exposure (fees spent + outstanding rent) the relayer may incur. |
 | `APPROVED_LABELS_PATH` | `artifacts/deployment/approved-labels.json` | Operator-published ordered approved-label list (written by `pnpm --filter @veilo/relayer approve-root`). |
 | `APPROVED_PARTICIPANTS` | empty | Comma-separated synthetic/test participant addresses whose inserted deposits the prototype rule approves. |
 | `RELAYER_AUTO_APPROVE_KEY_PATH` | empty | Relayer only, opt-in: path (from the repository root) to the approval authority keypair. With it and `APPROVED_PARTICIPANTS`, the relayer applies the same rule as `approve-root` on every tick, so a participant's inserted deposit becomes spendable without the manual tool. Without it, approval stays manual. |
 | `VEILO_CIRCUIT_BUILD_DIR` | `circuits/build` | Proving files (hash-checked against `artifacts/circuits/manifest.json`). |
-| `VEILO_CONTROL_URL`, `VEILO_RELAYER_URL` | loopback + service port | Overrides for the wallet's control and relayer clients. |
+| `VEILO_CONTROL_URL`, `VEILO_RELAYER_URL` | loopback + service port | Overrides for the wallet's control and relayer clients. With `VEILO_WALLET_URL`, they are also the dashboard proxy's upstreams (https, or http only for localhost); see [Dashboard on Vercel](./deployment.md#dashboard-on-vercel). |
 | `WALLET_NOTE_SYNC_MS` | `10000` | Interval of the wallet's background note sync against verified public state. Inserted deposits and change notes become spendable, and are reported to control, without an owner session. |
 
 `pnpm backup` writes an AES-256-GCM encrypted snapshot (SQLite backup API) of the wallet secrets DB and control ledger to `backups/`. `pnpm restore -- --file <path> [--include-control]` must run with the wallet stopped; it validates every encrypted row, moves the old files aside, advances key counters by 1000 and blocks new proofs and signatures until the wallet's startup reconciliation passes.
