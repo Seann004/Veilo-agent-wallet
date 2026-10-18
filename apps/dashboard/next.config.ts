@@ -1,5 +1,9 @@
 import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
+import { assertHostedConfig } from "./lib/server/upstream-url";
+
+// On Vercel the services live elsewhere; refuse to build without valid addresses for them.
+if (process.env.VERCEL) assertHostedConfig(process.env);
 
 const SECURITY_HEADERS = [
   { key: "X-Content-Type-Options", value: "nosniff" },

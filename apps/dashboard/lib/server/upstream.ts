@@ -42,24 +42,18 @@ const URL_ENV: Record<UpstreamService, string> = {
   relayer: "VEILO_RELAYER_URL",
 };
 
-const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
+import { upstreamUrl } from "./upstream-url";
 
-/** An explicit upstream: https, or http only to loopback; no credentials, query or fragment. */
-export function upstreamUrl(name: string, raw: string): string {
-  let u: URL;
-  try {
-    u = new URL(raw);
-  } catch {
-    throw new Error(`${name} must be a URL`);
-  }
-  if (u.protocol !== "https:" && !(u.protocol === "http:" && LOOPBACK.has(u.hostname))) throw new Error(`${name} must use https (http only for localhost)`);
-  if (u.username || u.password || u.search || u.hash) throw new Error(`${name} must not carry credentials, a query or a fragment`);
-  return u.toString().replace(/\/$/, "");
-}
+export { upstreamUrl };
 
 export function upstreamConfig(env: NodeJS.ProcessEnv = process.env): UpstreamConfig {
   const host = env.VEILO_BIND_HOST?.trim() || "127.0.0.1";
   const loopbackHost = host === "0.0.0.0" ? "127.0.0.1" : host;
+  // Hosted builds must name every upstream; a silent loopback fallback would only fail later.
+  if (env.VERCEL) {
+    const missing = ["VEILO_DASHBOARD_ORIGIN", ...Object.values(URL_ENV)].filter((k) => !env[k]?.trim());
+    if (missing.length > 0) throw new Error(`hosted dashboard is missing ${missing.join(", ")}`);
+  }
   const origin = new URL(env.VEILO_DASHBOARD_ORIGIN?.trim() || `http://localhost:${port(env, "dashboard")}`).origin;
   const base = (s: UpstreamService) => {
     const explicit = env[URL_ENV[s]]?.trim();

@@ -308,7 +308,11 @@ describe("hosted upstreams", () => {
     expect(c.baseUrl.relayer).toBe("http://127.0.0.1:4105");
     expect(c.secureCookies).toBe(true);
     expect(upstreamUrl("X", "http://localhost:4101")).toBe("http://localhost:4101");
-    for (const bad of ["http://control.example.com", "https://u:p@control.example.com", "https://control.example.com/?k=1", "ftp://control.example.com", "not a url"]) {
+    expect(upstreamUrl("X", "https://h.example.com/api/")).toBe("https://h.example.com/api");
+    expect(() => upstreamConfig({ VERCEL: "1", VEILO_CONTROL_URL: "https://c.example.com" } as unknown as NodeJS.ProcessEnv)).toThrow(/missing VEILO_DASHBOARD_ORIGIN, VEILO_WALLET_URL, VEILO_RELAYER_URL/);
+    const { assertHostedConfig } = await import("../lib/server/upstream-url");
+    expect(() => assertHostedConfig({ VEILO_DASHBOARD_ORIGIN: "https://d.example.com", VEILO_CONTROL_URL: "https://c.example.com", VEILO_WALLET_URL: "http://w.example.com", VEILO_RELAYER_URL: "https://r.example.com" } as unknown as NodeJS.ProcessEnv)).toThrow(/VEILO_WALLET_URL/);
+    for (const bad of ["https://h.example.com?", "https://h.example.com#", "http://control.example.com", "https://u:p@control.example.com", "https://control.example.com/?k=1", "ftp://control.example.com", "not a url"]) {
       expect(() => upstreamUrl("VEILO_CONTROL_URL", bad), bad).toThrow(/VEILO_CONTROL_URL/);
     }
   });
