@@ -1429,6 +1429,18 @@ details > summary {
   border-bottom-left-radius: 6px;
 }
 
+.bubble-steps {
+  margin-top: 0.5rem;
+}
+
+.bubble-steps ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.82rem;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
 .bubble-meta {
   display: block;
   margin-top: 0.25rem;

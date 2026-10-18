@@ -43,6 +43,32 @@ describe("live agent tasks", () => {
     expect(rec.calls).toHaveLength(count);
   });
 
+  it("shows how the agent did the work under its answer, without repeating the task", async () => {
+    const content = [
+      "Fees fell 12% this week.",
+      "",
+      "— Details —",
+      "Task: Summarize fee changes",
+      "Made with: Your AI model (deepseek/deepseek-v4-flash), no USDC spent.",
+      "Connector data used: github/list_issues.",
+      "Note: one connector returned no usable result.",
+    ].join("\n");
+    const rec = recordingFetch((url) => {
+      if (url.includes("/tasks?")) return { tasks: [], jobs: [] };
+      if (url.includes("/balances")) return balancesAfterTopUpAndConsumption();
+      if (url.includes("/activity")) return { events: [], purchases: [] };
+      if (url.includes("/content?")) return { items: [draft({ kind: "research_brief", title: "Fee brief", content, agent: { id: PRINCE, name: "Prince", role: "research" } })] };
+      return { items: [] };
+    });
+    vi.stubGlobal("fetch", rec.impl);
+    await act(async () => { render(withRole(<AgentDetail agentId={PRINCE} />)); });
+    expect(screen.getByText("Fees fell 12% this week.")).toBeTruthy();
+    expect(screen.getByText("How I did it")).toBeTruthy();
+    expect(screen.getByText("Connector data used: github/list_issues.")).toBeTruthy();
+    expect(screen.getByText(/Made with: Your AI model/)).toBeTruthy();
+    expect(screen.queryByText("Task: Summarize fee changes")).toBeNull();
+  });
+
   it("does not overlap slow refreshes or continue after unmount", async () => {
     vi.useFakeTimers();
     vi.spyOn(document, "hidden", "get").mockReturnValue(false);

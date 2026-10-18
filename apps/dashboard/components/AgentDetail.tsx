@@ -345,6 +345,20 @@ function ResultText({ text }: { text: string }) {
   );
 }
 
+/**
+ * What the agent did, from the runner's details section: model used, connectors called,
+ * marketplace search and notes. The task line repeats the owner's message and is left out.
+ */
+function stepsOf(content: string): string[] {
+  const i = content.indexOf("\n— Details —\n");
+  if (i < 0) return [];
+  return content
+    .slice(i + "\n— Details —\n".length)
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l !== "" && !l.startsWith("Task: "));
+}
+
 /** The part of an output meant for the owner: everything before the runner's details marker, kept short. */
 function answerOf(content: string): string {
   const body = content.split("\n— Details —\n")[0]!.trim();
@@ -414,6 +428,7 @@ function buildThread(
   }
   for (const c of items) {
     const answer = c.kind === "content_calendar" ? "" : answerOf(c.content);
+    const steps = stepsOf(c.content);
     const taskState = tasks.find((t) => t.id === c.taskId)?.state;
     out.push({
       at: c.createdAt,
@@ -422,6 +437,16 @@ function buildThread(
         <li className="bubble bubble-agent bubble-answer">
           <strong className="bubble-title">{c.title}</strong>
           {answer ? <span className="plain-text">{answer}</span> : null}
+          {steps.length > 0 ? (
+            <details className="advanced bubble-steps">
+              <summary>How I did it</summary>
+              <ul>
+                {steps.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
           <span className="bubble-meta">
             {taskState && taskState !== "completed" ? `${taskStateLabel(taskState)} · ` : ""}
             {REVIEW_LABEL[c.reviewState] ?? c.reviewState} · <Link href="/outputs">Open in Outputs</Link>
