@@ -5,9 +5,8 @@ import { BotAvatar, botAvatarTypes } from "bot-avatars";
 import { usePrefersReducedMotion } from "./ThinkingOrb";
 import { AVATARS, useAgentAvatar, type AvatarOption } from "../lib/avatars";
 import type { Agent } from "../lib/types";
-import { AVATAR_COLOURS, GENDERS, PRESENTATIONS } from "../lib/avatar-art";
+import { AVATAR_COLOURS } from "../lib/avatar-art";
 import { avatarChoice, encodeAvatar } from "../lib/avatar-customization";
-import { Select } from "./Select";
 
 /** Shape and colour of the bot for an avatar choice; the same mapping serves static and animated spots. */
 export function botFor(avatar: AvatarOption): { type: (typeof botAvatarTypes)[number]; colour: string } {
@@ -30,7 +29,7 @@ function BotFace({ avatar, size, paused }: { avatar: AvatarOption; size: number;
   const { type, colour } = botFor(avatar);
   return (
     <span className="working-avatar" data-bot={type} aria-hidden={paused ? true : undefined} style={{ width: size, height: size }}>
-      <BotAvatar type={type} state={paused ? "default" : "working"} paused={paused} size={size} color={colour} />
+      <BotAvatar type={type} state={paused ? "default" : "working"} paused={paused} size={size} color={colour} shading="plastic" />
     </span>
   );
 }
@@ -93,17 +92,7 @@ export function AvatarPicker({ value, onChange, label = "Avatar" }: { value: str
           </button>
         ))}
       </div>
-      <div className="avatar-custom-fields">
-        <div className="field">
-          <span className="small">Presentation</span>
-          <Select label="Presentation" value={choice.presentation} options={[...PRESENTATIONS]} onChange={(presentation) => update({ presentation })} />
-        </div>
-        <div className="field">
-          <span className="small">Gender (optional)</span>
-          <Select label="Gender (optional)" value={choice.gender} options={[...GENDERS]} onChange={(gender) => update({ gender })} />
-        </div>
-      </div>
-      <p className="hint">Woman adds a pink ribbon. Other choices have no ribbon. Choose any colour or presentation; these choices don’t change how the agent works.</p>
+      <p className="hint">Shape and colour are only how the agent looks; they don’t change how it works.</p>
       <button type="button" className="link-btn" onClick={() => onChange(choice.avatarId)}>Reset appearance</button>
     </fieldset>
   );

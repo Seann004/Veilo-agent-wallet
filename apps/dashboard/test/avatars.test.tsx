@@ -57,26 +57,23 @@ describe("avatar display preferences", () => {
     }
   });
 
-  it("keeps shape, colour, presentation and gender independent, and restores them after remount", async () => {
+  it("keeps shape and colour independent, offers no gender or presentation, and restores them after remount", async () => {
     const user = userEvent.setup();
     function Editor() {
       const [value, setValue] = useState(window.localStorage.getItem("veilo.avatar.saved") ?? "avatar-09");
       return <AvatarPicker value={value} onChange={(v) => { setValue(v); setAgentAvatar("saved", v); }} />;
     }
     render(<Editor />);
+    expect(screen.queryByRole("button", { name: /Presentation/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Gender/ })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Teal" }));
     await user.click(screen.getByRole("button", { name: "Blue drop" }));
-    await user.click(screen.getByRole("button", { name: "Presentation: Smooth" }));
-    await user.keyboard("{ArrowDown}{Enter}");
-    await user.click(screen.getByRole("button", { name: "Gender (optional): Not specified" }));
-    await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{Enter}");
     const saved = window.localStorage.getItem("veilo.avatar.saved")!;
-    expect(avatarChoice(saved)).toEqual({ avatarId: "avatar-02", colour: "#14a38b", presentation: "tuft", gender: "nonbinary" });
+    expect(avatarChoice(saved)).toMatchObject({ avatarId: "avatar-02", colour: "#14a38b" });
     expect(encodeAvatar(avatarChoice(saved))).toBe(saved);
     cleanup();
     render(<Editor />);
-    expect(screen.getByRole("button", { name: "Presentation: Tuft" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Gender (optional): Non-binary" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Teal" }).getAttribute("aria-pressed")).toBe("true");
     await user.click(screen.getByRole("button", { name: "Reset appearance" }));
     expect(window.localStorage.getItem("veilo.avatar.saved")).toBe("avatar-02");
   });

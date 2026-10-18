@@ -32,10 +32,9 @@ export function resolveAvatar(value: string): AvatarOption {
   if (original) return original;
   const choice = avatarChoice(value);
   const avatar = avatarById(choice.avatarId)!;
-  const gender = GENDERS.find((g) => g.value === choice.gender)!.label;
   return {
     id: encodeAvatar(choice),
-    label: `${avatar.label}, ${choice.presentation}${choice.gender === "unspecified" ? "" : `, ${gender}`}`,
+    label: avatar.label,
     src: `data:image/svg+xml,${encodeURIComponent(pebbleSvg(AVATARS.indexOf(avatar), choice))}`,
   };
 }
