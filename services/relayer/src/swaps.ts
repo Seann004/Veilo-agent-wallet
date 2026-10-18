@@ -102,8 +102,10 @@ export class SwapService {
     const blockhash = (msg.lifetimeToken as string) ?? "";
     const signed = await sponsorCosign(sponsor, tx, { blockhash, lastValidBlockHeight: BigInt(req.lastValidBlockHeight) });
     const now = Date.now();
-    // Rechecked and recorded in one synchronous transaction, so concurrent swaps cannot both fit.
-    this.c.db.transaction(() => {
+    // Rechecked and recorded in one synchronous transaction, so concurrent swaps cannot both fit
+    // and a concurrent retry of the same swap id neither re-broadcasts nor counts against the cap.
+    const inserted = this.c.db.transaction(() => {
+      if (this.c.db.prepare(`SELECT 1 FROM swap WHERE id = ?`).get(req.swapId)) return false;
       this.#assertWithinCap(wsolRent);
       this.c.db
         .prepare(
@@ -111,8 +113,9 @@ export class SwapService {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?)`,
         )
         .run(req.swapId, fresh, req.destination, signed.signature, blockhash, BigInt(req.lastValidBlockHeight), wsolRent, usdcAcct.lamports, now, now);
+      return true;
     })();
-    await this.c.chain.send(signed.wire).catch(() => undefined);
+    if (inserted) await this.c.chain.send(signed.wire).catch(() => undefined);
     return this.view(req.swapId)!;
   }
 
