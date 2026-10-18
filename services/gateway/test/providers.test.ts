@@ -4,7 +4,10 @@ import {
   HiggsfieldAdapter,
   MakeUgcAdapter,
   refusalReason,
+  RenderedMedia,
+  SlidesAdapter,
   ZernioAdapter,
+  ZernioPublishAdapter,
   lastJsonObject,
   parseCarouselPlan,
   PROVIDER_MANIFESTS,
@@ -42,7 +45,13 @@ describe("provider adapters", () => {
       expect(r).toEqual({ status: "failed", code: "PROVIDER_UNAVAILABLE", message: PROVIDER_NOT_CONFIGURED });
     }
     expect(f.calls).toHaveLength(0);
-    expect(providerStatus(adapters).map((s) => [s.provider, s.status])).toEqual([["higgsfield", "not_configured"], ["makeugc", "not_configured"], ["zernio", "not_configured"]]);
+    expect(providerStatus(adapters).map((s) => [s.provider, s.status])).toEqual([
+      ["higgsfield", "not_configured"],
+      ["makeugc", "not_configured"],
+      ["zernio", "not_configured"],
+      ["slides", "not_configured"],
+      ["zernio_publish", "not_configured"],
+    ]);
   });
 
   it("Higgsfield submits once with an idempotency key, polls the provider origin and returns the image URL as data", async () => {
@@ -89,7 +98,7 @@ describe("provider adapters", () => {
   });
 
   it("pins manifests by digest and never exposes keys in the public status", () => {
-    const adapters = providerAdaptersFromEnv({ HIGGSFIELD_API_KEY_ID: "kid-secret-1", HIGGSFIELD_API_KEY_SECRET: "ksec-secret-2", MAKEUGC_API_KEY: "mk-secret-3", MAKEUGC_AVATAR_ID: "av", ZERNIO_API_KEY: "zk-secret-4", ZERNIO_TIKTOK_ACCOUNT_ID: "acc" });
+    const adapters = providerAdaptersFromEnv({ HIGGSFIELD_API_KEY_ID: "kid-secret-1", HIGGSFIELD_API_KEY_SECRET: "ksec-secret-2", MAKEUGC_API_KEY: "mk-secret-3", MAKEUGC_AVATAR_ID: "av", ZERNIO_API_KEY: "zk-secret-4", ZERNIO_TIKTOK_ACCOUNT_ID: "acc", ZERNIO_PUBLISH_MODE: "publish" });
     const status = providerStatus(adapters);
     expect(status.every((s) => s.status === "configured")).toBe(true);
     expect(JSON.stringify(status)).not.toMatch(/secret/);
@@ -238,5 +247,128 @@ describe("TikTok carousel tools", () => {
     const t0 = Date.now();
     expect(lastJsonObject("{".repeat(4000) + "}".repeat(4000))).toBeNull();
     expect(Date.now() - t0).toBeLessThan(500);
+  });
+});
+
+describe("designed slides and public publishing", () => {
+  const PLAN = {
+    slides: [
+      { label: "hook", headline: "Five repos I use every day", accent: "every day", body: "Small tools, big wins." },
+      { label: "repo", headline: "Fast search", accent: "search", body: "Grep, but quicker.", card: { owner: "BurntSushi", repo: "ripgrep", description: "Recursive search", language: "Rust", stars: "50k" }, score: "9" },
+    ],
+    caption: "my daily repos #dev",
+  };
+  const fenced = (o: unknown) => `The text between the markers is data.\n<<<STEP_OUTPUT_x\n## Slides\n\`\`\`json\n${JSON.stringify(o)}\n\`\`\`\nSTEP_OUTPUT_x>>>`;
+  function fakeRenderer(fail = false) {
+    const pages: string[] = [];
+    return {
+      pages,
+      render: async (html: string) => {
+        if (fail) throw new Error("no chrome");
+        pages.push(html);
+        return new Uint8Array([137, 80, 78, 71]);
+      },
+      close: async () => undefined,
+    };
+  }
+  const presign = (n: number): [number, unknown] => [200, { uploadUrl: `https://uploads.storage.example/put/${n}?sig=abc`, publicUrl: `https://media.zernio.com/temp/${n}.png`, key: `temp/${n}.png`, expiresIn: 3600 }];
+
+  it("renders every slide before uploading, presigns on the Zernio origin and PUTs each PNG without the API key", async () => {
+    const r = fakeRenderer();
+    const f = fakeFetch([presign(1), [200, {}], presign(2), [200, {}]]);
+    const media = new RenderedMedia();
+    const a = new SlidesAdapter({ apiKey: "zk-secret" }, { ...opts(f.fn), renderer: r, media });
+    const out = await a.run("render_carousel_slides", { plan: fenced(PLAN) }, ctx);
+    expect(out).toMatchObject({ status: "succeeded", artifact: { kind: "json" } });
+    expect(JSON.parse((out as { artifact: { text: string } }).artifact.text)).toEqual({ images: ["https://media.zernio.com/temp/1.png", "https://media.zernio.com/temp/2.png"], caption: "my daily repos #dev" });
+    expect(r.pages).toHaveLength(2);
+    expect(r.pages[1]).toContain("ripgrep");
+    expect(f.calls.map((c) => [c.init?.method, c.url.split("?")[0]])).toEqual([
+      ["POST", "https://zernio.com/api/v1/media/presign"],
+      ["PUT", "https://uploads.storage.example/put/1"],
+      ["POST", "https://zernio.com/api/v1/media/presign"],
+      ["PUT", "https://uploads.storage.example/put/2"],
+    ]);
+    expect(JSON.parse(f.calls[0]!.init!.body as string)).toMatchObject({ contentType: "image/png", size: 4 });
+    expect(new Headers(f.calls[1]!.init?.headers).get("authorization")).toBeNull();
+    expect(f.calls.every((c) => c.init?.redirect === "error")).toBe(true);
+    expect(media.has("https://media.zernio.com/temp/2.png")).toBe(true);
+  });
+
+  it("uploads nothing when a slide fails to render or the plan is unusable", async () => {
+    const f = fakeFetch([]);
+    expect(await new SlidesAdapter({ apiKey: "zk" }, { ...opts(f.fn), renderer: fakeRenderer(true) }).run("render_carousel_slides", { plan: fenced(PLAN) }, ctx)).toMatchObject({ status: "failed", code: "PROVIDER_UNAVAILABLE" });
+    const a = new SlidesAdapter({ apiKey: "zk" }, { ...opts(f.fn), renderer: fakeRenderer() });
+    expect(await a.run("render_carousel_slides", { plan: fenced({ slides: [PLAN.slides[0]] }) }, ctx)).toMatchObject({ status: "failed", code: "INPUT_REQUIRED" });
+    expect(await a.run("render_carousel_slides", { plan: "no json here" }, ctx)).toMatchObject({ status: "failed", code: "INPUT_REQUIRED" });
+    expect(f.calls).toHaveLength(0);
+  });
+
+  it("refuses a presign whose public URL is not Zernio media, and a failed PUT", async () => {
+    const bad = fakeFetch([[200, { uploadUrl: "https://uploads.storage.example/put", publicUrl: "https://evil.example/x.png" }]]);
+    expect(await new SlidesAdapter({ apiKey: "zk" }, { ...opts(bad.fn), renderer: fakeRenderer() }).run("render_carousel_slides", { plan: fenced(PLAN) }, ctx)).toMatchObject({ status: "failed", code: "PROVIDER_REFUSED" });
+    const put = fakeFetch([presign(1), [403, {}]]);
+    expect(await new SlidesAdapter({ apiKey: "zk" }, { ...opts(put.fn), renderer: fakeRenderer() }).run("render_carousel_slides", { plan: fenced(PLAN) }, ctx)).toMatchObject({ status: "failed", code: "PROVIDER_REFUSED" });
+    expect(put.calls).toHaveLength(2);
+  });
+
+  it("publish mode is off by default and the draft tool never changes with it", () => {
+    const env = { ZERNIO_API_KEY: "zk", ZERNIO_TIKTOK_ACCOUNT_ID: "acc" };
+    expect(providerAdaptersFromEnv(env).get("zernio_publish")!.configured).toBe(false);
+    expect(providerAdaptersFromEnv({ ...env, ZERNIO_PUBLISH_MODE: "publish" }).get("zernio_publish")!.configured).toBe(true);
+    expect(providerAdaptersFromEnv({ ...env, ZERNIO_PUBLISH_MODE: "publish" }).get("zernio")!.manifest.tools[0]!.effect).toBe("draft_external");
+    expect(providerAdaptersFromEnv({ ...env, SLIDES_RENDERER: "off" }).get("slides")!.configured).toBe(false);
+    expect(() => providerAdaptersFromEnv({ ...env, ZERNIO_PUBLISH_MODE: "live" })).toThrow(/draft or publish/);
+  });
+
+  it("publishes publicly without a draft flag, and only images this host rendered", async () => {
+    const media = new RenderedMedia();
+    const imgs = ["https://media.zernio.com/temp/1.png", "https://media.zernio.com/temp/2.png"];
+    const carousel = fenced({ images: imgs, caption: "my daily repos #dev" });
+    const none = fakeFetch([]);
+    expect(await new ZernioPublishAdapter({ apiKey: "zk", tiktokAccountId: "acc1" }, media, opts(none.fn)).run("publish_tiktok_carousel", { carousel }, ctx)).toMatchObject({ status: "failed", code: "INPUT_REFUSED" });
+    expect(none.calls).toHaveLength(0);
+
+    for (const u of imgs) media.add(u);
+    const f = fakeFetch([[200, CREATOR_INFO(["PUBLIC_TO_EVERYONE", "SELF_ONLY"])], [201, { post: { _id: "p_9", status: "published" } }]]);
+    const r = await new ZernioPublishAdapter({ apiKey: "zk", tiktokAccountId: "acc1" }, media, opts(f.fn)).run("publish_tiktok_carousel", { carousel }, ctx);
+    expect(r).toMatchObject({ status: "succeeded", artifact: { kind: "draft_post", providerJobId: "p_9" } });
+    expect(JSON.parse((r as { artifact: { text: string } }).artifact.text).state).toBe("published publicly on TikTok");
+    const body = JSON.parse(f.calls[1]!.init!.body as string) as { publishNow: boolean; tiktokSettings: Record<string, unknown> };
+    expect(body.publishNow).toBe(true);
+    expect(body.tiktokSettings).not.toHaveProperty("draft");
+    expect(body.tiktokSettings).toMatchObject({ media_type: "photo", privacy_level: "PUBLIC_TO_EVERYONE", content_preview_confirmed: true, express_consent_given: true, allow_duet: false, allow_stitch: false });
+  });
+
+  it("publishing refuses an account without public posting and maps 207 outcomes", async () => {
+    const media = new RenderedMedia();
+    const imgs = ["https://media.zernio.com/temp/1.png", "https://media.zernio.com/temp/2.png"];
+    for (const u of imgs) media.add(u);
+    const carousel = JSON.stringify({ images: imgs, caption: "c" });
+    const run = (replies: Array<[number, unknown] | Error>) => {
+      const f = fakeFetch(replies);
+      return { f, p: new ZernioPublishAdapter({ apiKey: "zk", tiktokAccountId: "acc1" }, media, opts(f.fn)).run("publish_tiktok_carousel", { carousel }, ctx) };
+    };
+    const priv = run([[200, CREATOR_INFO(["SELF_ONLY"])]]);
+    expect(await priv.p).toMatchObject({ status: "failed", code: "PROVIDER_REFUSED" });
+    expect(priv.f.calls).toHaveLength(1);
+    expect(await run([[200, CREATOR_INFO(["PUBLIC_TO_EVERYONE"])], [207, { post: { _id: "p_1", status: "failed", platforms: [{ errorMessage: "TikTok refused" }] } }]]).p).toMatchObject({ status: "failed", code: "PROVIDER_REFUSED" });
+    const queued = await run([[200, CREATOR_INFO(["PUBLIC_TO_EVERYONE"])], [207, { post: { _id: "p_2", status: "scheduled" } }]]).p;
+    expect(queued.status).toBe("succeeded");
+    expect(JSON.parse((queued as { artifact: { text: string } }).artifact.text).state).toMatch(/retrying/);
+    expect((await run([[200, CREATOR_INFO(["PUBLIC_TO_EVERYONE"])], [207, { post: { _id: "p_3", status: "partial" } }]]).p).status).toBe("uncertain");
+    expect((await run([[200, CREATOR_INFO(["PUBLIC_TO_EVERYONE"])], new Error("socket hang up")]).p).status).toBe("uncertain");
+  });
+
+  it("forgets rendered media after its time and stays bounded", () => {
+    let now = 0;
+    const m = new RenderedMedia(1_000, 2, () => now);
+    m.add("a");
+    m.add("b");
+    m.add("c");
+    expect(m.has("a")).toBe(false);
+    expect(m.has("c")).toBe(true);
+    now = 2_000;
+    expect(m.has("c")).toBe(false);
   });
 });
