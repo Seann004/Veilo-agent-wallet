@@ -1,4 +1,3 @@
-import { SPONSORED_PLANNING_LABEL } from "@veilo/contracts/gateway";
 import { ToolDenied } from "../control-client";
 import {
   BYOK_LABEL,
@@ -8,6 +7,7 @@ import {
   outcomeText,
   parseJsonObject,
   plan,
+  planningSummary,
   PLAN_USER_MAX_CHARS,
   runAi,
   step,
@@ -474,7 +474,7 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
         ]
       : []),
     ...ctx.notes.map((n) => `Note: ${n}`),
-    `${ctx.client.planningCalls} ${SPONSORED_PLANNING_LABEL} call(s).`,
+    `${planningSummary(ctx.client)}.`,
   ];
   await step(ctx, "Saving the result");
   const saved = await tryTool(ctx, "save_artifact", {

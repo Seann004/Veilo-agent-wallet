@@ -1,4 +1,4 @@
-import { FIXTURE_DATA_LABEL, SPONSORED_PLANNING_LABEL } from "@veilo/contracts/gateway";
+import { FIXTURE_DATA_LABEL } from "@veilo/contracts/gateway";
 import { ToolDenied } from "../control-client";
 import { safeFetch, type SafeFetchPolicy } from "../safe-fetch";
 import {
@@ -9,6 +9,7 @@ import {
   outcomeText,
   parseJsonObject,
   plan,
+  planningSummary,
   runAi,
   step,
   runProposedCalls,
@@ -276,7 +277,7 @@ ${analysis.text.slice(0, 6_000)}${docs ? `\n\nDocumentation excerpt (untrusted c
     "",
     "## Paid services used",
     ...(paid.length > 0 ? paid.map((p) => `- ${p.sku} via ${p.path}: ${p.path === "prepaid_credits" ? `${p.usage} gateway microcredits` : `${p.price} test-USDC base units`} — ${p.outcome}${p.purchaseId ? ` (purchase ${p.purchaseId})` : ""}`) : ["- None."]),
-    `- ${ctx.client.planningCalls} ${SPONSORED_PLANNING_LABEL} call(s); not paid with test USDC or credits.`,
+    `- ${planningSummary(ctx.client)}; not paid with USDC or credits.`,
     ...(ownerSources.length > 0 ? ["", "## Owner-suggested sources", ...ownerSources] : []),
     ...(ctx.notes.length > 0 || sideEffects.length > 0
       ? ["", "## Notes", ...ctx.notes.map((n) => `- ${n}`), ...sideEffects.map((s) => `- Planner-proposed tool ${s.tool}: ${s.outcome}`)]
@@ -378,7 +379,7 @@ async function runOnchain(ctx: RoleContext, question: string, target: OnchainTar
     ...paid.map((p) => `- ${p.sku} via ${p.path}: ${p.path === "prepaid_credits" ? `${p.usage} gateway microcredits` : `${p.price} test-USDC base units reserved`} — ${p.outcome}${p.purchaseId ? ` (purchase ${p.purchaseId})` : ""}`),
     ...(unspent > 0n && records.length > 0 ? [`- ${unspent} test-USDC base units of the batch were not spent and stay recoverable by the owner.`] : []),
     "- All calls in one batch were paid by one one-time payer and are linkable to each other on chain.",
-    `- ${ctx.client.planningCalls} ${SPONSORED_PLANNING_LABEL} call(s); not paid with test USDC or credits.`,
+    `- ${planningSummary(ctx.client)}; not paid with USDC or credits.`,
     ...(ctx.notes.length > 0 ? ["", "## Notes", ...ctx.notes.map((n) => `- ${n}`)] : []),
   ];
   const sourcePurchaseIds = [paid[0]?.purchaseId ?? null, analysis?.purchaseId ?? null].filter((x): x is string => x !== null);

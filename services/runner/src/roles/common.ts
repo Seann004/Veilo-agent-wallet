@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { computeRequestDigest } from "@veilo/contracts/gateway";
+import { computeRequestDigest, SPONSORED_PLANNING_LABEL } from "@veilo/contracts/gateway";
 import type { PageReader } from "../browser";
 import { ToolDenied, type ControlClient, type ControlReply, type RunBounds } from "../control-client";
 
@@ -174,6 +174,18 @@ export function parseJsonObject(text: unknown): Record<string, unknown> | undefi
  * is unavailable, uncertain or exhausted; the runner never retries past its planning bound.
  */
 /** Longest planner user message; anything after it is cut, including a closing data fence. */
+/** How many planning calls ran on the owner's model and how many were operator-sponsored. */
+export function planningSummary(client: { planningCalls: number; planningAnswers: ReadonlyArray<{ byok: boolean; model: string | null }> }): string {
+  const own = client.planningAnswers.filter((a) => a.byok);
+  const sponsored = client.planningCalls - own.length;
+  const models = [...new Set(own.flatMap((a) => (a.model ? [a.model] : [])))];
+  const word = (n: number) => (n === 1 ? "call" : "calls");
+  const parts: string[] = [];
+  if (own.length > 0) parts.push(`${own.length} planning ${word(own.length)} on your model${models.length > 0 ? ` (${models.join(", ")})` : ""}`);
+  if (sponsored > 0 || own.length === 0) parts.push(`${sponsored} ${SPONSORED_PLANNING_LABEL} ${word(sponsored)}`);
+  return parts.join(" and ");
+}
+
 export const PLAN_USER_MAX_CHARS = 12_000;
 
 export async function plan(ctx: RoleContext, purpose: string, system: string, user: string): Promise<string | undefined> {

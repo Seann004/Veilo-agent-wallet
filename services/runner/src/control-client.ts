@@ -60,6 +60,8 @@ export class ControlClient {
   toolCalls = 0;
   paidRequests = 0;
   planningCalls = 0;
+  /** Which provider answered each planning request: the owner's model (BYOK) or operator-sponsored. */
+  readonly planningAnswers: Array<{ byok: boolean; model: string | null }> = [];
   readonly denied: Array<{ tool: string; code: string; message: string }> = [];
 
   constructor(o: { baseUrl: string; token: string; fetch?: FetchLike; customTools?: boolean }) {
@@ -183,6 +185,11 @@ export class ControlClient {
   async planning(taskId: string, purpose: string, messages: Array<{ role: "system" | "user"; content: string }>, bounds: RunBounds): Promise<ControlReply | null> {
     if (this.planningCalls >= bounds.maxPlanningCalls) return null;
     this.planningCalls += 1;
-    return this.request("POST", "/worker/planning", { taskId, purpose, messages, maxOutputTokens: 600 });
+    const r = await this.request("POST", "/worker/planning", { taskId, purpose, messages, maxOutputTokens: 600 });
+    const outcome = r.body?.gateway?.outcome;
+    const byok = outcome?.mode === "byok" || (typeof r.body?.label === "string" && /bring your own key/i.test(r.body.label));
+    const model = byok && typeof outcome?.model === "string" && /^[A-Za-z0-9._:/@-]{1,120}$/.test(outcome.model) ? outcome.model : null;
+    this.planningAnswers.push({ byok, model });
+    return r;
   }
 }

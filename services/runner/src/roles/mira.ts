@@ -1,6 +1,5 @@
-import { SPONSORED_PLANNING_LABEL } from "@veilo/contracts/gateway";
 import type { ControlReply } from "../control-client";
-import { BYOK_LABEL, buy, delivered, outcomeText, plan, runAi, step, tryTool, type CatalogItem, type RoleContext, type RoleOutcome } from "./common";
+import { BYOK_LABEL, buy, delivered, outcomeText, plan, planningSummary, runAi, step, tryTool, type CatalogItem, type RoleContext, type RoleOutcome } from "./common";
 
 interface Draft {
   channel: string;
@@ -82,7 +81,7 @@ export async function runMira(ctx: RoleContext): Promise<RoleOutcome> {
       ? `Generated on ${BYOK_LABEL.toLowerCase()} (${own.model}); no USDC spent.`
       : `Purchased: content-package via direct x402 (${item!.price.amount} USDC base units) — ${outcomeText(r)}.`,
     result?.provenance?.label ? `Generation: ${result.provenance.label}.` : "",
-    `${ctx.client.planningCalls} ${SPONSORED_PLANNING_LABEL} call(s).`,
+    `${planningSummary(ctx.client)}.`,
     "Draft for owner review. Nothing is published or sent automatically.",
   ].filter((l) => l !== "");
 
