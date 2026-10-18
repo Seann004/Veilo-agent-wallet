@@ -226,6 +226,38 @@ describe("local authorization", () => {
     expect((await bridge(s).receive(again)).state).toBe("awaiting_approval");
   });
 
+  it("waits for a covering note that is still on its way instead of rejecting the hire", async () => {
+    s = await makeMarketStack();
+    const listingId = "22222222-2222-4222-8222-222222222222";
+    const brief = "Compare three CRM vendors for a five-person team.";
+    await proposeAsScout(s, listingId, brief);
+    await grant(s, listingId);
+    s.env.db.prepare(`UPDATE note SET state = 'pending_deposit' WHERE state = 'approved'`).run();
+    const req = s.request({ brief, listingId, requestedBy: { kind: "agent", agentId: null, localAgentId: s.scout.id } });
+    s.market.requests = [req];
+    await bridge(s).poll();
+    expect(bridge(s).hire(req.operationId)!.state).toBe("authorized");
+    expect(purchases(s)).toBe(0);
+    s.env.db.prepare(`UPDATE note SET state = 'approved' WHERE state = 'pending_deposit'`).run();
+    await bridge(s).poll();
+    expect(bridge(s).hire(req.operationId)!.state).toBe("paid");
+    expect(s.seller.payments).toBe(1);
+  });
+
+  it("still rejects a hire when no note is on its way", async () => {
+    s = await makeMarketStack();
+    const listingId = "22222222-2222-4222-8222-222222222222";
+    const brief = "Compare three CRM vendors for a five-person team.";
+    await proposeAsScout(s, listingId, brief);
+    await grant(s, listingId);
+    s.env.db.prepare(`UPDATE note SET state = 'exited' WHERE state = 'approved'`).run();
+    const req = s.request({ brief, listingId, requestedBy: { kind: "agent", agentId: null, localAgentId: s.scout.id } });
+    s.market.requests = [req];
+    await bridge(s).poll();
+    expect(bridge(s).hire(req.operationId)!.state).toBe("rejected");
+    expect(purchases(s)).toBe(0);
+  });
+
   it("prompt-injected listing text cannot change the granted recipient or price", async () => {
     s = await makeMarketStack();
     const listingId = "22222222-2222-4222-8222-222222222222";

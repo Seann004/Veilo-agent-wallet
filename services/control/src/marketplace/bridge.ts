@@ -706,6 +706,10 @@ export class MarketplaceBridge {
       }).purchase;
     } catch (error) {
       if (!(error instanceof ControlError)) throw error;
+      // A note that is still on its way (an earlier step's change, or a deposit) will cover this
+      // step shortly; the hire stays authorized and is retried on the next poll. Its quote expiry
+      // still bounds the wait.
+      if (error.code === "NOTE_PENDING" && this.#noteOnTheWay(h.workspace_id)) return;
       immediate(this.ledger.db, () => {
         const cur = this.hire(h.operation_id) as HireRow;
         if (cur.state === "authorized" && cur.purchase_id === null) this.#reject(cur, { code: error.code, message: error.message });
@@ -725,6 +729,14 @@ export class MarketplaceBridge {
       const approval = this.ledger.db.prepare(`SELECT owner_pubkey FROM marketplace_hire_approval WHERE operation_id = ?`).pluck().get(h.operation_id) as string;
       decidePurchase(this.ledger, purchase.id, "approve", approval);
     }
+  }
+
+  #noteOnTheWay(workspaceId: string): boolean {
+    return (
+      this.ledger.db
+        .prepare(`SELECT 1 FROM note WHERE workspace_id = ? AND state IN ('reserved', 'pending_change', 'pending_deposit') LIMIT 1`)
+        .get(workspaceId) !== undefined
+    );
   }
 
   /** Orchestrator hook: the fresh payer exists locally; nothing has been released on chain. */
