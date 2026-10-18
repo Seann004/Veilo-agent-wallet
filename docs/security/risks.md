@@ -14,6 +14,8 @@
 | Backup and restore | Lost change or reused wallet material can lose funds or duplicate authority | Wallet/control snapshots are separate and omit the gateway ledger; quiesce writers, retain matching gateway state/credentials and reconcile after restore |
 | Dependencies | Devnet, RPC, facilitator or provider outages interrupt work | Health checks, bounded retries/cost and explicit pause states |
 | Public exit/recovery | Reveals value or linkage | Use bound owner destinations and explain the public nature of the operation |
+| Devnet swap | A swap may be refused for sponsor budget after its funding settled; the SOL output links to the owner's address; the swap is untested on devnet | Funded USDC stays recoverable to the owner; recovery of a never-signed swap is explicit (`swap_never_signed`); disclose the public destination |
+| Owner's model provider and connectors | Prompts, gathered data and reference images reach third parties; injected text may steer the model | Keys stay in control; third-party text is fenced; policy and signing do not trust model output |
 
 Independent review and execution evidence are needed to evaluate implementation safety. Privacy depends on correct cryptography and operational behavior; it does not hide every transaction detail from every observer.
 

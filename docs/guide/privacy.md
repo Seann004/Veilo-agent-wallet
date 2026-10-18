@@ -34,6 +34,16 @@ Funding privacy and owner monitoring serve different audiences: the owner retain
 
 Persistent gateway accounts deliberately link service usage off chain. The protocol does not hide prompts from the provider or establish network-level anonymity.
 
+## Agent tools added after the merge
+
+| Path | Who else sees what |
+|---|---|
+| Owner's model provider | Prompts, gathered page and connector text, outputs and any reference image. The provider bills and identifies the owner. |
+| Read-only browsing | Each site sees a request from the runner host's address; control's audit keeps only the host. |
+| Connectors (including CoinGecko market data) | The connector server sees the call arguments, such as coin ids. Calls are keyless and not private. |
+| Result destinations | Telegram, Slack or Discord receive the task's saved outputs as plain text. |
+| Devnet swap | A fresh wallet funded from the pool pays the swap, but the SOL lands publicly at `OWNER_RECOVERY_ADDRESS`, linking that swap to the owner's address. |
+
 ## Marketplace observer boundary — accepted v3.2 scope
 
 Marketplace identity and job records create additional off-chain linkage. The marketplace operator, sellers, facilitators and model providers can see the buyer–seller relationship and plaintext job content they process. Supabase Web3 identity does not hide a buyer from the cloud operator. Private Storage and RLS restrict application access; they do not establish transaction or metadata anonymity.

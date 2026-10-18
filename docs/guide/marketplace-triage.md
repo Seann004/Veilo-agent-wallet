@@ -5,7 +5,7 @@
 Evidence kinds used below:
 
 - **RLS e2e (live):** `pnpm test:marketplace-rls` (`scripts/marketplace/rls-e2e.ts`), 84/84 passed against the Supabase project with real Web3 sign-ins. Its chain reads use a labeled fixture, so it proves identity, RLS, Storage and transitions, not settlement.
-- **Unit (fakes):** Vitest suites such as `services/control/test/marketplace.test.ts`, `services/marketplace/test/marketplace.test.ts` and `services/gateway/test/seller-host.test.ts`, part of the 643 passing tests.
+- **Unit (fakes):** Vitest suites such as `services/control/test/marketplace.test.ts`, `services/marketplace/test/marketplace.test.ts` and `services/gateway/test/seller-host.test.ts`, part of `pnpm test` (921 passing on `59eb491`; see [current status](./status.md)).
 - **Devnet smoke (public funding):** two `marketplace-devnet-smoke-*.json` records in `artifacts/evidence/`, before PR #3 merged. The payer was funded publicly, not from the pool.
 
 ## Delivery gates T17–T23
