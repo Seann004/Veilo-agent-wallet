@@ -68,7 +68,8 @@ export const AGENT_TOOLS: readonly AgentToolDefinition[] = [
 /**
  * Additional tools for `custom` agents only. Search results are untrusted catalogue text, and a
  * hire proposal only asks the marketplace for a quote: payment still needs local owner approval
- * or an owner-installed listing grant, and the agent cannot name a recipient or a price.
+ * or an owner-installed listing grant, and the agent cannot name a recipient or a price. A
+ * workflow run proposal is likewise paid only under an owner assignment or approval.
  */
 export const CUSTOM_AGENT_TOOLS: readonly AgentToolDefinition[] = [
   {
@@ -82,6 +83,18 @@ export const CUSTOM_AGENT_TOOLS: readonly AgentToolDefinition[] = [
     description: "Propose hiring one marketplace listing for this task. It never pays by itself.",
     method: "POST",
     path: "/worker/hires",
+  },
+  {
+    name: "list_workflows",
+    description: "List the workflows the owner assigned to this agent, with their run inputs and total.",
+    method: "GET",
+    path: "/worker/workflows",
+  },
+  {
+    name: "propose_workflow_run",
+    description: "Propose one run of an assigned workflow for this task. It runs only under the owner's assignment or approval.",
+    method: "POST",
+    path: "/worker/workflow-runs",
   },
 ];
 

@@ -43,6 +43,8 @@ const ALLOWED_ARGS: Record<string, readonly string[]> = {
   marketplace_search: ["q"],
   // No recipient, price, agent or policy field exists here: the quote and local authorization decide those.
   propose_hire: ["taskId", "listingId", "brief", "idempotencyKey"],
+  list_workflows: [],
+  propose_workflow_run: ["taskId", "versionId", "runInputs", "idempotencyKey"],
 };
 
 /**
@@ -95,8 +97,8 @@ export class ControlClient {
     if (!def) return deny("TOOL_UNAVAILABLE", `tool ${name} is not available to this agent`);
     if (ctx.now() > ctx.bounds.deadlineMs) deny("BUDGET_EXCEEDED", "task duration bound reached");
     if (this.toolCalls >= ctx.bounds.maxToolCalls) deny("BUDGET_EXCEEDED", "task tool-call limit reached");
-    // A hire proposal can lead to a payment, so it counts against the paid-purchase bound too.
-    const paid = name === "request_purchase" || name === "consume_inference_sku" || name === "propose_hire";
+    // Hire and workflow run proposals can lead to payments, so they count against the paid-purchase bound too.
+    const paid = name === "request_purchase" || name === "consume_inference_sku" || name === "propose_hire" || name === "propose_workflow_run";
     if (paid && this.paidRequests >= ctx.bounds.maxPaidPurchases) deny("BUDGET_EXCEEDED", "task paid-purchase limit reached");
 
     const allowed = ALLOWED_ARGS[name] ?? [];
