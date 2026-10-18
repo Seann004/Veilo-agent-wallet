@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
+import { ControlError } from "../src/errors";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DEMO_TOKEN_MINT, DEVNET_CAIP2 } from "@veilo/contracts";
 import type { WorkflowApprovalTerms } from "@veilo/contracts/marketplace";
 import {
+  reportPath,
   WorkflowRunner,
   type ExternalPort,
   type ExternalToolFacts,
@@ -66,11 +68,22 @@ class FakeMarket implements WorkflowMarketPort {
   async version() {
     return structuredClone(this.v);
   }
+  /** The marketplace's own status, with the same transitions mk_report_workflow_run allows. */
+  cloudStatus = "none";
   async createRun() {
     this.runs += 1;
+    this.cloudStatus = "awaiting_approval";
     return { runId: `cloud-${this.runs}` };
   }
   async report(_id: string, r: { status: string; steps: StepReport[] }) {
+    const allowed: Record<string, string[]> = {
+      awaiting_approval: ["awaiting_approval", "approved", "rejected", "halted"],
+      approved: ["approved", "running", "halted", "failed"],
+      running: ["running", "halted", "failed", "completed"],
+      halted: ["halted", "approved", "failed"],
+    };
+    if (!(allowed[this.cloudStatus] ?? [this.cloudStatus]).includes(r.status)) throw new Error(`run cannot move from ${this.cloudStatus} to ${r.status}`);
+    this.cloudStatus = r.status;
     this.reports.push(r);
   }
   async deliverable(jobId: string) {
@@ -88,7 +101,10 @@ class FakeHires implements HirePort {
   readonly rejected: string[] = [];
   quoteOverride: Partial<HireQuote> | undefined;
   readonly states = new Map<string, string>();
+  /** Like the marketplace, refuse a step hire unless the run is recorded approved there. */
+  gate: () => boolean = () => true;
   async hire(r: { listingId: string; brief: string; idempotencyKey: string }) {
+    if (!this.gate()) throw new ControlError("SERVICE_NOT_ALLOWED", "hire not created: no approved workflow run in this workspace matches the hire key");
     this.hires.push(r);
     const op = `op-${this.hires.length}`;
     const price = r.listingId === "listing-draft" ? "3000" : "10000";
@@ -143,6 +159,7 @@ beforeEach(() => {
   hires = new FakeHires();
   external = new FakeExternal();
   runner = new WorkflowRunner({ ledger: env.ledger, market, hires, external, maxRunUsdc: 1_000_000n });
+  hires.gate = () => market.cloudStatus === "approved" || market.cloudStatus === "running";
 });
 afterEach(() => env.cleanup());
 
@@ -168,6 +185,17 @@ describe("workflow runner (§26.7)", () => {
     expect(v.steps.map((s) => [s.payment, s.execution])).toEqual([["paid", "delivered"], ["paid", "delivered"]]);
     expect(v.steps[0]!.merchantSignatures).toEqual(["sigA", "sigB"]);
     expect(market.reports.at(-1)?.status).toBe("completed");
+  });
+
+  it("reports approval to the marketplace before the first hire, and walks its allowed statuses", async () => {
+    const run = await approvedRun();
+    expect(market.reports.map((r) => r.status)).toEqual(["approved"]);
+    market.jobs.set("job-1", { state: "succeeded", text: "# Brief\nSupply is 1000 [call 0]." });
+    await runner.advance(run.id);
+    expect(market.reports.map((r) => r.status).slice(-2)).toEqual(["running", "completed"]);
+    expect(reportPath("awaiting_approval", "completed")).toEqual(["approved", "running", "completed"]);
+    expect(reportPath("approved", "failed")).toEqual(["failed"]);
+    expect(reportPath("halted", "running")).toEqual(["approved", "running"]);
   });
 
   it("passes earlier outputs only as fenced data, even when they contain instructions", async () => {

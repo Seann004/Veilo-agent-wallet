@@ -96,6 +96,7 @@ export function createIntegration(
           hires: new BridgeHirePort(marketplace, ledger),
           external: new LocalExternalPort(ledger, orchestrator, external, o.workflowLimits?.maxExternalBatchUsdc ?? 100_000n),
           maxRunUsdc: o.workflowLimits?.maxRunUsdc ?? 1_000_000n,
+          log: (line) => console.log(`[control] ${line}`),
         })
       : undefined;
   if (workflows) workflowRef.current = workflows;

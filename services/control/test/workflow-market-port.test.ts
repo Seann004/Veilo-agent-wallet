@@ -6,10 +6,13 @@ const replying = (status: number, body: unknown) => ({ signed: async () => ({ st
 
 describe("marketplace workflow port", () => {
   it("reports a marketplace that refuses this controller as an unlinked controller, never as an expired owner session", async () => {
-    for (const status of [401, 403]) {
-      const port = new MarketplaceWorkflowPort(replying(status, { error: { code: "UNAUTHENTICATED", message: "unknown controller" } }));
-      await expect(port.version("v1")).rejects.toMatchObject({ code: "NOT_READY", message: expect.stringMatching(/not linked to your marketplace account/) });
-    }
+    const port = new MarketplaceWorkflowPort(replying(401, { error: { code: "UNAUTHENTICATED", message: "unknown controller" } }));
+    await expect(port.version("v1")).rejects.toMatchObject({ code: "NOT_READY", message: expect.stringMatching(/not linked to your marketplace account/) });
+  });
+
+  it("keeps the marketplace's own reason for a 403, never claiming the controller is unlinked", async () => {
+    const port = new MarketplaceWorkflowPort(replying(403, { error: { code: "POLICY_DENIED", message: "agent is not active" } }));
+    await expect(port.version("v1")).rejects.toMatchObject({ code: "POLICY_DENIED", message: expect.stringMatching(/agent is not active/) });
   });
 
   it("keeps the marketplace's own code for other refusals", async () => {
