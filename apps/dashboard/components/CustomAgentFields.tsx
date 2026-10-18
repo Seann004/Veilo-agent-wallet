@@ -218,6 +218,7 @@ export function CustomRunForm({ agent, disabled, onQueued }: { agent: Agent; dis
   const [image, setImage] = useState<string | null>(null);
   const [imageNote, setImageNote] = useState<string | null>(null);
   const [imageBusy, setImageBusy] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   // Guests cannot attach images (control refuses them), so the field is not offered.
   const canAttach = useAccess().role !== "guest";
@@ -229,6 +230,23 @@ export function CustomRunForm({ agent, disabled, onQueued }: { agent: Agent; dis
   const clearImage = () => {
     setImage(null);
     if (fileRef.current) fileRef.current.value = "";
+  };
+  const takeImage = (file: File | undefined) => {
+    setImageNote(null);
+    if (!file) return;
+    const problem = referenceFileProblem(file);
+    if (problem) {
+      setImageNote(problem);
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    setImageBusy(true);
+    downscaleReferenceImage(file)
+      .then(setImage, (err: unknown) => {
+        setImageNote(err instanceof Error ? err.message : "That image could not be read.");
+        clearImage();
+      })
+      .finally(() => setImageBusy(false));
   };
   return (
     <form
@@ -305,32 +323,34 @@ export function CustomRunForm({ agent, disabled, onQueued }: { agent: Agent; dis
                 </button>
               </div>
             ) : null}
+            {image === null ? (
+              <label
+                htmlFor={ids.image}
+                className={`ref-drop${dragging ? " dragging" : ""}${off ? " disabled" : ""}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (!off) setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  if (!off) takeImage(e.dataTransfer.files[0]);
+                }}
+              >
+                <Icon name="upload" size={18} />
+                <span>{imageBusy ? "Reading image…" : <>Drag an image here or <span className="ref-drop-browse">browse</span></>}</span>
+              </label>
+            ) : null}
             <input
               id={ids.image}
               ref={fileRef}
               type="file"
+              className="sr-only"
               accept={REFERENCE_IMAGE_TYPES.join(",")}
               disabled={off}
-              hidden={image !== null}
               aria-describedby={`${ids.image}-h`}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                setImageNote(null);
-                if (!file) return;
-                const problem = referenceFileProblem(file);
-                if (problem) {
-                  setImageNote(problem);
-                  e.target.value = "";
-                  return;
-                }
-                setImageBusy(true);
-                downscaleReferenceImage(file)
-                  .then(setImage, (err: unknown) => {
-                    setImageNote(err instanceof Error ? err.message : "That image could not be read.");
-                    clearImage();
-                  })
-                  .finally(() => setImageBusy(false));
-              }}
+              onChange={(e) => takeImage(e.target.files?.[0])}
             />
             <span id={`${ids.image}-h`} className={imageNote ? "hint field-error" : "hint"} role={imageNote ? "alert" : undefined}>
               {imageNote ?? "PNG, JPEG or WebP, up to 2 MB. Your AI model reads it to match the style; only your model provider sees it."}
