@@ -245,7 +245,7 @@ function OwnerWalletView() {
                   })
                 }
               >
-                Sign in wallet
+                Deposit with Phantom
               </button>
             </div>
           </div>
