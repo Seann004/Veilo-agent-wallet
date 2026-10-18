@@ -4,6 +4,19 @@ export { PROVIDER_MANIFESTS };
 
 export const PROVIDER_NOT_CONFIGURED = "Provider not configured";
 
+/**
+ * The provider's own short reason for a refusal (e.g. "not_enough_credits"), as plain text: only
+ * a bounded token from `detail` or a platform error line, so nothing else from the body is echoed.
+ */
+export function refusalReason(body: Record<string, unknown> | null): string {
+  const detail = body?.detail;
+  if (typeof detail === "string" && /^[A-Za-z0-9_.-]{1,60}$/.test(detail)) return `: ${detail}`;
+  const post = body?.post as { platforms?: Array<{ errorMessage?: unknown }> } | undefined;
+  const line = post?.platforms?.find((p) => typeof p.errorMessage === "string")?.errorMessage as string | undefined;
+  if (line) return `: ${line.replace(/[^\x20-\x7E]/g, " ").replace(/\s+/g, " ").trim().slice(0, 200)}`;
+  return "";
+}
+
 export type ProviderResult =
   | { status: "succeeded"; artifact: { kind: ArtifactKind; url?: string; text?: string; providerJobId: string } }
   | { status: "failed"; code: string; message: string }
@@ -215,7 +228,7 @@ export class HiggsfieldAdapter extends BaseAdapter {
     if (submit.status >= 500) return { status: "uncertain", message: `submission outcome unknown (HTTP ${submit.status})` };
     const id = submit.body?.request_id;
     if (submit.status >= 400 || typeof id !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(id)) {
-      return { status: "failed", code: "PROVIDER_REFUSED", message: `provider refused the job (HTTP ${submit.status})` };
+      return { status: "failed", code: "PROVIDER_REFUSED", message: `provider refused the job (HTTP ${submit.status})${refusalReason(submit.body)}` };
     }
     for (let i = 0; i < this.maxPolls; i += 1) {
       await this.sleep(this.pollMs);
@@ -345,7 +358,7 @@ export class ZernioAdapter extends BaseAdapter {
     if (res.status >= 500) return { status: "uncertain", message: `draft outcome unknown (HTTP ${res.status})` };
     const post = res.body?.post as { _id?: unknown; status?: unknown } | undefined;
     const id = typeof post?._id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(post._id) ? post._id : null;
-    if (res.status >= 400 || !id || post?.status === "failed") return { status: "failed", code: "PROVIDER_REFUSED", message: `draft refused (HTTP ${res.status})` };
+    if (res.status >= 400 || !id || post?.status === "failed") return { status: "failed", code: "PROVIDER_REFUSED", message: `draft refused (HTTP ${res.status})${refusalReason(res.body)}` };
     return {
       status: "succeeded",
       artifact: {
@@ -386,7 +399,7 @@ export class MakeUgcAdapter extends BaseAdapter {
     const id = (submit.body?.data as { id?: unknown } | undefined)?.id;
     const idText = typeof id === "number" ? String(id) : id;
     if (submit.status >= 400 || typeof idText !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(idText)) {
-      return { status: "failed", code: "PROVIDER_REFUSED", message: `provider refused the job (HTTP ${submit.status})` };
+      return { status: "failed", code: "PROVIDER_REFUSED", message: `provider refused the job (HTTP ${submit.status})${refusalReason(submit.body)}` };
     }
     for (let i = 0; i < this.maxPolls; i += 1) {
       await this.sleep(this.pollMs);

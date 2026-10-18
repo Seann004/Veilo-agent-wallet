@@ -3,6 +3,7 @@ import { toolManifestDigest } from "@veilo/contracts/marketplace";
 import {
   HiggsfieldAdapter,
   MakeUgcAdapter,
+  refusalReason,
   ZernioAdapter,
   lastJsonObject,
   parseCarouselPlan,
@@ -192,6 +193,15 @@ describe("TikTok carousel tools", () => {
     const priv = fakeFetch([[200, CREATOR_INFO(["PUBLIC_TO_EVERYONE", "SELF_ONLY"])], [201, { post: { _id: "p_2", status: "pending" } }]]);
     await new ZernioAdapter({ apiKey: "zk", tiktokAccountId: "acc1" }, opts(priv.fn)).run("create_tiktok_carousel_draft", { carousel: input }, ctx);
     expect(JSON.parse(priv.calls[1]!.init!.body as string).tiktokSettings.privacy_level).toBe("SELF_ONLY");
+  });
+
+  it("names the provider's own refusal reason, bounded and as plain text", async () => {
+    expect(refusalReason({ detail: "not_enough_credits" })).toBe(": not_enough_credits");
+    expect(refusalReason({ detail: "<script>alert(1)</script>" })).toBe("");
+    expect(refusalReason({ post: { platforms: [{ errorMessage: "TikTok failed (code 40002):\nupdate the app" }] } })).toBe(": TikTok failed (code 40002): update the app");
+    expect(refusalReason(null)).toBe("");
+    const f = fakeFetch([[403, { detail: "not_enough_credits" }]]);
+    expect(await new HiggsfieldAdapter({ id: "k", secret: "s" }, opts(f.fn)).run("generate_image", { prompt: "a mug" }, ctx)).toMatchObject({ status: "failed", message: "provider refused the job (HTTP 403): not_enough_credits" });
   });
 
   it("Zernio sends nothing when the TikTok account check fails or the account cannot post", async () => {
