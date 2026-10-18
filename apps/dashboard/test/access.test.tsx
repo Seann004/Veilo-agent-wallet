@@ -167,7 +167,7 @@ describe("shell access", () => {
     const calls: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       calls.push(`${init?.method ?? "GET"} ${String(input)}`);
-      return f(input, init);
+      return f(input);
     });
     render(
       <Shell>

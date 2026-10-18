@@ -148,7 +148,6 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
   const ownerOrService = requireActor(deps, ["owner", "service"]);
   const reader = requireActor(deps, READERS);
   const runner = requireActor(deps, ["owner", "guest"]);
-  const signedIn = requireActor(deps, ["owner", "guest"]);
   const anyActor = requireActor(deps, ["owner", "guest", "viewer", "worker", "service"]);
   const guestRunLimit = deps.session.guestRunsPerHour ?? DEFAULT_GUEST_RUNS_PER_HOUR;
   const ownerId = (res: Response) => {
