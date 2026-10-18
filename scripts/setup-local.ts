@@ -14,7 +14,7 @@ import {
 import { ensureOwnerServiceSecret } from "../services/wallet/src/secret";
 import { TOOLCHAIN_IMAGE } from "./toolchain-image.mjs";
 
-const REQUIRED_NODE_MAJOR = 22;
+const MAX_NODE_MAJOR = 24;
 const MIN_NODE = [22, 14, 0] as const;
 const PINNED_PNPM = "10.34.6";
 
@@ -39,7 +39,7 @@ function checkNode() {
   const tooOld =
     major < MIN_NODE[0] ||
     (major === MIN_NODE[0] && (minor < MIN_NODE[1] || (minor === MIN_NODE[1] && patch < MIN_NODE[2])));
-  if (major !== REQUIRED_NODE_MAJOR || tooOld) fail(`Node ${process.versions.node}; need >=22.14.0 <23`);
+  if (major > MAX_NODE_MAJOR || tooOld) fail(`Node ${process.versions.node}; need >=22.14.0 <25 (24 LTS recommended)`);
   else ok(`Node ${process.versions.node}`);
 }
 
