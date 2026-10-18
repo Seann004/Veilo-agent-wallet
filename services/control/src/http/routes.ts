@@ -25,6 +25,7 @@ import { immediate } from "@veilo/db";
 import { big, iso, num, type Ledger } from "../context";
 import { ControlError } from "../errors";
 import { issueWorkerCredential } from "../auth/credentials";
+import type { RunnerCredentialProvisioner } from "../auth/runner-credentials";
 import {
   DEFAULT_GUEST_RUNS_PER_HOUR,
   SESSION_COOKIE,
@@ -139,7 +140,7 @@ function denyGuestRun(ledger: Ledger, guest: GuestActor, agentId: string, reason
   throw new ControlError("POLICY_DENIED", reason);
 }
 
-export function controlRouter(deps: AuthDeps & { integration?: Integration | undefined }): Router {
+export function controlRouter(deps: AuthDeps & { integration?: Integration | undefined; runnerCredentials?: RunnerCredentialProvisioner | undefined }): Router {
   const { ledger } = deps;
   const integration = deps.integration;
   const r = Router();
@@ -348,6 +349,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
       body.activatePolicyVersion !== undefined
         ? activatePolicyVersion(ledger, workspaceId, agentId, body.activatePolicyVersion, { type: "owner", id: ownerId(res) })
         : null;
+    if (activated) deps.runnerCredentials?.syncQuietly();
     res.json({
       agent: agentView(ledger, requireAgent(ledger, workspaceId, agentId)),
       draft: draft ? policyView(draft) : null,
@@ -488,11 +490,15 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
   });
 
   r.post("/agents/:id/resume", owner, (req, res) => {
-    res.json({ agent: agentView(ledger, resumeAgent(ledger, wsId(res), param(req, "id"), ownerId(res))) });
+    const agent = resumeAgent(ledger, wsId(res), param(req, "id"), ownerId(res));
+    deps.runnerCredentials?.syncQuietly();
+    res.json({ agent: agentView(ledger, agent) });
   });
 
   r.post("/agents/:id/revoke", owner, (req, res) => {
-    res.json({ agent: agentView(ledger, revokeAgent(ledger, wsId(res), param(req, "id"), ownerId(res))) });
+    const agent = revokeAgent(ledger, wsId(res), param(req, "id"), ownerId(res));
+    deps.runnerCredentials?.syncQuietly();
+    res.json({ agent: agentView(ledger, agent) });
   });
 
   r.post("/agents/:id/worker-credentials", owner, (req, res) => {

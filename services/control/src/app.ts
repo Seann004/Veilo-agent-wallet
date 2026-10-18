@@ -8,6 +8,7 @@ import { aiRouter } from "./http/ai-routes";
 import { channelRouter } from "./http/channel-routes";
 import type { ChannelService } from "./channels/service";
 import type { AiService } from "./ai/service";
+import type { RunnerCredentialProvisioner } from "./auth/runner-credentials";
 import { connectorRouter } from "./http/connector-routes";
 import { controlRouter } from "./http/routes";
 import { externalRouter } from "./http/external-routes";
@@ -31,6 +32,8 @@ export interface ControlDeps extends AuthDeps {
   /** The owner's own model provider (BYOK); planning falls back to the sponsored trial without it. */
   ai?: AiService | undefined;
   channels?: ChannelService | undefined;
+  /** Single-host provisioning of runner worker credentials; absent unless the operator opts in. */
+  runnerCredentials?: RunnerCredentialProvisioner | undefined;
 }
 
 /**

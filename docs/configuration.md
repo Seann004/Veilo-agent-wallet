@@ -103,6 +103,7 @@ Every process serves `GET /health`.
 | `GATEWAY_PLANNING_CREDENTIAL_PATH` | `<VEILO_SECRETS_DIR>/gateway/planning.token` | Read by control to proxy operator-sponsored planning (`POST /worker/planning`); withheld from the runner. |
 | `CONTROL_PURCHASE_WAIT_MS` | `120000` | How long a purchase request (worker intent, owner reconcile, Shawn check) keeps reconciling a pending chain outcome of the same operation before it replies. Waiting never authorizes, proves or signs anything new. |
 | `CONTROL_PURCHASE_SWEEP_MS` | `15000` | The scheduler reconciles every purchase with unresolved execution at most this often, so a withdrawal or payment that finalizes after its request returned still completes. |
+| `CONTROL_PROVISION_RUNNER_CREDENTIALS` | empty | Single-host local deployments only. With `1` and `RUNNER_WORKER_CREDENTIAL_PATH` set, control issues a worker credential for every active research, content or custom agent that has no live entry in that file (at startup, on policy activation and on resume) and removes the entry when the agent is revoked or archived. The file is replaced atomically (temporary file and rename, mode 0600) and keeps other entries; tokens are never logged. Leave unset when the runner runs on another host or its credentials are managed by hand. |
 
 #### Marketplace controller (control)
 

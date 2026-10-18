@@ -14,6 +14,7 @@ import { openControlDatabase } from "@veilo/db";
 import { McpClient } from "@veilo/mcp-client";
 import { createApp } from "./app";
 import { ServiceCredentials } from "./auth/credentials";
+import { RunnerCredentialProvisioner } from "./auth/runner-credentials";
 import type { SessionSettings } from "./auth/session";
 import { parseGuestPubkeys, parseGuestRunsPerHour, parsePublicView } from "./auth/access-config";
 import { AgentConnectors, connectorLimitsFromEnv, parseConnectorCatalog } from "./connectors/agent-connectors";
@@ -187,7 +188,18 @@ async function main(): Promise<void> {
   const channels = new ChannelService(ledger, vault, undefined, process.env.VEILO_DASHBOARD_ORIGIN ?? "");
   const interrupted = channels.closeInterrupted();
   if (interrupted > 0) console.log(`[${SERVICE}] marked ${interrupted} interrupted result deliveries as failed`);
-  createApp(health, { ledger, session, services, integration, connectors, ai, channels, maxExternalBatchUsdc: BigInt(externalMaxRaw) }).listen(port, config.bindHost, () => {
+  let runnerCredentials: RunnerCredentialProvisioner | undefined;
+  if (process.env.CONTROL_PROVISION_RUNNER_CREDENTIALS === "1") {
+    const path = config.paths.serviceCredentials.runner;
+    if (!path) {
+      console.log(`[${SERVICE}] CONTROL_PROVISION_RUNNER_CREDENTIALS is set but RUNNER_WORKER_CREDENTIAL_PATH is not; runner credentials are not provisioned`);
+    } else {
+      runnerCredentials = new RunnerCredentialProvisioner({ ledger, path, log: (l) => console.log(`[${SERVICE}] ${l}`) });
+      runnerCredentials.syncQuietly();
+      console.log(`[${SERVICE}] runner worker credentials are provisioned for active agents`);
+    }
+  }
+  createApp(health, { ledger, session, services, integration, connectors, ai, channels, runnerCredentials, maxExternalBatchUsdc: BigInt(externalMaxRaw) }).listen(port, config.bindHost, () => {
     console.log(`[${SERVICE}] listening on http://${config.bindHost}:${port} (${config.network.caip2})`);
   });
   if (process.env.VEILO_LOG_CONFIG === "1") console.log(JSON.stringify(describeConfig(config)));
