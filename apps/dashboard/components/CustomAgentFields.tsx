@@ -333,7 +333,7 @@ export function CustomRunForm({ agent, disabled, onQueued }: { agent: Agent; dis
               }}
             />
             <span id={`${ids.image}-h`} className={imageNote ? "hint field-error" : "hint"} role={imageNote ? "alert" : undefined}>
-              {imageNote ?? "PNG, JPEG or WebP, up to 2 MB. Your AI model reads it to match the style. It stays on this computer."}
+              {imageNote ?? "PNG, JPEG or WebP, up to 2 MB. Your AI model reads it to match the style; only your model provider sees it."}
             </span>
           </div>
         ) : null}

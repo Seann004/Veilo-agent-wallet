@@ -68,7 +68,7 @@ describe("reference image field", () => {
     const user = userEvent.setup();
     const onQueued = vi.fn();
     render(<CustomRunForm agent={scout()} disabled={false} onQueued={onQueued} />);
-    expect(screen.getByText(/Your AI model reads it to match the style\. It stays on this computer\./)).toBeTruthy();
+    expect(screen.getByText(/Your AI model reads it to match the style; only your model provider sees it\./)).toBeTruthy();
     const input = screen.getByLabelText("Reference image (optional)") as HTMLInputElement;
     await user.upload(input, file("ref.png", "image/png", 500));
     const thumb = (await screen.findByAltText("Reference image preview")) as HTMLImageElement;
