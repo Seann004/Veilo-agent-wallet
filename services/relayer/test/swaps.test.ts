@@ -120,6 +120,22 @@ describe("devnet swap co-signing", () => {
     expect(t.rentRecovered).toBe(2_039_280n);
   });
 
+  it("keeps a finalized swap in flight until its transaction (and fee) can be read", async () => {
+    const { sponsor, m, chain, db, svc } = await setup();
+    const dest = randomAddress();
+    const s = await swapTx(sponsor, m, dest);
+    chain.accounts.set(s.freshUsdc, { data: new Uint8Array(165), lamports: 2_039_280n, owner: "Tokenkeg", executable: false });
+    const ok = await svc.submit({ swapId: id(), transaction: s.wire, lastValidBlockHeight: "10", freshWallet: s.fresh, destination: dest });
+    chain.statuses.set(ok.signature, { confirmationStatus: "finalized", err: null });
+    await svc.advance(ok.swapId);
+    expect(svc.view(ok.swapId)!.state).toBe("submitted");
+    expect(sponsorTotals(db).feesSpent).toBe(0n);
+    chain.txs.set(ok.signature, { slot: 5n, err: null, logs: [], fee: 10_000n });
+    await svc.advance(ok.swapId);
+    expect(svc.view(ok.swapId)).toMatchObject({ state: "finalized", sponsorFeeLamports: "10000" });
+    expect(sponsorTotals(db).feesSpent).toBe(10_000n);
+  });
+
   it("refuses when the sponsor allowance cannot cover the wrapped-SOL rent", async () => {
     const { sponsor, m, chain, svc } = await setup(1_000n);
     const dest = randomAddress();

@@ -138,8 +138,10 @@ export class SwapService {
     if (!r || r.state !== "submitted") return;
     const st = await this.c.chain.signatureStatus(r.signature);
     if (st?.confirmationStatus === "finalized") {
+      // Finalized only with the fee read from the transaction itself; otherwise retried next crank.
       const tx = await this.c.chain.transaction(r.signature);
-      const fee = tx?.fee ?? 0n;
+      if (!tx) return;
+      const fee = tx.fee;
       this.c.db.transaction(() => {
         recordSponsorEvent(this.c.db, "fee_spent", `swap:${id}`, r.signature, fee);
         if (st.err === null) {
