@@ -3,7 +3,7 @@ import { immediate } from "@veilo/db";
 import { num, type Ledger } from "../context";
 import { ControlError } from "../errors";
 import { writeAudit } from "../ledger/events";
-import { activeAgentPolicy, type AgentRow } from "../ledger/workspace";
+import { requireWorkAuthority, type AgentRow } from "../ledger/workspace";
 import { publicFetch } from "@veilo/mcp-client";
 import { assertTaskLive, ownTask } from "../agents/work";
 import { completeWithProvider, DEFAULT_BASE_URL, listProviderModels, ModelCallError, type AiProviderKind, type ModelEndpoint } from "./model-client";
@@ -195,8 +195,7 @@ export class AiService {
       const t = ownTask(this.ledger, agent.id, taskId);
       assertTaskLive(this.ledger, t);
       // Model work stops with the agent's spending authority, like any purchase.
-      const policy = activeAgentPolicy(this.ledger, agent.id);
-      if (agent.status !== "active" || !policy || policy.tier === "stopped") throw new ControlError("ACCOUNT_STOPPED", "this agent is not active");
+      requireWorkAuthority(this.ledger, agent);
       const used = kind === "planning" ? num(t.planning_calls) : num((t as unknown as { ai_calls: bigint }).ai_calls);
       const max = kind === "planning" ? num(t.max_planning_calls) : MAX_AI_CALLS_PER_TASK;
       if (used >= max) throw new ControlError("BUDGET_EXCEEDED", `task ${kind === "planning" ? "planning" : "model"}-call limit reached`);

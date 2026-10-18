@@ -114,6 +114,21 @@ export function activeAgentPolicy(ledger: Ledger, agentId: string): PolicyRow | 
     .get(agentId) as PolicyRow | undefined;
 }
 
+/**
+ * Free agent work (model calls on the owner's key, page visits) stops with spending authority:
+ * the agent must be active under an unstopped, unexpired policy, and the workspace policy must
+ * not have expired. Returns the agent's active policy.
+ */
+export function requireWorkAuthority(ledger: Ledger, agent: AgentRow): PolicyRow {
+  const policy = activeAgentPolicy(ledger, agent.id);
+  if (agent.status !== "active" || !policy || policy.tier === "stopped") throw new ControlError("ACCOUNT_STOPPED", "this agent is not active");
+  const now = ledger.now();
+  const expired = (p: PolicyRow | undefined) => p !== undefined && p.expires_at_ms !== null && num(p.expires_at_ms) <= now;
+  if (expired(activeWorkspacePolicy(ledger, agent.workspace_id))) throw new ControlError("POLICY_DENIED", "workspace policy has expired");
+  if (expired(policy)) throw new ControlError("POLICY_DENIED", "agent policy has expired");
+  return policy;
+}
+
 export function listPolicies(ledger: Ledger, workspaceId: string): PolicyRow[] {
   return ledger.db
     .prepare(`SELECT * FROM policy WHERE workspace_id = ? ORDER BY scope_type, agent_id, version`)

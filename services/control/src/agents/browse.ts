@@ -4,7 +4,7 @@ import { isPublicAddress } from "@veilo/mcp-client";
 import { num, type Ledger } from "../context";
 import { ControlError } from "../errors";
 import { writeAudit } from "../ledger/events";
-import { activeAgentPolicy, agentPermissions, type AgentRow } from "../ledger/workspace";
+import { agentPermissions, requireWorkAuthority, type AgentRow } from "../ledger/workspace";
 import { assertTaskLive, ownTask } from "./work";
 
 /** Pages one task may open with the read-only browser. */
@@ -39,8 +39,7 @@ export function browsePermit(ledger: Ledger, agent: AgentRow, body: { taskId: st
   return immediate(ledger.db, () => {
     const t = ownTask(ledger, agent.id, body.taskId);
     assertTaskLive(ledger, t);
-    const policy = activeAgentPolicy(ledger, agent.id);
-    if (agent.status !== "active" || !policy || policy.tier === "stopped") throw new ControlError("ACCOUNT_STOPPED", "this agent is not active");
+    const policy = requireWorkAuthority(ledger, agent);
     if (!agentPermissions(policy).allowBrowsing) throw new ControlError("POLICY_DENIED", "web browsing is off for this agent");
     const used = num((t as unknown as { browse_calls: bigint }).browse_calls);
     if (used >= MAX_BROWSE_PAGES_PER_TASK) throw new ControlError("BUDGET_EXCEEDED", "task page limit reached");

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { DEFAULT_AGENTS } from "@veilo/contracts";
 import { browsePermit, browseUrlProblem, MAX_BROWSE_PAGES_PER_TASK } from "../src/agents/browse";
-import { getAgent } from "../src/ledger/workspace";
+import { getAgent, requireWorkAuthority } from "../src/ledger/workspace";
 import { activateDefaults, createEnv, intentTask, type TestEnv } from "./helpers";
 
 let env: TestEnv;
@@ -42,5 +42,24 @@ describe("read-only browsing permits", () => {
     const audit = env.db.prepare("SELECT group_concat(details_json) FROM audit_event WHERE action = 'browse.page'").pluck().get() as string;
     expect(audit).toContain("solana.com");
     expect(audit).not.toContain("secret-query");
+  });
+
+  it("stop when the agent or workspace policy expires, like purchases do", () => {
+    env = createEnv();
+    const expiresAt = new Date(env.clock.t + 60_000).toISOString();
+    activateDefaults(env, { agents: { Prince: { ...prince(), allowBrowsing: true, expiresAt } } });
+    const agent = getAgent(env.ledger, env.agents.Prince.id)!;
+    const task = runningTask(env, "expiry");
+    expect(browsePermit(env.ledger, agent, { taskId: task, url: "https://solana.com/docs" }).remaining).toBe(MAX_BROWSE_PAGES_PER_TASK - 1);
+    env.clock.t += 60_000;
+    expect(() => browsePermit(env.ledger, agent, { taskId: task, url: "https://solana.com/docs/2" })).toThrow(/agent policy has expired/);
+    expect(env.db.prepare("SELECT browse_calls FROM task WHERE id = ?").pluck().get(task)).toBe(1n);
+
+    env = createEnv();
+    activateDefaults(env, { workspace: { expiresAt: new Date(env.clock.t + 60_000).toISOString() } });
+    const prince2 = getAgent(env.ledger, env.agents.Prince.id)!;
+    expect(() => requireWorkAuthority(env.ledger, prince2)).not.toThrow();
+    env.clock.t += 60_000;
+    expect(() => requireWorkAuthority(env.ledger, prince2)).toThrow(/workspace policy has expired/);
   });
 });
