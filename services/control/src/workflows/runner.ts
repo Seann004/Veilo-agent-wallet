@@ -402,8 +402,10 @@ export class WorkflowRunner {
   }
 
   /** Owner-only: lets an agent propose runs of one workflow version's terms within a budget. */
-  async assign(r: { agentId: string; versionId: string; budgetUsdc: bigint; ownerPubkey: string }): Promise<string> {
-    if (r.budgetUsdc <= 0n) throw new ControlError("INVALID_REQUEST", "budget must be positive");
+  /** With `askEachRun`, the agent may propose this workflow but no run starts without the owner. */
+  async assign(r: { agentId: string; versionId: string; budgetUsdc?: bigint; askEachRun?: boolean; ownerPubkey: string }): Promise<string> {
+    const ask = r.askEachRun === true;
+    if (!ask && (r.budgetUsdc === undefined || r.budgetUsdc <= 0n)) throw new ControlError("INVALID_REQUEST", "budget must be positive");
     const v = await this.deps.market.version(r.versionId);
     if (!v.live) throw new ControlError("SERVICE_NOT_ALLOWED", "only a live workflow can be assigned");
     const terms: WorkflowApprovalTerms = {
@@ -414,7 +416,11 @@ export class WorkflowRunner {
       totalMaxBaseUnits: v.totalMaxBaseUnits,
       runInputsDigest: "0".repeat(64),
     };
-    if (BigInt(v.totalMaxBaseUnits) > r.budgetUsdc) throw new ControlError("BUDGET_EXCEEDED", "budget is smaller than one run of this workflow");
+    // An ask-each-run assignment records one run's total; it never pre-approves spending.
+    const budget = ask ? BigInt(v.totalMaxBaseUnits) : (r.budgetUsdc as bigint);
+    if (!ask && BigInt(v.totalMaxBaseUnits) > budget) {
+      throw new ControlError("BUDGET_EXCEEDED", "budget is smaller than one run of this workflow; raise it or choose to approve each run");
+    }
     const listed = (await this.deps.market.catalogEntry?.(v.versionId).catch(() => null)) ?? null;
     const ws = requireWorkspace(this.ledger);
     const id = this.ledger.newId();
@@ -426,12 +432,12 @@ export class WorkflowRunner {
       this.ledger.db
         .prepare(
           `INSERT INTO workflow_assignment (id, workspace_id, agent_id, workflow_id, approved_terms_digest, budget_usdc, status, owner_pubkey, created_at_ms, updated_at_ms,
-             version_id, title, summary, run_inputs_json, total_usdc)
-           VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)`,
+             version_id, title, summary, run_inputs_json, total_usdc, ask_each_run)
+           VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run(id, ws.id, r.agentId, v.workflowId, assignmentDigest(terms), r.budgetUsdc, r.ownerPubkey, now, now,
-          v.versionId, listed ? listed.title.slice(0, 120) : null, listed ? listed.summary.slice(0, 300) : null, JSON.stringify(v.runInputs), BigInt(v.totalMaxBaseUnits));
-      writeAudit(this.ledger, { workspaceId: ws.id, scope: `agent:${r.agentId}`, actorType: "owner", actorId: null, action: "workflow.assign", policyResult: "allowed", details: { versionId: v.versionId, budget: r.budgetUsdc.toString() } });
+        .run(id, ws.id, r.agentId, v.workflowId, assignmentDigest(terms), budget, r.ownerPubkey, now, now,
+          v.versionId, listed ? listed.title.slice(0, 120) : null, listed ? listed.summary.slice(0, 300) : null, JSON.stringify(v.runInputs), BigInt(v.totalMaxBaseUnits), ask ? 1 : 0);
+      writeAudit(this.ledger, { workspaceId: ws.id, scope: `agent:${r.agentId}`, actorType: "owner", actorId: null, action: "workflow.assign", policyResult: "allowed", details: { versionId: v.versionId, budget: budget.toString(), askEachRun: ask } });
     });
     return id;
   }
@@ -455,8 +461,8 @@ export class WorkflowRunner {
     const auto = immediate(this.ledger.db, () => {
       const a = this.ledger.db
         .prepare(`SELECT * FROM workflow_assignment WHERE agent_id = ? AND workflow_id = ? AND status = 'active'`)
-        .get(r.agentId, run.workflow_id) as { id: string; approved_terms_digest: string; budget_usdc: bigint; owner_pubkey: string } | undefined;
-      if (!a || a.approved_terms_digest !== assignmentDigest(JSON.parse(run.terms_json) as WorkflowApprovalTerms)) return null;
+        .get(r.agentId, run.workflow_id) as { id: string; approved_terms_digest: string; budget_usdc: bigint; owner_pubkey: string; ask_each_run: bigint } | undefined;
+      if (!a || a.ask_each_run === 1n || a.approved_terms_digest !== assignmentDigest(JSON.parse(run.terms_json) as WorkflowApprovalTerms)) return null;
       const committed = this.ledger.db
         .prepare(`SELECT coalesce(sum(total_max_usdc), 0) FROM workflow_run WHERE assignment_id = ? AND status NOT IN ('awaiting_approval', 'rejected')`)
         .pluck()

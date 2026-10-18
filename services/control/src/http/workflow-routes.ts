@@ -104,9 +104,15 @@ export function workflowRouter(deps: AuthDeps & { integration?: Integration | un
 
   r.post("/workflows/assignments", owner, async (req, res) => {
     const o = ownerOf(res);
-    const b = parse(z.object({ agentId: uuid, versionId: uuid, budgetUsdc: z.string().regex(/^[1-9][0-9]{0,18}$/) }).strict(), req.body);
+    const b = parse(
+      z
+        .object({ agentId: uuid, versionId: uuid, budgetUsdc: z.string().regex(/^[1-9][0-9]{0,18}$/).optional(), askEachRun: z.boolean().optional() })
+        .strict()
+        .refine((x) => x.askEachRun === true || x.budgetUsdc !== undefined, { message: "a budget is required unless each run is approved" }),
+      req.body,
+    );
     requireAgent(ledger, o.workspaceId, b.agentId);
-    const id = await runner().assign({ agentId: b.agentId, versionId: b.versionId, budgetUsdc: BigInt(b.budgetUsdc), ownerPubkey: o.ownerPubkey });
+    const id = await runner().assign({ agentId: b.agentId, versionId: b.versionId, ...(b.budgetUsdc !== undefined ? { budgetUsdc: BigInt(b.budgetUsdc) } : {}), askEachRun: b.askEachRun === true, ownerPubkey: o.ownerPubkey });
     res.status(201).json({ assignmentId: id });
   });
 
@@ -114,13 +120,13 @@ export function workflowRouter(deps: AuthDeps & { integration?: Integration | un
     const o = ownerOf(res);
     const rows = ledger.db
       .prepare(
-        `SELECT a.id, a.agent_id, a.workflow_id, a.version_id, a.title, a.budget_usdc, a.status, a.created_at_ms,
+        `SELECT a.id, a.agent_id, a.workflow_id, a.version_id, a.title, a.budget_usdc, a.ask_each_run, a.status, a.created_at_ms,
                 (SELECT coalesce(sum(total_max_usdc), 0) FROM workflow_run w WHERE w.assignment_id = a.id AND w.status NOT IN ('awaiting_approval', 'rejected')) AS committed
          FROM workflow_assignment a WHERE a.workspace_id = ? ORDER BY a.created_at_ms DESC`,
       )
-      .all(o.workspaceId) as Array<{ id: string; agent_id: string; workflow_id: string; version_id: string | null; title: string | null; budget_usdc: bigint; status: string; committed: bigint; created_at_ms: bigint }>;
+      .all(o.workspaceId) as Array<{ id: string; agent_id: string; workflow_id: string; version_id: string | null; title: string | null; budget_usdc: bigint; ask_each_run: bigint; status: string; committed: bigint; created_at_ms: bigint }>;
     res.json({
-      assignments: rows.map((a) => ({ id: a.id, agentId: a.agent_id, workflowId: a.workflow_id, versionId: a.version_id, title: catalogText(a.title, 120) || null, budget: a.budget_usdc.toString(), committed: a.committed.toString(), status: a.status })),
+      assignments: rows.map((a) => ({ id: a.id, agentId: a.agent_id, workflowId: a.workflow_id, versionId: a.version_id, title: catalogText(a.title, 120) || null, budget: a.budget_usdc.toString(), askEachRun: a.ask_each_run === 1n, committed: a.committed.toString(), status: a.status })),
     });
   });
 

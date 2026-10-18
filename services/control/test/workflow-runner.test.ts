@@ -380,6 +380,19 @@ describe("workflow runner (§26.7)", () => {
     expect(runner.run(run.id)?.status).toBe("awaiting_approval");
   });
 
+  it("an ask-each-run assignment lets the agent propose but every run waits for the owner", async () => {
+    const prince = env.agents.Prince.id;
+    await expect(runner.assign({ agentId: prince, versionId: V1, ownerPubkey: OWNER })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    await expect(runner.assign({ agentId: prince, versionId: V1, budgetUsdc: 1n, ownerPubkey: OWNER })).rejects.toMatchObject({ code: "BUDGET_EXCEEDED" });
+    await runner.assign({ agentId: prince, versionId: V1, askEachRun: true, ownerPubkey: OWNER });
+    const run = await runner.propose({ agentId: prince, versionId: V1, runInputs: { mint: "m" } });
+    expect(run.status).toBe("awaiting_approval");
+    expect(run.assignment_id).toBeNull();
+    expect(hires.hires).toEqual([]);
+    const approved = await runner.approve(run.id, OWNER, run.approval_digest);
+    expect(approved.status).toBe("approved");
+  });
+
   it("refuses to release an assignment-approved step's funding once the assignment is revoked", async () => {
     external.payment = "pending";
     const prince = env.agents.Prince.id;
