@@ -29,7 +29,7 @@ function BotFace({ avatar, size, paused }: { avatar: AvatarOption; size: number;
   const { type, colour } = botFor(avatar);
   return (
     <span className="working-avatar" data-bot={type} aria-hidden={paused ? true : undefined} style={{ width: size, height: size }}>
-      <BotAvatar type={type} state={paused ? "default" : "working"} paused={paused} size={size} color={colour} shading="plastic" />
+      <BotAvatar type={type} state={paused ? "default" : "working"} paused={paused} size={size} color={colour} shading="plastic" ink="#000000" />
     </span>
   );
 }

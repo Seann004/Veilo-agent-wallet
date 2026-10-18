@@ -186,8 +186,7 @@ function CreateAgentForm() {
       <section className="panel" aria-label="Role and avatar">
         <div className="avatar-hero">
           {preview ? <AvatarImage avatar={preview} size={96} /> : null}
-          <details className="advanced">
-            <summary>Change look</summary>
+          <div className="avatar-picker-open">
             <AvatarPicker
               value={avatarId}
               onChange={(id) => {
@@ -195,7 +194,7 @@ function CreateAgentForm() {
                 setAvatarChosen(true);
               }}
             />
-          </details>
+          </div>
         </div>
         <h2 className="section-title">Role</h2>
         <div className="suggestions">
