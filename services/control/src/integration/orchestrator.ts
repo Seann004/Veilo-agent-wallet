@@ -385,7 +385,15 @@ export class PurchaseOrchestrator {
     let p = getPurchaseRow(this.ledger, purchaseId);
     if (p.payment_path !== "private_x402") throw new Blocked("SERVICE_NOT_ALLOWED", "swaps are funded only through the private pool");
     const svc = this.#service(p);
-    if (svc.status !== "approved") throw new Blocked("SERVICE_NOT_ALLOWED", "the owner has not approved swaps");
+    // Withdrawn approval cancels a swap whose proof was never released; one already released
+    // keeps reconciling to a final or recoverable state.
+    if (svc.status !== "approved" && p.authorization_state === "reserved") {
+      immediate(this.ledger.db, () => {
+        const cur = getPurchaseRow(this.ledger, p.id);
+        if (cur.authorization_state === "reserved") cancelUnreleased(this.ledger, cur, "rejected");
+      });
+      throw new Blocked("SERVICE_NOT_ALLOWED", "the owner withdrew swap approval before funding");
+    }
     const binding = swapFundingBinding(p, svc.network, svc.mint);
     this.#ensureExecution(p);
     for (let step = 0; step < MAX_STEPS; step += 1) {

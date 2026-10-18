@@ -17,6 +17,7 @@ class SwapTestFunding implements FundingProvider {
   readonly reqs = new Map<string, FundingRequest>();
   readonly swapBindings = new Map<string, FundingBinding>();
   outcome: SwapResult["status"] = "finalized";
+  fundingPending = false;
   async prepare(req: FundingRequest): Promise<FundingResult> {
     this.reqs.set(req.purchaseId, req);
     return { status: "prepared", fundingRef: req.purchaseId, payer: "FreshPayer1111111111111111111111111111111111" };
@@ -27,6 +28,7 @@ class SwapTestFunding implements FundingProvider {
   async status(purchaseId: string): Promise<FundingResult> {
     const req = this.reqs.get(purchaseId);
     if (!req) return { status: "not_ready", reason: "unknown purchase" };
+    if (this.fundingPending) return { status: "submitted", fundingRef: purchaseId, signature: null };
     const change = req.inputNote.value - req.payoutUsdc;
     return {
       status: "finalized",
@@ -145,6 +147,42 @@ describe("devnet swap purchase", () => {
     expect(() => swapPurchase("swap-off")).toThrow(/service binding is not approved/);
     approveSwapService(env.ledger, env.ws.id, 500_000n, "owner");
     expect(() => swapPurchase("swap-on")).not.toThrow();
+  });
+
+  it("lets swaps whose funding left the pool settle after approval is withdrawn", async () => {
+    funding.fundingPending = true;
+    const inFlight = swapPurchase("swap-off-1");
+    await orchestrator.drive(inFlight).catch(() => undefined);
+    expect(getPurchaseRow(env.ledger, inFlight)).toMatchObject({ authorization_state: "released", funding_state: "submitted" });
+    funding.fundingPending = false;
+    funding.outcome = "not_ready";
+    const signed = swapPurchase("swap-off-2");
+    await orchestrator.drive(signed).catch(() => undefined);
+    expect(getPurchaseRow(env.ledger, signed)).toMatchObject({ funding_state: "finalized", merchant_state: "signed" });
+
+    disableSwapService(env.ledger, env.ws.id, "owner");
+    funding.outcome = "finalized";
+    await orchestrator.drive(inFlight);
+    expect(getPurchaseRow(env.ledger, inFlight)).toMatchObject({ funding_state: "finalized", merchant_state: "finalized", fulfilment_state: "delivered" });
+    funding.outcome = "failed";
+    await orchestrator.drive(signed);
+    expect(getPurchaseRow(env.ledger, signed)).toMatchObject({ merchant_state: "expired_unsettled", recovery_state: "recoverable" });
+  });
+
+  it("releases a reserved swap when approval is withdrawn, and re-approval does not resume it", async () => {
+    const id = swapPurchase("swap-off-3");
+    expect(env.db.prepare(`SELECT COUNT(*) FROM note WHERE reserved_purchase_id = ?`).pluck().get(id)).toBe(1n);
+    disableSwapService(env.ledger, env.ws.id, "owner");
+    await orchestrator.drive(id);
+    expect(getPurchaseRow(env.ledger, id)).toMatchObject({ authorization_state: "rejected", funding_state: "abandoned", merchant_state: "abandoned" });
+    expect(env.db.prepare(`SELECT status FROM reservation WHERE purchase_id = ?`).pluck().get(id)).toBe("released");
+    expect(env.db.prepare(`SELECT COUNT(*) FROM note WHERE reserved_purchase_id = ?`).pluck().get(id)).toBe(0n);
+
+    approveSwapService(env.ledger, env.ws.id, 500_000n, "owner");
+    await orchestrator.drive(id).catch(() => undefined);
+    expect(getPurchaseRow(env.ledger, id).authorization_state).toBe("rejected");
+    expect(funding.reqs.has(id)).toBe(false);
+    expect(funding.swapBindings.has(id)).toBe(false);
   });
 
   it("signs no swap after the agent is paused, and refuses agents without the swap SKU", async () => {
