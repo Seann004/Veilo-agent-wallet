@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { address, getCompiledTransactionMessageDecoder, type Instruction } from "@solana/kit";
+import { address, createNoopSigner, getCompiledTransactionMessageDecoder, type Address, type Instruction } from "@solana/kit";
+import { getSwapV2Instruction } from "@orca-so/whirlpools-client";
+import { associatedTokenAddress } from "@veilo/privacy-sdk";
 import { advanceAuthority, recordFundingFinalized } from "@veilo/control/src/ledger/purchases";
 import { DEVNET_SOL_USDC_WHIRLPOOL, ORCA_WHIRLPOOL_PROGRAM, SWAP_SLIPPAGE_BPS, WRAPPED_SOL_MINT, type FundingBinding, type FundingResult } from "@veilo/contracts";
 import { decodeWireTransaction } from "@veilo/x402-client";
@@ -10,14 +12,38 @@ import { authorize, BINDING, createWorld, depositAndApprove, fundingInput, rando
 let world: World;
 let w: TestWallet;
 let quotes = 0;
+type QuoteTamper = { pool?: Address; aToB?: boolean; amount?: bigint; threshold?: bigint; exactOut?: boolean };
+let tamper: QuoteTamper = {};
+const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const quoter: SwapQuoter = {
-  async quote({ fresh }) {
+  async quote({ fresh, usdcMint, inputAmount }) {
     quotes += 1;
-    const swapIx: Instruction = {
-      programAddress: address(ORCA_WHIRLPOOL_PROGRAM),
-      accounts: [{ address: fresh, role: 2 }],
-      data: new Uint8Array([1, 2, 3]),
-    };
+    const swapIx: Instruction = getSwapV2Instruction(
+      {
+        tokenProgramA: TOKEN_PROGRAM,
+        tokenProgramB: TOKEN_PROGRAM,
+        memoProgram: address("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"),
+        tokenAuthority: createNoopSigner(fresh),
+        whirlpool: tamper.pool ?? address(DEVNET_SOL_USDC_WHIRLPOOL),
+        tokenMintA: address(WRAPPED_SOL_MINT),
+        tokenMintB: usdcMint,
+        tokenOwnerAccountA: (await associatedTokenAddress(fresh, address(WRAPPED_SOL_MINT))).address,
+        tokenVaultA: randomAddress(),
+        tokenOwnerAccountB: (await associatedTokenAddress(fresh, usdcMint)).address,
+        tokenVaultB: randomAddress(),
+        tickArray0: randomAddress(),
+        tickArray1: randomAddress(),
+        tickArray2: randomAddress(),
+        oracle: randomAddress(),
+        amount: tamper.amount ?? inputAmount,
+        otherAmountThreshold: tamper.threshold ?? 7_000_000n,
+        sqrtPriceLimit: 0,
+        amountSpecifiedIsInput: !tamper.exactOut,
+        aToB: tamper.aToB ?? false,
+        remainingAccountsInfo: null,
+      },
+      { programAddress: address(ORCA_WHIRLPOOL_PROGRAM) },
+    );
     return { swapIx, minOutLamports: 7_000_000n, estOutLamports: 7_070_000n };
   },
 };
@@ -27,6 +53,7 @@ beforeEach(async () => {
   w = world.open();
   w.deps.swapQuoter = quoter;
   quotes = 0;
+  tamper = {};
 });
 afterEach(() => world.cleanup());
 
@@ -100,6 +127,23 @@ describe("devnet swap signing", () => {
     advanceAuthority(ledger(), expired, "sign_merchant");
     expect((await w.funding.signSwap(expired, expired, binding)).status).toBe("failed");
     expect(await w.funding.merchantOutcome(expired)).toBe("expired_unsettled");
+  });
+
+  it("refuses to sign a quoted swap that is not the intended sale on the pinned pool", async () => {
+    const binding = SWAP();
+    const id = await funded("s7", binding);
+    advanceAuthority(ledger(), id, "sign_merchant");
+    const cases: QuoteTamper[] = [{ pool: randomAddress() }, { aToB: true }, { exactOut: true }, { amount: 999_999n }, { threshold: 1n }];
+    for (const t of cases) {
+      tamper = t;
+      const r = await w.funding.signSwap(id, id, binding);
+      expect(r).toMatchObject({ status: "not_ready", reason: expect.stringMatching(/nothing was signed/) });
+    }
+    expect(w.store.swap(id)).toBeUndefined();
+    expect(w.store.events(id).some((e) => e.kind === SWAP_SIGNATURE_PRODUCED)).toBe(false);
+    expect(world.relayer.swaps.size).toBe(0);
+    tamper = {};
+    expect((await w.funding.signSwap(id, id, binding)).status).toBe("finalized");
   });
 
   it("keeps a signed swap and resubmits the same bytes when the relayer was down", async () => {

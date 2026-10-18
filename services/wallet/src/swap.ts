@@ -15,6 +15,7 @@ import {
 import { getSetComputeUnitLimitInstruction } from "@solana-program/compute-budget";
 import { getCloseAccountInstruction, getCreateAssociatedTokenIdempotentInstruction } from "@solana-program/token";
 import { setNativeMintWrappingStrategy, swapInstructions, WhirlpoolDeployment } from "@orca-so/whirlpools";
+import { getSwapV2InstructionDataDecoder, SWAP_V2_DISCRIMINATOR } from "@orca-so/whirlpools-client";
 import { createDevnetRpc, DEVNET_SOL_USDC_WHIRLPOOL, ORCA_WHIRLPOOL_PROGRAM, WRAPPED_SOL_MINT } from "@veilo/contracts";
 import { associatedTokenAddress } from "@veilo/privacy-sdk";
 
@@ -56,6 +57,32 @@ export class OrcaSwapQuoter implements SwapQuoter {
     const q = built.quote as { tokenMinOut: bigint; tokenEstOut: bigint };
     return { swapIx, minOutLamports: q.tokenMinOut, estOutLamports: q.tokenEstOut };
   }
+}
+
+/**
+ * Why the quoted instruction is not exactly the swap the wallet means to sign (an Orca swapV2
+ * selling exactly `amount` of the fresh wallet's USDC on the pinned whirlpool for at least
+ * `minOut` lamports of wrapped SOL), or null when it is.
+ */
+export async function swapInstructionMismatch(ix: Instruction, e: { fresh: Address; usdcMint: Address; amount: bigint; minOut: bigint }): Promise<string | null> {
+  const data = ix.data ?? new Uint8Array();
+  if (ix.programAddress !== ORCA_WHIRLPOOL_PROGRAM || data.length < 8 || !SWAP_V2_DISCRIMINATOR.every((b, i) => data[i] === b)) return "not an Orca swapV2 instruction";
+  const a = (ix.accounts ?? []).map((m) => m.address);
+  const freshUsdc = (await associatedTokenAddress(e.fresh, e.usdcMint)).address;
+  const freshWsol = (await associatedTokenAddress(e.fresh, address(WRAPPED_SOL_MINT))).address;
+  if (a[3] !== e.fresh || a[4] !== DEVNET_SOL_USDC_WHIRLPOOL || a[5] !== WRAPPED_SOL_MINT || a[6] !== e.usdcMint || a[7] !== freshWsol || a[9] !== freshUsdc) {
+    return "swap does not use the pinned whirlpool and the fresh wallet's own token accounts";
+  }
+  let args;
+  try {
+    args = getSwapV2InstructionDataDecoder().decode(data);
+  } catch {
+    return "swap instruction data does not decode";
+  }
+  if (args.aToB || !args.amountSpecifiedIsInput) return "swap does not sell an exact USDC input for SOL";
+  if (args.amount !== e.amount) return "swap input differs from the funded amount";
+  if (args.otherAmountThreshold !== e.minOut) return "swap minimum output differs from the quote";
+  return null;
 }
 
 /**

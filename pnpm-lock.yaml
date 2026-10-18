@@ -506,6 +506,9 @@ importers:
       '@orca-so/whirlpools':
         specifier: 8.0.1
         version: 8.0.1(@solana/kit@5.5.1(typescript@5.9.3))(typescript@5.9.3)
+      '@orca-so/whirlpools-client':
+        specifier: 7.0.0
+        version: 7.0.0(@solana/kit@5.5.1(typescript@5.9.3))
       '@solana-program/compute-budget':
         specifier: 0.11.0
         version: 0.11.0(@solana/kit@5.5.1(typescript@5.9.3))

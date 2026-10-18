@@ -34,7 +34,7 @@ import { WalletError } from "./errors";
 import { verifiedPublicState, type PoolContext, type VerifiedPublicState } from "./pool";
 import { PortUnavailableError } from "./ports";
 import type { ExternalCallRow, FundingRow, NoteRecord, SwapRow } from "./store";
-import { buildSwapTransaction } from "./swap";
+import { buildSwapTransaction, swapInstructionMismatch } from "./swap";
 
 /** Relayer error codes that refuse a swap before co-signing it. */
 const TERMINAL_SWAP_REFUSALS = new Set(["POLICY_DENIED", "INVALID_REQUEST", "BUDGET_EXCEEDED"]);
@@ -656,6 +656,8 @@ export class FundingService {
         return { status: "not_ready", reason: `swap quote unavailable; nothing was signed (${describeError(error)})` };
       }
       if (quote.minOutLamports <= 0n) return { status: "not_ready", reason: "the pool quotes no SOL for this amount; nothing was signed" };
+      const mismatch = await swapInstructionMismatch(quote.swapIx, { fresh: address(freshAddress), usdcMint: ctx.mint, amount: f.payout, minOut: quote.minOutLamports });
+      if (mismatch) return { status: "not_ready", reason: `the quoted swap was refused (${mismatch}); nothing was signed` };
       const bh = await chain.latestBlockhash();
       const unsigned = await buildSwapTransaction({
         sponsor: ctx.sponsor,
