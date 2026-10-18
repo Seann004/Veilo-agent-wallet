@@ -79,3 +79,7 @@ Third-party packages
 thinking-orbs 0.3.2 (https://github.com/Jakubantalik/Libraries.dev), MIT License,
 Copyright (c) 2026 Jakub Antalik. Used unmodified as the dashboard's agent
 loading indicator. The full license text ships in the package's LICENSE file.
+
+bot-avatars 0.2.2 (https://github.com/Jakubantalik/Libraries.dev), MIT License,
+Copyright (c) 2026 Jakub Antalik. Used unmodified for the animated avatar shown
+while an agent is working. The full license text ships in the package's LICENSE file.

@@ -15,7 +15,8 @@ import { AgentControls } from "./AgentControls";
 import { AgentConnectors } from "./AgentConnectors";
 import { AgentDelivery } from "./Channels";
 import { CustomAgentPanel } from "./CustomAgentFields";
-import { AgentAvatar, AvatarImage, AvatarPicker } from "./Avatar";
+import { AgentAvatar, AvatarImage, AvatarPicker, WorkingAvatar } from "./Avatar";
+import { Markdown, truncateMarkdown } from "./Markdown";
 import { Icon } from "./Icon";
 import { Select } from "./Select";
 import { PolicyForm, PolicyReview, type AgentPolicyInput } from "./Policy";
@@ -364,7 +365,7 @@ function stepsOf(content: string): string[] {
 /** The part of an output meant for the owner: everything before the runner's details marker, kept short. */
 function answerOf(content: string): string {
   const body = content.split("\n— Details —\n")[0]!.trim();
-  return body.length > 900 ? `${body.slice(0, 899)}…` : body;
+  return truncateMarkdown(body, 900);
 }
 
 /** Thread entries come only from recorded tasks, finished jobs, purchases and saved content. */
@@ -439,7 +440,7 @@ function buildThread(
       node: (
         <li className="bubble bubble-agent bubble-answer">
           <strong className="bubble-title">{c.title}</strong>
-          {answer ? <span className="plain-text">{answer}</span> : null}
+          {answer ? <Markdown className="md-bubble">{answer}</Markdown> : null}
           {proposed ? <ProposedRunStatus proposed={proposed} /> : null}
           {steps.length > 0 ? (
             <details className="advanced bubble-steps">
@@ -656,7 +657,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
     <div className="agent-view">
       <section className="thread-panel" aria-label={`${agent.name} thread`}>
         <header className="thread-head">
-          <AgentAvatar agent={agent} size={36} />
+          {activeJob ? <WorkingAvatar agent={agent} size={48} /> : <AgentAvatar agent={agent} size={36} />}
           <div>
             <h1>{agent.name}</h1>
             <p className="role">{ROLE_LABEL[agent.role]}</p>

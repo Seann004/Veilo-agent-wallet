@@ -24,7 +24,7 @@ function subscribe(onChange: () => void) {
   return () => mq?.removeEventListener?.("change", onChange);
 }
 
-function usePrefersReducedMotion(): boolean {
+export function usePrefersReducedMotion(): boolean {
   return useSyncExternalStore(
     subscribe,
     () => window.matchMedia?.(REDUCED)?.matches ?? false,

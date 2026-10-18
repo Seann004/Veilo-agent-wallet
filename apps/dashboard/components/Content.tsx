@@ -7,6 +7,7 @@ import { when } from "../lib/format";
 import type { CalendarEntry, ContentItem, ReviewState } from "../lib/types";
 import { useCapability } from "./Shell";
 import { useAction } from "./hooks";
+import { Markdown } from "./Markdown";
 import { DeniedHint, ErrorNotice } from "./ui";
 
 export const NO_CHARGE_NOTE = "Editing is free: it uses no AI, buys nothing and publishes nothing.";
@@ -59,6 +60,12 @@ export function ContentEditor({ item, onSaved }: { item: ContentItem; onSaved: (
             <label htmlFor={bodyId}>Draft text</label>
             <textarea id={bodyId} rows={8} value={content} disabled={archived} readOnly={readOnly} onChange={(e) => setContent(e.target.value)} />
           </div>
+          {content.trim() ? (
+            <details open>
+              <summary>Formatted preview</summary>
+              <Markdown>{content}</Markdown>
+            </details>
+          ) : null}
         </>
       ) : null}
       {item.citations.length > 0 ? (

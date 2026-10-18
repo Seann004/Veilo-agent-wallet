@@ -1,5 +1,8 @@
 "use client";
 
+import { Component, type ReactNode } from "react";
+import { BotAvatar, botAvatarTypes } from "bot-avatars";
+import { usePrefersReducedMotion } from "./ThinkingOrb";
 import { AVATARS, useAgentAvatar, type AvatarOption } from "../lib/avatars";
 import type { Agent } from "../lib/types";
 import { AVATAR_COLOURS, GENDERS, PRESENTATIONS } from "../lib/avatar-art";
@@ -12,6 +15,38 @@ export function AvatarImage({ avatar, size = 36 }: { avatar: AvatarOption; size?
 
 export function AgentAvatar({ agent, size = 36 }: { agent: Pick<Agent, "id" | "role">; size?: number }) {
   return <AvatarImage avatar={useAgentAvatar(agent.id, agent.role)} size={size} />;
+}
+
+class AnimationBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  override state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  override render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+/** The same agent always gets the same bot shape. */
+export function botTypeFor(agentId: string): (typeof botAvatarTypes)[number] {
+  let h = 0;
+  for (let i = 0; i < agentId.length; i++) h = (Math.imul(h, 31) + agentId.charCodeAt(i)) >>> 0;
+  return botAvatarTypes[h % botAvatarTypes.length]!;
+}
+
+/** Animated avatar for an agent that is working; static when motion is reduced or the animation fails. */
+export function WorkingAvatar({ agent, size = 48 }: { agent: Pick<Agent, "id" | "role">; size?: number }) {
+  const avatar = useAgentAvatar(agent.id, agent.role);
+  const reduced = usePrefersReducedMotion();
+  const fallback = <AvatarImage avatar={avatar} size={size} />;
+  if (reduced) return fallback;
+  return (
+    <AnimationBoundary fallback={fallback}>
+      <span className="working-avatar" role="img" aria-label="Working" style={{ width: size, height: size }}>
+        <BotAvatar type={botTypeFor(agent.id)} state="working" size={size} color={avatarChoice(avatar.id).colour} />
+      </span>
+    </AnimationBoundary>
+  );
 }
 
 export function AvatarPicker({ value, onChange, label = "Avatar" }: { value: string; onChange: (id: string) => void; label?: string }) {
