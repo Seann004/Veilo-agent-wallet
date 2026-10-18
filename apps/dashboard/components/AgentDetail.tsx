@@ -362,10 +362,26 @@ function stepsOf(content: string): string[] {
     .filter((l) => l !== "" && !l.startsWith("Task: "));
 }
 
-/** The part of an output meant for the owner: everything before the runner's details marker, kept short. */
+/** The part of an output meant for the owner: everything before the runner's details marker. */
 function answerOf(content: string): string {
-  const body = content.split("\n— Details —\n")[0]!.trim();
-  return truncateMarkdown(body, 900);
+  return content.split("\n— Details —\n")[0]!.trim();
+}
+
+const CHAT_ANSWER_PREVIEW = 900;
+
+function ChatAnswer({ answer }: { answer: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const long = answer.length > CHAT_ANSWER_PREVIEW;
+  return (
+    <>
+      <Markdown className="md-bubble">{long && !expanded ? truncateMarkdown(answer, CHAT_ANSWER_PREVIEW) : answer}</Markdown>
+      {long ? (
+        <button type="button" className="link-btn output-more" aria-expanded={expanded} onClick={() => setExpanded((x) => !x)}>
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      ) : null}
+    </>
+  );
 }
 
 /** Thread entries come only from recorded tasks, finished jobs, purchases and saved content. */
@@ -456,7 +472,7 @@ function buildThread(
       node: (
         <li className="bubble bubble-agent bubble-answer">
           {/* The title repeats the owner's message, so it is shown only when there is no answer text. */}
-          {answer ? <Markdown className="md-bubble">{answer}</Markdown> : <strong className="bubble-title">{c.title}</strong>}
+          {answer ? <ChatAnswer answer={answer} /> : <strong className="bubble-title">{c.title}</strong>}
           {proposed ? <ProposedRunStatus proposed={proposed} /> : null}
           {steps.length > 0 ? (
             <details className="advanced bubble-steps">
