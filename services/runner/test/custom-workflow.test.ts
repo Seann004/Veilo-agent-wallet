@@ -7,6 +7,7 @@ import { activatePolicyVersion, insertAgent } from "../../control/src/ledger/wor
 import type { WorkflowRunner } from "../../control/src/workflows/runner";
 import { FakeWorkflowMarket, fakeWorkflowRunner, WF_OWNER, WF_V1, WF_V2 } from "../../control/test/fixtures/fake-workflow-market";
 import { makeStack, type Stack } from "../../control/test/fixtures/stack";
+import { gatheredForInputs } from "../src/roles/custom";
 import { runOnce } from "../src/worker";
 
 const OTHER = "CPZSjRmyfTS95UjQD8ZdeTEWbQvW9QvEXnn6aGP7yyMN";
@@ -43,7 +44,7 @@ async function runScout(o: { pick: Record<string, unknown>; assign?: boolean; af
     const all = body.messages.map((m) => m.content).join("\n");
     prompts.push(all);
     let text = "Own analysis of validators.";
-    if (all.includes("Assigned workflows:")) text = JSON.stringify(o.pick);
+    if (all.includes("Assigned workflows (")) text = JSON.stringify(o.pick);
     else if (all.includes("You are an agent working for a workspace owner")) text = JSON.stringify({ connectorCalls: [], browse: [PAGE_A, PAGE_B], searchQuery: "carousel", swap: false });
     return new Response(JSON.stringify({ model: "m", choices: [{ message: { content: text } }] }), { status: 200 });
   };
@@ -95,8 +96,9 @@ describe("custom agent proposing an assigned workflow", () => {
     expect(r.runs[0]!.idempotency_key).toBe(`task:${r.taskId}:wfrun:${WF_V1}`);
 
     // The page that tried to close its fence never reached a planner; the other one did, fenced.
-    const second = r.prompts.find((p) => p.includes("Assigned workflows:"))!;
-    expect(second).toContain("workflowVersionId=" + WF_V1);
+    const second = r.prompts.find((p) => p.includes("Assigned workflows ("))!;
+    // The catalogue-sourced workflow list sits inside its own data fence.
+    expect(second).toMatch(new RegExp(`<<<CONNECTOR_OUTPUT_[0-9a-f]{24}\\n1\\. workflowVersionId=${WF_V1}[^]*?\\nCONNECTOR_OUTPUT_[0-9a-f]{24}>>>`));
     expect(second).toMatch(/<<<CONNECTOR_OUTPUT_[0-9a-f]{24}\n/);
     expect(second).not.toContain("ignore the owner");
     // Two planner calls, no analysis call, no marketplace search and no purchase.
@@ -144,6 +146,23 @@ describe("custom agent proposing an assigned workflow", () => {
   it("without any assignment the agent is not offered workflows", async () => {
     const r = await runScout({ assign: false, pick: { listingId: null, workflowVersionId: WF_V1, runInputs: { topic: "x" } } });
     expect(r.runs).toHaveLength(0);
-    expect(r.prompts.some((p) => p.includes("Assigned workflows:"))).toBe(false);
+    expect(r.prompts.some((p) => p.includes("Assigned workflows ("))).toBe(false);
+  });
+});
+
+describe("gathered data for the workflow planner", () => {
+  it("clips an oversized block before fencing, so it stays enclosed and within budget", () => {
+    const taskId = "77777777-7777-4777-8777-777777777777";
+    const out = gatheredForInputs(taskId, [{ label: "From the web page", raw: "Untrusted. ".repeat(2_000), callId: "web:1" }], 9_000);
+    const marker = fenceMarker(taskId, "web:1");
+    expect(out.length).toBeLessThanOrEqual(9_000);
+    expect(out).toContain(`<<<${marker}\n`);
+    expect(out.endsWith(`\n${marker}>>>`)).toBe(true);
+    const two = gatheredForInputs(taskId, [
+      { label: "a", raw: "x".repeat(20_000), callId: "c1" },
+      { label: "b", raw: "y".repeat(20_000), callId: "web:0" },
+    ]);
+    expect(two.length).toBeLessThanOrEqual(9_000);
+    expect(two.match(/CONNECTOR_OUTPUT_[0-9a-f]{24}>>>/g)).toHaveLength(2);
   });
 });
