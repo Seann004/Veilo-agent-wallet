@@ -45,6 +45,7 @@ const ALLOWED_ARGS: Record<string, readonly string[]> = {
   propose_hire: ["taskId", "listingId", "brief", "idempotencyKey"],
   list_workflows: [],
   propose_workflow_run: ["taskId", "versionId", "runInputs", "idempotencyKey"],
+  describe_reference: ["taskId"],
 };
 
 /**

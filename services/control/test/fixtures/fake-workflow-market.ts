@@ -13,6 +13,7 @@ export class FakeWorkflowMarket implements WorkflowMarketPort {
   runs = 0;
   /** Changing it after an assignment changes the run terms, so the assignment no longer covers them. */
   recipient = SELLER;
+  runInputs: Array<{ name: string; label: string; maxChars: number }> = [{ name: "topic", label: "Topic", maxChars: 500 }];
   version = async (versionId: string): Promise<WorkflowVersionFacts> => ({
     versionId,
     workflowId: `wf-${versionId.slice(0, 4)}`,
@@ -20,7 +21,7 @@ export class FakeWorkflowMarket implements WorkflowMarketPort {
     network: DEVNET_CAIP2,
     mint: DEMO_TOKEN_MINT,
     totalMaxBaseUnits: "230000",
-    runInputs: [{ name: "topic", label: "Topic", maxChars: 500 }],
+    runInputs: this.runInputs,
     steps: [{ toolKind: "listing", toolId: STEP, maxBaseUnits: "230000", inputs: { brief: { from: "run_input", name: "topic" } } }],
     tools: [
       {
