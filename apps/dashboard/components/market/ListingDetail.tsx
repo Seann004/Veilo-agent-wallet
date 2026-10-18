@@ -9,7 +9,7 @@ import type { CatalogEntry, HireResponse, ListingSample, QuoteFields } from "../
 import { useAction, useResource } from "../hooks";
 import { ErrorNotice, KV, Loading } from "../ui";
 import { useMarket } from "./MarketContext";
-import { Countdown, creatorAvatar, turnaround, DetailHeader, DetailSections, FullValue, Money, PausedNotice, PlainText, RequireMarketSession, TestTokenNote, type DetailSection } from "./parts";
+import { Countdown, creatorAvatar, turnaround, DetailHeader, DetailSections, FullValue, Money, PausedNotice, PlainText, RequireMarketSession, type DetailSection } from "./parts";
 
 const MAX_BRIEF = 16_000;
 
@@ -120,7 +120,6 @@ export function ListingDetail({ slug }: { slug: string }) {
           </button>
         }
       />
-      <TestTokenNote />
       <DetailSections sections={sections} open={open} onOpen={setOpen} />
     </>
   );

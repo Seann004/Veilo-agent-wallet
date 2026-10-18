@@ -12,7 +12,7 @@ import type { Workspace } from "../../lib/types";
 import { useAction, useResource } from "../hooks";
 import { ConfirmButton, EmptyState, ErrorNotice, KV, Loading, Section, TxLink } from "../ui";
 import { useMarket } from "./MarketContext";
-import { Countdown, FullValue, Money, PlainText, TestTokenNote } from "./parts";
+import { Countdown, FullValue, Money, PlainText } from "./parts";
 import { Select } from "../Select";
 
 /** A hire as the local control service stores it; listing text and the brief are untrusted. */
@@ -85,7 +85,6 @@ export function LocalApproval() {
         This is where payments are actually authorized. Approving here lets your <strong>local controller</strong> pay the seller from the chosen
         agent&apos;s budget, after re-checking the quote and your limits. It uses your local owner sign-in, not your marketplace sign-in.
       </p>
-      <TestTokenNote />
       {ws.loading && !ws.data ? <Loading label="local workspace" /> : null}
       {ws.error?.status === 401 ? (
         <p className="notice notice-warn" role="status">

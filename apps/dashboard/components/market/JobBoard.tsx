@@ -8,7 +8,7 @@ import type { JobRow } from "../../lib/market/types";
 import { useResource } from "../hooks";
 import { EmptyState, ErrorNotice, Loading } from "../ui";
 import { useMarket } from "./MarketContext";
-import { JobStates, RequireMarketSession, TestTokenNote } from "./parts";
+import { JobStates, RequireMarketSession } from "./parts";
 
 export const POLL_MS = 5_000;
 
@@ -17,7 +17,6 @@ export function JobBoard() {
   return (
     <>
       <h1>Jobs</h1>
-      <TestTokenNote />
       <RequireMarketSession what="see your jobs">
         <JobList />
       </RequireMarketSession>

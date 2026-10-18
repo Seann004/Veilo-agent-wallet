@@ -10,7 +10,7 @@ import { useAction, useResource } from "../hooks";
 import { ConfirmButton, EmptyState, ErrorNotice, Loading, Section } from "../ui";
 import { ControllerPanel } from "./ControllerPanel";
 import { useMarket } from "./MarketContext";
-import { Money, PausedNotice, PlainText, RequireMarketSession, TestTokenNote } from "./parts";
+import { Money, PausedNotice, PlainText, RequireMarketSession } from "./parts";
 
 const TOOL_LABEL: Record<(typeof AGENT_TOOLS)[number], string> = {
   marketplace_search: "Search the marketplace",
@@ -25,7 +25,6 @@ export function MarketAgents() {
       <p className="small">
         Agents and policies created here are <strong>proposals</strong>. They stay inactive until your local controller installs and acknowledges them.
       </p>
-      <TestTokenNote />
       <RequireMarketSession what="manage marketplace agents">
         <ControllerPanel />
         <Agents />

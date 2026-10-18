@@ -12,7 +12,7 @@ import { useAction, useResource } from "../hooks";
 import { ConfirmButton, ErrorNotice, KV, Loading, Section, TxLink } from "../ui";
 import { POLL_MS } from "./JobBoard";
 import { useMarket } from "./MarketContext";
-import { Countdown, FullValue, JobStates, Money, PausedNotice, PlainText, RequireMarketSession, TestTokenNote } from "./parts";
+import { Countdown, FullValue, JobStates, Money, PausedNotice, PlainText, RequireMarketSession } from "./parts";
 import { Select } from "../Select";
 
 const CANCELLABLE = new Set(["created", "awaiting_approval", "awaiting_payment", "queued", "running", "input_required"]);
@@ -56,7 +56,6 @@ function JobView({ jobId }: { jobId: string }) {
       <h1>Job</h1>
       <p className="small muted mono wrap-anywhere">{d.job.id}</p>
       <p className="small">{isBuyer ? "You hired this specialist." : isSeller ? "This job is assigned to you as the seller." : null}</p>
-      <TestTokenNote />
       <JobStates p={p} />
       {p.notes.map((n) => (
         <p key={n} className="notice notice-warn" role="status">

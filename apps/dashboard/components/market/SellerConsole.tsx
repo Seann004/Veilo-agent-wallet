@@ -13,14 +13,13 @@ import { useAction, useResource } from "../hooks";
 import { ErrorNotice, KV, Loading, Section } from "../ui";
 import { RefundItem } from "./JobDetail";
 import { useMarket } from "./MarketContext";
-import { Address, FullValue, JobStates, Money, PausedNotice, PlainText, RequireMarketSession, TestTokenNote } from "./parts";
+import { Address, FullValue, JobStates, Money, PausedNotice, PlainText, RequireMarketSession } from "./parts";
 import { Select } from "../Select";
 
 export function SellerConsole() {
   return (
     <>
       <h1>Seller console</h1>
-      <TestTokenNote />
       <RequireMarketSession what="open the seller console">
         <Console />
       </RequireMarketSession>

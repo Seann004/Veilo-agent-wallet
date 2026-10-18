@@ -8,7 +8,7 @@ import { BADGE_CLASS, BADGE_LABEL, kindGlyph, type ToolEntry } from "../../lib/m
 import { useAction, useResource } from "../hooks";
 import { EmptyState, ErrorNotice, Loading, Section } from "../ui";
 import { useMarket } from "./MarketContext";
-import { Address, Money, PlainText, RequireMarketSession, TestTokenNote } from "./parts";
+import { Address, Money, PlainText, RequireMarketSession } from "./parts";
 import { Select } from "../Select";
 
 interface Connector {
@@ -34,7 +34,6 @@ export function ToolLibrary() {
         Tools are published listings and operator-approved external x402 resources. A workflow built only from approved tools goes live after automated checks; a new tool waits for
         review.
       </p>
-      <TestTokenNote />
       {res.loading && !res.data ? <Loading label="tools" /> : null}
       <ErrorNotice error={res.error} what="the tool library could not be loaded" onRetry={res.reload} />
       {res.data && res.data.tools.length === 0 ? <EmptyState>No tools are published yet.</EmptyState> : null}

@@ -92,7 +92,7 @@ describe("marketplace browse", () => {
     expect(screen.getByRole("heading", { name: "Featured" })).toBeTruthy();
     // Without an owner session a starter agent can't be added; the button says why instead of linking.
     expect(screen.getAllByRole("button", { name: "Add" }).every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
-    expect(screen.getAllByText(/Solana devnet · USDC/).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Solana devnet · USDC")).toBeNull();
     expect(screen.getAllByText(HOSTILE).length).toBeGreaterThan(0);
     expect(document.querySelector("script")).toBeNull();
     expect((window as unknown as { __pwned?: number }).__pwned).toBeUndefined();

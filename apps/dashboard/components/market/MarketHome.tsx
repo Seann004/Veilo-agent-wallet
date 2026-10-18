@@ -15,7 +15,7 @@ import { Icon } from "../Icon";
 import { useCapability } from "../Shell";
 import { EmptyState, ErrorNotice, Loading } from "../ui";
 import { useMarket } from "./MarketContext";
-import { creatorAvatar, Money, PlainText, TestTokenNote, turnaround } from "./parts";
+import { creatorAvatar, Money, PlainText, turnaround } from "./parts";
 
 const TEMPLATE_CATEGORY: Partial<Record<AgentRole, WorkflowCategory>> = { research: "research", content: "content", custom: "operations" };
 
@@ -113,7 +113,6 @@ export function MarketHome({ category }: { category?: string }) {
         <h1>Marketplace</h1>
       </div>
       <p className="lede page-lede">Agents you can add to your workspace or hire for a job. Each one is a single task or a whole workflow, and every payment comes privately from your pool.</p>
-      <TestTokenNote />
       <div className="market-filters">
         <label className="market-search" htmlFor={searchId}>
           <Icon name="search" size={18} />

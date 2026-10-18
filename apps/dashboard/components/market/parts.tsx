@@ -53,14 +53,6 @@ export function Money({ amount, decimals, unit = "USDC", compact = false }: { am
   );
 }
 
-export function TestTokenNote() {
-  return (
-    <p className="token-note" role="note">
-      {TEST_TOKEN_LABEL}
-    </p>
-  );
-}
-
 /** Untrusted text from sellers, buyers or results: rendered as text nodes only, line breaks kept. */
 export function PlainText({ text, className, inline }: { text: string | null | undefined; className?: string; inline?: boolean }) {
   if (inline) return <span className={className ? `inline-text ${className}` : "inline-text"}>{text ?? ""}</span>;

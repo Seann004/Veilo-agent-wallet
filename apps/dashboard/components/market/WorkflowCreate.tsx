@@ -19,7 +19,7 @@ import type { Workspace } from "../../lib/types";
 import { useAction, useResource } from "../hooks";
 import { ErrorNotice, Loading, Section } from "../ui";
 import { useMarket } from "./MarketContext";
-import { Address, Money, PlainText, RequireMarketSession, TestTokenNote } from "./parts";
+import { Address, Money, PlainText, RequireMarketSession } from "./parts";
 import { Select } from "../Select";
 
 interface DraftStep {
@@ -64,7 +64,6 @@ export function WorkflowCreate() {
     <>
       <h1>Create a workflow</h1>
       <p className="small">Chain published tools into a workflow anyone can run. Each step stays its own purchase paid directly to that tool's recipient.</p>
-      <TestTokenNote />
       <RequireMarketSession what="create a workflow">
         <Wizard />
       </RequireMarketSession>

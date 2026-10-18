@@ -12,7 +12,7 @@ import type { Workspace } from "../../lib/types";
 import { useAction, useResource } from "../hooks";
 import { ConfirmButton, ErrorNotice, KV, Loading } from "../ui";
 import { useMarket } from "./MarketContext";
-import { Address, creatorAvatar, DetailHeader, DetailSections, FullValue, Money, PlainText, TestTokenNote, type DetailSection } from "./parts";
+import { Address, creatorAvatar, DetailHeader, DetailSections, FullValue, Money, PlainText, type DetailSection } from "./parts";
 import { Select } from "../Select";
 
 function willAndWont(w: WorkflowEntry): { will: string[]; wont: string[] } {
@@ -157,7 +157,6 @@ export function WorkflowDetail({ slug }: { slug: string }) {
           </>
         }
       />
-      <TestTokenNote />
       <DetailSections sections={sections} open={open} onOpen={setOpen} />
     </>
   );
@@ -293,6 +292,7 @@ function AddToAgent({ w }: { w: WorkflowEntry }) {
   const act = useAction();
   const [agentId, setAgentId] = useState("");
   const [budget, setBudget] = useState("");
+  const [ask, setAsk] = useState(true);
   const [done, setDone] = useState(false);
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const formId = useId();
@@ -301,19 +301,22 @@ function AddToAgent({ w }: { w: WorkflowEntry }) {
   const agentOptions = [{ value: "", label: "Choose an agent" }, ...agents.map((a) => ({ value: a.id, label: a.name }))];
   return (
     <div className="stack">
-      <p className="small">
-        The agent can run this workflow on its own, within the budget you set here.
-      </p>
+      <p className="small">Let an agent use this workflow when a task needs it.</p>
       <ErrorNotice error={act.error} what="the assignment could not be saved" />
       {done ? (
         <p className="notice notice-help" role="status">
-          Added. The agent can now propose runs within the budget.
+          {ask ? "Added. The agent can propose runs; each one waits for your approval." : "Added. The agent can run it within the budget without asking."}
         </p>
       ) : (
         <form
           className="stack"
           onSubmit={async (e) => {
             e.preventDefault();
+            if (ask) {
+              const r = await act.run(() => api("control", "/workflows/assignments", { method: "POST", body: { agentId, versionId: w.version_id, askEachRun: true } }));
+              if (r) setDone(true);
+              return;
+            }
             let units: string;
             if (decimals === null) {
               if (!/^[1-9][0-9]{0,18}$/.test(budget.trim())) return setBudgetError("enter a whole number of base units");
@@ -331,21 +334,26 @@ function AddToAgent({ w }: { w: WorkflowEntry }) {
           <div className="field">
             <label htmlFor={`${formId}-agent`}>Agent</label>
             <Select id={`${formId}-agent`} label="Agent" required value={agentId} options={agentOptions} onChange={setAgentId} />
-            <p className="hint">Only custom agents that are on and allowed to hire appear here. The agent proposes a run when a task fits; it runs within this budget without asking you again.</p>
+            <p className="hint">Only custom agents that are on and allowed to hire appear here.</p>
             {ws.data && agents.length === 0 ? (
               <p className="notice notice-warn" role="note">
                 No agent can take a workflow yet. <Link href="/agents/new">Create a custom agent</Link> that is allowed to hire specialists, and turn it on.
               </p>
             ) : null}
           </div>
-          <div className="field">
-            <label htmlFor={`${formId}-budget`}>Budget {decimals === null ? "(base units)" : "(USDC)"}</label>
-            <input id={`${formId}-budget`} required inputMode="decimal" aria-invalid={budgetError !== null} value={budget} onChange={(e) => setBudget(e.target.value)} />
-            {budgetError ? <p className="field-error">{budgetError}</p> : null}
-            <p className="hint">
-              At least one run: <Money amount={String(w.total_base_units)} decimals={decimals} />
-            </p>
-          </div>
+          <label className="field inline">
+            <input type="checkbox" checked={ask} onChange={(e) => setAsk(e.target.checked)} /> Ask me before each run
+          </label>
+          {ask ? (
+            <p className="hint flush">The agent proposes a run with its topic; you review and approve it. Each run costs up to <Money compact amount={String(w.total_base_units)} decimals={decimals} />.</p>
+          ) : (
+            <div className="field">
+              <label htmlFor={`${formId}-budget`}>Budget {decimals === null ? "(base units)" : "(USDC)"}</label>
+              <input id={`${formId}-budget`} required inputMode="decimal" aria-invalid={budgetError !== null} value={budget} onChange={(e) => setBudget(e.target.value)} />
+              {budgetError ? <p className="field-error">{budgetError}</p> : null}
+              <p className="hint">Runs within this budget start without asking. At least one run: <Money compact amount={String(w.total_base_units)} decimals={decimals} /></p>
+            </div>
+          )}
           <button type="submit" className="btn" disabled={act.busy || agentId === ""}>
             Add to agent
           </button>

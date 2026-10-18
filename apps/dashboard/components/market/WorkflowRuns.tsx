@@ -8,7 +8,7 @@ import { partitionRuns, plainReason, RUN_STATUS_LABEL, runHeadline, stepStateLab
 import { useAction, useResource } from "../hooks";
 import { ConfirmButton, EmptyState, ErrorNotice, KV, Loading, Section, TxLink } from "../ui";
 import { useOptionalMarket } from "./MarketContext";
-import { Address, FullValue, Money, PlainText, TestTokenNote } from "./parts";
+import { Address, FullValue, Money, PlainText } from "./parts";
 
 const HEAD_CLASS: Record<RunHeadline, string> = { Running: "pill", Waiting: "pill pill-warn", Completed: "pill pill-ok", Failed: "pill pill-danger", Halted: "pill pill-warn" };
 const STATE_CLASS: Record<StepStateLabel, string> = {
@@ -62,7 +62,6 @@ export function WorkflowRunList() {
   return (
     <>
       <h1>Workflow runs</h1>
-      <TestTokenNote />
       {runs.loading && !runs.data ? <Loading label="runs" /> : null}
       <ErrorNotice error={runs.error} what="your runs could not be loaded (sign in to the local dashboard first)" onRetry={runs.reload} />
       {runs.data && runs.data.runs.length === 0 ? (
@@ -244,7 +243,6 @@ export function WorkflowRunView({ runId }: { runId: string }) {
           ]}
         />
       </details>
-      <TestTokenNote />
     </>
   );
 }
