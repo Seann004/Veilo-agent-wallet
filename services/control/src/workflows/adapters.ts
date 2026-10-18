@@ -39,6 +39,23 @@ interface ExternalRow {
   call_template: ExternalToolFacts["callTemplate"];
 }
 
+/**
+ * Public catalogue text reduced to one plain line: control and bidi characters, markup brackets,
+ * data-fence markers and links are removed, then it is clipped. It is still third-party text.
+ */
+export function catalogText(v: unknown, max: number): string {
+  if (typeof v !== "string") return "";
+  return v
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g, " ")
+    .replace(/(?:CONNECTOR|STEP)_OUTPUT_[A-Za-z0-9]*/g, " ")
+    .replace(/\b(?:https?|file|ftp|data|javascript):\S*/gi, " ")
+    .replace(/[<>{}`[\]]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+}
+
 /** Signed controller calls to the hosted marketplace. */
 export class MarketplaceWorkflowPort implements WorkflowMarketPort {
   constructor(private readonly client: MarketplaceClient) {}
@@ -123,7 +140,8 @@ export class MarketplaceWorkflowPort implements WorkflowMarketPort {
     const list = (r.body as { workflows?: unknown } | undefined)?.workflows;
     const hit = Array.isArray(list) ? (list as Array<Record<string, unknown>>).find((w) => w.version_id === versionId) : undefined;
     if (!hit || typeof hit.title !== "string") return null;
-    return { title: hit.title, summary: typeof hit.summary === "string" ? hit.summary : "" };
+    const title = catalogText(hit.title, 120);
+    return title === "" ? null : { title, summary: catalogText(hit.summary, 300) };
   }
 }
 

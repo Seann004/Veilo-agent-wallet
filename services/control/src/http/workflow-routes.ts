@@ -7,6 +7,7 @@ import { ControlError } from "../errors";
 import { assertTaskLive, chargeToolCall, ownTask } from "../agents/work";
 import type { Integration } from "../integration";
 import { requireAgent } from "../ledger/workspace";
+import { catalogText } from "../workflows/adapters";
 import type { WorkflowRunner } from "../workflows/runner";
 import { actorOf, requireActor, type AuthDeps } from "./actor";
 
@@ -153,9 +154,9 @@ export function workflowRouter(deps: AuthDeps & { integration?: Integration | un
     res.json({
       workflows: rows.map((w) => ({
         versionId: w.version_id,
-        title: (w.title ?? "Assigned workflow").slice(0, 120),
-        summary: (w.summary ?? "").slice(0, 300),
-        runInputs: ((JSON.parse(w.run_inputs_json ?? "[]") as Array<{ name: string; label: string; maxChars: number }>) ?? []).slice(0, 4).map((i) => ({ name: i.name, label: String(i.label).slice(0, 80), maxChars: i.maxChars })),
+        title: catalogText(w.title, 120) || "Assigned workflow",
+        summary: catalogText(w.summary, 300),
+        runInputs: ((JSON.parse(w.run_inputs_json ?? "[]") as Array<{ name: string; label: string; maxChars: number }>) ?? []).slice(0, 4).map((i) => ({ name: i.name, label: catalogText(i.label, 80) || i.name, maxChars: i.maxChars })),
         total: w.total_usdc === null ? null : w.total_usdc.toString(),
       })),
     });
