@@ -3,6 +3,7 @@ import { lookup } from "node:dns/promises";
 import { request as httpRequest, type IncomingMessage } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { isIP, type LookupFunction } from "node:net";
+import type { Transform } from "node:stream";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 import type { Browser, BrowserContext } from "playwright-core";
 import { isPublicAddress } from "@veilo/mcp-client";
@@ -79,13 +80,37 @@ interface Fetched {
 /**
  * One GET/HEAD with no redirects, where the address check runs in the connection's own DNS
  * lookup: the address checked is the address connected to, so rebinding cannot reach a private
- * host. The decoded body is streamed and refused once it passes MAX_RESPONSE_BYTES.
+ * host. The decoded body is streamed and refused once it passes MAX_RESPONSE_BYTES, and the whole
+ * exchange is bounded by NAV_TIMEOUT_MS and by `signal`, not only by socket idleness.
  */
-export function pinnedFetch(u: URL, method: string, headers: Record<string, string>, allowAddress: (ip: string) => boolean = isPublicAddress): Promise<Fetched> {
+export function pinnedFetch(
+  u: URL,
+  method: string,
+  headers: Record<string, string>,
+  allowAddress: (ip: string) => boolean = isPublicAddress,
+  signal?: AbortSignal,
+): Promise<Fetched> {
   return new Promise((resolve, reject) => {
     const literal = u.hostname.replace(/^\[|\]$/g, "");
     if (isIP(literal) && !allowAddress(literal)) return reject(new Refused("non-public address"));
+    if (signal?.aborted) return reject(new Refused("aborted"));
     const request = u.protocol === "https:" ? httpsRequest : httpRequest;
+    let res: IncomingMessage | undefined;
+    let decoder: Transform | null = null;
+    const settle = () => {
+      clearTimeout(deadline);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const fail = (err: unknown) => {
+      settle();
+      req.destroy();
+      res?.destroy();
+      decoder?.destroy();
+      reject(err);
+    };
+    const onAbort = () => fail(new Refused("aborted"));
+    const deadline = setTimeout(() => fail(new Refused("timed out")), NAV_TIMEOUT_MS);
+    signal?.addEventListener("abort", onAbort, { once: true });
     const req = request(
       u,
       {
@@ -101,36 +126,31 @@ export function pinnedFetch(u: URL, method: string, headers: Record<string, stri
           });
         }) as unknown as LookupFunction,
       },
-      (res: IncomingMessage) => {
-        if (Number(res.headers["content-length"] ?? "0") > MAX_RESPONSE_BYTES) {
-          res.destroy();
-          return reject(new Refused("response too large"));
-        }
+      (incoming: IncomingMessage) => {
+        res = incoming;
+        if (Number(res.headers["content-length"] ?? "0") > MAX_RESPONSE_BYTES) return fail(new Refused("response too large"));
         const encoding = String(res.headers["content-encoding"] ?? "").trim().toLowerCase();
-        const decoder = encoding === "gzip" || encoding === "x-gzip" ? createGunzip() : encoding === "deflate" ? createInflate() : encoding === "br" ? createBrotliDecompress() : null;
+        decoder = encoding === "gzip" || encoding === "x-gzip" ? createGunzip() : encoding === "deflate" ? createInflate() : encoding === "br" ? createBrotliDecompress() : null;
         const stream = decoder ? res.pipe(decoder) : res;
         const chunks: Buffer[] = [];
         let total = 0;
         stream.on("data", (c: Buffer) => {
           total += c.length;
-          if (total > MAX_RESPONSE_BYTES) {
-            res.destroy();
-            decoder?.destroy();
-            return reject(new Refused("response too large"));
-          }
+          if (total > MAX_RESPONSE_BYTES) return fail(new Refused("response too large"));
           chunks.push(c);
         });
-        stream.on("error", reject);
-        res.on("error", reject);
+        stream.on("error", fail);
+        res.on("error", fail);
         stream.on("end", () => {
           const out: Record<string, string> = {};
-          for (const [k, v] of Object.entries(res.headers)) if (v !== undefined && !DROPPED_RESPONSE_HEADERS.has(k)) out[k] = Array.isArray(v) ? v.join(", ") : v;
-          resolve({ status: res.statusCode ?? 502, headers: out, body: Buffer.concat(chunks) });
+          for (const [k, v] of Object.entries(incoming.headers)) if (v !== undefined && !DROPPED_RESPONSE_HEADERS.has(k)) out[k] = Array.isArray(v) ? v.join(", ") : v;
+          settle();
+          resolve({ status: incoming.statusCode ?? 502, headers: out, body: Buffer.concat(chunks) });
         });
       },
     );
-    req.on("timeout", () => req.destroy(new Refused("timed out")));
-    req.on("error", reject);
+    req.on("timeout", () => fail(new Refused("timed out")));
+    req.on("error", fail);
     req.end();
   });
 }
@@ -171,6 +191,8 @@ export class ChromeReader implements PageReader {
     const hosts = new Map<string, boolean>();
     const allowed = (u: URL) => (this.o.allowUrl ? this.o.allowUrl(u) : publicUrl(u, hosts));
     const allowAddress = this.o.allowUrl ? () => true : isPublicAddress;
+    // Cancels fetches still running when the page is done, so none outlive its context.
+    const inflight = new AbortController();
     try {
       await context.routeWebSocket(/.*/, (ws) => ws.close());
       await context.route("**/*", async (route) => {
@@ -188,7 +210,7 @@ export class ChromeReader implements PageReader {
         for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
           let resp: Fetched;
           try {
-            resp = await pinnedFetch(target, req.method(), headers, allowAddress);
+            resp = await pinnedFetch(target, req.method(), headers, allowAddress, inflight.signal);
           } catch (err) {
             return route.abort(err instanceof Refused ? "blockedbyclient" : "failed");
           }
@@ -219,6 +241,7 @@ export class ChromeReader implements PageReader {
       const read = (await page.evaluate(EXTRACT)) as Omit<PageRead, "url">;
       return { url: page.url(), ...read };
     } finally {
+      inflight.abort();
       await context.close().catch(() => undefined);
     }
   }

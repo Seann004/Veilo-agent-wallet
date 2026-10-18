@@ -43,6 +43,13 @@ beforeAll(async () => {
       res.writeHead(200, { "content-encoding": "gzip" });
       return res.end(gzipSync(Buffer.alloc(6 * 1024 * 1024, 97)));
     }
+    if (req.url === "/drip") {
+      // Never finishes: a byte at a time keeps the socket from going idle.
+      res.writeHead(200);
+      const timer = setInterval(() => res.write("a"), 50);
+      res.on("close", () => clearInterval(timer));
+      return;
+    }
     if (req.url === "/gzip") {
       res.writeHead(200, { "content-encoding": "gzip", "content-type": "text/html" });
       return res.end(gzipSync("<html><title>z</title><body>zipped text</body></html>"));
@@ -82,6 +89,13 @@ describe("pinned fetch", () => {
     const ok = await pinnedFetch(new URL(`${base}/gzip`), "GET", {}, any);
     expect(ok.body.toString()).toContain("zipped text");
     expect(ok.headers["content-encoding"]).toBeUndefined();
+  });
+
+  it("ends a response that drips forever when its page is done", async () => {
+    const stop = new AbortController();
+    const pending = pinnedFetch(new URL(`${base}/drip`), "GET", {}, () => true, stop.signal);
+    setTimeout(() => stop.abort(), 300);
+    await expect(pending).rejects.toThrow("aborted");
   });
 });
 
