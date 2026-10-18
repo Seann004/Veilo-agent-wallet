@@ -121,7 +121,7 @@ export function ActivityDrawer({
         {purchase.stateReason ? <p className="small">Reason: {purchase.stateReason}</p> : null}
         <KV
           rows={[
-            ["Payment path", prepaid ? `Prepaid gateway credits — ${LABEL_CREDITS_NO_CHARGE}` : "Private pool → fresh wallet → x402 (USDC)"],
+            ["Payment path", prepaid ? `Prepaid gateway credits: ${LABEL_CREDITS_NO_CHARGE}` : "Private pool → fresh wallet → x402 (USDC)"],
             [
               "Policy result",
               policyEvent
@@ -146,7 +146,7 @@ export function ActivityDrawer({
             <ul className="plain small">
               {attempts.map((a) => (
                 <li key={`${a.leg}-${a.attempt}`}>
-                  {a.leg} #{a.attempt}: {a.commitment} — <TxLink signature={a.signature} />
+                  {a.leg} #{a.attempt}: {a.commitment} <TxLink signature={a.signature} />
                 </li>
               ))}
             </ul>

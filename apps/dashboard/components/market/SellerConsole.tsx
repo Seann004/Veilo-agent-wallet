@@ -400,7 +400,7 @@ function VersionForm({ listingId, d, onCreated }: { listingId: string; d: Seller
             )}
       </fieldset>
       <fieldset className="private-field">
-        <legend>Private — seller-only instructions</legend>
+        <legend>Private seller-only instructions</legend>
         {field(
           "sellerInstructions",
           "Instructions for your runtime (private)",

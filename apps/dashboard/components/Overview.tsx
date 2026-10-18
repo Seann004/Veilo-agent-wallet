@@ -94,7 +94,7 @@ export function Overview() {
       {draftWs ? (
         <div className="notice notice-warn notice-row" role="status">
           <span>
-            <strong>Agents can’t spend yet.</strong> Confirm the workspace limits — {usdc(draftWs.lifetimeTestUsdc)} in total, {usdc(draftWs.rolling24hTestUsdc)} a day — to let them start.
+            <strong>Agents can’t spend yet.</strong> Confirm the workspace limits ({usdc(draftWs.lifetimeTestUsdc)} in total, {usdc(draftWs.rolling24hTestUsdc)} a day) to let them start.
           </span>
           <button
             type="button"

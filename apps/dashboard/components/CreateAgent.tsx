@@ -329,7 +329,7 @@ function CreateAgentForm() {
             <h2 className="panel-title">Review</h2>
             <PolicyReviewGroups policy={effective} workspacePolicy={wsPolicy} title={name} hiring={isCustom ? { allowed: custom.hiring, grants: custom.grants.length } : null} />
             <CreateConnectorsStep picked={connectors} onChange={setConnectors} readOnly />
-            <p className="small muted">Starts switched off — turn it on on the next screen. Connectors can be added later.</p>
+            <p className="small muted">Starts switched off. Turn it on on the next screen. Connectors can be added later.</p>
           </section>
         ) : null}
         <div className="form-footer">

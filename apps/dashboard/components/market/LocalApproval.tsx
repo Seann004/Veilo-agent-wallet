@@ -60,16 +60,16 @@ export interface ListingGrant {
 }
 
 const STATE_LABEL: Record<string, string> = {
-  received: "Received — checking",
+  received: "Received: checking",
   awaiting_approval: "Waiting for your local approval",
-  authorized: "Authorized — payment starting",
+  authorized: "Authorized: payment starting",
   purchasing: "Paying",
-  uncertain: "Payment outcome uncertain — reconciling",
+  uncertain: "Payment outcome uncertain: reconciling",
   paid: "Paid",
-  failed_unpaid: "Failed — nothing was paid",
-  rejected: "Rejected — nothing was paid",
-  evidence_rejected: "Paid — evidence refused, retrying",
-  recoverable: "Unpaid — funds recoverable",
+  failed_unpaid: "Failed: nothing was paid",
+  rejected: "Rejected: nothing was paid",
+  evidence_rejected: "Paid: evidence refused, retrying",
+  recoverable: "Unpaid: funds recoverable",
 };
 
 /**
@@ -346,7 +346,7 @@ export function AgentGrants({ agentId, name }: { agentId: string; name: string }
                 { value: "", label: "Choose a published listing" },
                 ...(catalogue.data?.listings ?? []).map((l) => {
                   const d = m.decimalsFor(l.mint, l.network);
-                  return { value: l.listing_id, label: `${l.title} — ${l.seller_name} (${d === null ? `${String(l.price_base_units)} base units` : `${formatUnits(l.price_base_units, d)} USDC`})` };
+                  return { value: l.listing_id, label: `${l.title} · ${l.seller_name} (${d === null ? `${String(l.price_base_units)} base units` : `${formatUnits(l.price_base_units, d)} USDC`})` };
                 }),
               ]}
               onChange={setListingId}

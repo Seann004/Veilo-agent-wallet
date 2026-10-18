@@ -180,7 +180,7 @@ function Wizard() {
             {steps.map((s, i) => (
               <li key={i} className="chain-step">
                 <p className="chain-title">
-                  Step {i + 1}: <PlainText text={s.tool.title} inline /> <span className={BADGE_CLASS[s.tool.badge]}>{BADGE_LABEL[s.tool.badge]}</span> — max{" "}
+                  Step {i + 1}: <PlainText text={s.tool.title} inline /> <span className={BADGE_CLASS[s.tool.badge]}>{BADGE_LABEL[s.tool.badge]}</span>, max{" "}
                   <Money amount={s.tool.priceBaseUnits} decimals={decimals} />
                 </p>
                 {s.tool.io.inputs.map((want) => {
@@ -238,7 +238,7 @@ function Wizard() {
                 id={`${id}-add`}
                 label="Add a step from the tool library"
                 value=""
-                options={[{ value: "", label: "Choose a tool" }, ...usable.map((t) => ({ value: `${t.toolKind}:${t.toolId}`, label: `${t.title} — ${BADGE_LABEL[t.badge]}` }))]}
+                options={[{ value: "", label: "Choose a tool" }, ...usable.map((t) => ({ value: `${t.toolKind}:${t.toolId}`, label: `${t.title} · ${BADGE_LABEL[t.badge]}` }))]}
                 onChange={(v) => {
                   const t = usable.find((x) => `${x.toolKind}:${x.toolId}` === v);
                   if (t) setSteps([...steps, { tool: t, inputs: {} }]);

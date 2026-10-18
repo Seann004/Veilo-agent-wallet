@@ -20,7 +20,7 @@ export function NetworkStatus({ health, healthError, workspace }: { health: Heal
   else if (health.chain.state === "verified") {
     const id = health.chain.identity;
     ok = id.genesisHash === DEVNET_GENESIS && (!workspace || (workspace.mint === id.mint && workspace.network === id.caip2));
-    status = ok ? "Live on Solana devnet" : "Solana devnet · network or mint mismatch — payments refused";
+    status = ok ? "Live on Solana devnet" : "Solana devnet · network or mint mismatch, payments refused";
     title = `Verified devnet · mint ${shortKey(id.mint)}`;
   } else if (health.chain.state === "unavailable") status = "Solana devnet · network not confirmed: devnet RPC unavailable";
   else status = "Solana devnet · network check pending";

@@ -77,7 +77,7 @@ export const BADGE_LABEL: Record<ToolEntry["badge"], string> = {
   approved: "Approved",
   in_review: "In review",
   provider_not_configured: "Provider not configured",
-  manifest_changed: "Manifest changed — disabled",
+  manifest_changed: "Manifest changed: disabled",
   suspended: "Suspended",
 };
 
@@ -166,12 +166,12 @@ export function runHeadline(r: Pick<LocalRun, "status" | "waiting">): RunHeadlin
 
 export const RUN_STATUS_LABEL: Record<LocalRun["status"], string> = {
   awaiting_approval: "Waiting for your local approval",
-  approved: "Approved — starting",
+  approved: "Approved: starting",
   running: "Running",
-  halted: "Halted — needs a fresh approval",
-  failed: "Stopped — later steps were not bought",
+  halted: "Halted: needs a fresh approval",
+  failed: "Stopped: later steps were not bought",
   completed: "Completed",
-  rejected: "Rejected — nothing was paid",
+  rejected: "Rejected: nothing was paid",
 };
 
 /** Agents a workflow run can be charged to: switched on, with an active policy that allows hiring. */

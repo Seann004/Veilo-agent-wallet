@@ -230,7 +230,7 @@ describe("create a custom agent", () => {
     renderCreate();
     await fillCustom(user);
     await user.click(screen.getByLabelText("Allow this agent to hire specialists from the marketplace"));
-    await pick(user, "Listing", "Research desk — Desk");
+    await pick(user, "Listing", "Research desk · Desk");
     await user.type(screen.getByLabelText("Maximum total per hire"), "0.3");
     await user.click(screen.getByRole("button", { name: "Pre-approve listing" }));
     await submitTwice(user);
@@ -262,7 +262,7 @@ describe("create a custom agent", () => {
     renderCreate();
     await fillCustom(user);
     await user.click(screen.getByLabelText("Allow this agent to hire specialists from the marketplace"));
-    await pick(user, "Listing", "Research desk — Desk");
+    await pick(user, "Listing", "Research desk · Desk");
     await user.type(screen.getByLabelText("Maximum total per hire"), "0.3");
     await user.click(screen.getByRole("button", { name: "Pre-approve listing" }));
     await submitTwice(user);

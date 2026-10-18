@@ -82,7 +82,7 @@ export function MarketAccountBar() {
         <div className="notice notice-warn" role="alert">
           <strong>Wallet switched.</strong> Your wallet is now on <Address value={m.mismatch} />, but this marketplace session belongs to{" "}
           <Address value={m.me.address} />. Hiring, approvals and seller actions are paused. Switch the wallet back, or sign in again for the new
-          address — the session is never moved to it automatically.
+          address. The session never moves to it automatically.
           {walletButtons("Sign in again with")}
         </div>
       ) : null}

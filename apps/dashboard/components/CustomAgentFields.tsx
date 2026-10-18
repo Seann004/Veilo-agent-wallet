@@ -158,7 +158,7 @@ function GrantDraftPicker({ grants, onChange }: { grants: GrantDraft[]; onChange
             id={ids.listing}
             label="Listing"
             value={listingId}
-            options={[{ value: "", label: "Choose a published listing" }, ...(catalogue.data?.listings ?? []).map((l) => ({ value: l.listing_id, label: `${l.title} — ${l.seller_name}` }))]}
+            options={[{ value: "", label: "Choose a published listing" }, ...(catalogue.data?.listings ?? []).map((l) => ({ value: l.listing_id, label: `${l.title} · ${l.seller_name}` }))]}
             onChange={setListingId}
           />
         </div>

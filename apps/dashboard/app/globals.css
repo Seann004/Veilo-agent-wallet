@@ -689,6 +689,11 @@ h3 {
   text-decoration: none;
   cursor: pointer;
   white-space: nowrap;
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1), background-color 120ms ease, border-color 120ms ease;
+}
+
+.btn:active:not(:disabled):not([aria-disabled="true"]) {
+  transform: scale(0.97);
 }
 
 .btn:hover:not(:disabled) {
@@ -910,8 +915,14 @@ input[type="checkbox"] {
 }
 
 .hint {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  max-width: 62ch;
   color: var(--ink-2);
+}
+
+p.small.muted {
+  max-width: 68ch;
 }
 
 fieldset {

@@ -68,7 +68,7 @@ export function legStateLabel(state: string): string {
     case "submitted":
     case "signed":
     case "proof_released":
-      return `${state.replace(/_/g, " ")} — ${LABEL_WAITING}`;
+      return `${state.replace(/_/g, " ")}: ${LABEL_WAITING}`;
     case "paid_without_result":
       return LABEL_PAID_NO_RESULT;
     case "not_required":

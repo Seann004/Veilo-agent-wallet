@@ -58,7 +58,7 @@ describe("owner-facing labels", () => {
     expect(within(dialog).getByText(LABEL_STOPPED_AUTHORIZED)).toBeTruthy();
     expect(within(dialog).getByText("Funding (pool withdrawal to fresh wallet)")).toBeTruthy();
     expect(within(dialog).getByText("Merchant (x402 settlement)")).toBeTruthy();
-    expect(within(dialog).getByText(`submitted — ${LABEL_WAITING}`)).toBeTruthy();
+    expect(within(dialog).getByText(`submitted: ${LABEL_WAITING}`)).toBeTruthy();
     const links = within(dialog).getAllByRole("link").map((a) => a.getAttribute("href"));
     expect(links.some((h) => h?.startsWith("https://explorer.solana.com/tx/FundSig") && h.endsWith("?cluster=devnet"))).toBe(true);
     expect(links.some((h) => h?.startsWith("https://explorer.solana.com/tx/MerchSig") && h.endsWith("?cluster=devnet"))).toBe(true);

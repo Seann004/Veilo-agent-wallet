@@ -258,7 +258,7 @@ describe("job state presenter", () => {
   it("shows a settled but failed job as paid and failed with a refund path", () => {
     const p = presentJob({ state: "failed", financial_state: "settled" });
     expect(p.execution).toMatchObject({ text: "Failed", tone: "problem" });
-    expect(p.financial).toMatchObject({ text: "Paid — settled on chain", tone: "ok" });
+    expect(p.financial).toMatchObject({ text: "Paid: settled on chain", tone: "ok" });
     expect(p.paid).toBe(true);
     expect(p.paidWithoutResult).toBe(true);
     expect(p.notes.join(" ")).toMatch(/Paid; result unavailable.*refund/);
@@ -277,7 +277,7 @@ describe("job state presenter", () => {
   it("renders the two indicators as separate list items", () => {
     render(<JobStates p={presentJob({ state: "failed", financial_state: "settled" })} />);
     const items = within(screen.getByRole("list", { name: "Execution and payment states" })).getAllByRole("listitem");
-    expect(items.map((li) => li.textContent)).toEqual([expect.stringContaining("Failed"), expect.stringContaining("Paid — settled on chain")]);
+    expect(items.map((li) => li.textContent)).toEqual([expect.stringContaining("Failed"), expect.stringContaining("Paid: settled on chain")]);
   });
 });
 
@@ -366,7 +366,7 @@ describe("untrusted content", () => {
     expect(screen.getAllByText(HOSTILE).length).toBe(3);
     const states = within(screen.getByRole("list", { name: "Execution and payment states" })).getAllByRole("listitem");
     expect(states[0]!.textContent).toContain("Failed");
-    expect(states[1]!.textContent).toContain("Paid — settled on chain");
+    expect(states[1]!.textContent).toContain("Paid: settled on chain");
     expect(screen.getByRole("heading", { name: "Request a refund" })).toBeTruthy();
     expect(screen.getAllByText(/Solana devnet · USDC/).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /opens Solana devnet explorer/ }).getAttribute("href")).toContain("cluster=devnet");

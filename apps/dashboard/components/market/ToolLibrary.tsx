@@ -86,7 +86,7 @@ function Connectors() {
       <ul>
         {(res.data?.connectors ?? []).map((c) => (
           <li key={c.id}>
-            <PlainText text={c.title} inline /> — <span className="mono">{c.endpoint}</span>: {c.tools.map((t) => t.name).join(", ")}
+            <PlainText text={c.title} inline /> · <span className="mono">{c.endpoint}</span>: {c.tools.map((t) => t.name).join(", ")}
           </li>
         ))}
       </ul>
