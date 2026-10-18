@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MarketContextProvider, type MarketContextValue } from "../components/market/MarketContext";
 import { MarketHome } from "../components/market/MarketHome";
-import { WorkflowRunView } from "../components/market/WorkflowRuns";
+import { WorkflowRunList, WorkflowRunView } from "../components/market/WorkflowRuns";
+import { partitionRuns, plainReason, stepTitles } from "../lib/market/workflows";
 import { matchRoute } from "../lib/server/proxy";
 import type { LocalRun, WorkflowEntry } from "../lib/market/workflows";
 
@@ -160,6 +161,68 @@ describe("workflow run progress", () => {
     const pills = [...document.querySelectorAll(".timeline-step .pill")].map((p) => p.textContent);
     expect(pills).toEqual(["Delivered", "Getting a quote", "Not started"]);
     expect(screen.getByRole("button", { name: "Refresh" })).toBeTruthy();
+  });
+});
+
+function localRun(id: string, status: LocalRun["status"], extra: Partial<LocalRun> = {}): LocalRun {
+  return {
+    id,
+    cloudRunId: "c",
+    workflowVersionId: "10000000-0000-4000-8000-000000000001",
+    agentId: "a",
+    status,
+    isTest: false,
+    requestedBy: "agent",
+    approvedBy: null,
+    approvalDigest: "a".repeat(64),
+    terms: { steps: [], totalMaxBaseUnits: "230000", network: NETWORK, mint: MINT },
+    total: { amount: "230000", unit: "usdc_base_units" },
+    stop: null,
+    steps: [],
+    ...extra,
+  };
+}
+
+describe("workflow run readability", () => {
+  it("shows USDC amounts, catalogue step titles and reasons without error-code prefixes", async () => {
+    const step = (i: number): LocalRun["steps"][number] => ({
+      index: i, toolKind: "listing", toolId: `t${i}`, recipient: RECIPIENT, max: i === 0 ? "3000" : "10000", state: i === 0 ? "failed" : "not_run", payment: "not_paid", execution: i === 0 ? "failed" : "not_run", paid: null, jobId: null, purchaseId: null, fundingSignature: null, merchantSignatures: [], artifact: null,
+      stop: i === 0 ? { code: "SERVICE_NOT_ALLOWED", reason: "SERVICE_NOT_ALLOWED: hire not created: no approved workflow run matches" } : null,
+    });
+    const run = localRun("20000000-0000-4000-8000-000000000003", "failed", { total: { amount: "13000", unit: "usdc_base_units" }, stop: { code: "SERVICE_NOT_ALLOWED", reason: "SERVICE_NOT_ALLOWED: hire not created: no approved workflow run matches" }, steps: [step(0), step(1)] });
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => (String(url).includes("/marketplace/workflows") ? Response.json({ workflows: [workflow(1)] }) : Response.json({ run }))));
+    render(withMarket(<WorkflowRunView runId={run.id} />));
+    expect(await screen.findByText("Paid RPC")).toBeTruthy();
+    expect(screen.getByText("Brief writer")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Token brief 1");
+    expect(document.body.textContent).toContain("0.013 USDC");
+    expect(document.body.textContent).not.toContain("base units (token decimals");
+    expect(document.body.textContent).not.toContain("Marketplace tool");
+    expect(screen.getAllByText("Hire not created: no approved workflow run matches").length).toBeGreaterThan(0);
+    expect(document.querySelector(".run-reason")?.textContent).not.toContain("SERVICE_NOT_ALLOWED");
+  });
+
+  it("hides older failed runs by default and shows them again on request", async () => {
+    const runs = [localRun("20000000-0000-4000-8000-00000000000a", "failed"), localRun("20000000-0000-4000-8000-00000000000b", "completed"), localRun("20000000-0000-4000-8000-00000000000c", "rejected"), localRun("20000000-0000-4000-8000-00000000000d", "failed")];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => (String(url).includes("/marketplace/workflows") ? Response.json({ workflows: [] }) : Response.json({ runs }))));
+    render(withMarket(<WorkflowRunList />));
+    const toggle = (await screen.findByLabelText(/Hide failed runs/)) as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+    expect(within(screen.getByRole("list", { name: "Workflow runs" })).getAllByRole("listitem")).toHaveLength(2);
+    expect(document.body.textContent).toContain("0.23 USDC");
+    fireEvent.click(toggle);
+    const items = within(screen.getByRole("list", { name: "Workflow runs" })).getAllByRole("listitem");
+    expect(items).toHaveLength(4);
+    expect(items.filter((li) => li.className === "muted")).toHaveLength(2);
+  });
+
+  it("helpers: plain reasons, run partition and step title fallback", () => {
+    expect(plainReason("NOT_READY: PRICE_CHANGED: step 0 price differs")).toEqual({ text: "Step 0 price differs", codes: ["NOT_READY", "PRICE_CHANGED"] });
+    expect(plainReason("Waiting for funds.")).toEqual({ text: "Waiting for funds.", codes: [] });
+    const p = partitionRuns([{ status: "failed" as const }, { status: "running" as const }, { status: "failed" as const }], true);
+    expect(p.shown.map((r) => r.status)).toEqual(["failed", "running"]);
+    expect(p.olderFailed).toHaveLength(1);
+    expect(stepTitles(undefined, 2)).toEqual(["Step 1", "Step 2"]);
   });
 });
 

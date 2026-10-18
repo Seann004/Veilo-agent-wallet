@@ -178,3 +178,40 @@ export const RUN_STATUS_LABEL: Record<LocalRun["status"], string> = {
 export function hiringAgents(agents: readonly Agent[]): Agent[] {
   return agents.filter((a) => a.status === "active" && (a.activePolicy?.permissions?.allowedSkus ?? []).includes("specialist-job"));
 }
+
+/**
+ * A stop or wait reason without its leading error codes ("SERVICE_NOT_ALLOWED: hire not created: …"
+ * reads "Hire not created: …"). The codes are returned separately for a tooltip or technical details.
+ */
+export function plainReason(text: string | null | undefined): { text: string; codes: string[] } {
+  let rest = (text ?? "").trim();
+  const codes: string[] = [];
+  for (let m = /^([A-Z][A-Z0-9_]{2,}):\s*/.exec(rest); m; m = /^([A-Z][A-Z0-9_]{2,}):\s*/.exec(rest)) {
+    codes.push(m[1] as string);
+    rest = rest.slice(m[0].length);
+  }
+  return { text: rest.charAt(0).toUpperCase() + rest.slice(1), codes };
+}
+
+const isFailedRun = (r: Pick<LocalRun, "status">) => r.status === "failed" || r.status === "rejected";
+
+/**
+ * Splits newest-first runs into those to show and the failed or rejected runs older than the
+ * newest run that succeeded or is still active. Nothing is deleted; hidden runs stay one click away.
+ */
+export function partitionRuns<T extends Pick<LocalRun, "status">>(runs: readonly T[], hideOldFailed: boolean): { shown: T[]; olderFailed: T[] } {
+  const newestGood = runs.findIndex((r) => !isFailedRun(r));
+  if (newestGood < 0) return { shown: [...runs], olderFailed: [] };
+  const olderFailed = runs.filter((r, i) => i > newestGood && isFailedRun(r));
+  return { shown: hideOldFailed ? runs.filter((r) => !olderFailed.includes(r)) : [...runs], olderFailed };
+}
+
+/** Step titles of a catalogued workflow version; a missing title reads "Step N". */
+export function stepTitles(entry: Pick<WorkflowEntry, "steps"> | undefined, count: number): string[] {
+  return Array.from({ length: count }, (_, i) => entry?.steps[i]?.title?.trim() || `Step ${i + 1}`);
+}
+
+/** Agents that can be given a workflow: custom agents that are on and allowed to hire. */
+export function workflowAgents(agents: readonly Agent[]): Agent[] {
+  return hiringAgents(agents).filter((a) => a.role === "custom");
+}

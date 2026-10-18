@@ -54,6 +54,11 @@ export function useMarket(): MarketContextValue {
   return v;
 }
 
+/** The surrounding marketplace context, or null outside one. */
+export function useOptionalMarket(): MarketContextValue | null {
+  return useContext(MarketContext);
+}
+
 /** Uses the surrounding marketplace context when there is one; pages outside /marketplace get their own. */
 export function EnsureMarket({ children }: { children: ReactNode }) {
   return useContext(MarketContext) ? <>{children}</> : <MarketProvider>{children}</MarketProvider>;
