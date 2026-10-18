@@ -97,22 +97,35 @@ export class SwapService {
     const usdcAcct = await this.c.chain.account(freshUsdc);
     if (!usdcAcct) throw new RelayerError("NOT_READY", "fresh wallet USDC account not found");
     const wsolRent = await this.c.chain.rentExemptMinimum(TOKEN_ACCOUNT_SIZE);
-    const totals = sponsorTotals(this.c.db);
-    if (totals.feesSpent + totals.rentOutstanding + wsolRent + 2n * LAMPORTS_PER_SIGNATURE > this.c.sponsorCapLamports) {
-      throw new RelayerError("BUDGET_EXCEEDED", "sponsor lamport allowance exhausted");
-    }
+    this.#assertWithinCap(wsolRent);
 
     const blockhash = (msg.lifetimeToken as string) ?? "";
     const signed = await sponsorCosign(sponsor, tx, { blockhash, lastValidBlockHeight: BigInt(req.lastValidBlockHeight) });
     const now = Date.now();
-    this.c.db
-      .prepare(
-        `INSERT INTO swap (id, fresh_wallet, destination, signature, blockhash, last_valid_block_height, wsol_rent_lamports, usdc_rent_lamports, state, created_at_ms, updated_at_ms)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?)`,
-      )
-      .run(req.swapId, fresh, req.destination, signed.signature, blockhash, BigInt(req.lastValidBlockHeight), wsolRent, usdcAcct.lamports, now, now);
+    // Rechecked and recorded in one synchronous transaction, so concurrent swaps cannot both fit.
+    this.c.db.transaction(() => {
+      this.#assertWithinCap(wsolRent);
+      this.c.db
+        .prepare(
+          `INSERT INTO swap (id, fresh_wallet, destination, signature, blockhash, last_valid_block_height, wsol_rent_lamports, usdc_rent_lamports, state, created_at_ms, updated_at_ms)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?)`,
+        )
+        .run(req.swapId, fresh, req.destination, signed.signature, blockhash, BigInt(req.lastValidBlockHeight), wsolRent, usdcAcct.lamports, now, now);
+    })();
     await this.c.chain.send(signed.wire).catch(() => undefined);
     return this.view(req.swapId)!;
+  }
+
+  /** Counts swaps still in flight at their worst case (wSOL rent kept, two signature fees). */
+  #assertWithinCap(wsolRent: bigint): void {
+    const totals = sponsorTotals(this.c.db);
+    const inFlight = this.c.db
+      .prepare(`SELECT COALESCE(SUM(wsol_rent_lamports), 0) AS rent, COUNT(*) AS n FROM swap WHERE state = 'submitted'`)
+      .get() as { rent: bigint; n: bigint };
+    const pending = BigInt(inFlight.rent) + BigInt(inFlight.n) * 2n * LAMPORTS_PER_SIGNATURE;
+    if (totals.feesSpent + totals.rentOutstanding + pending + wsolRent + 2n * LAMPORTS_PER_SIGNATURE > this.c.sponsorCapLamports) {
+      throw new RelayerError("BUDGET_EXCEEDED", "sponsor lamport allowance exhausted");
+    }
   }
 
   async advance(id: string): Promise<void> {

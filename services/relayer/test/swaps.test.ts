@@ -128,4 +128,20 @@ describe("devnet swap co-signing", () => {
     await expect(svc.submit({ swapId: id(), transaction: s.wire, lastValidBlockHeight: "10", freshWallet: s.fresh, destination: dest })).rejects.toMatchObject({ code: "BUDGET_EXCEEDED" });
     expect(chain.sent).toHaveLength(0);
   });
+
+  it("counts swaps still in flight, so concurrent swaps cannot each fit the same allowance", async () => {
+    const probe = await setup();
+    const rent = await probe.chain.rentExemptMinimum(165);
+    const { sponsor, m, chain, svc } = await setup(rent + 2n * 5_000n + 1n);
+    const dest = randomAddress();
+    const req = async () => {
+      const s = await swapTx(sponsor, m, dest);
+      chain.accounts.set(s.freshUsdc, { data: new Uint8Array(165), lamports: 2_039_280n, owner: "Tokenkeg", executable: false });
+      return { swapId: id(), transaction: s.wire, lastValidBlockHeight: "10", freshWallet: s.fresh, destination: dest };
+    };
+    const [a, b] = await Promise.allSettled([svc.submit(await req()), svc.submit(await req())]);
+    expect([a.status, b.status].sort()).toEqual(["fulfilled", "rejected"]);
+    expect(chain.sent).toHaveLength(1);
+    await expect(svc.submit(await req())).rejects.toMatchObject({ code: "BUDGET_EXCEEDED" });
+  });
 });
