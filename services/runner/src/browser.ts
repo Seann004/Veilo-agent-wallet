@@ -1,5 +1,9 @@
+import { lookup as dnsLookup } from "node:dns";
 import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
+import { request as httpRequest, type IncomingMessage } from "node:http";
+import { request as httpsRequest } from "node:https";
+import { isIP, type LookupFunction } from "node:net";
+import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 import type { Browser, BrowserContext } from "playwright-core";
 import { isPublicAddress } from "@veilo/mcp-client";
 
@@ -23,6 +27,10 @@ const MAX_REDIRECTS = 5;
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
 /** Reading text needs documents, scripts, styles and data; everything heavier is refused. */
 const SKIPPED_TYPES = new Set(["image", "media", "font", "manifest", "texttrack", "eventsource", "websocket", "other"]);
+/** Only these page request headers are forwarded; cookies and custom headers are dropped. */
+const FORWARDED_HEADERS = ["accept", "accept-language", "referer", "user-agent"];
+/** Headers that describe the transfer, not the decoded body handed to the page. */
+const DROPPED_RESPONSE_HEADERS = new Set(["content-encoding", "content-length", "transfer-encoding", "connection", "set-cookie"]);
 
 // Runs in the page: visible text and outgoing http(s) links only.
 const EXTRACT = `(() => {
@@ -60,13 +68,79 @@ export async function publicUrl(u: URL, cache: Map<string, boolean> = new Map())
   return ok;
 }
 
+class Refused extends Error {}
+
+interface Fetched {
+  status: number;
+  headers: Record<string, string>;
+  body: Buffer;
+}
+
 /**
- * Read-only browsing in a fresh, cookie-less Chrome context per page. Every request is fetched
- * here and checked against publicUrl; redirects are followed here hop by hop (at most five, each
- * checked), heavy resource types and responses over 5 MB are refused, WebSockets are closed,
- * downloads are off, and nothing is typed or submitted. The final page URL is checked again.
- * DNS is resolved separately for the check and for the fetch, so a rebinding window remains;
- * browsing is therefore opt-in per agent and bounded per task by control.
+ * One GET/HEAD with no redirects, where the address check runs in the connection's own DNS
+ * lookup: the address checked is the address connected to, so rebinding cannot reach a private
+ * host. The decoded body is streamed and refused once it passes MAX_RESPONSE_BYTES.
+ */
+export function pinnedFetch(u: URL, method: string, headers: Record<string, string>, allowAddress: (ip: string) => boolean = isPublicAddress): Promise<Fetched> {
+  return new Promise((resolve, reject) => {
+    const literal = u.hostname.replace(/^\[|\]$/g, "");
+    if (isIP(literal) && !allowAddress(literal)) return reject(new Refused("non-public address"));
+    const request = u.protocol === "https:" ? httpsRequest : httpRequest;
+    const req = request(
+      u,
+      {
+        method,
+        headers: { ...headers, "accept-encoding": "gzip, deflate, br" },
+        timeout: NAV_TIMEOUT_MS,
+        lookup: ((host: string, opts: { all?: boolean }, cb: (err: Error | null, address: unknown, family?: number) => void) => {
+          dnsLookup(host, { all: true }, (err, addrs) => {
+            if (err) return cb(err, opts.all ? [] : "", 4);
+            if (addrs.length === 0 || addrs.some((a) => !allowAddress(a.address))) return cb(new Refused("non-public address"), opts.all ? [] : "", 4);
+            if (opts.all) cb(null, addrs);
+            else cb(null, addrs[0]!.address, addrs[0]!.family);
+          });
+        }) as unknown as LookupFunction,
+      },
+      (res: IncomingMessage) => {
+        if (Number(res.headers["content-length"] ?? "0") > MAX_RESPONSE_BYTES) {
+          res.destroy();
+          return reject(new Refused("response too large"));
+        }
+        const encoding = String(res.headers["content-encoding"] ?? "").trim().toLowerCase();
+        const decoder = encoding === "gzip" || encoding === "x-gzip" ? createGunzip() : encoding === "deflate" ? createInflate() : encoding === "br" ? createBrotliDecompress() : null;
+        const stream = decoder ? res.pipe(decoder) : res;
+        const chunks: Buffer[] = [];
+        let total = 0;
+        stream.on("data", (c: Buffer) => {
+          total += c.length;
+          if (total > MAX_RESPONSE_BYTES) {
+            res.destroy();
+            decoder?.destroy();
+            return reject(new Refused("response too large"));
+          }
+          chunks.push(c);
+        });
+        stream.on("error", reject);
+        res.on("error", reject);
+        stream.on("end", () => {
+          const out: Record<string, string> = {};
+          for (const [k, v] of Object.entries(res.headers)) if (v !== undefined && !DROPPED_RESPONSE_HEADERS.has(k)) out[k] = Array.isArray(v) ? v.join(", ") : v;
+          resolve({ status: res.statusCode ?? 502, headers: out, body: Buffer.concat(chunks) });
+        });
+      },
+    );
+    req.on("timeout", () => req.destroy(new Refused("timed out")));
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+/**
+ * Read-only browsing in a fresh, cookie-less Chrome context per page. Every request is checked
+ * against publicUrl and then fetched by pinnedFetch, whose connection refuses non-public
+ * addresses; redirects are followed here hop by hop (at most five, each checked), heavy resource
+ * types and responses over 5 MB are refused, WebSockets are closed, non-proxied WebRTC UDP is
+ * disabled, downloads are off, and nothing is typed or submitted.
  */
 export class ChromeReader implements PageReader {
   #browser: Promise<Browser> | null = null;
@@ -75,7 +149,7 @@ export class ChromeReader implements PageReader {
     private readonly o: {
       executablePath?: string | undefined;
       channel?: string | undefined;
-      /** Tests only: replaces the public-URL rule. */
+      /** Tests only: replaces the public-URL rule and the connect-time public-address rule. */
       allowUrl?: (u: URL) => Promise<boolean>;
     } = {},
   ) {}
@@ -85,7 +159,7 @@ export class ChromeReader implements PageReader {
       chromium.launch({
         headless: true,
         ...(this.o.executablePath ? { executablePath: this.o.executablePath } : { channel: this.o.channel ?? "chrome" }),
-        args: ["--disable-extensions", "--disable-background-networking", "--no-first-run", "--disable-sync"],
+        args: ["--disable-extensions", "--disable-background-networking", "--no-first-run", "--disable-sync", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"],
       }),
     );
     return this.#browser;
@@ -96,6 +170,7 @@ export class ChromeReader implements PageReader {
     const context: BrowserContext = await browser.newContext({ acceptDownloads: false, javaScriptEnabled: true, serviceWorkers: "block", userAgent: "VeiloAgent/1.0 (read-only)" });
     const hosts = new Map<string, boolean>();
     const allowed = (u: URL) => (this.o.allowUrl ? this.o.allowUrl(u) : publicUrl(u, hosts));
+    const allowAddress = this.o.allowUrl ? () => true : isPublicAddress;
     try {
       await context.routeWebSocket(/.*/, (ws) => ws.close());
       await context.route("**/*", async (route) => {
@@ -108,18 +183,19 @@ export class ChromeReader implements PageReader {
         }
         if ((req.method() !== "GET" && req.method() !== "HEAD") || SKIPPED_TYPES.has(req.resourceType()) || !(await allowed(u))) return route.abort("blockedbyclient");
         // Redirects are followed here, one checked hop at a time; the browser only ever sees the final response.
+        const headers = Object.fromEntries(FORWARDED_HEADERS.flatMap((k) => (req.headers()[k] ? [[k, req.headers()[k]!]] : [])));
         let target = u;
         for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-          let resp;
+          let resp: Fetched;
           try {
-            resp = await route.fetch({ url: target.toString(), maxRedirects: 0, timeout: NAV_TIMEOUT_MS });
-          } catch {
-            return route.abort("failed");
+            resp = await pinnedFetch(target, req.method(), headers, allowAddress);
+          } catch (err) {
+            return route.abort(err instanceof Refused ? "blockedbyclient" : "failed");
           }
-          if (resp.status() >= 300 && resp.status() < 400) {
+          if (resp.status >= 300 && resp.status < 400) {
             let next: URL | null;
             try {
-              next = resp.headers()["location"] ? new URL(resp.headers()["location"]!, target) : null;
+              next = resp.headers["location"] ? new URL(resp.headers["location"], target) : null;
             } catch {
               next = null;
             }
@@ -127,9 +203,7 @@ export class ChromeReader implements PageReader {
             target = next;
             continue;
           }
-          const declared = Number(resp.headers()["content-length"] ?? "0");
-          if (declared > MAX_RESPONSE_BYTES || (await resp.body()).length > MAX_RESPONSE_BYTES) return route.abort("blockedbyclient");
-          return route.fulfill({ response: resp });
+          return route.fulfill({ status: resp.status, headers: resp.headers, body: resp.body });
         }
         return route.abort("blockedbyclient");
       });

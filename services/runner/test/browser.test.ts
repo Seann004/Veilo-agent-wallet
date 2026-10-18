@@ -1,8 +1,9 @@
 import { existsSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { gzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ChromeReader, publicUrl } from "../src/browser";
+import { ChromeReader, pinnedFetch, publicUrl } from "../src/browser";
 
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 let server: Server;
@@ -32,6 +33,20 @@ beforeAll(async () => {
       res.writeHead(302, { location: "/loop" });
       return res.end();
     }
+    if (req.url === "/big") {
+      // No content-length: the cap has to hold while streaming.
+      const chunk = Buffer.alloc(1024 * 1024, 97);
+      for (let i = 0; i < 6; i += 1) res.write(chunk);
+      return res.end();
+    }
+    if (req.url === "/gzip-bomb") {
+      res.writeHead(200, { "content-encoding": "gzip" });
+      return res.end(gzipSync(Buffer.alloc(6 * 1024 * 1024, 97)));
+    }
+    if (req.url === "/gzip") {
+      res.writeHead(200, { "content-encoding": "gzip", "content-type": "text/html" });
+      return res.end(gzipSync("<html><title>z</title><body>zipped text</body></html>"));
+    }
     if (req.url === "/ws-page") {
       return res.end(`<html><title>ws</title><body>page<script>
         const ws = new WebSocket("ws://127.0.0.1:1/x"); ws.onopen = () => { document.body.innerText = "socket opened"; };
@@ -50,6 +65,23 @@ describe("public URL rule", () => {
       expect(await publicUrl(new URL(bad)), bad).toBe(false);
     }
     expect(await publicUrl(new URL("https://1.1.1.1/"))).toBe(true);
+  });
+});
+
+describe("pinned fetch", () => {
+  it("checks the connected address, so a name resolving to loopback is refused at connect time", async () => {
+    const port = new URL(base).port;
+    await expect(pinnedFetch(new URL(`http://localhost:${port}/`), "GET", {})).rejects.toThrow("non-public address");
+    await expect(pinnedFetch(new URL(`${base}/`), "GET", {})).rejects.toThrow("non-public address");
+  });
+
+  it("bounds the decoded body while streaming and decodes gzip", async () => {
+    const any = () => true;
+    await expect(pinnedFetch(new URL(`${base}/big`), "GET", {}, any)).rejects.toThrow("too large");
+    await expect(pinnedFetch(new URL(`${base}/gzip-bomb`), "GET", {}, any)).rejects.toThrow("too large");
+    const ok = await pinnedFetch(new URL(`${base}/gzip`), "GET", {}, any);
+    expect(ok.body.toString()).toContain("zipped text");
+    expect(ok.headers["content-encoding"]).toBeUndefined();
   });
 });
 
