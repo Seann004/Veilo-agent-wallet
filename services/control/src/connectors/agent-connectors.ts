@@ -35,6 +35,8 @@ interface PinnedTool {
   name: string;
   sha256: string;
   inputSchema: Record<string, unknown>;
+  /** The approved description covered by the digest; attachments made before it was kept have none. */
+  description?: string;
 }
 
 interface AttachmentRow {
@@ -117,14 +119,17 @@ export class AgentConnectors {
     };
   }
 
-  /** What the runner may call: tool names and input schemas only, never endpoints. */
-  workerList(agent: AgentRow): { label: string; connectors: Array<{ connectorId: string; status: string; tools: Array<{ name: string; inputSchema: Record<string, unknown> }> }> } {
+  /** What the runner may call: tool names, approved descriptions and input schemas only, never endpoints. */
+  workerList(agent: AgentRow): {
+    label: string;
+    connectors: Array<{ connectorId: string; status: string; tools: Array<{ name: string; description?: string; inputSchema: Record<string, unknown> }> }>;
+  } {
     return {
       label: CONNECTOR_LABEL,
       connectors: this.#rows(agent.id).map((r) => ({
         connectorId: r.connector_id,
         status: r.status,
-        tools: (JSON.parse(r.tools_json) as PinnedTool[]).map((t) => ({ name: t.name, inputSchema: t.inputSchema })),
+        tools: (JSON.parse(r.tools_json) as PinnedTool[]).map((t) => ({ name: t.name, ...(typeof t.description === "string" ? { description: t.description } : {}), inputSchema: t.inputSchema })),
       })),
     };
   }
@@ -154,7 +159,7 @@ export class AgentConnectors {
       if (!t) throw new ControlError("INVALID_REQUEST", `tool ${name} is not in the approved connector`);
       const parsed = mcpToolPinSchema.safeParse({ name: t.name, description: t.description, inputSchema: t.inputSchema });
       if (!parsed.success || mcpToolDigest(parsed.data) !== t.sha256) throw new ControlError("SERVICE_NOT_ALLOWED", `tool ${name} does not match its approved digest`);
-      return { name: t.name, sha256: t.sha256, inputSchema: t.inputSchema };
+      return { name: t.name, sha256: t.sha256, inputSchema: t.inputSchema, description: parsed.data.description.slice(0, 1_000) };
     });
     immediate(ledger.db, () => {
       const agent = assertAttachable();

@@ -169,9 +169,9 @@ describe("agent connector calls", () => {
     const row = t.env.db.prepare(`SELECT outcome, result_chars FROM agent_connector_call WHERE id = ?`).get(r.body.callId) as { outcome: string; result_chars: bigint };
     expect(row).toEqual({ outcome: "ok", result_chars: BigInt(t.mcp.text.length) });
     expect(t.env.db.prepare(`SELECT tool_calls FROM task WHERE id = ?`).pluck().get(taskId)).toBe(1n);
-    // The worker sees tool names and schemas, never the endpoint.
+    // The worker sees tool names, approved descriptions and schemas, never the endpoint.
     const listed = await t.call("/worker/connectors", { headers: { authorization: `Bearer ${token}` } });
-    expect(listed.body.connectors).toEqual([{ connectorId: "fixture-docs", status: "active", tools: [{ name: "search_docs", inputSchema: DOCS_TOOL.inputSchema }] }]);
+    expect(listed.body.connectors).toEqual([{ connectorId: "fixture-docs", status: "active", tools: [{ name: "search_docs", description: DOCS_TOOL.description, inputSchema: DOCS_TOOL.inputSchema }] }]);
     expect(JSON.stringify(listed.body)).not.toContain(ENDPOINT);
   });
 
