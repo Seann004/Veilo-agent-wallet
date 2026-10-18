@@ -455,8 +455,8 @@ function buildThread(
       key: `c-${c.id}`,
       node: (
         <li className="bubble bubble-agent bubble-answer">
-          <strong className="bubble-title">{c.title}</strong>
-          {answer ? <Markdown className="md-bubble">{answer}</Markdown> : null}
+          {/* The title repeats the owner's message, so it is shown only when there is no answer text. */}
+          {answer ? <Markdown className="md-bubble">{answer}</Markdown> : <strong className="bubble-title">{c.title}</strong>}
           {proposed ? <ProposedRunStatus proposed={proposed} /> : null}
           {steps.length > 0 ? (
             <details className="advanced bubble-steps">

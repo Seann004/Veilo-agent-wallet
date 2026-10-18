@@ -7,7 +7,10 @@ export function summarizeResult(job: Job | undefined, task?: Task): string {
   const r = job.result ?? {};
   if (typeof r.detail === "string") return `${String(r.decision ?? job.state)}: ${r.detail}`;
   if (typeof r.error === "string") return `${job.state}: ${r.error}`;
-  const parts = [taskStateLabel(task && task.id === job.taskId ? task.state : job.state)];
+  const state = task && task.id === job.taskId ? task.state : job.state;
+  const parts = [taskStateLabel(state)];
+  // The runner's plain reason is shown verbatim; it is the owner-facing sentence, not a raw error.
+  if (typeof r.failure === "string" && r.failure.trim() !== "") parts.push(r.failure.replace(/\s+/g, " ").replace(/ · /g, ", ").trim().slice(0, 240));
   if (Array.isArray(r.paid)) {
     for (const p of r.paid as Array<{ sku?: unknown; outcome?: unknown }>) {
       if (typeof p.sku === "string" && typeof p.outcome === "string") parts.push(`${skuLabel(p.sku)}: ${plainOutcome(p.outcome)}`);
@@ -21,6 +24,7 @@ export function summarizeResult(job: Job | undefined, task?: Task): string {
   if (run) parts.push(run.status === "awaiting_approval" ? `Proposed the workflow "${run.title}" (waits for your approval)` : `Started the workflow "${run.title}" under your assignment`);
   else if (r.workflowRun && typeof r.workflowRun === "object") parts.push(plainOutcome(`Workflow not proposed (${String((r.workflowRun as { code?: unknown }).code)})`));
   if (typeof r.artifactId === "string") parts.push("Saved to Outputs");
+  if (state === "failed" && parts.length === 1) parts.push("No reason was recorded for this failure.");
   return parts.join(" · ");
 }
 

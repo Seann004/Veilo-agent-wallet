@@ -28,6 +28,14 @@ describe("backend truth in summaries and errors", () => {
     expect(summarizeResult(undefined)).toBe("No result yet");
   });
 
+  it("says why a job failed instead of a bare state", () => {
+    const failed = { id: "t1", state: "failed" } as Task;
+    expect(summarizeResult(job({ failure: "Couldn't save the answer: it cited a page the agent wasn't cleared to read.", artifactId: null }), failed)).toBe(
+      "Failed · Couldn't save the answer: it cited a page the agent wasn't cleared to read.",
+    );
+    expect(summarizeResult(job({ artifactId: null, notes: [] }), failed)).toBe("Failed · No reason was recorded for this failure.");
+  });
+
   it("maps a service without its JSON API to NOT_READY and keeps JSON error codes", async () => {
     vi.stubGlobal("fetch", async () => new Response("<html>Cannot GET</html>", { status: 404, headers: { "content-type": "text/html" } }));
     await expect(api("wallet", "/notes/status")).rejects.toMatchObject({ code: "NOT_READY", status: 404 });

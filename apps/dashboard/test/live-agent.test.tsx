@@ -29,7 +29,9 @@ describe("live agent tasks", () => {
     finished = true;
     await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
     expect(screen.getByText("Done: Research is ready")).toBeTruthy();
-    expect(screen.getByText("Fresh research brief")).toBeTruthy();
+    // The answer bubble shows the answer; its title repeats the owner's message and stays in Outputs.
+    expect(screen.getByText("Original draft text")).toBeTruthy();
+    expect(screen.queryByText("Fresh research brief")).toBeNull();
     expect(screen.getByRole("button", { name: /Inference credit pack/ })).toBeTruthy();
     for (const path of ["/tasks?", "/balances", "/activity", "/content?", "/handoffs"]) {
       expect(rec.calls.filter((call) => call.url.includes(path))).toHaveLength(2);
