@@ -6,6 +6,7 @@ import { useId, useState } from "react";
 import { api } from "../../lib/api";
 import { parseUnits } from "../../lib/market/amounts";
 import { marketApi } from "../../lib/market/client";
+import { localControllerStatus } from "../../lib/market/controller-registration";
 import { categoryLabel, hiringAgents, kindGlyph, type LocalRun, type WorkflowEntry } from "../../lib/market/workflows";
 import type { Workspace } from "../../lib/types";
 import { useAction, useResource } from "../hooks";
@@ -170,6 +171,8 @@ function useAgents() {
 function RunOnce({ w }: { w: WorkflowEntry }) {
   const router = useRouter();
   const ws = useAgents();
+  const controller = useResource(localControllerStatus, "local-controller");
+  const unlinked = controller.data !== undefined && (!controller.data.configured || controller.data.registration === null);
   const act = useAction();
   const [agentId, setAgentId] = useState("");
   const [inputs, setInputs] = useState<Record<string, string>>({});
@@ -180,6 +183,14 @@ function RunOnce({ w }: { w: WorkflowEntry }) {
   return (
     <div className="stack">
       <p className="small">Nothing is paid until you approve the exact steps and total.</p>
+      {unlinked ? (
+        <div className="notice notice-warn" role="status">
+          <p className="flush">
+            Link this computer&apos;s controller to your marketplace account first. It authorizes every step&apos;s payment.{" "}
+            <Link href="/marketplace/agents">Link it under Marketplace → Agents</Link>
+          </p>
+        </div>
+      ) : null}
       <ErrorNotice error={ws.error} what="your local agents could not be loaded (sign in to the local dashboard first)" />
       <ErrorNotice error={act.error} what="the run could not be prepared or approved" />
       {!prepared ? (
