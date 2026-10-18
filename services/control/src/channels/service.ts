@@ -171,6 +171,15 @@ export class ChannelService {
    * the outcome is recorded on the task and in the audit log.
    */
   async deliverTask(taskId: string): Promise<void> {
+    try {
+      await this.#deliver(taskId);
+    } catch (error) {
+      // A ledger error here must not become an unhandled rejection that stops control.
+      console.error(`[control] result delivery for task ${taskId} failed: ${(error as Error).name}`);
+    }
+  }
+
+  async #deliver(taskId: string): Promise<void> {
     const ctx = immediate(this.ledger.db, () => {
       const task = this.ledger.db.prepare(`SELECT id, workspace_id, agent_id, state FROM task WHERE id = ?`).get(taskId) as
         | { id: string; workspace_id: string; agent_id: string; state: string }

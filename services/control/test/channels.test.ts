@@ -101,6 +101,18 @@ describe("result delivery channels", () => {
     await expect(svc.test("other-workspace", tg.id as string)).rejects.toThrow(/not found/);
   });
 
+  it("never rejects when the ledger itself fails, so control keeps running", async () => {
+    env = createEnv();
+    activateDefaults(env);
+    const { sent, fetchImpl } = recorder();
+    const svc = new ChannelService(env.ledger, ProviderKeyVault.ephemeral(), fetchImpl);
+    const tg = svc.add(env.ws.id, "owner", { kind: "telegram", label: "Phone", botToken: BOT, chatId: "4242" });
+    svc.bind(env.ws.id, "owner", env.agents.Prince.id, tg.id as string);
+    env.ledger.db.exec(`CREATE TRIGGER fail_claim BEFORE INSERT ON task_delivery BEGIN SELECT RAISE(ABORT, 'database is locked'); END`);
+    await expect(svc.deliverTask(finishedTask(env.agents.Prince.id, "completed"))).resolves.toBeUndefined();
+    expect(sent).toHaveLength(0);
+  });
+
   it("finds the owner's Telegram chat from the bot without storing the token", async () => {
     env = createEnv();
     const { sent, fetchImpl } = recorder();
