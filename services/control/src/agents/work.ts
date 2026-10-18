@@ -105,7 +105,9 @@ export function claimWorkerJob(ledger: Ledger, agent: AgentRow, workerId: string
       .run(ledger.now(), ledger.now(), job.task_id);
   }
   const task = job.task_id ? getTask(ledger, job.task_id) : undefined;
-  return { job: { ...jobView(job), version: job.version.toString() }, task: task ? taskView(task) : null };
+  // The runner introduces the agent by the owner's name and description for it.
+  const agentView = { name: agent.name, description: agent.description };
+  return { job: { ...jobView(job), version: job.version.toString() }, task: task ? { ...taskView(task), agent: agentView } : null };
 }
 
 function ownJob(ledger: Ledger, agent: AgentRow, jobId: string) {
