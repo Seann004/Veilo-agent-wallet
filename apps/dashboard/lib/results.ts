@@ -15,7 +15,7 @@ export function summarizeResult(job: Job | undefined, task?: Task): string {
   }
   const hire = r.hire as { proposalId?: unknown; code?: unknown } | null | undefined;
   if (hire && typeof hire === "object") {
-    parts.push(typeof hire.proposalId === "string" ? "Wants to hire a specialist (nothing paid until you approve)" : plainOutcome(`Hire refused (${String(hire.code)})`));
+    parts.push(typeof hire.proposalId === "string" ? "Wants to hire a specialist (waits for your approval unless you pre-approved the listing)" : plainOutcome(`Hire refused (${String(hire.code)})`));
   }
   if (typeof r.artifactId === "string") parts.push("Saved to Outputs");
   return parts.join(" · ");

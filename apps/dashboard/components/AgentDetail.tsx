@@ -345,9 +345,9 @@ function ResultText({ text }: { text: string }) {
   );
 }
 
-/** The part of an output meant for the owner: everything before its "Details" footer, kept short. */
+/** The part of an output meant for the owner: everything before the runner's details marker, kept short. */
 function answerOf(content: string): string {
-  const body = content.split(/\n\s*Details\n/)[0]!.trim();
+  const body = content.split("\n— Details —\n")[0]!.trim();
   return body.length > 900 ? `${body.slice(0, 899)}…` : body;
 }
 
@@ -642,7 +642,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
           <LimitBar label="Total" u={budget?.lifetime} />
           <LimitBar label="Today" u={budget?.rolling24h} />
           <p className="small muted section-foot">
-            {cash ? `${usdc(cash.spent)} spent` : "Nothing spent"} · <Link href="/wallet">Payments</Link>
+            {cash ? `${usdc(cash.spent)} spent` : "—"} · <Link href="/wallet">Payments</Link>
           </p>
         </div>
 

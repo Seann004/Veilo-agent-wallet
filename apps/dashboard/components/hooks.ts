@@ -24,13 +24,18 @@ export function usePolling(refresh: () => Promise<void>, key: string, enabled = 
     let timer: ReturnType<typeof setTimeout>;
     // Browsers mark covered or background windows hidden; keep checking there, just less often.
     const next = () => (document.hidden ? intervalMs * 4 : intervalMs);
+    // One loop only: a visibility change while a refresh is in flight must not start a second.
+    let inFlight = false;
     const poll = async () => {
+      if (inFlight) return;
+      inFlight = true;
       clearTimeout(timer);
       try {
         await latest.current();
       } catch {
         // Resource reloads surface their own errors; a failed refresh must not stop polling.
       } finally {
+        inFlight = false;
         if (active) timer = setTimeout(() => { void poll(); }, next());
       }
     };

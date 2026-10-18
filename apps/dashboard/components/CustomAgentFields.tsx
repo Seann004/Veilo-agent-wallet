@@ -75,7 +75,7 @@ export function RunnerCredentialNote() {
 function HiringCopy() {
   return (
     <p className="small">
-      Each hire waits for your OK in <Link href="/marketplace/approvals">Approvals</Link>, and stays within this agent&apos;s limits.
+      Each hire waits for your OK in <Link href="/marketplace/approvals">Approvals</Link>, unless it matches a listing you pre-approve below. It always stays within this agent&apos;s limits.
     </p>
   );
 }

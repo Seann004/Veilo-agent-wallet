@@ -114,7 +114,7 @@ function PublicExit({ notes, onChanged }: { notes: NoteStatus; onChanged: () => 
   return (
     <>
       <p className="hint flush">
-        Sends money back to your wallet. Note: a public exit is linkable to the deposit it came from.
+        Sends money back to your wallet. Note: a public exit is linkable. Anyone can see which deposit it was, how much, and roughly how much you spent.
       </p>
       <ConnectWalletPrompt purpose="sign the withdrawal" />
       {exitable.length === 0 ? <p className="muted flush">Nothing to withdraw yet. Deposits can be withdrawn once they&apos;re recorded.</p> : null}

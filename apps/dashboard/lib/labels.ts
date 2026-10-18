@@ -196,12 +196,12 @@ export function runBlockedReason(status: AgentStatus, workspaceStopped: boolean)
   }
 }
 
-export type SkuGroup = "Data" | "AI work" | "Swaps" | "Hiring" | "Other";
+export type SkuGroup = "Data" | "AI work" | "Paid APIs" | "Swaps" | "Hiring" | "Other";
 
 const SKU_INFO: Record<string, { label: string; group: SkuGroup }> = {
   "research-basic": { label: "Research data", group: "Data" },
   "research-expanded": { label: "Research data (more sources)", group: "Data" },
-  "external-x402-batch": { label: "Paid APIs", group: "Data" },
+  "external-x402-batch": { label: "Paid APIs", group: "Paid APIs" },
   summarize: { label: "Summaries", group: "AI work" },
   analyze: { label: "Analysis", group: "AI work" },
   "content-package": { label: "Content drafts", group: "AI work" },
@@ -243,7 +243,11 @@ export const plainOutcome = (text: string): string =>
  * money moved, with no recovery under way. Anything else still shows where it stands.
  */
 export function isSettled(st: { authorization: string; merchant: string; fulfilment: string; recovery: string }): boolean {
-  if (st.recovery !== "none" || st.authorization !== "released") return false;
-  if (st.fulfilment === "delivered") return st.merchant === "finalized";
-  return st.fulfilment === "abandoned" && st.merchant === "not_started";
+  if (st.recovery === "recovered") return true;
+  if (st.recovery !== "none") return false;
+  if (st.authorization === "rejected") return true;
+  if (st.authorization !== "released") return false;
+  // Prepaid credit calls have no merchant leg.
+  if (st.fulfilment === "delivered") return st.merchant === "finalized" || st.merchant === "not_required";
+  return st.fulfilment === "abandoned" && (st.merchant === "not_started" || st.merchant === "not_required");
 }

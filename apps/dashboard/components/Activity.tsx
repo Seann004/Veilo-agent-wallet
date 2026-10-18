@@ -68,6 +68,8 @@ export function ActivityDrawer({
   const merchant = sig("merchant");
   const recovery = sig("recovery");
   const prepaid = purchase.paymentPath === "prepaid_credits";
+  // Only a settled merchant leg (or a delivered prepaid call) is a payment that happened.
+  const paid = prepaid ? purchase.states.fulfilment === "delivered" : purchase.states.merchant === "finalized";
   const titleId = `drawer-${purchase.id}`;
   const post = (path: string, body: unknown) =>
     void action.run(async () => {
@@ -89,14 +91,14 @@ export function ActivityDrawer({
         <KV
           rows={[
             ["Amount", prepaid ? `Prepaid AI credits (${credits(purchase.usage.amount)})` : usdc(purchase.price.amount)],
-            ["Paid by", agent?.name ?? "unknown agent"],
-            ["Paid to", service ? hostOf(service.origin) : shortKey(purchase.serviceId)],
+            [paid ? "Paid by" : "Agent", agent?.name ?? "unknown agent"],
+            [paid ? "Paid to" : "Service", service ? hostOf(service.origin) : shortKey(purchase.serviceId)],
             ["Why", purchase.rationale ?? <span className="muted">no reason given</span>],
             ["When", when(purchase.settledAt ?? purchase.createdAt)],
             ...(prepaid ? [] : [["Transaction", <TxLink key="tx" signature={merchant?.signature} />] as [string, ReactNode]]),
           ]}
         />
-        {prepaid ? null : <p className="small muted">Paid from your private pool. The service saw a fresh one-time wallet, not yours.</p>}
+        {paid && !prepaid ? <p className="small muted">Paid from your private pool. The service saw a fresh one-time wallet, not yours.</p> : null}
         <details className="disclosure tech-details">
           <summary>Technical details</summary>
         <StateStrip purchase={purchase} />

@@ -37,3 +37,19 @@ describe("backend truth in summaries and errors", () => {
     expect(e).toMatchObject({ code: "BUDGET_EXCEEDED", message: "agent cap" });
   });
 });
+
+describe("settled payments", () => {
+  it("treats only finished outcomes as settled, including prepaid, rejected and recovered ones", async () => {
+    const { isSettled } = await import("../lib/labels");
+    const base = { authorization: "released", merchant: "finalized", fulfilment: "delivered", recovery: "none" };
+    expect(isSettled(base)).toBe(true);
+    expect(isSettled({ ...base, merchant: "not_required" })).toBe(true);
+    expect(isSettled({ ...base, merchant: "not_required", fulfilment: "abandoned" })).toBe(true);
+    expect(isSettled({ ...base, authorization: "rejected", merchant: "not_started", fulfilment: "not_started" })).toBe(true);
+    expect(isSettled({ ...base, recovery: "recovered" })).toBe(true);
+    expect(isSettled({ ...base, merchant: "submitted", fulfilment: "not_started" })).toBe(false);
+    expect(isSettled({ ...base, fulfilment: "paid_without_result" })).toBe(false);
+    expect(isSettled({ ...base, recovery: "recoverable" })).toBe(false);
+    expect(isSettled({ ...base, authorization: "awaiting_approval" })).toBe(false);
+  });
+});
