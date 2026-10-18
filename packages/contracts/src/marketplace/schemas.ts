@@ -106,9 +106,21 @@ export function remoteOriginProblem(value: string): string | null {
   return null;
 }
 
+/**
+ * Shape only: a bare http(s) origin without credentials. Whether the origin may be used (public
+ * https, or an operator-allowlisted local test seller) is the marketplace's policy decision.
+ */
 export const remoteOriginSchema = z.string().max(300).superRefine((v, ctx) => {
-  const problem = remoteOriginProblem(v);
-  if (problem) ctx.addIssue({ code: "custom", message: `remote origin ${problem}` });
+  let url: URL;
+  try {
+    url = new URL(v);
+  } catch {
+    ctx.addIssue({ code: "custom", message: "remote origin is not a URL" });
+    return;
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") ctx.addIssue({ code: "custom", message: "remote origin must use http(s)" });
+  else if (url.username || url.password) ctx.addIssue({ code: "custom", message: "remote origin must not contain credentials" });
+  else if (url.origin !== v.replace(/\/$/, "")) ctx.addIssue({ code: "custom", message: "remote origin must be a bare origin without path, query or fragment" });
 });
 
 export const listingVersionInputSchema = z

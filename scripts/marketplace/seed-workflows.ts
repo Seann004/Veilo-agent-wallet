@@ -273,7 +273,7 @@ async function main(): Promise<void> {
     operatorTokenHash: sha(operatorToken),
     managedSellerOrigin: process.env.MARKETPLACE_MANAGED_SELLER_ORIGIN ?? null,
     managedSellerIdentity: process.env.MARKETPLACE_MANAGED_SELLER_IDENTITY ?? "veilo-seller-host-devnet",
-    devSellerOrigins: [],
+    devSellerOrigins: (process.env.MARKETPLACE_DEV_SELLER_ORIGINS ?? "").split(",").map((o) => o.trim().replace(/\/$/, "")).filter(Boolean),
     allowedBrowserOrigins: [],
     maxNetworkFeeLamports: 10_000_000n,
     quoteTtlSeconds: 300,

@@ -100,6 +100,14 @@ describe("remote seller origin", () => {
       expect(remoteOriginProblem(bad), bad).not.toBeNull();
     }
   });
+
+  it("leaves the public-or-allowlisted decision to the marketplace but still requires a bare origin", async () => {
+    const { remoteOriginSchema } = await import("../src/marketplace");
+    for (const ok of ["https://seller.example.com", "http://127.0.0.1:4116", "http://127.0.0.1:4116/"]) expect(remoteOriginSchema.safeParse(ok).success, ok).toBe(true);
+    for (const bad of ["http://127.0.0.1:4116/path", "https://user:pw@seller.example.com", "ftp://seller.example.com", "not a url"]) {
+      expect(remoteOriginSchema.safeParse(bad).success, bad).toBe(false);
+    }
+  });
 });
 
 describe("payer binding message", () => {
