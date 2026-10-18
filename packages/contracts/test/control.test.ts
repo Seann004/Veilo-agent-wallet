@@ -78,6 +78,9 @@ describe("payment state transitions", () => {
     const base = { authorization: "released", funding: "finalized", merchant: "uncertain", fulfilment: "not_started", recovery: "none" } as const;
     expect(paymentStatusLabel(base)).toBe("Waiting for confirmation");
     expect(paymentStatusLabel({ ...base, merchant: "finalized", fulfilment: "paid_without_result" })).toBe("Paid; result unavailable");
+    const prepaid = { authorization: "released", funding: "not_required", merchant: "not_required", recovery: "none" } as const;
+    expect(paymentStatusLabel({ ...prepaid, fulfilment: "abandoned" })).toBe("Stopped; nothing was paid");
+    expect(paymentStatusLabel({ ...prepaid, fulfilment: "in_progress" })).toBe("Authorized; in progress");
   });
 });
 

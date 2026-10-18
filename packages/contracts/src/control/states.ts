@@ -135,6 +135,9 @@ export function paymentStatusLabel(s: PaymentStates): string {
   if (s.funding === "submitted" || s.merchant === "submitted" || s.merchant === "signed") {
     return "Waiting for confirmation";
   }
+  // Uncertain and in-flight legs returned above, so an abandoned job here settled no payment
+  // unless a leg finalized.
+  if (s.fulfilment === "abandoned") return s.funding === "finalized" || s.merchant === "finalized" ? "Stopped; no result" : "Stopped; nothing was paid";
   if (s.authorization === "released") return "Authorized; in progress";
   return "Reserved";
 }
