@@ -8,7 +8,7 @@ import { parseUsdcInput, usdc, when } from "../lib/format";
 import { REVIEW_LABEL, ROLE_LABEL, agentStateLabel, purchaseLabel, runBlockedReason, skuLabel, taskStateLabel } from "../lib/labels";
 import type { Activity, Agent, Balances, ContentItem, Handoff, Job, LimitUsage, Purchase, Task } from "../lib/types";
 import { ActivityDrawer } from "./Activity";
-import { summarizeResult } from "../lib/results";
+import { summarizeResult, workflowRunOf } from "../lib/results";
 import { AgentControls } from "./AgentControls";
 import { AgentConnectors } from "./AgentConnectors";
 import { AgentDelivery } from "./Channels";
@@ -430,6 +430,7 @@ function buildThread(
     const answer = c.kind === "content_calendar" ? "" : answerOf(c.content);
     const steps = stepsOf(c.content);
     const taskState = tasks.find((t) => t.id === c.taskId)?.state;
+    const proposed = workflowRunOf(jobs.find((j) => j.taskId === c.taskId && j.result?.workflowRun));
     out.push({
       at: c.createdAt,
       key: `c-${c.id}`,
@@ -437,6 +438,12 @@ function buildThread(
         <li className="bubble bubble-agent bubble-answer">
           <strong className="bubble-title">{c.title}</strong>
           {answer ? <span className="plain-text">{answer}</span> : null}
+          {proposed ? (
+            <span className="bubble-line">
+              {proposed.status === "awaiting_approval" ? "Workflow run waiting for your approval · " : "Workflow run started under your assignment · "}
+              <Link href={`/marketplace/runs/${proposed.runId}`}>{proposed.status === "awaiting_approval" ? "Review and approve" : "View run"}</Link>
+            </span>
+          ) : null}
           {steps.length > 0 ? (
             <details className="advanced bubble-steps">
               <summary>How I did it</summary>

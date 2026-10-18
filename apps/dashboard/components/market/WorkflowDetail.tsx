@@ -7,7 +7,7 @@ import { api } from "../../lib/api";
 import { parseUnits } from "../../lib/market/amounts";
 import { marketApi } from "../../lib/market/client";
 import { localControllerStatus } from "../../lib/market/controller-registration";
-import { categoryLabel, hiringAgents, kindGlyph, type LocalRun, type WorkflowEntry } from "../../lib/market/workflows";
+import { categoryLabel, hiringAgents, kindGlyph, workflowAgents, type LocalRun, type WorkflowEntry } from "../../lib/market/workflows";
 import type { Workspace } from "../../lib/types";
 import { useAction, useResource } from "../hooks";
 import { ConfirmButton, ErrorNotice, KV, Loading } from "../ui";
@@ -297,7 +297,7 @@ function AddToAgent({ w }: { w: WorkflowEntry }) {
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const formId = useId();
   const decimals = m.decimalsFor(w.mint, w.network);
-  const agents = (ws.data?.agents ?? []).filter((a) => a.status === "active");
+  const agents = workflowAgents(ws.data?.agents ?? []);
   const agentOptions = [{ value: "", label: "Choose an agent" }, ...agents.map((a) => ({ value: a.id, label: a.name }))];
   return (
     <div className="stack">
@@ -331,6 +331,12 @@ function AddToAgent({ w }: { w: WorkflowEntry }) {
           <div className="field">
             <label htmlFor={`${formId}-agent`}>Agent</label>
             <Select id={`${formId}-agent`} label="Agent" required value={agentId} options={agentOptions} onChange={setAgentId} />
+            <p className="hint">Only custom agents that are on and allowed to hire appear here. The agent proposes a run when a task fits; it runs within this budget without asking you again.</p>
+            {ws.data && agents.length === 0 ? (
+              <p className="notice notice-warn" role="note">
+                No agent can take a workflow yet. <Link href="/agents/new">Create a custom agent</Link> that is allowed to hire specialists, and turn it on.
+              </p>
+            ) : null}
           </div>
           <div className="field">
             <label htmlFor={`${formId}-budget`}>Budget {decimals === null ? "(base units)" : "(USDC)"}</label>

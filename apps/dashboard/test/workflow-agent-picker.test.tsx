@@ -111,3 +111,20 @@ describe("run-once agent picker", () => {
     expect(link.getAttribute("href")).toBe("/agents/new");
   });
 });
+
+describe("add-to-agent picker", () => {
+  it("lists only custom agents that are on and allowed to hire", async () => {
+    const research = { ...agent("r", "Prince", "active", ["specialist-job"]), role: "research" } as Agent;
+    const agents = [agent("a", "Scout", "active", ["specialist-job"]), agent("b", "No hiring", "active", ["analyze"]), agent("c", "Off", "paused" as Agent["status"], ["specialist-job"]), research];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => (String(url).includes("/api/control/workspace") ? Response.json({ workspace: {}, agents, policies: [], services: [] }) : Response.json({ workflow: entry }))),
+    );
+    render(withMarket(<WorkflowDetail slug="wf-1" />));
+    fireEvent.click(within(await screen.findByRole("navigation", { name: "Sections" })).getByRole("button", { name: /Add to an agent/ }));
+    expect(await screen.findByText(/Only custom agents that are on and allowed to hire appear here/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Agent/ }));
+    const names = within(screen.getByRole("listbox")).getAllByRole("option").map((o) => o.textContent);
+    expect(names).toEqual(["Choose an agent", "Scout"]);
+  });
+});

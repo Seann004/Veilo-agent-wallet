@@ -69,6 +69,25 @@ describe("live agent tasks", () => {
     expect(screen.queryByText("Task: Summarize fee changes")).toBeNull();
   });
 
+  it("shows a proposed workflow run in the agent's answer with a link to review and approve it", async () => {
+    const taskId = "88888888-8888-4888-8888-888888888888";
+    const runId = "20000000-0000-4000-8000-000000000009";
+    const at = "2026-10-15T00:00:00.000Z";
+    const content = ["I'd like to run 'Carousel from a topic' with topic: Solana validators (1 step, up to 0.23 USDC).", "", "— Details —", `Workflow run: ${runId} (waiting for your approval).`].join("\n");
+    const rec = recordingFetch((url) => {
+      if (url.includes("/tasks?")) return { tasks: [], jobs: [{ id: "job-9", agentId: PRINCE, taskId, kind: "custom", state: "completed", result: { workflowRun: { runId, status: "awaiting_approval", title: "Carousel from a topic" } }, scheduledAt: at, createdAt: at, updatedAt: at, attempts: 1 }] };
+      if (url.includes("/balances")) return balancesAfterTopUpAndConsumption();
+      if (url.includes("/activity")) return { events: [], purchases: [] };
+      if (url.includes("/content?")) return { items: [draft({ kind: "research_brief", title: "Validators", content, taskId, agent: { id: PRINCE, name: "Scout", role: "custom" } })] };
+      return { items: [] };
+    });
+    vi.stubGlobal("fetch", rec.impl);
+    await act(async () => { render(withRole(<AgentDetail agentId={PRINCE} />)); });
+    expect(screen.getByText(/I'd like to run 'Carousel from a topic'/)).toBeTruthy();
+    expect(screen.getByText(/Workflow run waiting for your approval/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Review and approve" }).getAttribute("href")).toBe(`/marketplace/runs/${runId}`);
+  });
+
   it("does not overlap slow refreshes or continue after unmount", async () => {
     vi.useFakeTimers();
     vi.spyOn(document, "hidden", "get").mockReturnValue(false);
