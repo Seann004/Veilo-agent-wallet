@@ -2,7 +2,7 @@ import { Router, type Response } from "express";
 import { z } from "zod";
 import { baseUnitString, DEVNET_SOL_USDC_WHIRLPOOL } from "@veilo/contracts";
 import { ControlError } from "../errors";
-import { approveSwapService, MAX_SWAP_USDC, SWAP_SERVICE_KEY, SWAP_SKU } from "../swap/service";
+import { approveSwapService, disableSwapService, MAX_SWAP_USDC, SWAP_SERVICE_KEY, SWAP_SKU } from "../swap/service";
 import { actorOf, requireActor, type AuthDeps } from "./actor";
 
 /**
@@ -40,6 +40,11 @@ export function swapRouter(deps: AuthDeps): Router {
     const b = z.object({ amountUsdc: baseUnitString }).strict().safeParse(req.body ?? {});
     if (!b.success) throw new ControlError("INVALID_REQUEST", "amountUsdc must be a base-unit string");
     res.status(201).json(approveSwapService(ledger, o.workspaceId, BigInt(b.data.amountUsdc), o.ownerPubkey));
+  });
+
+  r.delete("/swap-service", owner, (_req, res) => {
+    const o = ownerOf(res);
+    res.json(disableSwapService(ledger, o.workspaceId, o.ownerPubkey));
   });
 
   return r;

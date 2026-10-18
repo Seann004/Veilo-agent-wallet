@@ -22,7 +22,7 @@ export function SwapPanel() {
   const [amount, setAmount] = useState("");
   const action = useAction();
   const base = parseUsdcInput(amount);
-  const current = svc.data?.service;
+  const current = svc.data?.service?.status === "approved" ? svc.data.service : null;
   return (
     <Section title="Agent swaps">
       <p className="hint flush">
@@ -30,7 +30,20 @@ export function SwapPanel() {
       </p>
       {current ? (
         <p className="small">
-          Approved: <strong>{usdc(current.amount.amount)}</strong> per swap.
+          Approved: <strong>{usdc(current.amount.amount)}</strong> per swap.{" "}
+          <button
+            type="button"
+            className="btn btn-small"
+            disabled={action.busy}
+            onClick={() =>
+              void action.run(async () => {
+                await api("control", "/swap-service", { method: "DELETE" });
+                await svc.reload();
+              })
+            }
+          >
+            Turn off
+          </button>
         </p>
       ) : null}
       <form

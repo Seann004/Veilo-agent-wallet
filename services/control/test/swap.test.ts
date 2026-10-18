@@ -7,7 +7,7 @@ import { PurchaseOrchestrator } from "../src/integration/orchestrator";
 import { authorizePurchase } from "../src/ledger/authorize";
 import { pauseAgent } from "../src/ledger/authority";
 import { getPurchaseRow } from "../src/ledger/purchases";
-import { approveSwapService, SWAP_SKU, SwapRunner } from "../src/swap/service";
+import { approveSwapService, disableSwapService, SWAP_SKU, SwapRunner } from "../src/swap/service";
 import { activateDefaults, addNotes, createEnv, intentTask, type TestEnv } from "./helpers";
 
 /** Funding stand-in: a synthetic finalized withdrawal and a scripted swap outcome. */
@@ -123,6 +123,13 @@ describe("devnet swap purchase", () => {
     await orchestrator.drive(id);
     expect(getPurchaseRow(env.ledger, id)).toMatchObject({ funding_state: "finalized", merchant_state: "signed", recovery_state: "none" });
     expect(orchestrator.view(id).blocked).toMatchObject({ code: "RECOVERY_REQUIRED" });
+  });
+
+  it("refuses new swaps once the owner turns approval off, and re-approval restores them", () => {
+    expect(disableSwapService(env.ledger, env.ws.id, "owner")).toEqual({ serviceId });
+    expect(() => swapPurchase("swap-off")).toThrow(/service binding is not approved/);
+    approveSwapService(env.ledger, env.ws.id, 500_000n, "owner");
+    expect(() => swapPurchase("swap-on")).not.toThrow();
   });
 
   it("signs no swap after the agent is paused, and refuses agents without the swap SKU", async () => {

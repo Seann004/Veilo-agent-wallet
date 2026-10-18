@@ -61,6 +61,28 @@ export function approveSwapService(ledger: Ledger, workspaceId: string, amountUs
   });
 }
 
+/**
+ * Withdraws the owner's swap approval: new swap purchases are refused at authorization, while
+ * swaps already authorized settle or recover as before.
+ */
+export function disableSwapService(ledger: Ledger, workspaceId: string, ownerId: string): { serviceId: string | null } {
+  return immediate(ledger.db, () => {
+    const serviceId = ledger.db.prepare(`SELECT id FROM approved_service WHERE workspace_id = ? AND service_key = ?`).pluck().get(workspaceId, SWAP_SERVICE_KEY) as string | undefined;
+    if (serviceId === undefined) return { serviceId: null };
+    ledger.db.prepare(`UPDATE approved_service SET status = 'disabled', updated_at_ms = ? WHERE id = ?`).run(ledger.now(), serviceId);
+    writeAudit(ledger, {
+      workspaceId,
+      scope: `service:${serviceId}`,
+      actorType: "owner",
+      actorId: ownerId,
+      action: "swap.disable",
+      policyResult: "allowed",
+      details: {},
+    });
+    return { serviceId };
+  });
+}
+
 /** The binding the wallet stores at prepare time and deep-compares before it signs the swap. */
 export function swapFundingBinding(p: PurchaseRow, network: string, mint: string): FundingBinding {
   return {

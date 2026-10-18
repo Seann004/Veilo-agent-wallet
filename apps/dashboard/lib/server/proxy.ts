@@ -82,6 +82,7 @@ export const ROUTES: Record<UpstreamService, Route[]> = {
     r("PUT", `/agents/${ID}/delivery`),
     r("GET", "/swap-service"),
     r("POST", "/swap-service"),
+    r("DELETE", "/swap-service"),
     r("GET", `/purchases/${ID}/external-calls`),
   ],
   wallet: [
