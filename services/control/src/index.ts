@@ -185,6 +185,8 @@ async function main(): Promise<void> {
   const vault = ProviderKeyVault.fromFile(join(config.paths.secretsDir, "control", "ai-provider.key"));
   const ai = new AiService(ledger, vault, undefined, process.env.AI_ALLOW_LOCAL_PROVIDER === "1");
   const channels = new ChannelService(ledger, vault, undefined, process.env.VEILO_DASHBOARD_ORIGIN ?? "");
+  const interrupted = channels.closeInterrupted();
+  if (interrupted > 0) console.log(`[${SERVICE}] marked ${interrupted} interrupted result deliveries as failed`);
   createApp(health, { ledger, session, services, integration, connectors, ai, channels, maxExternalBatchUsdc: BigInt(externalMaxRaw) }).listen(port, config.bindHost, () => {
     console.log(`[${SERVICE}] listening on http://${config.bindHost}:${port} (${config.network.caip2})`);
   });

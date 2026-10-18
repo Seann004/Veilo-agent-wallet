@@ -167,6 +167,21 @@ export class ChannelService {
   }
 
   /**
+   * At startup, a delivery still marked sending was interrupted by a restart: the message may or
+   * may not have reached the chat. It is marked failed with that explanation and never re-sent,
+   * so a result is not delivered twice.
+   */
+  closeInterrupted(): number {
+    return immediate(this.ledger.db, () =>
+      Number(
+        this.ledger.db
+          .prepare(`UPDATE task_delivery SET outcome = 'failed', detail = ?, at_ms = ? WHERE outcome = 'sending'`)
+          .run("interrupted by a restart; it may or may not have been sent", this.ledger.now()).changes,
+      ),
+    );
+  }
+
+  /**
    * After a task finishes, sends its result to the agent's destination, once. Never throws:
    * the outcome is recorded on the task and in the audit log.
    */

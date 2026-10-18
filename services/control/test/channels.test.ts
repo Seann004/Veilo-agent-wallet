@@ -113,6 +113,22 @@ describe("result delivery channels", () => {
     expect(sent).toHaveLength(0);
   });
 
+  it("marks a delivery interrupted mid-send as failed at startup and never re-sends it", async () => {
+    env = createEnv();
+    activateDefaults(env);
+    const { sent, fetchImpl } = recorder();
+    const svc = new ChannelService(env.ledger, ProviderKeyVault.ephemeral(), fetchImpl);
+    const tg = svc.add(env.ws.id, "owner", { kind: "telegram", label: "Phone", botToken: BOT, chatId: "4242" });
+    svc.bind(env.ws.id, "owner", env.agents.Prince.id, tg.id as string);
+    const t = finishedTask(env.agents.Prince.id, "completed");
+    env.ledger.db.prepare(`INSERT INTO task_delivery (task_id, channel_id, outcome, at_ms) VALUES (?, ?, 'sending', ?)`).run(t, tg.id, env.ledger.now());
+    expect(svc.closeInterrupted()).toBe(1);
+    expect(env.ledger.db.prepare(`SELECT outcome, detail FROM task_delivery WHERE task_id = ?`).get(t)).toEqual({ outcome: "failed", detail: "interrupted by a restart; it may or may not have been sent" });
+    await svc.deliverTask(t);
+    expect(sent).toHaveLength(0);
+    expect(svc.closeInterrupted()).toBe(0);
+  });
+
   it("finds the owner's Telegram chat from the bot without storing the token", async () => {
     env = createEnv();
     const { sent, fetchImpl } = recorder();
