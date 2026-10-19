@@ -14,6 +14,7 @@ const PATHS = {
   pause: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM10 9v6M14 9v6",
   file: "M7 3h7l4 4v14H7zM14 3v4h4",
   arrow: "M7 17 17 7M9 7h8v8",
+  "arrow-right": "M5 12h14M13 6l6 6-6 6",
   send: "M12 19V5M5 12l7-7 7 7",
   card: "M3 6h18v12H3zM3 10h18",
   chevron: "M6 9l6 6 6-6",

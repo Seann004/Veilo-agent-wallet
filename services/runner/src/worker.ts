@@ -1,6 +1,6 @@
 import { TASK_RUN_BOUNDS } from "@veilo/contracts";
 import { ControlClient, type FetchLike, type RunBounds } from "./control-client";
-import type { RoleOutcome } from "./roles/common";
+import { withFailureReason, type RoleOutcome } from "./roles/common";
 import { runCustom } from "./roles/custom";
 import { runMira } from "./roles/mira";
 import { runPrince } from "./roles/prince";
@@ -76,6 +76,7 @@ export async function runOnce(cred: AgentCredential, o: WorkerOptions): Promise<
     clearInterval(beat);
   }
   await inflight;
+  outcome = withFailureReason(outcome);
   const summary = { ...outcome.summary, toolCalls: client.toolCalls, planningCalls: client.planningCalls, deniedTools: client.denied };
   if (!leaseLost) {
     await client.complete(job.id, {

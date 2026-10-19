@@ -24,7 +24,11 @@ export function summarizeResult(job: Job | undefined, task?: Task): string {
   if (run) parts.push(run.status === "awaiting_approval" ? `Proposed the workflow "${run.title}" (waits for your approval)` : `Started the workflow "${run.title}" under your assignment`);
   else if (r.workflowRun && typeof r.workflowRun === "object") parts.push(plainOutcome(`Workflow not proposed (${String((r.workflowRun as { code?: unknown }).code)})`));
   if (typeof r.artifactId === "string") parts.push("Saved to Outputs");
-  if (state === "failed" && parts.length === 1) parts.push("No reason was recorded for this failure.");
+  // Control closes a job whose runner lease expired; its purchases were reconciled, not retried.
+  if (r.reconciled === true && typeof r.reason === "string") parts.push("The runner stopped responding before it finished");
+  // Jobs recorded before failures carried a reason: work was produced but nothing was saved.
+  if (state === "failed" && parts.length === 1 && r.didWork === true && r.artifactId === null) parts.push("The answer wasn't saved");
+  if (state === "failed" && parts.length === 1) parts.push("No reason recorded");
   return parts.join(" · ");
 }
 

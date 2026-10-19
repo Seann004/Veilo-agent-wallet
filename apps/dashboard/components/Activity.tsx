@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../lib/api";
 import { credits, lamports, shortKey, usdc, when } from "../lib/format";
-import { LEG_LABEL, LABEL_CREDITS_NO_CHARGE, legStateLabel, isSettled, purchaseLabel, reasonGuidance, skuLabel } from "../lib/labels";
+import { LEG_LABEL, LABEL_CREDITS_NO_CHARGE, legStateLabel, isSettled, purchaseLabel, reasonGuidance, skuLabel, stateSummaries } from "../lib/labels";
 import { hostOf } from "../lib/connectors";
 import type { Activity, Agent, AuditEvent, PaymentStates, Purchase, Workspace } from "../lib/types";
 import { useCapability } from "./Shell";
 import { useAction } from "./hooks";
+import { AgentAvatar } from "./Avatar";
 import { StateStrip } from "./StateStrip";
 import { DeniedHint, ErrorNotice, KV, TxLink } from "./ui";
 
@@ -236,6 +237,15 @@ export function ActivityList({ activity, workspace, onChanged, limit }: { activi
   );
 }
 
+/** Pill tone for a payment: a proven problem first, then anything still open, then a finished success. */
+export function purchaseTone(p: Pick<Purchase, "states" | "paymentPath">): "ok" | "warn" | "danger" | "muted" {
+  const tones = stateSummaries(p).map((x) => x.tone);
+  if (tones.includes("problem")) return "danger";
+  if (tones.includes("wait")) return "warn";
+  if (tones.includes("ok")) return "ok";
+  return "muted";
+}
+
 export function ActivityTable({ activity, workspace, onChanged, limit = 8 }: { activity: Activity; workspace: Workspace; onChanged: () => void | Promise<void>; limit?: number }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [showUncharged, setShowUncharged] = useState(false);
@@ -273,17 +283,23 @@ export function ActivityTable({ activity, workspace, onChanged, limit = 8 }: { a
               <th scope="col">When</th>
               <th scope="col">Agent</th>
               <th scope="col">What</th>
-              <th scope="col">Amount</th>
+              <th scope="col" className="num">Amount</th>
               <th scope="col">Status</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((p) => {
               const agent = workspace.agents.find((a) => a.id === p.agentId);
+              const settlement = p.paymentPath === "prepaid_credits" ? undefined : (p.chainAttempts ?? []).filter((a) => a.leg === "merchant" && a.signature).at(-1)?.signature;
               return (
                 <tr key={p.id} className={collapsed.has(p.id) ? "muted" : undefined}>
                   <td className="nowrap small">{when(p.createdAt)}</td>
-                  <td>{agent?.name ?? "agent"}</td>
+                  <td>
+                    <span className="who">
+                      {agent ? <AgentAvatar agent={agent} size={22} /> : null}
+                      {agent?.name ?? "agent"}
+                    </span>
+                  </td>
                   <td>
                     <button
                       type="button"
@@ -297,8 +313,17 @@ export function ActivityTable({ activity, workspace, onChanged, limit = 8 }: { a
                       {skuLabel(p.sku)}
                     </button>
                   </td>
-                  <td className="nowrap">{p.paymentPath === "prepaid_credits" ? "prepaid AI credits" : usdc(p.price.amount)}</td>
-                  <td>{collapsed.has(p.id) ? "Not charged" : purchaseLabel(p, { agentStopped: agentStopped(agent, workspace.workspace.stopped) })}</td>
+                  <td className="nowrap num">{p.paymentPath === "prepaid_credits" ? "prepaid AI credits" : usdc(p.price.amount)}</td>
+                  <td>
+                    <span className="status-cell">
+                      {collapsed.has(p.id) ? (
+                        <span className="pill pill-muted">Not charged</span>
+                      ) : (
+                        <span className={`pill pill-${purchaseTone(p)}`}>{purchaseLabel(p, { agentStopped: agentStopped(agent, workspace.workspace.stopped) })}</span>
+                      )}
+                      {settlement ? <TxLink signature={settlement} label="Tx" /> : null}
+                    </span>
+                  </td>
                 </tr>
               );
             })}

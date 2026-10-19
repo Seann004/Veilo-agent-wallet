@@ -33,7 +33,16 @@ describe("backend truth in summaries and errors", () => {
     expect(summarizeResult(job({ failure: "Couldn't save the answer: it cited a page the agent wasn't cleared to read.", artifactId: null }), failed)).toBe(
       "Failed · Couldn't save the answer: it cited a page the agent wasn't cleared to read.",
     );
-    expect(summarizeResult(job({ artifactId: null, notes: [] }), failed)).toBe("Failed · No reason was recorded for this failure.");
+    expect(summarizeResult(job({ artifactId: null, notes: [] }), failed)).toBe("Failed · No reason recorded");
+    // An older record: the agent produced an answer, but no output was saved.
+    expect(summarizeResult(job({ didWork: true, artifactId: null, notes: [] }), failed)).toBe("Failed · The answer wasn't saved");
+    // A runner reason as a control error object, not a string.
+    expect(summarizeResult(job({ failure: "Couldn't finish (POLICY_DENIED: artifact refused).", error: { code: "POLICY_DENIED" } }), failed)).toBe(
+      "Failed · Couldn't finish (POLICY_DENIED: artifact refused).",
+    );
+    expect(summarizeResult({ ...job({ reconciled: true, reason: "lease expired", purchases: [] }), state: "failed" }, undefined)).toBe(
+      "Failed · The runner stopped responding before it finished",
+    );
   });
 
   it("maps a service without its JSON API to NOT_READY and keeps JSON error codes", async () => {
