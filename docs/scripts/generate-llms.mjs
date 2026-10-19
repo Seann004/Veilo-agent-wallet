@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 
 const pages = [
+  ['evidence.md', 'Evidence and submission', 'Public devnet receipts, downloadable presentation and submission checklist.'],
   ['submission-review-2026-10-19.md', 'Submission review', 'Checklist coverage, evidence-export corrections, current test results and remaining operator gates.'],
   ['guide/marketplace.md', 'Specialist-agent marketplace', 'v3.2 buyer/seller marketplace, Supabase boundary, direct payments and zero fee; implemented, devnet acceptance incomplete.'],
   ['guide/marketplace-triage.md', 'Marketplace triage', 'T17–T23 gates and all fourteen acceptance checks mapped to recorded RLS, unit and devnet evidence.'],
@@ -24,13 +25,9 @@ const index = `# Veilo
 
 > Veilo is an owner-controlled AI agent workspace with delegated spending controls and a shared private funding pool on Solana devnet.
 
-Status: the recorded M2 pool/PayAI Echo run and one complete Shawn/Prince/Mira demo run with live inference (2026-10-17-1eba868c, recorded before PR #3 merged) are verified on devnet. Integrated flows are verified on local test validator with a fixture / mock provider. A fresh post-merge devnet run, browser-wallet signing and a private-pool-funded marketplace hire are not yet run. Amounts are USDC on Solana devnet. The deterministic development setup has derivable toxic waste and is for devnet funds only.
+Status: Solana devnet development prototype, not audited or suitable for production funds. See the current-status page for implemented capabilities, dated test results and remaining end-to-end checks. The evidence page contains public transaction receipts and submission files.
 
-Veilo includes a marketplace of reviewed paid specialists: searchable listings, seller review, private jobs/deliverables, direct seller x402 settlement, zero platform fee and receipt-based earnings. Supabase holds marketplace identity/product records; local control/wallet retain spending authority. Cloud sign-in cannot authorize money, and the local P0 stack still works without Supabase. These capabilities are implemented in code and pass live RLS checks; their devnet acceptance is incomplete.
-
-Execution uses credit-manager, research, content and custom roles; custom agents can propose marketplace hires that the owner approves locally. Owners configure names, jobs, triggers, budgets and approved services. Shawn, Prince and Mira are workflow examples, not a fixed list of agents. The model proposes resources; independent control and wallet services authorize purchases.
-
-The private flow aims to remove the explicit link from a particular deposited note to a payout. Fresh-wallet payments, merchants, amounts and timing remain public. Owners retain local agent attribution; the gateway can link authenticated usage. Do not infer universal anonymity, production readiness, deployed behavior or successful security tests from these documentation pages.
+Veilo combines personal agents, a local private wallet and a specialist marketplace. Supabase holds marketplace identity and product data; local control and wallet services retain spending authority. Spending limits are service-enforced. Groth16 authorizes pool withdrawals; fresh wallets make ordinary x402 merchant payments. Amounts, merchants and timing remain public.
 
 ## Product documentation
 

@@ -1,0 +1,78 @@
+{
+  "kind": "Veilo demo:run evidence",
+  "runId": "2026-10-17-1eba868c",
+  "profile": "devnet",
+  "network": "Solana devnet (test USDC; no monetary value)",
+  "program": "27DgErLiY8u5ovRDFrr49GVQkpm5hpSjtvX4UY3vAjFd",
+  "poolState": "5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe",
+  "poolExplorer": "https://explorer.solana.com/address/5u3NV47tnYYQ2uaT6WSo9XkmJLnCAY54fG7fHiDasuhe?cluster=devnet",
+  "labels": {
+    "inference": "operator-funded commercial inference via OpenRouter",
+    "data": "research datasets are labeled demo fixture data (CC0)",
+    "payments": "test-chain x402 payments in test USDC",
+    "credits": "Demo inference credits \u2014 backed by the operator's OpenRouter account",
+    "privacy": "Deposits, payouts, amounts, fresh wallets and timing are public; the hidden property is which deposit funded a withdrawal. The demo owner is the only depositor in this run, so its anonymity set is small."
+  },
+  "acceptance": {
+    "passed": true,
+    "checks": [
+      {
+        "name": "Prince research task completed",
+        "ok": true,
+        "detail": "state completed"
+      },
+      {
+        "name": "Mira content task completed",
+        "ok": true,
+        "detail": "state completed"
+      },
+      {
+        "name": "Shawn credit pack delivered once via private x402",
+        "ok": true,
+        "detail": "purchase 41cb3f46-aae2-42ec-8e85-0ea297a39b20"
+      },
+      {
+        "name": "Shawn credit pack merchant leg paid the gateway merchant",
+        "ok": true,
+        "detail": "1000000 base units to the gateway merchant ATA"
+      },
+      {
+        "name": "Prince research dataset delivered once via private x402",
+        "ok": true,
+        "detail": "purchase 751077a8-2661-49ab-8cb9-98cff07ee652"
+      },
+      {
+        "name": "Prince research dataset merchant leg paid the gateway merchant",
+        "ok": true,
+        "detail": "200000 base units to the gateway merchant ATA"
+      },
+      {
+        "name": "Mira content package delivered once via private x402",
+        "ok": true,
+        "detail": "purchase 78425795-ea51-4a08-a36c-b16251e97083"
+      },
+      {
+        "name": "Mira content package merchant leg paid the gateway merchant",
+        "ok": true,
+        "detail": "300000 base units to the gateway merchant ATA"
+      },
+      {
+        "name": "analyze inference succeeded (live)",
+        "ok": true,
+        "detail": "1 succeeded live provider call(s)"
+      },
+      {
+        "name": "content-package inference succeeded (live)",
+        "ok": true,
+        "detail": "1 succeeded live provider call(s)"
+      },
+      {
+        "name": "no fixture provider call in a live run",
+        "ok": true,
+        "detail": "0 non-live provider call(s)"
+      }
+    ]
+  },
+  "sourceArtifact": "artifacts/evidence/demo-2026-10-17-1eba868c/summary.json",
+  "scope": "Historical backend-driven run with owner-local keys. Not a browser-wallet or current private-funded marketplace workflow acceptance run."
+}

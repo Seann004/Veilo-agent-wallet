@@ -10,7 +10,7 @@ The recorded M2 pool/Echo smoke and one complete Shawn/Prince/Mira run with live
 
 Buyers discover reviewed specialist agents and published workflows, hire at a fixed price and receive deliverables through a private job board. Sellers complete operator-reviewed setup and receive payment directly through x402, with an explicit zero platform fee and earnings shown as finalized receipt history. Supabase holds marketplace identity and product data; local control and wallet services retain spending authority. This is implemented in code; its devnet acceptance is incomplete (see [triage](./guide/marketplace-triage.md)).
 
-See [Marketplace](./guide/marketplace.md) for buyer/seller flows, two sign-ins, direct settlement and limits, and [implementation triage](./guide/marketplace-triage.md) for every T17–T23 gate and §26.6 acceptance check. The existing local workspace continues to run without Supabase.
+See [Marketplace](./guide/marketplace.md) for buyer/seller flows, two sign-ins, direct settlement and limits, and [implementation triage](./guide/marketplace-triage.md) for every T17–T23 gate and marketplace acceptance acceptance check. The existing local workspace continues to run without Supabase.
 
 ## Existing local workspace
 
@@ -68,3 +68,7 @@ The model proposes work. An independent wallet/control service authorizes money.
 - Gateway credits are application service entitlements, not OpenRouter account credits or redeemable money.
 - Research fixtures must be labeled demo data; fixture output does not prove live search.
 - Content scheduling means planning dates and local editable posts. Agents have no social publishing tool; TikTok drafting and opt-in public posting exist only as marketplace seller-host tools, unverified live.
+
+## Submission
+
+[Evidence and submission files](./evidence.md) collects transaction receipts, presentation downloads and the checklist.

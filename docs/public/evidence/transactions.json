@@ -1,0 +1,36 @@
+{
+  "network": "Solana devnet",
+  "recordedDate": "2026-10-17",
+  "lastFinalityCheckDate": "2026-10-19",
+  "lastCheckResult": "Finalized with no on-chain error",
+  "scope": "Historical operator-driven pool/x402 smoke. Echo refunds its payment. Owner withdrawal uses a separate note. Does not establish current unattended marketplace acceptance.",
+  "transactions": [
+    {
+      "operation": "Pool withdrawal",
+      "amount": "0.01",
+      "asset": "devnet USDC",
+      "slot": "512001315",
+      "signature": "2fbWQ6ws2y2sHFUgBeELnKVsdVKZwpBnx6ma9kkwhkHtdw9ki2fBq14UN3nqdFMBcGsLQKUVK36aE1w7DBcPJLE3",
+      "explorer": "https://explorer.solana.com/tx/2fbWQ6ws2y2sHFUgBeELnKVsdVKZwpBnx6ma9kkwhkHtdw9ki2fBq14UN3nqdFMBcGsLQKUVK36aE1w7DBcPJLE3?cluster=devnet",
+      "sourceArtifact": "artifacts/evidence/m2-spend.json"
+    },
+    {
+      "operation": "x402 merchant payment",
+      "amount": "0.01",
+      "asset": "devnet USDC",
+      "slot": "512001369",
+      "signature": "3mChKemwTiirm9TvVpFMzbKiMQAkDB8SMX74nWgkmjhzijY2TRszZQpkET6PU6EQD5p6oEQt7jds2JmwSWLJWReA",
+      "explorer": "https://explorer.solana.com/tx/3mChKemwTiirm9TvVpFMzbKiMQAkDB8SMX74nWgkmjhzijY2TRszZQpkET6PU6EQD5p6oEQt7jds2JmwSWLJWReA?cluster=devnet",
+      "sourceArtifact": "artifacts/evidence/m2-merchant.json"
+    },
+    {
+      "operation": "Owner withdrawal",
+      "amount": "0.20",
+      "asset": "devnet USDC",
+      "slot": "512001396",
+      "signature": "52EVL9oes4qKYArNqEFySbC7g5pNwEVxAo9bMZ7JXNNRqoVC6yeeBoPGarvequ2sDT78Xb2YRarN5t8XLmT8BEZu",
+      "explorer": "https://explorer.solana.com/tx/52EVL9oes4qKYArNqEFySbC7g5pNwEVxAo9bMZ7JXNNRqoVC6yeeBoPGarvequ2sDT78Xb2YRarN5t8XLmT8BEZu?cluster=devnet",
+      "sourceArtifact": "artifacts/evidence/m2-exits.json"
+    }
+  ]
+}
