@@ -1,7 +1,6 @@
-import { lookup as dnsLookup } from "node:dns";
-import { request as httpsRequest } from "node:https";
-import { BlockList, isIP, type LookupFunction } from "node:net";
-import { Readable } from "node:stream";
+import { requestBounded } from "./transport";
+export { isPublicAddress, requestBounded } from "./transport";
+export type { Resolver, BoundedResponse } from "./transport";
 import { mcpToolDigest, mcpToolPinSchema, renderArgs, type McpToolPin } from "@veilo/contracts/marketplace";
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
@@ -39,7 +38,7 @@ export class McpClient {
     readonly endpoint: string,
     private readonly o: { fetch?: FetchLike; bearer?: string | undefined; timeoutMs?: number; maxBytes?: number; publicOnly?: boolean; clientName?: string } = {},
   ) {
-    this.#fetch = o.fetch ?? (o.publicOnly ? publicFetch : (u, i) => fetch(u, i));
+    this.#fetch = o.fetch ?? (o.publicOnly ? (u, i) => publicFetch(u, i, { maxBytes: o.maxBytes, timeoutMs: o.timeoutMs }) : (u, i) => fetch(u, i));
   }
 
   async #post(body: Record<string, unknown>): Promise<unknown> {
@@ -50,6 +49,7 @@ export class McpClient {
     try {
       res = await this.#fetch(this.endpoint, { method: "POST", headers, body: JSON.stringify(body), redirect: "error", signal: AbortSignal.timeout(this.o.timeoutMs ?? 30_000) });
     } catch (error) {
+      if (error instanceof McpError) throw error;
       throw new McpError("PROVIDER_UNAVAILABLE", `MCP server unreachable: ${(error as Error).name}`);
     }
     const session = res.headers.get("mcp-session-id");
@@ -126,62 +126,18 @@ async function readBounded(res: Response, max: number): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-const V4_SPECIAL = new BlockList();
-for (const [net, prefix] of [
-  ["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16], ["172.16.0.0", 12], ["192.0.0.0", 24], ["192.0.2.0", 24],
-  ["192.88.99.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15], ["198.51.100.0", 24], ["203.0.113.0", 24], ["224.0.0.0", 4], ["240.0.0.0", 4],
-] as const) V4_SPECIAL.addSubnet(net, prefix, "ipv4");
-const V6_GLOBAL = new BlockList();
-V6_GLOBAL.addSubnet("2000::", 3, "ipv6");
-// Inside 2000::/3 but tunnelling, documentation or otherwise not plain global unicast.
-const V6_SPECIAL = new BlockList();
-for (const [net, prefix] of [["2001::", 23], ["2001:db8::", 32], ["2002::", 16], ["3fff::", 20]] as const) V6_SPECIAL.addSubnet(net, prefix, "ipv6");
-
-/** True only for global unicast: any IPv6 outside 2000::/3 (mapped, NAT64, ULA, link-local) is refused. */
-export function isPublicAddress(address: string): boolean {
-  const family = isIP(address);
-  if (family === 4) return !V4_SPECIAL.check(address, "ipv4");
-  if (family === 6) return V6_GLOBAL.check(address, "ipv6") && !V6_SPECIAL.check(address, "ipv6");
-  return false;
-}
-
-/**
- * fetch over node:https whose DNS lookup refuses non-public addresses at connect time, so the
- * address checked is the address connected to. Never follows redirects.
- */
-export const publicFetch: FetchLike = (url, init = {}) =>
-  new Promise((resolve, reject) => {
-    const u = new URL(url);
-    if (u.protocol !== "https:") return reject(new McpError("PROVIDER_FAILED", "MCP endpoint must use https"));
-    const literal = u.hostname.replace(/^\[|\]$/g, "");
-    if (isIP(literal) && !isPublicAddress(literal)) return reject(new McpError("PROVIDER_FAILED", "MCP host resolves to a non-public address"));
-    const req = httpsRequest(
-      u,
-      {
-        method: init.method ?? "GET",
-        headers: init.headers as Record<string, string>,
-        signal: init.signal ?? undefined,
-        // Node asks for every address when it races IPv4 and IPv6, and for one otherwise.
-        lookup: ((host: string, opts: { all?: boolean }, cb: (err: Error | null, address: unknown, family?: number) => void) => {
-          dnsLookup(host, { all: true }, (err, addrs) => {
-            if (err) return cb(err, opts.all ? [] : "", 4);
-            if (addrs.length === 0 || addrs.some((a) => !isPublicAddress(a.address))) return cb(new McpError("PROVIDER_FAILED", "MCP host resolves to a non-public address"), opts.all ? [] : "", 4);
-            if (opts.all) cb(null, addrs);
-            else cb(null, addrs[0]!.address, addrs[0]!.family);
-          });
-        }) as unknown as LookupFunction,
-      },
-      (res) => {
-        const headers = new Headers();
-        for (const [k, v] of Object.entries(res.headers)) if (v !== undefined) headers.set(k, Array.isArray(v) ? v.join(", ") : v);
-        const status = res.statusCode ?? 502;
-        const body = status === 204 || status === 304 ? null : (Readable.toWeb(res) as ReadableStream<Uint8Array>);
-        resolve(new Response(body, { status, headers }));
-      },
-    );
-    req.on("error", reject);
-    req.end(typeof init.body === "string" ? init.body : undefined);
-  });
+/** HTTPS-only public MCP transport, with connection-bound DNS checks and bounded decoded replies. */
+export const publicFetch = async (url: string, init: RequestInit = {}, bounds?: { maxBytes?: number | undefined; timeoutMs?: number | undefined }) => {
+  const u = new URL(url);
+  if (u.protocol !== "https:") throw new McpError("PROVIDER_FAILED", "MCP endpoint must use https");
+  try {
+    const r = await requestBounded(u, { ...bounds, method: init.method, headers: Object.fromEntries(new Headers(init.headers)), body: typeof init.body === "string" ? init.body : undefined, signal: init.signal ?? undefined, rejectRedirects: true });
+    return new Response(r.status === 204 || r.status === 304 ? null : new Uint8Array(r.body), { status: r.status, headers: r.headers });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "MCP transport failed";
+    throw new McpError(/size bound|content encoding|redirects|non-public/.test(message) ? "PROVIDER_FAILED" : "PROVIDER_UNAVAILABLE", message);
+  }
+};
 
 /** Reads the live tool and refuses unless it still matches the reviewed digest. */
 export async function liveToolMatches(client: McpClient, tool: Pick<McpJobTool, "toolName" | "toolSha256">): Promise<void> {

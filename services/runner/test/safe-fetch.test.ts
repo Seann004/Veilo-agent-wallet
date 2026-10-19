@@ -17,7 +17,7 @@ async function local(handler: Parameters<typeof createServer>[1]): Promise<strin
 
 describe("tool HTTP restrictions", () => {
   it("classifies private, loopback, link-local, CGNAT and mapped addresses", () => {
-    for (const ip of ["127.0.0.1", "10.1.2.3", "172.16.0.1", "192.168.1.1", "169.254.169.254", "100.64.0.1", "0.0.0.0", "::1", "fd00::1", "fe80::1", "::ffff:10.0.0.1"]) {
+    for (const ip of ["127.0.0.1", "10.1.2.3", "172.16.0.1", "192.168.1.1", "169.254.169.254", "100.64.0.1", "0.0.0.0", "::1", "fd00::1", "fe80::1", "::ffff:10.0.0.1", "::ffff:7f00:1", "64:ff9b::a9fe:a9fe", "2002:a9fe:a9fe::1", "2001:db8::1"]) {
       expect([ip, isPrivateAddress(ip)]).toEqual([ip, true]);
     }
     for (const ip of ["93.184.216.34", "1.1.1.1", "2606:4700:4700::1111"]) expect(isPrivateAddress(ip)).toBe(false);
@@ -30,6 +30,30 @@ describe("tool HTTP restrictions", () => {
     await expect(safeFetch("https://u:p@data.example/", policy)).rejects.toThrow(/credentials/);
     await expect(safeFetch("https://data.example/x", policy, async () => ["10.0.0.5"])).rejects.toThrow(/private/);
     await expect(safeFetch("https://data.example/x", policy, async () => ["93.184.216.34", "127.0.0.1"])).rejects.toThrow(/private/);
+  });
+
+  it("aborts an oversized chunked stream before the producer finishes", async () => {
+    let writes = 0;
+    let closed!: () => void;
+    const disconnected = new Promise<void>(resolve => { closed = resolve; });
+    const origin = await local((_req, res) => {
+      res.writeHead(200);
+      const timer = setInterval(() => { writes++; res.write(Buffer.alloc(1024)); if (writes === 100) res.end(); }, 5);
+      res.on("close", () => { clearInterval(timer); closed(); });
+    });
+    await expect(safeFetch(origin, { approvedOrigins: [origin], localServiceOrigins: [origin], maxBytes: 1500 })).rejects.toThrow(/size bound/);
+    await disconnected;
+    expect(writes).toBeLessThan(100);
+    expect(writes).toBeGreaterThanOrEqual(2);
+  });
+
+  it("bounds the whole exchange even when a response keeps sending bytes", async () => {
+    const origin = await local((_req, res) => {
+      res.writeHead(200);
+      const timer = setInterval(() => res.write("a"), 5);
+      res.on("close", () => clearInterval(timer));
+    });
+    await expect(safeFetch(origin, { approvedOrigins: [origin], localServiceOrigins: [origin], timeoutMs: 50 })).rejects.toThrow(/timed out/);
   });
 
   it("allows an explicitly configured local demo service and refuses its redirects", async () => {
