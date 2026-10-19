@@ -1,6 +1,6 @@
 # Architecture
 
-**Verification scope:** see [current status](./status.md). The recorded M2 proof run is **verified on devnet**; integrated flows are **verified on local test validator** with a **fixture / mock provider**. The Shawn/Prince/Mira demo has one recorded pre-merge **verified on devnet** run with live inference. Marketplace code is on `main`; a private-pool-funded hire is **not yet run** on devnet.
+For recorded verification and remaining checks, see [current status](./status.md).
 
 Veilo separates agent planning, financial authority, public-chain enforcement and paid-service delivery. The implemented owner stack is local, with one owner per workspace and distinct processes, credentials and secret access. The accepted v3.2 marketplace adds multiple independent buyer/seller accounts and cloud product records; it does not make a workspace multi-owner. These are application/process credential boundaries on a trusted owner host, not an OS sandbox against a compromised process. Owners can create and configure agents; demo agents are examples of roles running within the same authority boundaries.
 
