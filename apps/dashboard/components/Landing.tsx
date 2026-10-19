@@ -55,7 +55,7 @@ export function Landing() {
       </section>
 
       <figure className="shot">
-        <img src="/marketing/hero-placeholder.svg" alt="Veilo workspace: agents in a sidebar, a task thread and the agent's limits" width={1600} height={900} />
+        <img src="/marketing/workspace-preview.jpg" alt="Veilo workspace with personal agents, ready-to-spend USDC, spending limits and treasury activity on Solana devnet" width={1470} height={550} />
       </figure>
 
       <section className="site-section">
