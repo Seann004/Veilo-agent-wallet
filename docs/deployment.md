@@ -251,7 +251,7 @@ The figures are recomputed on every dry run, and a shortfall stops the run.
 
 ### Operator commands, in order
 
-Run each command from the repository root (in a Claude Code session: `! <command>`). Docker must be running, unless you set `VEILO_TOOLCHAIN=native`. `.env` already holds `FUNDING_KEY_PATH=work/keys/veilo-devnet-funding.json`.
+Run commands from the repository root. Docker must be running unless you set `VEILO_TOOLCHAIN=native`. Configure `FUNDING_KEY_PATH` to your own local devnet key file. No private key or provider credential is included in a clone.
 
 1. Plan (read-only):
    `pnpm deploy:devnet`
@@ -516,18 +516,18 @@ Every merchant signing call in runs `96c82bb7` and `1eba868c` succeeded on the f
 
 Operator-funded inference, provider-reported: 88 micro-USD (run e607), 73 micro-USD (run 96c8) and 205 micro-USD (run 1eba). Two diagnostic replays cost about 430 more.
 
-The stopped runs' notes stay in the pool: 1.8 USDC each for `e60755f3` and `96c82bb7`. Their state files are `work/demo/devnet-state.2026-10-17-<runId>.json`, and their note stores are under `work/demo/devnet/<runId>/`. The owner can exit them from this Mac.
+Historical stopped-run funds belong to the original operator. Their local note stores and keys are not included in the repository; a new installation cannot recover or spend those notes.
 
 ### Running on macOS (operator checklist)
 
 Prerequisites on the Mac:
 
-1. Node 22: `export PATH=/opt/homebrew/opt/node@22/bin:$PATH`. The default Node 25 is outside `engines`.
-2. The role keys of `27Dg…AjFd` exist only on the Mac that deployed it, under `work/keys/devnet/`. On another machine, copy that directory and `work/keys/veilo-devnet-funding.json` to the same relative paths. Do not create new keys for these roles. Then restrict the files: `chmod 700 work work/keys work/keys/devnet && chmod 600 work/keys/*.json work/keys/devnet/*.json`.
+1. Use a supported Node version: 22.14–24. Node 25 is outside `engines`.
+2. A new installation needs its own deployment and role keys. Follow the devnet runbook; do not copy another operator's secrets or regenerate keys against their existing pool. For your own existing deployment, restore keys only from your secured backup. Restrict local key files to your OS account.
 3. `circuits/build/` can be rebuilt with `pnpm test:circuits`. The setup is deterministic, and the build fails if any hash differs from `artifacts/circuits/manifest.json`.
 4. `pnpm deploy:devnet` fills `.env` (`POOL_PROGRAM_ID`, `POOL_ID`, `SPONSOR_KEY_PATH`, `APPROVED_PARTICIPANTS`, `GATEWAY_MERCHANT_ADDRESS`, `GATEWAY_MERCHANT_ATA`). It never overwrites a different existing value, so clear the old values before deploying a new pool. Also set:
    - `FUNDING_KEY_PATH=work/keys/veilo-devnet-funding.json`
-   - `OPENROUTER_API_KEY`: a key with its own provider-side spend limit
+   - `OPENROUTER_API_KEY`: your own account's key with a provider-side spend limit
    - `OPERATOR_MAX_REAL_USD_MICRO`: at least 5,498, for example `50000`. The budget guard counts only gateway ledgers on this machine.
 5. Ports 4700–4705 must be free during the run.
 

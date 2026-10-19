@@ -1,6 +1,8 @@
 # Running Veilo
 
-**Verification scope:** M2 and the pre-merge Shawn/Prince/Mira demo run `2026-10-17-1eba868c` are **verified on devnet**. Integrated payments/recovery are **verified on local test validator** with a **fixture / mock provider**. A fresh post-merge devnet run, browser-wallet signing and a private-pool-funded marketplace hire are **not yet run**. See [current status](./status.md).
+Use your own wallet, deployment and provider accounts. A clean clone contains no author API keys, wallet keys or local state. [Current status](./status.md) records verification and remaining checks.
+
+Provider-backed calls use the configured operator's real credits. Leave the real-inference budget at zero until you have configured your own account and spending limits. Do not copy an existing operator's `.env`, secret directory, databases or private keys, and do not point a new installation at their service credentials. Public program IDs, mint addresses and transaction receipts are not credentials.
 
 ## Marketplace setup (optional)
 
