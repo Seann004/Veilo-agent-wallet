@@ -11,7 +11,7 @@ Run `2026-10-17-1eba868c` filled the deposit/approval, Shawn, Prince, Mira, dupl
 - An unattended scheduler top-up, if submission claims autonomous execution; the script invokes Shawn's check explicitly.
 - A funded-wallet recovery scenario, separate from the script's public exit.
 - Marketplace: a private-pool-funded hire, a multi-step workflow run, a paid QuickNode x402 call and an MCP tool run through a seller host, all on devnet.
-- A first owner-approved devnet swap end to end (none recorded), and seeding `coingecko-market` into the live marketplace with `pnpm marketplace:seed --confirm`.
+- A devnet swap on the current code (three earlier swaps finalized on 2026-10-17/18, before the hardening and agent-chosen-amount changes), and seeding `coingecko-market` into the live marketplace with `pnpm marketplace:seed --confirm`.
 - A clean full `pnpm test` run on `59eb491`: the recorded run had 9 timeouts during a host pause, which passed when their files were rerun alone.
 
 Attach tested source commit, UTC time, reviewer, lockfile/artifact hashes and every failure/skip. The integration JSON and the evidence export do not record the tested source commit. M2 is a separate synthetic-participant pool/Echo run and cannot fill agent gateway placeholders.

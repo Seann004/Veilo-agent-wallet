@@ -18,7 +18,7 @@ Measured on `59eb491` on macOS (Node 24, pnpm 10.34.6, `.env` loaded):
 
 | Feature | Status | Evidence and limits |
 |---|---|---|
-| Owner-approved devnet swap (USDC to SOL on the pinned Orca whirlpool, agent picks an amount up to the owner's maximum per swap) | **not yet run** on devnet | Unit tests in control, wallet, relayer and runner against fakes. No swap evidence exists under `artifacts/evidence/`. Known gaps are listed in [payments](./payments.md#devnet-swap). |
+| Owner-approved devnet swap (USDC to SOL on the pinned Orca whirlpool, agent picks an amount up to the owner's maximum per swap) | **ran on devnet before the latest changes** | Three swaps finalized without error on 2026-10-17/18 (relayer ledger, confirmed on chain). The current code is unit-tested against fakes only; no evidence file exists under `artifacts/evidence/`. Known gaps are listed in [payments](./payments.md#devnet-swap). |
 | Agents on the owner's own model key | in code; tested against fakes | Live provider tests through Settings were made by the developer (OpenRouter GLM models); no recorded evidence file |
 | Read-only web browsing for custom agents | in code; tested with a real local Chrome refusal check | No recorded devnet or production run |
 | Result delivery to Telegram, Slack or Discord | in code; tested against fakes | No recorded live delivery |
