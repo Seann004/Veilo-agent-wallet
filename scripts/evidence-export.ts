@@ -3,10 +3,12 @@
 // links, the latest test outcome summaries and the redacted owner ledger of the latest demo run.
 // The bundle is scanned for known secret values and secret-shaped patterns; any hit fails.
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import { findRepoRoot, loadDotEnv } from "@veilo/contracts";
-import { argValue, explorerTx, writeJson } from "./devnet/lib";
+import { argValue, writeJson } from "./devnet/lib";
+import { evidenceSignatures, type EvidenceSignature } from "./evidence/signatures";
 import { fileSecrets, keypairSecrets, listFiles, scanDir, type SecretValue } from "./evidence/scan";
 
 const root = findRepoRoot();
@@ -15,15 +17,6 @@ const sha = (p: string) => createHash("sha256").update(readFileSync(p)).digest("
 const evidenceDir = join(root, "artifacts", "evidence");
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const out = argValue("--out") ?? join(root, "artifacts", "evidence-export", stamp);
-
-function signaturesIn(value: unknown, path: string, acc: Array<{ signature: string; where: string }>): void {
-  if (typeof value === "string") {
-    if (/^[1-9A-HJ-NP-Za-km-z]{86,90}$/.test(value)) acc.push({ signature: value, where: path });
-    return;
-  }
-  if (Array.isArray(value)) value.forEach((v, i) => signaturesIn(v, `${path}[${i}]`, acc));
-  else if (value && typeof value === "object") for (const [k, v] of Object.entries(value)) signaturesIn(v, `${path}.${k}`, acc);
-}
 
 function knownSecrets(): SecretValue[] {
   loadDotEnv({ rootDir: root, allowProviderSecrets: true });
@@ -59,6 +52,7 @@ function main(): void {
   copy(join(dep, "approved-labels.json"), "deployment/approved-labels.json");
 
   const hashed = [
+    "pnpm-lock.yaml",
     "target/deploy/privacy_pool.so",
     "artifacts/program/privacy_pool.json",
     "artifacts/circuits/manifest.json",
@@ -85,25 +79,27 @@ function main(): void {
     roles: roles ? Object.fromEntries(Object.entries(roles.roles).map(([k, v]) => [k, v.publicKey])) : null,
   };
 
-  const signatures: Array<{ signature: string; where: string }> = [];
+  const signatures: EvidenceSignature[] = [];
   const devnetEvidence = existsSync(evidenceDir) ? readdirSync(evidenceDir).filter((f) => f.endsWith(".json")) : [];
   for (const f of devnetEvidence) {
     copy(join(evidenceDir, f), `evidence/${f}`);
-    signaturesIn(JSON.parse(readFileSync(join(evidenceDir, f), "utf8")), f, signatures);
+    signatures.push(...evidenceSignatures(JSON.parse(readFileSync(join(evidenceDir, f), "utf8")), f));
   }
   const demo = latest("demo-", true);
   if (demo) {
     for (const f of listFiles(demo)) {
       const name = `demo/${relative(demo, f).split("\\").join("/")}`;
       copy(f, name);
-      if (f.endsWith(".json")) signaturesIn(JSON.parse(readFileSync(f, "utf8")), name, signatures);
+      if (f.endsWith(".json")) signatures.push(...evidenceSignatures(JSON.parse(readFileSync(f, "utf8")), name));
     }
   }
-  const unique = [...new Map(signatures.map((s) => [s.signature, s])).values()].map((s) => ({ ...s, explorer: explorerTx(s.signature) }));
+  const unique = [...new Map(signatures.map((s) => [`${s.network}:${s.signature}`, s])).values()];
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 
   writeJson(join(out, "index.json"), {
     kind: "Veilo sanitized evidence bundle",
     exportedAt: new Date().toISOString(),
+    exportSource: { commit: git("rev-parse", "HEAD"), dirty: git("status", "--porcelain").length > 0, scope: "Exporter checkout only; does not establish the source commit tested by historical records." },
     network: "Solana devnet (test USDC, no monetary value); integration-*.json files are local test validator results",
     addresses,
     artifactHashes: hashed,
@@ -112,6 +108,7 @@ function main(): void {
     testOutcomes: devnetEvidence.filter((f) => f.startsWith("integration-")),
     notes: [
       "Operator-funded commercial inference, demo fixture data and test-chain payments are labeled separately inside each file.",
+      "Receipt network labels come from source records. Only explicit devnet evidence has devnet Explorer links; local-validator and unknown receipts have no public Explorer link. Export does not recheck finality.",
       "No keys, credentials, note secrets or provider keys are included; the bundle is scanned before it is accepted.",
     ],
     files: [...copied, "index.json"],
