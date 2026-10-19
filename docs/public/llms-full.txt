@@ -12,6 +12,7 @@ The private flow aims to remove the explicit link from a particular deposited no
 
 ## Product documentation
 
+- [Submission review](./submission-review-2026-10-19.html): Checklist coverage, evidence-export corrections, current test results and remaining operator gates.
 - [Specialist-agent marketplace](./guide/marketplace.html): v3.2 buyer/seller marketplace, Supabase boundary, direct payments and zero fee; implemented, devnet acceptance incomplete.
 - [Marketplace triage](./guide/marketplace-triage.html): T17–T23 gates and all fourteen acceptance checks mapped to recorded RLS, unit and devnet evidence.
 - [Current status](./guide/status.html): Merged-tree checks, M2 and pre-merge demo devnet evidence, local validator/mock workflows and outstanding runs.
@@ -32,6 +33,63 @@ The private flow aims to remove the explicit link from a particular deposited no
 ## Complete context
 
 - [Full text](./llms-full.txt): Product documentation and editable diagram definitions in one text file.
+
+---
+
+# Submission review, 19 October 2026
+
+Scope: tested source `b155f17` (based on merged source `55e6404c2b8304c5b0b557742a3b2e96bbae1627`) plus the accompanying submission documentation. This is a focused adversarial review of submission claims, connector approval, runner transport/leases and supporting controls, not an external audit, exhaustive program audit or production clearance. Historical transactions keep their original environments and dates.
+
+## Organizer checklist supplied by the owner
+
+The six requirements below come from the owner's screenshot. Deadline, registration, devnet eligibility and reuse acceptance have not been independently confirmed in this review.
+
+| Requirement | Available now | Remaining gate |
+|---|---|---|
+| Technical documentation: architecture, algorithms, security | [Architecture](./guide/architecture.md), [protocol](./protocol.md), [policy](./guide/policy.md), [privacy](./guide/privacy.md), [security model](./security/assessment.md) | Freeze the final source and deployed artifact identities with the submitted evidence |
+| Presentation, at most 10 minutes | Canonical `slide_deck.md` proposes 12 slides with notes and a 5:40 speaking target; no demo slide or embedded demonstration | Approve content, rebuild the earlier PowerPoint draft and rehearse under 10 minutes; any website demonstration is separate and must fit the slot if included |
+| Optional demo video, at most 5 minutes | Demo flow and historical execution records exist | No final recording verified in this review; record only after the website rehearsal |
+| Source, README, GitHub link, setup, tests | README, pinned lockfiles, deployment/running guides, source and test suites | **GitHub API reports the repository is private**. Grant judges access or choose a reviewed publication path, then freeze a clean reviewed commit; a fresh clone has no keys, provider credits or proof build artifacts |
+| Security self-assessment: permission tiers and known risks | [Assessment](./security/assessment.md), [risks](./security/risks.md), [evidence matrix](./security/evidence.md) | Retain known gaps and attach final review identity and exact tested snapshot; not an independent audit |
+| On-chain execution evidence: real transaction hashes | M2 and pre-merge agent receipts, including pool withdrawal, merchant payment and public exit | A fresh current-path swap and private-pool-funded marketplace workflow are still needed for those current-feature claims; local-validator signatures cannot count as devnet evidence |
+
+## Findings and corrections
+
+1. **High, evidence integrity:** `scripts/evidence-export.ts` assigned devnet Explorer links to local integration signatures. Fixed through `scripts/evidence/signatures.ts`: explicit local labels take precedence, unknown environments stay unknown, only explicit devnet receipts receive public-devnet links, and deduplication includes network. Five regression cases cover misleading profiles, local labels, the local-rehearsal profile, unknown records and real devnet labels. This correction does not recheck chain finality.
+2. **Medium, provenance:** the exporter lacked the source checkout identity and lockfile digest. It now includes checkout commit/dirty flag and `pnpm-lock.yaml` hash. This identifies the exporter, never retroactively attributes historical runs to a new source commit. The submitted run must still record its own tested source.
+3. **Medium, documentation drift:** public setup/handoff text instructed operators to run the full marketplace seed and retained older browser DNS and swap claims. Updated to the custom-connector proposal followed by targeted operator approval, connection-time DNS checks and the distinction between older finalized swaps and the current unverified path.
+4. **Low, product clarity:** the existing `coingecko-docs` catalogue entry could be mistaken for price access. Dashboard display and future seed title now say **CoinGecko docs search only**. Market-data registration stays separate and requires explicit operator review. No live catalogue activation was performed.
+
+## Adversarial boundaries checked
+
+- Connector discovery contacts the registered canonical endpoint. Approval checks the full tools against live definitions again before approval. Fixed templates pin both code and upstream `execute`; raw code execution is refused. Existing approval, drift, endpoint and forged-pin tests remain in the suite.
+- Runner heartbeat 403/404/409 latches lease loss. Temporary failures leave completion validation to control. Existing lease and stale-completion regression tests remain in the suite.
+- Runner browser and research fetches use the shared bounded transport with address validation at connection time. Redirect and local-origin rules remain separate from arbitrary public access.
+- Reviewed program entry points include signer/account/PDA validation, checked financial arithmetic, proof verification and nullifier checks. No Rust/program changes were made and the program/LiteSVM suite was not rerun in this pass.
+- Budgets are enforced by the owner-controlled services. They are not proof-enforced caps. Owner-host compromise, small anonymity sets, development trusted setup and administrator powers remain explicit limitations.
+
+## Validation record
+
+Baseline before the exporter fix: full Vitest **989 passed, 1 skipped, 126 files**. Final full Vitest on source `b155f17`: **994 passed, 1 skipped, 127 files** (Node 24.22.0, `pnpm test --maxWorkers=4`). Root typecheck and lint passed after the fix. The five added tests concern evidence-network classification. Documentation production build and dashboard production build passed. VitePress emitted a bundle-size warning but no dead-link or rendering failure. A read-only classification of 14 existing evidence JSON files found four local-validator and forty devnet signature occurrences, with zero local/unknown signatures receiving a devnet link. This does not independently reverify transaction finality. Real development proof artifacts are present in this checkout. An initial run under a different bundled Node and restricted local-server environment failed; the repository Node and permitted local-server run passed the baseline. This is not evidence of a deployed behavior change.
+
+## Remaining operational gates
+
+- Current hardened swap: tiny amount, new finalized funding and swap receipts, pinned destination and pool, no blind retry on uncertainty.
+- CoinGecko: show docs-only first, submit market data in the UI, show In review, operator approves only that connector, attach to a custom agent and verify a cited price result.
+- Carousel: verify the displayed quote, one Studio North seller, provider credits, five images, three paid steps and the intended TikTok inbox destination. No paid image call or draft was initiated by this review. `draft` prevents auto-publication, not a guarantee of private audience.
+- Browser-wallet signing and owner exit on an eligible note; reserved/pending funds are not immediately withdrawable. A public exit is not a funded-wallet recovery drill.
+- Sponsor capacity is not reserved for the later swap, failed-swap sponsor fees do not reach control, and missing transaction reads can leave fee-accounting gaps. These remain open and block claims of complete financial hardening.
+- GitHub repository visibility was checked through the authenticated GitHub API on 19 October: `private: true`. Anonymous judge access is unavailable; reviewer invitations or a separately approved publication decision are required. No repository visibility was changed.
+- Licensing and organizer acceptance remain owner decisions. No code was merged, deployed or submitted by this review.
+
+## Website review order
+
+1. Workspace and Wallet: owner/devnet identity, ready/held/pending totals, public pool total, weak-pool warning, mobile and both themes.
+2. Custom agent on the owner's model key and a read-only documentation/browser task.
+3. Custom CoinGecko connector flow as described above; no USDC purchase, while model calls can consume provider credits.
+4. Wrong-direction and over-budget refusals before one tiny authorized swap.
+5. Carousel quote and output review, then one explicitly approved paid rehearsal.
+6. Pause/revoke and a separate eligible-note public exit last. Capture IDs, source revision, UTC times and finalized receipts.
 
 ---
 
@@ -163,19 +221,15 @@ Supabase's [Web3 sign-in](https://supabase.com/docs/guides/auth/auth-web3), [RLS
 
 # Evidence and current status
 
-This page reflects `main` at merge commit `59eb491` (PR #5, spend-control gaps, owner-approved swaps and templated connectors). It separates what that tree was checked against from evidence recorded earlier. Recorded results are not an independent audit, and the PRD describes requirements, not completion. All amounts are USDC on **Solana devnet**; they have no monetary value.
+Reviewed on 19 October 2026 against source `b155f17`, based on merged `main` `55e6404`, plus the accompanying submission documentation. Recorded results are not an independent audit. The PRD describes requirements, not completion. USDC payments use **Solana devnet** test tokens with no monetary value. CoinGecko market data concerns real public market prices and is separate from devnet pool pricing.
 
-## Checks on the current tree
+## Checks on the reviewed tree
 
-Measured on `59eb491` on macOS (Node 24, pnpm 10.34.6, `.env` loaded):
+The full suite on the local tree before the evidence-export fix passed **989 tests with 1 skipped across 126 files**. After the fix, the final full suite passed **994 tests with 1 skipped across 127 files**. Typecheck and lint passed. The new regression cases and scope are recorded in the [submission review](../submission-review-2026-10-19.md). The exporter now records its checkout provenance without claiming that historical transactions ran on that revision.
 
-| Check | Result | Limit |
-|---|---|---|
-| `pnpm check` (typecheck and lint) | pass | — |
-| `pnpm test` | 944 passed, 1 skipped (118 files) on the PR #5 head `bff924e`; `16b7f5d` changed one test, which passes | Full runs on a heavily loaded machine time out in several suites; those suites pass when run on their own |
-| `pnpm test:marketplace-rls` | not rerun; 84/84 recorded at `59696dd` | Chain reads in this script use a labeled fixture; it tests identity, RLS, Storage and transitions, not settlement |
+The earlier PR #5 result, 944 passed / 1 skipped on `bff924e`, is historical. Typecheck and lint passed on the reviewed tree. The RLS suite was not rerun: its prior 84/84 uses fixture chain reads and proves tenant controls, not settlement.
 
-`pnpm test:integration`, `pnpm test:program`, `pnpm test:circuits` and a devnet demo run were **not rerun** after PR #3.
+`pnpm test:integration`, `pnpm test:program`, `pnpm test:circuits` and a fresh devnet demo were not rerun in this submission pass. Local development proof artifacts are present for the automated suite. Operator signing, paid provider calls, catalogue activation and publishing remain separate steps.
 
 ## Behaviour added since the recorded runs
 
@@ -192,7 +246,7 @@ Measured on `59eb491` on macOS (Node 24, pnpm 10.34.6, `.env` loaded):
 
 | Feature / environment | Status | Evidence and limits |
 |---|---|---|
-| M2 pool deposit, authenticated insertion, approved root, Groth16 withdrawal, change insertion and original/change public exits | **verified on devnet** | [M2 summary](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/m2-summary.json) and its eight companion files, recorded 16 October against an earlier pool. Two synthetic participants; small set, no measured anonymity. |
+| M2 pool deposit, authenticated insertion, approved root, Groth16 withdrawal, change insertion and original/change public exits | **verified on devnet** | [M2 summary](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/m2-summary.json) and its eight companion files, recorded 17 October against the deployment named in those files. Two synthetic participants; small set, no measured anonymity. |
 | M2 fresh-wallet merchant payment | **verified on devnet** | [Merchant record](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/m2-merchant.json): PayAI Echo, 10,000 base units; Echo refunds payments. Not the Veilo gateway or an agent run. |
 | Integrated private payments, credits, idempotency, cap races, revoke, crash recovery and backup/restore | **verified on local test validator** | [Integration report](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/integration-2026-10-17T00-36-54-669Z.json): 30 passed, 0 failed, 0 skipped. On-chain Groth16 verification, self-hosted x402 facilitator, **fixture / mock provider** for inference. Local signatures are not devnet signatures. |
 | Shawn, Prince and Mira eight-step demo with live inference | **verified on devnet** (pre-merge run) | Run `2026-10-17-1eba868c`, program `27Dg…AjFd`: all 11 acceptance checks in [summary.json](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/demo-2026-10-17-1eba868c/summary.json) pass. Three private x402 purchases (credit pack, research dataset, content package) each delivered once to the gateway merchant; live DeepSeek V4 Flash calls via the operator's OpenRouter account per [inference-receipts.json](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/demo-2026-10-17-1eba868c/inference-receipts.json); no fixture provider call. Research sources are still fictional CC0 demo data. Recorded before PR #3 merged; no fresh post-merge run yet. Details: [demo checklist](./demo.md) and [deployment](../deployment.md). |
@@ -345,7 +399,7 @@ The exporter currently adds devnet explorer URLs to every signature it finds, in
 
 # Handoff and submission gaps
 
-Updated after PR #3 merged the parallel worktrees into `main` (`59696dd`) and rechecked against `59eb491` (PR #5). [Current status](./guide/status.md), [demo checklist](./guide/demo.md) and [security evidence](./security/evidence.md) are the public record. One complete devnet demo run with live inference is recorded from before the merge; the marketplace is implemented with devnet acceptance incomplete; see [marketplace triage](./guide/marketplace-triage.md).
+Updated 19 October 2026 against tested source `b155f17`, based on merged `main` `55e6404`, plus the accompanying submission documentation. Historical evidence below retains its original revision. [Current status](./guide/status.md), [demo checklist](./guide/demo.md) and [security evidence](./security/evidence.md) are the public record. One complete devnet demo run with live inference is recorded from before the merge; the marketplace is implemented with devnet acceptance incomplete; see [marketplace triage](./guide/marketplace-triage.md).
 
 ## Pending operator evidence
 
@@ -356,10 +410,10 @@ Run `2026-10-17-1eba868c` filled the deposit/approval, Shawn, Prince, Mira, dupl
 - An unattended scheduler top-up, if submission claims autonomous execution; the script invokes Shawn's check explicitly.
 - A funded-wallet recovery scenario, separate from the script's public exit.
 - Marketplace: a private-pool-funded hire, a multi-step workflow run, a paid QuickNode x402 call and an MCP tool run through a seller host, all on devnet.
-- A devnet swap on the current code (three earlier swaps finalized on 2026-10-17/18, before the hardening and agent-chosen-amount changes), and seeding `coingecko-market` into the live marketplace with `pnpm marketplace:seed --confirm`.
-- A clean full `pnpm test` run on `59eb491`: the recorded run had 9 timeouts during a host pause, which passed when their files were rerun alone.
+- A devnet swap on the current code (three earlier swaps finalized on 2026-10-17/18, before the hardening and agent-chosen-amount changes), and registering `coingecko-market` through the custom-connector UI, followed by targeted operator approval with `pnpm marketplace:connector coingecko-market --confirm`. Do not run the full seed.
+- The latest automated checks are recorded on the [current status page](./guide/status.md). The older `59eb491` timeout record is historical and is not the current test result.
 
-Attach tested source commit, UTC time, reviewer, lockfile/artifact hashes and every failure/skip. The integration JSON and the evidence export do not record the tested source commit. M2 is a separate synthetic-participant pool/Echo run and cannot fill agent gateway placeholders.
+Attach tested source commit, UTC time, reviewer, lockfile/artifact hashes and every failure/skip. The historical integration JSON does not record its tested source commit; export provenance identifies the exporter checkout only. M2 is a separate synthetic-participant pool/Echo run and cannot fill agent gateway placeholders.
 
 ## Merged branches
 
@@ -376,13 +430,13 @@ Observed at the earlier baseline and not yet rechecked line by line after the me
 
 ## Issues in scripts and dependencies outside this documentation scope
 
-- `scripts/evidence-export.ts` collects signatures from local `integration-*.json` and assigns devnet explorer links to all of them. Source-file environment labels are authoritative; the aggregate signature index is not a devnet register. It also lacks a source Git commit field.
+- The submission review corrected `scripts/evidence-export.ts`: local-validator and unknown receipts receive no devnet Explorer link, and the export records its checkout commit, dirty flag and lockfile hash. These identify the exporter checkout, not the historical run's tested commit. Exporting still does not recheck finality or authorize publication.
 - `scripts/demo-run.ts` drives backend services and stops them on completion. It launches no dashboard and does not verify browser-wallet signing. Its manual Shawn trigger does not alone prove unattended scheduling. It demonstrates public exit, not funded-wallet recovery.
 - `groth16-solana` 0.2.0 metadata says MIT, but the published crate's license file is Apache-2.0. Build status T06 calls it MIT without mentioning this discrepancy. Resolve with upstream before a release; see [license map](./references/attribution.md).
 
 ## Marketplace delivery triage
 
-The [marketplace guide](./guide/marketplace.md) covers the buyer/seller experience and cloud/local/payment boundaries. [Implementation triage](./guide/marketplace-triage.md) maps T17–T23 and all fourteen §26.6 checks to the live RLS e2e script, unit tests and devnet smokes. Remaining blockers: no free job path, no credential broker or hosted sandbox, no content-retention cleanup, no live refund transfer or offline-controller drill, and no private-pool-funded hire on devnet. Higgsfield, MakeUGC and Zernio are unverified and shown as "Provider not configured" by owner decision.
+The [marketplace guide](./guide/marketplace.md) covers the buyer/seller experience and cloud/local/payment boundaries. [Implementation triage](./guide/marketplace-triage.md) maps T17–T23 and all fourteen §26.6 checks to the live RLS e2e script, unit tests and devnet smokes. Remaining blockers: no free job path, no credential broker or hosted sandbox, no content-retention cleanup, no live refund transfer or offline-controller drill, and no private-pool-funded hire on devnet. Paid Higgsfield, MakeUGC and Zernio execution is unverified. The configured carousel and free preflight reads do not prove image generation, sufficient provider credits or a delivered TikTok inbox draft.
 
 ## Known code gaps found while documenting `59eb491`
 
@@ -529,7 +583,7 @@ A custom agent's planner prompt carries the agent's name, the owner's descriptio
 
 | Capability | Default | Bound |
 |---|---|---|
-| Read public web pages | Off (per-agent "Can browse the web") | Control issues a permit per page: active agent, running task, public `http(s)` URL with no credentials or custom port, at most 3 pages per task (the custom planner asks for at most 2). Pages open in a fresh cookie-less installed Chrome context (GET/HEAD only, no downloads, nothing clicked or typed). Chrome resolves hosts itself, so a DNS-rebinding window remains between the check and the load. `RUNNER_BROWSER=off` disables browsing. |
+| Read public web pages | Off (per-agent "Can browse the web") | Control issues a permit per page: active agent, running task, public `http(s)` URL with no credentials or custom port, at most 3 pages per task (the custom planner asks for at most 2). Pages open in a fresh cookie-less installed Chrome context (GET/HEAD only, no downloads, nothing clicked or typed). Every page request uses the shared transport, which validates the address at connection time and stops responses above 5 MB. Redirects are checked at each hop. `RUNNER_BROWSER=off` disables browsing. |
 | Read-only connector tools | None attached | At most 2 planner-chosen calls per custom task; control caps calls per task (`CONNECTOR_CALLS_PER_TASK`, default 5) and per agent per day, pins tool digests and refuses changed tools. |
 | Devnet USDC to SOL swap | Off | Only after the owner approves a maximum per swap and adds the swap to the agent's allowed purchases (see below). |
 | Assigned workflows | None | The owner assigns a workflow with a budget or with approval for each run (`askEachRun`); proposals outside it wait for the owner. |
@@ -546,13 +600,13 @@ Finished results can also be sent to one destination per agent (a Telegram bot c
 3. Ask the agent, for example, "swap 0.5 USDC to SOL". The agent may request any amount up to the approved maximum; it cannot choose the pool, direction or destination. Control refuses an amount above the maximum, binds the amount into the request digest and prices the purchase at the requested amount, so every per-purchase, task, agent and workspace limit applies to it.
 4. The answer reports "Swapped", or "Requested; settling privately" while control finishes the swap after the task ends. The transaction appears under Wallet activity.
 
-Choosing **Update** changes only the maximum. Removing the approval refuses new swaps at authorization and cancels a reserved swap whose proof was not yet released; a swap whose funding was already released keeps settling or becomes recoverable. Devnet pool prices are not market prices. The swap runs only when the wallet has swaps configured and `OWNER_RECOVERY_ADDRESS` is set. A swap has **not yet run** end to end on devnet; see [payments](./payments.md#devnet-swap) for the flow and its known gaps.
+Choosing **Update** changes only the maximum. Removing the approval refuses new swaps at authorization and cancels a reserved swap whose proof was not yet released; a swap whose funding was already released keeps settling or becomes recoverable. Devnet pool prices are not market prices. The swap runs only when the wallet has swaps configured and `OWNER_RECOVERY_ADDRESS` is set. The current hardened swap path has **not yet run** end to end on devnet; three earlier swaps finalized on 17–18 October using the older path; see [payments](./payments.md#devnet-swap) for the flow and its known gaps.
 
 ### Attach CoinGecko market data
 
 The marketplace connector `coingecko-market` offers three read-only tools that Veilo defines: `coingecko_simple_price` (price and 24-hour change for 1 to 10 coin ids), `coingecko_trending` and `coingecko_search` (find a coin id), plus CoinGecko's docs search. Each tool runs a fixed code template through CoinGecko's `execute` tool; the agent supplies only schema-checked values such as coin ids and currencies, never code. The approval pins the template code digest and the upstream `execute` digest, and calling `execute` directly is refused.
 
-1. The connector must first be approved in the marketplace catalogue. `pnpm marketplace:seed --confirm` proposes and approves it after re-reading CoinGecko's live tool list; this has **not yet been run** against the live marketplace, so the connector is not listed there yet. `coingecko-docs` (docs search only) is unchanged.
+1. Show the existing **CoinGecko docs search only** connector (`coingecko-docs`). To demonstrate adding market data, use **Connectors → Add → Custom MCP server**, enter `https://mcp.api.coingecko.com/mcp`, choose **Load fixed queries**, then **Submit for review**. It stays **In review** until the operator approves it. The targeted command `pnpm marketplace:connector coingecko-market` previews only this connector; after the proposal is shown, the operator may add `--confirm` to approve it. Do not run the full seed for this flow. Catalogue activation and an attached-agent website acceptance run are still outstanding.
 2. Open **Connectors** (`/connectors`), attach CoinGecko market data to a custom agent, then ask it a market question.
 3. The answer cites "CoinGecko (mcp.api.coingecko.com)" as the source. Connector calls are free, keyless and not private: CoinGecko sees the requested coin ids.
 
@@ -1030,7 +1084,7 @@ Veilo separates agent planning, owner authority, wallet signing, on-chain verifi
 
 ## Assessment scope and conclusion
 
-Team self-assessment first written for source snapshot `fe13778` (17 October 2026); the agent-tool section below was added for `59eb491` (19 October 2026) from the source, not from a new review. M2 demonstrates the proof-based devnet funding rail; local integration reports 30/30 cases with mock inference. Neither establishes live agent inference, a completed submission gate, an independent audit or production safety. Permission tiers below are implemented controls with local test coverage; full devnet agent acceptance is **not yet run**.
+Team self-assessment first written for source snapshot `fe13778` (17 October 2026); the agent-tool section below was added for `59eb491` (19 October 2026) from the source, not from a new review. M2 demonstrates the proof-based devnet funding rail; local integration reports 30/30 cases with mock inference. Neither establishes live agent inference, a completed submission gate, an independent audit or production safety. Permission tiers below are implemented controls with local test coverage; fresh post-merge devnet agent acceptance is **not yet run**. The pre-merge agent run remains historical evidence.
 
 Assets include devnet USDC principal, note/signing/encryption secrets, owner authority, provider quota, ledger integrity and private prompts. Threat actors include malicious services/prompts, impersonating workers, replaying/concurrent callers, compromised gateway/relayer/indexer, hostile host access and faulty circuits/setup/program administrators.
 
@@ -1045,11 +1099,11 @@ New threats include cross-tenant reads, forged seller callbacks, payout/version 
 | Path | Control in code | Limit |
 |---|---|---|
 | Owner's model key | Sealed by control (AES-256-GCM, key file under the secrets directory); agents get completions only; per-task call cap; audit without content | A model reply is untrusted text; control still authorizes every purchase |
-| Read-only browsing | Off by default; a control permit per page (public host, no credentials or custom port, page cap); cookie-less Chrome context, GET/HEAD only | Chrome resolves hosts itself, so a DNS-rebinding window remains after control's check |
+| Read-only browsing | Off by default; a control permit per page (public host, no credentials or custom port, page cap); cookie-less Chrome context, GET/HEAD only | Shared transport checks DNS at connection time and aborts responses over 5 MB. This is restricted browsing, not a general hosted sandbox |
 | Connector tools | Operator-approved, digest-pinned, read-only; tool descriptions and outputs fenced; per-task and per-agent caps; drift refused | A fence reduces, but does not remove, prompt-injection influence on the model |
 | Templated connector tools (CoinGecko) | The approval pins the template code digest and the upstream `execute` digest; agents send only schema-checked values; code-execution tools are refused when proposed, attached or called directly | Correctness depends on the upstream `execute` tool running the submitted template as published |
 | Result destinations | Owner-only routes; sealed secrets; fixed service hosts | Outputs leave the host as plain text |
-| Devnet swap | Owner approval with a maximum per swap; amount bound to the request digest and priced into every cap; the wallet decodes the quoted swap before signing and records it before signing; the relayer accepts one exact transaction shape and rechecks the sponsor cap | Not run on devnet. Sponsor capacity is not reserved at funding time; a failed swap's sponsor fee does not reach control's record |
+| Devnet swap | Owner approval with a maximum per swap; amount bound to the request digest and priced into every cap; the wallet decodes the quoted swap before signing and records it before signing; the relayer accepts one exact transaction shape and rechecks the sponsor cap | Current hardened path not run on devnet; three older-path swaps finalized on 17–18 October. Sponsor capacity is not reserved at funding time; a failed swap's sponsor fee does not reach control's record |
 | Reference image | Owner-only; type and size checked; stored apart from the task input so the runner never receives it | The style text the agent gets is model output and is treated as untrusted |
 
 ## Permission tiers
@@ -1109,7 +1163,7 @@ A security design describes required behavior; it does not establish that an imp
 | Backup and restore | Lost change or reused wallet material can lose funds or duplicate authority | Wallet/control snapshots are separate and omit the gateway ledger; quiesce writers, retain matching gateway state/credentials and reconcile after restore |
 | Dependencies | Devnet, RPC, facilitator or provider outages interrupt work | Health checks, bounded retries/cost and explicit pause states |
 | Public exit/recovery | Reveals value or linkage | Use bound owner destinations and explain the public nature of the operation |
-| Devnet swap | A swap may be refused for sponsor budget after its funding settled; the SOL output links to the owner's address; the swap is untested on devnet | Funded USDC stays recoverable to the owner; recovery of a never-signed swap is explicit (`swap_never_signed`); disclose the public destination |
+| Devnet swap | A swap may be refused for sponsor budget after its funding settled; the SOL output links to the owner's address; the current hardened path lacks a fresh devnet receipt, although three older-path swaps finalized | Funded USDC stays recoverable to the owner; recovery of a never-signed swap is explicit (`swap_never_signed`); disclose the public destination |
 | Owner's model provider and connectors | Prompts, gathered data and reference images reach third parties; injected text may steer the model | Keys stay in control; third-party text is fenced; policy and signing do not trust model output |
 
 Independent review and execution evidence are needed to evaluate implementation safety. Privacy depends on correct cryptography and operational behavior; it does not hide every transaction detail from every observer.

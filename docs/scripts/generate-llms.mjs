@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 
 const pages = [
+  ['submission-review-2026-10-19.md', 'Submission review', 'Checklist coverage, evidence-export corrections, current test results and remaining operator gates.'],
   ['guide/marketplace.md', 'Specialist-agent marketplace', 'v3.2 buyer/seller marketplace, Supabase boundary, direct payments and zero fee; implemented, devnet acceptance incomplete.'],
   ['guide/marketplace-triage.md', 'Marketplace triage', 'T17–T23 gates and all fourteen acceptance checks mapped to recorded RLS, unit and devnet evidence.'],
   ['guide/status.md', 'Current status', 'Merged-tree checks, M2 and pre-merge demo devnet evidence, local validator/mock workflows and outstanding runs.'],

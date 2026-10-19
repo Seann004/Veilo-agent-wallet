@@ -6,7 +6,7 @@ Veilo separates agent planning, owner authority, wallet signing, on-chain verifi
 
 ## Assessment scope and conclusion
 
-Team self-assessment first written for source snapshot `fe13778` (17 October 2026); the agent-tool section below was added for `59eb491` (19 October 2026) from the source, not from a new review. M2 demonstrates the proof-based devnet funding rail; local integration reports 30/30 cases with mock inference. Neither establishes live agent inference, a completed submission gate, an independent audit or production safety. Permission tiers below are implemented controls with local test coverage; full devnet agent acceptance is **not yet run**.
+Team self-assessment first written for source snapshot `fe13778` (17 October 2026); the agent-tool section below was added for `59eb491` (19 October 2026) from the source, not from a new review. M2 demonstrates the proof-based devnet funding rail; local integration reports 30/30 cases with mock inference. Neither establishes live agent inference, a completed submission gate, an independent audit or production safety. Permission tiers below are implemented controls with local test coverage; fresh post-merge devnet agent acceptance is **not yet run**. The pre-merge agent run remains historical evidence.
 
 Assets include devnet USDC principal, note/signing/encryption secrets, owner authority, provider quota, ledger integrity and private prompts. Threat actors include malicious services/prompts, impersonating workers, replaying/concurrent callers, compromised gateway/relayer/indexer, hostile host access and faulty circuits/setup/program administrators.
 
@@ -21,11 +21,11 @@ New threats include cross-tenant reads, forged seller callbacks, payout/version 
 | Path | Control in code | Limit |
 |---|---|---|
 | Owner's model key | Sealed by control (AES-256-GCM, key file under the secrets directory); agents get completions only; per-task call cap; audit without content | A model reply is untrusted text; control still authorizes every purchase |
-| Read-only browsing | Off by default; a control permit per page (public host, no credentials or custom port, page cap); cookie-less Chrome context, GET/HEAD only | Chrome resolves hosts itself, so a DNS-rebinding window remains after control's check |
+| Read-only browsing | Off by default; a control permit per page (public host, no credentials or custom port, page cap); cookie-less Chrome context, GET/HEAD only | Shared transport checks DNS at connection time and aborts responses over 5 MB. This is restricted browsing, not a general hosted sandbox |
 | Connector tools | Operator-approved, digest-pinned, read-only; tool descriptions and outputs fenced; per-task and per-agent caps; drift refused | A fence reduces, but does not remove, prompt-injection influence on the model |
 | Templated connector tools (CoinGecko) | The approval pins the template code digest and the upstream `execute` digest; agents send only schema-checked values; code-execution tools are refused when proposed, attached or called directly | Correctness depends on the upstream `execute` tool running the submitted template as published |
 | Result destinations | Owner-only routes; sealed secrets; fixed service hosts | Outputs leave the host as plain text |
-| Devnet swap | Owner approval with a maximum per swap; amount bound to the request digest and priced into every cap; the wallet decodes the quoted swap before signing and records it before signing; the relayer accepts one exact transaction shape and rechecks the sponsor cap | Not run on devnet. Sponsor capacity is not reserved at funding time; a failed swap's sponsor fee does not reach control's record |
+| Devnet swap | Owner approval with a maximum per swap; amount bound to the request digest and priced into every cap; the wallet decodes the quoted swap before signing and records it before signing; the relayer accepts one exact transaction shape and rechecks the sponsor cap | Current hardened path not run on devnet; three older-path swaps finalized on 17–18 October. Sponsor capacity is not reserved at funding time; a failed swap's sponsor fee does not reach control's record |
 | Reference image | Owner-only; type and size checked; stored apart from the task input so the runner never receives it | The style text the agent gets is model output and is treated as untrusted |
 
 ## Permission tiers

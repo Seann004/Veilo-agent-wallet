@@ -486,7 +486,7 @@ async function main(): Promise<void> {
     const CONNECTORS: Array<{ id: string; title: string; endpoint: string; tools: string[]; templates?: string[]; note?: string }> = [
       { id: "solana-developer-docs", title: "Solana Developer MCP (docs)", endpoint: "https://mcp.solana.com/mcp", tools: ["Solana_Documentation_Search", "get_documentation", "list_sections"] },
       { id: "meteora-docs", title: "Meteora docs MCP", endpoint: "https://docs.meteora.ag/mcp", tools: ["search_meteora_documentation"] },
-      { id: "coingecko-docs", title: "CoinGecko MCP (docs search)", endpoint: "https://mcp.api.coingecko.com/mcp", tools: ["search_docs"] },
+      { id: "coingecko-docs", title: "CoinGecko docs search only", endpoint: "https://mcp.api.coingecko.com/mcp", tools: ["search_docs"] },
       ...MCP_TEMPLATE_SERVERS.map((t) => ({ id: t.id, title: t.title, endpoint: t.endpoint, tools: [...t.readOnlyTools], templates: [...t.templates], note: approvalNote(t) })),
     ];
     for (const c of CONNECTORS) {

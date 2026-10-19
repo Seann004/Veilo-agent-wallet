@@ -92,7 +92,7 @@ describe("Discover", () => {
     fireEvent.change(search, { target: { value: "liquidity pool" } });
     expect(within(cards()[0]!).getByText("Meteora docs")).toBeTruthy();
     fireEvent.change(search, { target: { value: "coingecko-docs" } });
-    expect(within(cards()[0]!).getByText("CoinGecko API docs")).toBeTruthy();
+    expect(within(cards()[0]!).getByText("CoinGecko docs search only")).toBeTruthy();
     fireEvent.change(search, { target: { value: "gmail" } });
     expect(screen.queryAllByRole("listitem").filter((li) => li.classList.contains("connector-card"))).toHaveLength(0);
     expect(screen.getByText(/No connectors match/)).toBeTruthy();

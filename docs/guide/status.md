@@ -1,18 +1,14 @@
 # Evidence and current status
 
-This page reflects `main` at merge commit `59eb491` (PR #5, spend-control gaps, owner-approved swaps and templated connectors). It separates what that tree was checked against from evidence recorded earlier. Recorded results are not an independent audit, and the PRD describes requirements, not completion. All amounts are USDC on **Solana devnet**; they have no monetary value.
+Reviewed on 19 October 2026 against source `b155f17`, based on merged `main` `55e6404`, plus the accompanying submission documentation. Recorded results are not an independent audit. The PRD describes requirements, not completion. USDC payments use **Solana devnet** test tokens with no monetary value. CoinGecko market data concerns real public market prices and is separate from devnet pool pricing.
 
-## Checks on the current tree
+## Checks on the reviewed tree
 
-Measured on `59eb491` on macOS (Node 24, pnpm 10.34.6, `.env` loaded):
+The full suite on the local tree before the evidence-export fix passed **989 tests with 1 skipped across 126 files**. After the fix, the final full suite passed **994 tests with 1 skipped across 127 files**. Typecheck and lint passed. The new regression cases and scope are recorded in the [submission review](../submission-review-2026-10-19.md). The exporter now records its checkout provenance without claiming that historical transactions ran on that revision.
 
-| Check | Result | Limit |
-|---|---|---|
-| `pnpm check` (typecheck and lint) | pass | — |
-| `pnpm test` | 944 passed, 1 skipped (118 files) on the PR #5 head `bff924e`; `16b7f5d` changed one test, which passes | Full runs on a heavily loaded machine time out in several suites; those suites pass when run on their own |
-| `pnpm test:marketplace-rls` | not rerun; 84/84 recorded at `59696dd` | Chain reads in this script use a labeled fixture; it tests identity, RLS, Storage and transitions, not settlement |
+The earlier PR #5 result, 944 passed / 1 skipped on `bff924e`, is historical. Typecheck and lint passed on the reviewed tree. The RLS suite was not rerun: its prior 84/84 uses fixture chain reads and proves tenant controls, not settlement.
 
-`pnpm test:integration`, `pnpm test:program`, `pnpm test:circuits` and a devnet demo run were **not rerun** after PR #3.
+`pnpm test:integration`, `pnpm test:program`, `pnpm test:circuits` and a fresh devnet demo were not rerun in this submission pass. Local development proof artifacts are present for the automated suite. Operator signing, paid provider calls, catalogue activation and publishing remain separate steps.
 
 ## Behaviour added since the recorded runs
 
@@ -29,7 +25,7 @@ Measured on `59eb491` on macOS (Node 24, pnpm 10.34.6, `.env` loaded):
 
 | Feature / environment | Status | Evidence and limits |
 |---|---|---|
-| M2 pool deposit, authenticated insertion, approved root, Groth16 withdrawal, change insertion and original/change public exits | **verified on devnet** | [M2 summary](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/m2-summary.json) and its eight companion files, recorded 16 October against an earlier pool. Two synthetic participants; small set, no measured anonymity. |
+| M2 pool deposit, authenticated insertion, approved root, Groth16 withdrawal, change insertion and original/change public exits | **verified on devnet** | [M2 summary](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/m2-summary.json) and its eight companion files, recorded 17 October against the deployment named in those files. Two synthetic participants; small set, no measured anonymity. |
 | M2 fresh-wallet merchant payment | **verified on devnet** | [Merchant record](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/m2-merchant.json): PayAI Echo, 10,000 base units; Echo refunds payments. Not the Veilo gateway or an agent run. |
 | Integrated private payments, credits, idempotency, cap races, revoke, crash recovery and backup/restore | **verified on local test validator** | [Integration report](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/integration-2026-10-17T00-36-54-669Z.json): 30 passed, 0 failed, 0 skipped. On-chain Groth16 verification, self-hosted x402 facilitator, **fixture / mock provider** for inference. Local signatures are not devnet signatures. |
 | Shawn, Prince and Mira eight-step demo with live inference | **verified on devnet** (pre-merge run) | Run `2026-10-17-1eba868c`, program `27Dg…AjFd`: all 11 acceptance checks in [summary.json](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/demo-2026-10-17-1eba868c/summary.json) pass. Three private x402 purchases (credit pack, research dataset, content package) each delivered once to the gateway merchant; live DeepSeek V4 Flash calls via the operator's OpenRouter account per [inference-receipts.json](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/demo-2026-10-17-1eba868c/inference-receipts.json); no fixture provider call. Research sources are still fictional CC0 demo data. Recorded before PR #3 merged; no fresh post-merge run yet. Details: [demo checklist](./demo.md) and [deployment](../deployment.md). |
