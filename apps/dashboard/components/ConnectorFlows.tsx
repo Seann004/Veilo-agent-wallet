@@ -32,6 +32,8 @@ import { ROLE_LABEL } from "../lib/labels";
 import type { Agent } from "../lib/types";
 import { Icon } from "./Icon";
 import { Modal } from "./Modal";
+import { EnsureMarket, useOptionalMarket } from "./market/MarketContext";
+import { MarketAccountBar } from "./market/MarketAccountBar";
 import { Select } from "./Select";
 import { useAction, useResource, type Resource } from "./hooks";
 import { ConfirmButton, ErrorNotice, Spinner } from "./ui";
@@ -419,7 +421,14 @@ function FieldError({ id, text }: { id: string; text: string | undefined }) {
 }
 
 /** Propose a remote MCP server for operator review; registered fixed queries can be discovered first. */
-export function AddCustomDialog({ onClose, onSubmitted }: { onClose: () => void; onSubmitted?: () => void }) {
+export function AddCustomDialog(props: { onClose: () => void; onSubmitted?: () => void }) {
+  return <EnsureMarket><CustomConnectorDialog {...props} /></EnsureMarket>;
+}
+
+function CustomConnectorDialog({ onClose, onSubmitted }: { onClose: () => void; onSubmitted?: () => void }) {
+  const market = useOptionalMarket();
+  const tokenSource = market?.configured ? market.accessToken : undefined;
+  const needsSignIn = market?.configured === true && !market.canAct;
   const fid = useId();
   const [id, setId] = useState("");
   const [title, setTitle] = useState("");
@@ -441,10 +450,11 @@ export function AddCustomDialog({ onClose, onSubmitted }: { onClose: () => void;
   }, [done]);
   const setTool = (i: number, patch: Partial<ToolDraft>) => setTools(tools.map((t, j) => (j === i ? { ...t, ...patch } : t)));
   const submit = () => {
+    if (needsSignIn) return;
     if (templateServer) {
       if (!preview) return;
       void act.run(async () => {
-        const res = await proposeConnector({ id: id || preview.connectorId, title: title || preview.title, endpoint: preview.endpoint, tools: preview.tools });
+        const res = await proposeConnector({ id: id || preview.connectorId, title: title || preview.title, endpoint: preview.endpoint, tools: preview.tools }, tokenSource);
         setDone(res.connectorId);
         onSubmitted?.();
       });
@@ -455,7 +465,7 @@ export function AddCustomDialog({ onClose, onSubmitted }: { onClose: () => void;
     if (!r.proposal) return;
     const proposal = r.proposal;
     void act.run(async () => {
-      const res = await proposeConnector(proposal);
+      const res = await proposeConnector(proposal, tokenSource);
       setDone(res.connectorId || proposal.id);
       onSubmitted?.();
     });
@@ -475,7 +485,7 @@ export function AddCustomDialog({ onClose, onSubmitted }: { onClose: () => void;
             <button type="button" className="btn" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" form={`${fid}-form`} className="btn btn-primary" disabled={act.busy || (!!templateServer && !preview)}>
+            <button type="submit" form={`${fid}-form`} className="btn btn-primary" disabled={act.busy || needsSignIn || (!!templateServer && !preview)}>
               {act.busy ? <Spinner /> : null}
               Submit for review
             </button>
@@ -504,9 +514,10 @@ export function AddCustomDialog({ onClose, onSubmitted }: { onClose: () => void;
             </li>
             <li>{KEYED_UNSUPPORTED}</li>
           </ul>
-          {!hasMarketplaceSignIn() ? (
+          {market?.configured ? <MarketAccountBar /> : null}
+          {!market?.configured && !hasMarketplaceSignIn() ? (
             <p className="notice notice-warn small" role="note">
-              Sending needs a marketplace sign-in, which this dashboard doesn&apos;t include yet. You can still check the details here.
+              Sending needs marketplace sign-in. Configure the marketplace for this dashboard first; you can still check the details here.
             </p>
           ) : null}
           <div className="grid-2">
@@ -569,10 +580,10 @@ export function AddCustomDialog({ onClose, onSubmitted }: { onClose: () => void;
             <div className="notice notice-help">
               <p className="flush">{templateServer.explanation}</p>
               <p className="hint">Load the live tool pins, then submit them for operator review.</p>
-              <button type="button" className="btn btn-small" disabled={act.busy} onClick={() => {
+              <button type="button" className="btn btn-small" disabled={act.busy || needsSignIn} onClick={() => {
                 const requested = endpoint;
                 void act.run(async () => {
-                  const next = await previewTemplateConnector(requested.trim());
+                  const next = await previewTemplateConnector(requested.trim(), tokenSource);
                   if (latestEndpoint.current === requested) setPreview(next);
                 });
               }}>{act.busy ? <Spinner /> : null}Load fixed queries</button>

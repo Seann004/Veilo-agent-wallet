@@ -91,14 +91,15 @@ export const hasMarketplaceSignIn = (): boolean => tokenSource !== null;
  * Calls the marketplace directly. Only a bearer token authenticates; cookies are never sent, so a
  * cross-site page cannot ride on a session.
  */
-async function marketplace<T>(path: string, init: { method?: "GET" | "POST"; body?: unknown; signedIn?: boolean } = {}): Promise<T> {
+async function marketplace<T>(path: string, init: { method?: "GET" | "POST"; body?: unknown; signedIn?: boolean; tokenSource?: TokenSource | undefined } = {}): Promise<T> {
   const origin = marketplaceOrigin();
   if (!origin) throw new ApiError(0, "NOT_READY", "the marketplace is not configured (NEXT_PUBLIC_MARKETPLACE_URL)");
   const method = init.method ?? "GET";
   const headers: Record<string, string> = { accept: "application/json" };
   if (init.signedIn) {
-    if (!tokenSource) throw new ApiError(0, "NOT_READY", "marketplace sign-in is not part of this dashboard yet");
-    const token = await tokenSource();
+    const source = init.tokenSource ?? tokenSource;
+    if (!source) throw new ApiError(0, "NOT_READY", "marketplace sign-in is not part of this dashboard yet");
+    const token = await source();
     if (!token) throw new ApiError(401, "UNAUTHENTICATED", "sign in to the marketplace with your wallet first");
     headers.authorization = `Bearer ${token}`;
   }
@@ -179,8 +180,8 @@ export interface ConnectorProposal {
   tools: Array<{ name: string; description: string; inputSchema: Record<string, unknown>; template?: { upstream: string; codeSha256: string; upstreamSha256: string } }>;
 }
 
-export function proposeConnector(p: ConnectorProposal): Promise<{ connectorId: string; status: string }> {
-  return marketplace("/tools/connectors", { method: "POST", body: p, signedIn: true });
+export function proposeConnector(p: ConnectorProposal, source?: TokenSource): Promise<{ connectorId: string; status: string }> {
+  return marketplace("/tools/connectors", { method: "POST", body: p, signedIn: true, tokenSource: source });
 }
 
 /**
@@ -395,6 +396,6 @@ export interface TemplateConnectorPreview {
   tools: ConnectorProposal["tools"];
 }
 
-export function previewTemplateConnector(endpoint: string): Promise<TemplateConnectorPreview> {
-  return marketplace("/tools/connectors/template-preview", { method: "POST", body: { endpoint }, signedIn: true });
+export function previewTemplateConnector(endpoint: string, source?: TokenSource): Promise<TemplateConnectorPreview> {
+  return marketplace("/tools/connectors/template-preview", { method: "POST", body: { endpoint }, signedIn: true, tokenSource: source });
 }
