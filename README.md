@@ -95,10 +95,26 @@ This table covers every script in the root `package.json`. Signing, paid inferen
 | `pnpm test:marketplace-rls` | Live identity/RLS/Storage/transition checks against the configured Supabase project (fixture chain reads) |
 | `pnpm marketplace:devnet-smoke` | Devnet hire with a publicly funded payer; signs only with `--confirm` |
 | `pnpm marketplace:operator` | Operator CLI: review sellers, listings, workflows, tools and connectors; issue seller-host credentials; sweep expiries |
+| `pnpm marketplace:connector coingecko-market` | Read-only plan for only CoinGecko; the operator may add `--confirm` to propose, recheck live digests and approve this connector without the full seed |
 | `pnpm marketplace:seed` | Read-only plan for demo creators, tools, connectors (including `coingecko-market`) and workflows; `--confirm` creates devnet token accounts and catalogue rows |
 | `pnpm marketplace:carousel-preflight` | Check the TikTok carousel workflow can run, without spending or posting (makes two free Zernio reads) |
 
 `pnpm install --frozen-lockfile` is pnpm's built-in dependency install, not a root script. Use `pnpm evidence:export` after the operator run; inspect output before publication. See [evidence mapping](docs/security/evidence.md) and [handoff gaps](docs/handoff.md).
+
+To add CoinGecko without seeding anything else, start the marketplace, configure
+`MARKETPLACE_URL` and `MARKETPLACE_OPERATOR_TOKEN_PATH`, then run
+`pnpm marketplace:connector coingecko-market`. It is read-only by default. The
+operator can rerun it with `--confirm` to propose and approve only this connector;
+changed or forged pins are refused. This step writes the live marketplace.
+
+Alternatively, enter `https://mcp.api.coingecko.com/mcp` in Connectors → Add →
+Custom MCP server, load the fixed queries, and submit for review. A signed-in
+`POST /tools/connectors` with only that endpoint also discovers the fixed tools.
+Neither path approves automatically. After operator approval, attach
+**CoinGecko market data** to an agent and ask **BTC price?**. Veilo runs fixed
+CoinGecko queries; agents fill in only coin ids, currencies or a search term,
+never code. The result cites CoinGecko. Live operator approval and this owner
+acceptance check remain to be run; tests use local fixtures.
 
 ## Documentation development
 

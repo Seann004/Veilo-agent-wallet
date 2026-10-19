@@ -12,20 +12,21 @@
  * and throwaway creator keys live under work/marketplace-seed (gitignored, 0600) and are never printed.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
-import { address, createKeyPairSignerFromBytes, createKeyPairSignerFromPrivateKeyBytes, getBase58Decoder, signBytes, type KeyPairSigner } from "@solana/kit";
-import { createClient } from "@supabase/supabase-js";
+import { address, createKeyPairSignerFromBytes, getBase58Decoder, type KeyPairSigner } from "@solana/kit";
 import { findRepoRoot, loadConfig, loadDotEnv, verifyChainIdentity } from "@veilo/contracts";
-import { CAROUSEL_SLIDE_COUNT_RULE, CAROUSEL_SLIDES, mcpTemplate, mcpToolDigest, MARKETPLACE_LIMITS, PROVIDER_MANIFESTS, templatedToolPin, TEST_TOKEN_LABEL, type ToolIo, type ToolProvider, type WorkflowVersionInput } from "@veilo/contracts/marketplace";
+import { CAROUSEL_SLIDE_COUNT_RULE, CAROUSEL_SLIDES, MCP_TEMPLATE_SERVERS, mcpTemplate, mcpToolDigest, MARKETPLACE_LIMITS, PROVIDER_MANIFESTS, templatedToolPin, TEST_TOKEN_LABEL, type ToolIo, type ToolProvider, type WorkflowVersionInput } from "@veilo/contracts/marketplace";
 import { createApp } from "../../services/marketplace/src/app";
 import { createRpcChain } from "../../services/marketplace/src/chain";
 import type { MarketplaceConfig } from "../../services/marketplace/src/config";
+import { approvalNote } from "../../services/marketplace/src/connector-approval";
 import { createDb } from "../../services/marketplace/src/db";
 import { payoutProofMessage } from "../../services/marketplace/src/service";
 import { McpClient } from "@veilo/mcp-client";
 import { ata, awaitTx, createAtaIdempotentIx, explorerTx, makeRpc, signAndSend, type SentTx } from "../devnet/lib";
+import { keyFor as seedKey, signText, web3Session } from "./web3-session";
 
 const confirm = process.argv.includes("--confirm");
 const repoRoot = findRepoRoot();
@@ -63,36 +64,8 @@ function step<T>(name: string, value: T): T {
   return value;
 }
 
-async function keyFor(name: string): Promise<KeyPairSigner> {
-  const dir = join(workDir, "keys");
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const path = join(dir, `${name}.seed.json`);
-  if (!existsSync(path)) writeFileSync(path, JSON.stringify([...randomBytes(32)]), { mode: 0o600 });
-  chmodSync(path, 0o600);
-  const seed = Uint8Array.from(JSON.parse(readFileSync(path, "utf8")) as number[]);
-  const signer = await createKeyPairSignerFromPrivateKeyBytes(seed);
-  seed.fill(0);
-  return signer;
-}
-
-const signText = async (signer: KeyPairSigner, message: string) => new Uint8Array(await signBytes(signer.keyPair.privateKey, new TextEncoder().encode(message)));
-
-async function session(signer: KeyPairSigner): Promise<{ token: string; userId: string }> {
-  const client = createClient(process.env.SUPABASE_URL as string, process.env.SUPABASE_PUBLISHABLE_KEY as string, { auth: { persistSession: false, autoRefreshToken: false } });
-  const message = [
-    "localhost:3000 wants you to sign in with your Solana account:",
-    signer.address,
-    "",
-    "Sign in to Veilo marketplace. This is a login message, not a transaction or spending approval.",
-    "",
-    "Version: 1",
-    "URI: http://localhost:3000/marketplace",
-    `Issued At: ${new Date().toISOString()}`,
-  ].join("\n");
-  const { data, error } = await client.auth.signInWithWeb3({ chain: "solana", message, signature: await signText(signer, message) });
-  if (error || !data.session) throw new Error(`web3 sign-in failed: ${error?.message ?? "no session"}`);
-  return { token: data.session.access_token, userId: data.session.user.id };
-}
+const keyFor = (name: string): Promise<KeyPairSigner> => seedKey(join(workDir, "keys"), name);
+const session = web3Session;
 
 interface Creator {
   key: string;
@@ -514,14 +487,7 @@ async function main(): Promise<void> {
       { id: "solana-developer-docs", title: "Solana Developer MCP (docs)", endpoint: "https://mcp.solana.com/mcp", tools: ["Solana_Documentation_Search", "get_documentation", "list_sections"] },
       { id: "meteora-docs", title: "Meteora docs MCP", endpoint: "https://docs.meteora.ag/mcp", tools: ["search_meteora_documentation"] },
       { id: "coingecko-docs", title: "CoinGecko MCP (docs search)", endpoint: "https://mcp.api.coingecko.com/mcp", tools: ["search_docs"] },
-      {
-        id: "coingecko-market",
-        title: "CoinGecko market data",
-        endpoint: "https://mcp.api.coingecko.com/mcp",
-        tools: ["search_docs"],
-        templates: ["coingecko_simple_price", "coingecko_trending", "coingecko_search"],
-        note: "read-only CoinGecko public API through fixed Veilo templates on the pinned execute tool; docs search; digests verified against the live tools/list",
-      },
+      ...MCP_TEMPLATE_SERVERS.map((t) => ({ id: t.id, title: t.title, endpoint: t.endpoint, tools: [...t.readOnlyTools], templates: [...t.templates], note: approvalNote(t) })),
     ];
     for (const c of CONNECTORS) {
       if (done(`connector.${c.id}`)) continue;

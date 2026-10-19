@@ -23,7 +23,7 @@ export function mcpToolDigest(t: McpToolPin): string {
 
 /** Why a pinned tool may not be offered on this endpoint, or null. */
 export function mcpToolPinProblem(t: McpToolPin, endpoint: string): string | null {
-  return t.template ? templatedToolProblem({ name: t.name, inputSchema: t.inputSchema, template: t.template }, endpoint) : codeExecutionToolProblem(t);
+  return t.template ? templatedToolProblem({ name: t.name, description: t.description, inputSchema: t.inputSchema, template: t.template }, endpoint) : codeExecutionToolProblem(t);
 }
 
 export function mcpManifestDigest(tools: readonly McpToolPin[]): string {

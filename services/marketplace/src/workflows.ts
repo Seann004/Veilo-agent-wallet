@@ -3,6 +3,7 @@ import {
   codeExecutionToolProblem,
   connectorProposalSchema,
   mcpManifestDigest,
+  mcpTemplateServerFor,
   mcpToolDigest,
   type McpToolPin,
   checkWorkflowPublication,
@@ -31,6 +32,7 @@ import { verifyEd25519, type ControllerActor, type UserActor } from "./auth";
 import { checkTransfer } from "./chain";
 import { must } from "./db";
 import { MarketError } from "./errors";
+import { previewTemplateConnector } from "./connector-approval";
 import type { Deps } from "./service";
 
 type Route = (handler: (req: Request & { rawBody?: Buffer }, res: Response) => Promise<unknown>) => (req: Request, res: Response, next: NextFunction) => void;
@@ -520,11 +522,25 @@ export function registerWorkflowRoutes(app: Express, deps: Deps, h: WorkflowRout
     }),
   );
   app.post(
+    "/tools/connectors/template-preview",
+    route(async (req) => {
+      await h.user(req);
+      const b = z.object({ endpoint: z.string().max(300) }).strict().parse(req.body);
+      return previewTemplateConnector(b.endpoint, deps.connectorTools);
+    }),
+  );
+  app.post(
     "/tools/connectors",
     route(async (req) => {
       const actor = await h.user(req, true);
-      const c = connectorProposalSchema.parse(req.body);
-      // Proposals are data only; the marketplace never contacts the endpoint. The operator verifies it before approval.
+      const b = z.object({ id: z.string().optional(), title: z.string().optional(), endpoint: z.string().max(300), tools: z.unknown().optional() }).strict().parse(req.body);
+      let input = b;
+      if (b.tools === undefined && mcpTemplateServerFor(b.endpoint)) {
+        const preview = await previewTemplateConnector(b.endpoint, deps.connectorTools);
+        input = { id: b.id ?? preview.connectorId, title: b.title ?? preview.title, endpoint: preview.endpoint, tools: preview.tools };
+      }
+      const c = connectorProposalSchema.parse(input);
+      // Discovery only reads a registered server. Approval always requires a separate operator action.
       return { connectorId: await db.rpc<string>("mk_propose_connector", { p_user: actor.userId, c, p_manifest: mcpManifestDigest(c.tools) }), status: "pending" };
     }),
   );

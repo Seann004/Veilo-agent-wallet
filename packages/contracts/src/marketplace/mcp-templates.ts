@@ -110,10 +110,11 @@ export function templatedToolPin(name: string, upstreamSha256: string) {
 }
 
 /**
- * Refuses a templated pin unless it matches a template in this build exactly: same name, schema,
- * upstream tool, code digest and endpoint host. A changed template therefore needs a new approval.
+ * Refuses a templated pin unless it matches a template in this build exactly: same name,
+ * description, schema, upstream tool, code digest and endpoint host. A changed template therefore
+ * needs a new approval.
  */
-export function templatedToolProblem(pin: { name: string; inputSchema: Record<string, unknown>; template: McpTemplateRef }, endpoint: string): string | null {
+export function templatedToolProblem(pin: { name: string; description: string; inputSchema: Record<string, unknown>; template: McpTemplateRef }, endpoint: string): string | null {
   const t = mcpTemplate(pin.name);
   if (!t) return `tool ${pin.name} is not a known Veilo template`;
   let host: string;
@@ -126,6 +127,7 @@ export function templatedToolProblem(pin: { name: string; inputSchema: Record<st
   if (pin.template.upstream !== t.upstream) return `template ${t.name} runs only through ${t.upstream}`;
   if (pin.template.codeSha256 !== mcpTemplateCodeDigest(t)) return `template ${t.name} code changed since it was approved`;
   if (canonicalJson(pin.inputSchema) !== canonicalJson(t.inputSchema)) return `template ${t.name} input schema differs from the approved one`;
+  if (pin.description !== t.description) return `template ${t.name} description differs from the approved one`;
   return null;
 }
 

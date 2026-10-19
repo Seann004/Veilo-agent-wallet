@@ -392,6 +392,9 @@ importers:
       '@veilo/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@veilo/mcp-client':
+        specifier: workspace:*
+        version: link:../../packages/mcp-client
       express:
         specifier: 5.3.0
         version: 5.3.0

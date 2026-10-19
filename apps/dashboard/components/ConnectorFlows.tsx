@@ -1,5 +1,6 @@
 "use client";
 
+import { mcpTemplateServerFor } from "@veilo/contracts/marketplace";
 import { brandForConnector, type Brand } from "../lib/brands";
 import { useEffect, useId, useRef, useState } from "react";
 import type { ApiError } from "../lib/api";
@@ -17,6 +18,8 @@ import {
   monogram,
   parseToolsList,
   proposeConnector,
+  previewTemplateConnector,
+  type TemplateConnectorPreview,
   shortDigest,
   validateProposal,
   workspaceAttachments,
@@ -29,6 +32,8 @@ import { ROLE_LABEL } from "../lib/labels";
 import type { Agent } from "../lib/types";
 import { Icon } from "./Icon";
 import { Modal } from "./Modal";
+import { EnsureMarket, useOptionalMarket } from "./market/MarketContext";
+import { MarketAccountBar } from "./market/MarketAccountBar";
 import { Select } from "./Select";
 import { useAction, useResource, type Resource } from "./hooks";
 import { ConfirmButton, ErrorNotice, Spinner } from "./ui";
@@ -415,8 +420,15 @@ function FieldError({ id, text }: { id: string; text: string | undefined }) {
   ) : null;
 }
 
-/** Propose a remote MCP server for operator review. Nothing is contacted until the operator verifies it. */
-export function AddCustomDialog({ onClose, onSubmitted }: { onClose: () => void; onSubmitted?: () => void }) {
+/** Propose a remote MCP server for operator review; registered fixed queries can be discovered first. */
+export function AddCustomDialog(props: { onClose: () => void; onSubmitted?: () => void }) {
+  return <EnsureMarket><CustomConnectorDialog {...props} /></EnsureMarket>;
+}
+
+function CustomConnectorDialog({ onClose, onSubmitted }: { onClose: () => void; onSubmitted?: () => void }) {
+  const market = useOptionalMarket();
+  const tokenSource = market?.configured ? market.accessToken : undefined;
+  const needsSignIn = market?.configured === true && !market.canAct;
   const fid = useId();
   const [id, setId] = useState("");
   const [title, setTitle] = useState("");
@@ -427,6 +439,10 @@ export function AddCustomDialog({ onClose, onSubmitted }: { onClose: () => void;
   const [pasted, setPasted] = useState("");
   const [pasteProblem, setPasteProblem] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [preview, setPreview] = useState<TemplateConnectorPreview | null>(null);
+  const latestEndpoint = useRef(endpoint);
+  latestEndpoint.current = endpoint;
+  const templateServer = mcpTemplateServerFor(endpoint.trim());
   const act = useAction();
   const doneRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -434,12 +450,22 @@ export function AddCustomDialog({ onClose, onSubmitted }: { onClose: () => void;
   }, [done]);
   const setTool = (i: number, patch: Partial<ToolDraft>) => setTools(tools.map((t, j) => (j === i ? { ...t, ...patch } : t)));
   const submit = () => {
+    if (needsSignIn) return;
+    if (templateServer) {
+      if (!preview) return;
+      void act.run(async () => {
+        const res = await proposeConnector({ id: id || preview.connectorId, title: title || preview.title, endpoint: preview.endpoint, tools: preview.tools }, tokenSource);
+        setDone(res.connectorId);
+        onSubmitted?.();
+      });
+      return;
+    }
     const r = validateProposal({ id, title, endpoint, tools });
     setProblems(r.problems);
     if (!r.proposal) return;
     const proposal = r.proposal;
     void act.run(async () => {
-      const res = await proposeConnector(proposal);
+      const res = await proposeConnector(proposal, tokenSource);
       setDone(res.connectorId || proposal.id);
       onSubmitted?.();
     });
@@ -459,7 +485,7 @@ export function AddCustomDialog({ onClose, onSubmitted }: { onClose: () => void;
             <button type="button" className="btn" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" form={`${fid}-form`} className="btn btn-primary" disabled={act.busy}>
+            <button type="submit" form={`${fid}-form`} className="btn btn-primary" disabled={act.busy || needsSignIn || (!!templateServer && !preview)}>
               {act.busy ? <Spinner /> : null}
               Submit for review
             </button>
@@ -482,15 +508,16 @@ export function AddCustomDialog({ onClose, onSubmitted }: { onClose: () => void;
         >
           <ul className="small connector-rules">
             <li>Read-only tools only.</li>
-            <li>The operator checks the live server before approving it. Nothing is contacted before then.</li>
+            <li>The operator checks the live server before approving it. Fixed-query previews contact only registered servers.</li>
             <li>
               Status starts as <strong>In review</strong>.
             </li>
             <li>{KEYED_UNSUPPORTED}</li>
           </ul>
-          {!hasMarketplaceSignIn() ? (
+          {market?.configured ? <MarketAccountBar /> : null}
+          {!market?.configured && !hasMarketplaceSignIn() ? (
             <p className="notice notice-warn small" role="note">
-              Sending needs a marketplace sign-in, which this dashboard doesn&apos;t include yet. You can still check the details here.
+              Sending needs marketplace sign-in. Configure the marketplace for this dashboard first; you can still check the details here.
             </p>
           ) : null}
           <div className="grid-2">
@@ -533,7 +560,13 @@ export function AddCustomDialog({ onClose, onSubmitted }: { onClose: () => void;
               spellCheck={false}
               aria-invalid={problems?.endpoint ? true : undefined}
               aria-describedby={problems?.endpoint ? err("ep") : `${fid}-ep-hint`}
-              onChange={(e) => setEndpoint(e.target.value)}
+              onChange={(e) => {
+                setEndpoint(e.target.value);
+                setPreview(null);
+                setProblems(null);
+                const server = mcpTemplateServerFor(e.target.value.trim());
+                if (server) { setId(server.id); setTitle(server.title); }
+              }}
             />
             <FieldError id={err("ep")} text={problems?.endpoint} />
             {!problems?.endpoint ? (
@@ -543,6 +576,20 @@ export function AddCustomDialog({ onClose, onSubmitted }: { onClose: () => void;
             ) : null}
           </div>
 
+          {templateServer ? (
+            <div className="notice notice-help">
+              <p className="flush">{templateServer.explanation}</p>
+              <p className="hint">Load the live tool pins, then submit them for operator review.</p>
+              <button type="button" className="btn btn-small" disabled={act.busy || needsSignIn} onClick={() => {
+                const requested = endpoint;
+                void act.run(async () => {
+                  const next = await previewTemplateConnector(requested.trim(), tokenSource);
+                  if (latestEndpoint.current === requested) setPreview(next);
+                });
+              }}>{act.busy ? <Spinner /> : null}Load fixed queries</button>
+              {preview ? <ul>{preview.tools.map((t) => <li key={t.name}><strong>{t.name}</strong><p className="small flush">{t.description}</p></li>)}</ul> : null}
+            </div>
+          ) : <>
           <div className="tools-head">
             <h3 className="section-title flush">Tools</h3>
             <button type="button" className="link-btn" aria-expanded={paste} onClick={() => setPaste(!paste)}>
@@ -627,6 +674,7 @@ export function AddCustomDialog({ onClose, onSubmitted }: { onClose: () => void;
               ) : null}
             </>
           )}
+          </>}
           {problems && !validateProposal({ id, title, endpoint, tools }).proposal ? (
             <p className="field-error" role="alert">
               Fix the highlighted fields to submit.

@@ -20,6 +20,8 @@ export interface Deps {
   chain: Chain;
   config: MarketplaceConfig;
   now: () => Date;
+  /** Replaces live MCP discovery in offline tests. */
+  connectorTools?: (endpoint: string) => Promise<import("@veilo/contracts/marketplace").McpToolPin[]>;
 }
 
 const JOB_FILES = "job-files";

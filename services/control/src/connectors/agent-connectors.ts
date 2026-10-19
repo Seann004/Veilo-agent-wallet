@@ -1,7 +1,19 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { canonicalJson } from "@veilo/contracts/gateway";
-import { mcpEndpointProblem, mcpTemplate, mcpTemplateRefSchema, mcpToolDigest, mcpToolPinProblem, mcpToolPinSchema, renderTemplatedCall, type McpTemplateRef } from "@veilo/contracts/marketplace";
+import {
+  mcpEndpointProblem,
+  mcpTemplate,
+  mcpTemplateRefSchema,
+  mcpTemplateServerFor,
+  mcpToolDigest,
+  mcpToolPinProblem,
+  mcpToolPinSchema,
+  renderTemplatedCall,
+  templateServerTools,
+  type McpTemplateRef,
+  type McpToolPin,
+} from "@veilo/contracts/marketplace";
 import { immediate } from "@veilo/db";
 import { callPinnedTool, McpError, type McpClient } from "@veilo/mcp-client";
 import { DAY_MS, iso, num, type Ledger } from "../context";
@@ -133,6 +145,33 @@ export class AgentConnectors {
         status: r.status,
         tools: (JSON.parse(r.tools_json) as PinnedTool[]).map((t) => ({ name: t.name, ...(typeof t.description === "string" ? { description: t.description } : {}), inputSchema: t.inputSchema })),
       })),
+    };
+  }
+
+  /**
+   * Reads the live tools/list of a server Veilo has fixed templates for and returns the tools a
+   * proposal for it carries. Only registered template servers are contacted, at their own endpoint.
+   */
+  async templatePreview(endpoint: string) {
+    const server = mcpTemplateServerFor(endpoint);
+    if (!server) throw new ControlError("SERVICE_NOT_ALLOWED", "Veilo has no fixed queries for this server; enter its tools by hand");
+    let live: McpToolPin[];
+    try {
+      const client = this.deps.client(server.endpoint);
+      await client.initialize();
+      live = await client.listTools();
+    } catch (error) {
+      throw new ControlError("PROVIDER_UNAVAILABLE", error instanceof McpError ? `could not read the server's tools: ${error.message}` : "could not read the server's tools");
+    }
+    const r = templateServerTools(server, live);
+    return {
+      connectorId: server.id,
+      title: server.title,
+      endpoint: server.endpoint,
+      explanation: server.explanation,
+      tools: r.tools.map((t) => ({ ...t, sha256: mcpToolDigest(t) })),
+      omitted: r.omitted,
+      missing: r.missing,
     };
   }
 
