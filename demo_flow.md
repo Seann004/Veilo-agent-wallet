@@ -1,5 +1,48 @@
 # Veilo demo flow and scripts
 
+## Current recording: reference-style public carousel
+
+Use **TikTok carousel (designed, posts publicly)** with the new reference-style version. The local model describes the attached image; the workflow uses that description for bounded colors, font category, alignment, shapes and headline case. This is reference guidance, not exact image reproduction. The public run has no intermediate draft/editing stop; change the brief before approval.
+
+Recording order (edited target: 4:55):
+
+| Time | Click / action | What to say |
+|---|---|---|
+| 0:00–0:15 | Open workspace | “Veilo combines a personal agent workspace, private on-chain payments and an agent marketplace.” |
+| 0:15–0:40 | Wallet → Add funds → review and sign in Phantom | “I deposit devnet USDC into the private pool. This is my available balance; amounts and timing remain public.” |
+| 0:40–1:10 | Create agent → Custom agent → Review → Create agent → Activate | “I choose its instructions, tools, hiring permission and spending limits before activating it.” |
+| 1:10–1:55 | Connectors → Add → Custom MCP server → Load fixed queries → Submit for review; approve the targeted CoinGecko proposal below; attach it and ask for BTC price | “The connector is unavailable until operator review checks its exact tool definitions.” |
+| 1:55–2:30 | Wallet → Agent swaps; request exactly 0.01 USDC → open completed receipt and Explorer | “A fresh wallet calls Orca, and SOL goes to my owner wallet. This is the actual swap output; returned account rent is separate.” |
+| 2:30–2:55 | Marketplace → public designed carousel → Add to an agent → Ask me before each run | “The agent can propose this workflow, but every public run waits for approval.” |
+| 2:55–3:30 | Attach reference image; send the research/carousel request below | “It retrieves the first three repositories on GitHub’s weekly Trending page and uses my image’s visual style.” |
+| 3:30–3:55 | Review and approve → inspect inputs, cost, account and public effect → Approve and run → Confirm approval | “I approve the topic, style, slide count, price and public publishing destination before execution.” |
+| 3:55–4:40 | Run → Show output → Load images → payments → actual TikTok post | “Each step has its own output and payment receipt. Here is the public post.” Say accepted/scheduled instead if publication is unconfirmed. |
+| 4:40–4:55 | Workspace / completed run | “Agents execute the approved workflow, while I control permissions and spending.” |
+
+Cut typing and generation waits. Label any earlier completed run as a recorded rehearsal. Do not issue a duplicate payment or post merely because the current run is pending. Model and provider credits cost real money separately from devnet settlement.
+
+Agent prompt:
+
+> Read https://github.com/trending?since=weekly. Use the first three repositories shown, preserving their order and source links. Propose five slides: cover, one per repository, and a close. Include the source links in the caption. Use my attached image as visual-style guidance and only my assigned “TikTok carousel (designed, posts publicly)” workflow. Wait for run approval. Do not invent repositories, star counts or scores.
+
+For the CoinGecko registration shot, submit `https://mcp.api.coingecko.com/mcp` as `coingecko-market` / **CoinGecko market data**, then run from the repository root:
+
+```sh
+pnpm marketplace:operator workflow-queue
+pnpm marketplace:connector coingecko-market
+pnpm marketplace:connector coingecko-market --confirm
+```
+
+Do not approve it ahead of that shot or run the full seed. If it is already approved, show attaching/using it rather than a fake fresh registration. The docs-search-only connector cannot fetch market prices.
+
+For the reference-style catalogue upgrade and version-pinned assignments, see [reference publishing](docs/guide/reference-publishing.md). Public publishing must be enabled on the seller host. A reference image requires a model that can read it; stop if the model reports the image was not used.
+
+---
+
+## Earlier draft-only rehearsal reference
+
+The sections below describe the separate draft-only workflow. Do not use their draft narration for the public workflow above.
+
 Solana devnet only. Every on-chain step uses devnet USDC and devnet SOL. Real model and Higgsfield usage is billed separately; devnet tokens have no cash value.
 
 ## Recording readiness

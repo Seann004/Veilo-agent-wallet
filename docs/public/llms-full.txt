@@ -13,7 +13,8 @@ Veilo combines personal agents, a local private wallet and a specialist marketpl
 - [Specialist-agent marketplace](./guide/marketplace.html): v3.2 buyer/seller marketplace, Supabase boundary, direct payments and zero fee; implemented, devnet acceptance incomplete.
 - [Marketplace triage](./guide/marketplace-triage.html): T17–T23 gates and all fourteen acceptance checks mapped to recorded RLS, unit and devnet evidence.
 - [Current status](./guide/status.html): Merged-tree checks, M2 and pre-merge demo devnet evidence, local validator/mock workflows and outstanding runs.
-- [Eight-step demo](./guide/demo.html): Operator commands, the recorded devnet run and pending browser-wallet screenshots.
+- [Historical backend rehearsal](./guide/demo.html): Recorded backend run, operator commands and outstanding browser evidence.
+- [Reference-style publishing](./guide/reference-publishing.html): Reference-guided carousel design, catalogue review and public run approval.
 - [Handoff gaps](./handoff.html): Outstanding evidence, merged branches, owner decisions and known documentation inconsistencies.
 - [Attribution](./references/attribution.html): Direct dependency licenses and unresolved review decisions.
 - [Overview](./): Product purpose, owner-created agents, user flow and benefits.
@@ -372,6 +373,58 @@ The recorded run drove the backend only. A dashboard run on devnet with a browse
 Export with `pnpm evidence:export`. Retain the exact source commit, lockfile hashes, circuit/setup manifest, UTC execution time and reviewer. Inspect `summary.json`, `ledger.json`, `inference-receipts.json`, useful output artifacts, negative outcomes and screenshots together. The exporter records artifact hashes and the exporter checkout commit. That commit does not establish which code produced a historical run; record the execution source commit separately.
 
 The exporter labels networks from source records and adds public Explorer links only to explicit devnet receipts. Local-validator and unknown receipts remain separate, and the exporter does not recheck finality. See [handoff gaps](../handoff.md). Secret scanning is useful but does not review private prompts or screenshot contents. Keep notes, witnesses, key files, credentials, decryption roots and encrypted backups owner-local.
+
+---
+
+# Reference-guided TikTok publishing
+
+The designed-slide workflow accepts **Topic**, **Visual style** and **Number of slides**. A reference image attached to an agent task is described by the owner's configured vision model. Only the bounded style description reaches the workflow; the original image is not sent to the seller.
+
+The planner maps the description into supported colors, font category, alignment, corner shapes and headline case. The renderer applies those settings consistently while preserving slide text and repository cards. This guides the design from the reference; it does not reproduce the image exactly. Use `default` for the original charcoal design.
+
+If a requested style has no design settings in the plan, the rendering step refuses rather than silently ignoring it. Arbitrary CSS, HTML, fonts, scripts and network URLs cannot be used as design settings.
+
+## Review and enable the new version
+
+From the repository root, inspect the targeted plan:
+
+```sh
+pnpm marketplace:carousel-style
+```
+
+With the updated marketplace and seller host running, submit only the two changed tool versions:
+
+```sh
+pnpm marketplace:carousel-style --submit
+pnpm marketplace:operator queue
+```
+
+Review each returned listing version, using its actual ID:
+
+```sh
+pnpm marketplace:operator review <LISTING_VERSION_ID> approve "Reviewed reference-style inputs and bounded renderer"
+```
+
+Then prepare the new public-publishing workflow version:
+
+```sh
+pnpm marketplace:carousel-style --workflow
+pnpm marketplace:operator workflow-queue
+```
+
+If the returned workflow is pending, review its actual version ID with `pnpm marketplace:operator workflow-review <WORKFLOW_VERSION_ID> approve "Reviewed reference style and public publishing terms"`. A version that already passed publication checks can be live immediately; catalogue publication is not approval of a paid run.
+
+These commands update catalogue versions; they do not start a paid run or post to TikTok. The renderer manifest changed, so old designer listings need the new reviewed version. Existing workflow assignments stay pinned: add the new version to the agent and remove the old assignment to avoid selecting it accidentally. Do not rerun the full seed for this update.
+
+## Run from the website
+
+1. Marketplace → **TikTok carousel (designed, posts publicly)** → **Add to an agent**. Choose **Ask me before each run**.
+2. Open the agent, attach the reference image, and request the carousel. Confirm the configured model can read the image.
+3. Open **Review and approve**. Check topic, reference-style description, slide count, total, public-publishing effect and destination account.
+4. **Approve and run → Confirm approval** authorizes this run. The seller host must have public publishing enabled separately.
+5. Inspect each step's output and receipt. Open the actual TikTok post before describing it as published; accepted, scheduled and uncertain states are not confirmed publication.
+
+The public workflow has no intermediate image-editing or draft-review stop. Edit the brief before approval, or choose the draft workflow for human review before publishing. Model/provider charges are separate from devnet settlement. Fresh live reference-style publishing evidence is still required; automated tests and local rendering do not establish TikTok delivery.
 
 ---
 

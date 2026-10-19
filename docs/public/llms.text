@@ -13,7 +13,8 @@ Veilo combines personal agents, a local private wallet and a specialist marketpl
 - [Specialist-agent marketplace](./guide/marketplace.html): v3.2 buyer/seller marketplace, Supabase boundary, direct payments and zero fee; implemented, devnet acceptance incomplete.
 - [Marketplace triage](./guide/marketplace-triage.html): T17–T23 gates and all fourteen acceptance checks mapped to recorded RLS, unit and devnet evidence.
 - [Current status](./guide/status.html): Merged-tree checks, M2 and pre-merge demo devnet evidence, local validator/mock workflows and outstanding runs.
-- [Eight-step demo](./guide/demo.html): Operator commands, the recorded devnet run and pending browser-wallet screenshots.
+- [Historical backend rehearsal](./guide/demo.html): Recorded backend run, operator commands and outstanding browser evidence.
+- [Reference-style publishing](./guide/reference-publishing.html): Reference-guided carousel design, catalogue review and public run approval.
 - [Handoff gaps](./handoff.html): Outstanding evidence, merged branches, owner decisions and known documentation inconsistencies.
 - [Attribution](./references/attribution.html): Direct dependency licenses and unresolved review decisions.
 - [Overview](./): Product purpose, owner-created agents, user flow and benefits.

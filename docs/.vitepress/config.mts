@@ -23,6 +23,7 @@ export default defineConfig({
         { text: 'Evidence & submission', link: '/evidence' },
         { text: 'Running Veilo', link: '/guide/running' },
         { text: 'Demo script', link: '/guide/demo' },
+        { text: 'Reference-style publishing', link: '/guide/reference-publishing' },
         { text: 'Handoff gaps', link: '/handoff' },
         { text: 'Agent workflows', link: '/guide/agents' },
         { text: 'Context for AI tools', link: '/ai-context' }
