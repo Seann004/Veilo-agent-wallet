@@ -162,7 +162,7 @@ export function Overview() {
             <>
               <DailyBars days={series.days} limit={wsBudget ? wsBudget.rolling24h.limit : null} />
               <p className="hint flush">Bars show calendar days. The limit applies to the previous 24 hours, including held funds.</p>
-              {series.complete ? null : <p className="hint flush">Only the latest {ACTIVITY_LIMIT} payments are loaded; earlier days may be missing some.</p>}
+              {series.complete ? null : <p className="hint flush">Only the latest {ACTIVITY_LIMIT} purchases are loaded; the chart may omit payments.</p>}
             </>
           ) : activity.error ? null : (
             <Loading label="payments" />

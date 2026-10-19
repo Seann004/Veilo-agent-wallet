@@ -42,6 +42,9 @@ describe("spending series", () => {
     const page = [purchase({ id: "a", settledAt: at(0), createdAt: at(0) }), purchase({ id: "b", settledAt: at(1), createdAt: at(1) })];
     expect(dailySpend(page, NOW, 7, 2).complete).toBe(false);
     expect(dailySpend(page, NOW, 7, 3).complete).toBe(true);
+    // Created-time pagination cannot rule out an older purchase settling in this window.
+    page[1]!.createdAt = at(9);
+    expect(dailySpend(page, NOW, 7, 2).complete).toBe(false);
   });
 
   it("splits pool buckets by readiness and withholds them in the public view", () => {

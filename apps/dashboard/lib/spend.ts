@@ -24,7 +24,7 @@ export interface SpendSeries {
 
 /**
  * Settled USDC payments per local calendar day, oldest first, ending today. `fetchedLimit` is the
- * page size the payments came from: a full page that ends inside the window may be missing older days.
+ * page size the payments came from. A full page can omit older purchases that settled recently.
  */
 export function dailySpend(purchases: Purchase[], now: Date, days = 7, fetchedLimit?: number): SpendSeries {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -41,8 +41,7 @@ export function dailySpend(purchases: Purchase[], now: Date, days = 7, fetchedLi
     out[idx]!.total += big(p.price.amount);
     out[idx]!.count += 1;
   }
-  const oldest = purchases.reduce<number>((min, p) => Math.min(min, Date.parse(p.createdAt) || min), Number.POSITIVE_INFINITY);
-  const complete = fetchedLimit === undefined || purchases.length < fetchedLimit || oldest < first;
+  const complete = fetchedLimit === undefined || purchases.length < fetchedLimit;
   return { days: out, complete };
 }
 
