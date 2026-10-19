@@ -12,6 +12,7 @@ The private flow aims to remove the explicit link from a particular deposited no
 
 ## Product documentation
 
+- [Submission review](./submission-review-2026-10-19.html): Checklist coverage, evidence-export corrections, current test results and remaining operator gates.
 - [Specialist-agent marketplace](./guide/marketplace.html): v3.2 buyer/seller marketplace, Supabase boundary, direct payments and zero fee; implemented, devnet acceptance incomplete.
 - [Marketplace triage](./guide/marketplace-triage.html): T17–T23 gates and all fourteen acceptance checks mapped to recorded RLS, unit and devnet evidence.
 - [Current status](./guide/status.html): Merged-tree checks, M2 and pre-merge demo devnet evidence, local validator/mock workflows and outstanding runs.

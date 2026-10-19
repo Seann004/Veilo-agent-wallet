@@ -1,6 +1,6 @@
 # Handoff and submission gaps
 
-Updated after PR #3 merged the parallel worktrees into `main` (`59696dd`) and rechecked against `59eb491` (PR #5). [Current status](./guide/status.md), [demo checklist](./guide/demo.md) and [security evidence](./security/evidence.md) are the public record. One complete devnet demo run with live inference is recorded from before the merge; the marketplace is implemented with devnet acceptance incomplete; see [marketplace triage](./guide/marketplace-triage.md).
+Updated 19 October 2026 against tested source `b155f17`, based on merged `main` `55e6404`, plus the accompanying submission documentation. Historical evidence below retains its original revision. [Current status](./guide/status.md), [demo checklist](./guide/demo.md) and [security evidence](./security/evidence.md) are the public record. One complete devnet demo run with live inference is recorded from before the merge; the marketplace is implemented with devnet acceptance incomplete; see [marketplace triage](./guide/marketplace-triage.md).
 
 ## Pending operator evidence
 
@@ -11,10 +11,10 @@ Run `2026-10-17-1eba868c` filled the deposit/approval, Shawn, Prince, Mira, dupl
 - An unattended scheduler top-up, if submission claims autonomous execution; the script invokes Shawn's check explicitly.
 - A funded-wallet recovery scenario, separate from the script's public exit.
 - Marketplace: a private-pool-funded hire, a multi-step workflow run, a paid QuickNode x402 call and an MCP tool run through a seller host, all on devnet.
-- A devnet swap on the current code (three earlier swaps finalized on 2026-10-17/18, before the hardening and agent-chosen-amount changes), and seeding `coingecko-market` into the live marketplace with `pnpm marketplace:seed --confirm`.
-- A clean full `pnpm test` run on `59eb491`: the recorded run had 9 timeouts during a host pause, which passed when their files were rerun alone.
+- A devnet swap on the current code (three earlier swaps finalized on 2026-10-17/18, before the hardening and agent-chosen-amount changes), and registering `coingecko-market` through the custom-connector UI, followed by targeted operator approval with `pnpm marketplace:connector coingecko-market --confirm`. Do not run the full seed.
+- The latest automated checks are recorded on the [current status page](./guide/status.md). The older `59eb491` timeout record is historical and is not the current test result.
 
-Attach tested source commit, UTC time, reviewer, lockfile/artifact hashes and every failure/skip. The integration JSON and the evidence export do not record the tested source commit. M2 is a separate synthetic-participant pool/Echo run and cannot fill agent gateway placeholders.
+Attach tested source commit, UTC time, reviewer, lockfile/artifact hashes and every failure/skip. The historical integration JSON does not record its tested source commit; export provenance identifies the exporter checkout only. M2 is a separate synthetic-participant pool/Echo run and cannot fill agent gateway placeholders.
 
 ## Merged branches
 
@@ -31,13 +31,13 @@ Observed at the earlier baseline and not yet rechecked line by line after the me
 
 ## Issues in scripts and dependencies outside this documentation scope
 
-- `scripts/evidence-export.ts` collects signatures from local `integration-*.json` and assigns devnet explorer links to all of them. Source-file environment labels are authoritative; the aggregate signature index is not a devnet register. It also lacks a source Git commit field.
+- The submission review corrected `scripts/evidence-export.ts`: local-validator and unknown receipts receive no devnet Explorer link, and the export records its checkout commit, dirty flag and lockfile hash. These identify the exporter checkout, not the historical run's tested commit. Exporting still does not recheck finality or authorize publication.
 - `scripts/demo-run.ts` drives backend services and stops them on completion. It launches no dashboard and does not verify browser-wallet signing. Its manual Shawn trigger does not alone prove unattended scheduling. It demonstrates public exit, not funded-wallet recovery.
 - `groth16-solana` 0.2.0 metadata says MIT, but the published crate's license file is Apache-2.0. Build status T06 calls it MIT without mentioning this discrepancy. Resolve with upstream before a release; see [license map](./references/attribution.md).
 
 ## Marketplace delivery triage
 
-The [marketplace guide](./guide/marketplace.md) covers the buyer/seller experience and cloud/local/payment boundaries. [Implementation triage](./guide/marketplace-triage.md) maps T17–T23 and all fourteen §26.6 checks to the live RLS e2e script, unit tests and devnet smokes. Remaining blockers: no free job path, no credential broker or hosted sandbox, no content-retention cleanup, no live refund transfer or offline-controller drill, and no private-pool-funded hire on devnet. Higgsfield, MakeUGC and Zernio are unverified and shown as "Provider not configured" by owner decision.
+The [marketplace guide](./guide/marketplace.md) covers the buyer/seller experience and cloud/local/payment boundaries. [Implementation triage](./guide/marketplace-triage.md) maps T17–T23 and all fourteen §26.6 checks to the live RLS e2e script, unit tests and devnet smokes. Remaining blockers: no free job path, no credential broker or hosted sandbox, no content-retention cleanup, no live refund transfer or offline-controller drill, and no private-pool-funded hire on devnet. Paid Higgsfield, MakeUGC and Zernio execution is unverified. The configured carousel and free preflight reads do not prove image generation, sufficient provider credits or a delivered TikTok inbox draft.
 
 ## Known code gaps found while documenting `59eb491`
 
