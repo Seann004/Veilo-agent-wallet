@@ -2,14 +2,17 @@
 
 Solana devnet only. Every on-chain step uses devnet USDC and devnet SOL. Real model and Higgsfield usage is billed separately; devnet tokens have no cash value.
 
-Readiness review — 2026-10-19:
-- PRs #7–#10 are merged by the owner. Main is `55e6404`. The tested disposable checkout matches that merged source exactly; no PR was merged by this review.
-- Combined validation: **989 passed, 1 skipped across 126 test files** with local development proving artifacts and the public program IDL available (`pnpm test --maxWorkers=4`). Root type checks, lint and the dashboard production build passed. These checks include the artifact-dependent real-proof tests; they are not a new live financial demo or an audit.
-- Live read-only checks: control, wallet, gateway, relayer, marketplace and the carousel seller respond successfully; the chain-aware services report verified devnet identity. The carousel catalogue has the styled 3–8 slide version, three paid steps and a 0.23 devnet-USDC total before any additional permitted fees. Higgsfield and Zernio report configured.
-- Carousel preflight passes: Higgsfield key presence, Zernio authentication, connected TikTok account `@shawndevtesting`, draft capability and local seller-origin configuration. Higgsfield credit sufficiency and an end-to-end generation were not checked.
-- TikTok currently offers only `PUBLIC_TO_EVERYONE`. This workflow sets `draft: true` and does not publish. Call it an **inbox draft**, not a guaranteed private-audience post; the owner reviews audience settings in TikTok before publishing.
-- CoinGecko market data is not in the live approved catalogue yet; only CoinGecko docs search is present. Merged PR #9 is running, and the targeted command passed its live read-only dry-run with all four tool pins. Explicit operator approval is still required. Do not run the full marketplace seed.
-- Still required: a fresh hardened-path swap, a fresh paid carousel rehearsal, and an owner exit on the combined code. Earlier swap signatures do not prove the new path.
+## Recording readiness
+
+Check the [current status](docs/guide/status.md) and [recorded evidence](docs/evidence.md) before filming. Automated tests and historical receipts do not establish that today's browser flow has completed.
+
+**Recording gates:** rehearse the current USDC-to-SOL swap, one paid carousel with its actual destination, and an eligible-note owner withdrawal. Save each run ID, UTC time, source commit, finalized transaction links and output before marking that segment ready. If any gate fails, omit that segment or clearly identify an earlier recording and its scope. Never present a historical backend run as a current browser rehearsal.
+
+The carousel quote is expected to contain three paid steps totalling 0.23 devnet USDC before any additional permitted fees. The displayed approved quote is authoritative. Model and image generation use real provider credits. A configured key does not establish sufficient credits or successful delivery.
+
+The social workflow requests an inbox draft, not a guaranteed private-audience post. Verify the destination account and draft-only effect in the actual review screen. Do not publish during the demonstration.
+
+CoinGecko docs search and market data are separate connectors. Check Discover before recording: if market data is already approved, demonstrate attaching and using it, rather than pretending to register it for the first time.
 
 This file covers:
 1. Pre-demo checklist
@@ -21,7 +24,7 @@ This file covers:
 ## 1. Pre-demo checklist (do this the day before, then again 30 minutes before)
 
 **Environment**
-- [x] PRs #8–#10 are merged by the owner, local `main` is at `55e6404`, dependencies are installed and the full local service stack has been restarted. All checked services return healthy responses; dashboard is running at http://localhost:3000 (Node 24).
+- [ ] Record the current source commit; install its dependencies and restart the local stack. Confirm dashboard http://localhost:3000 and service health on the intended devnet deployment. Recheck after any code or configuration change.
 - [ ] Phantom is on **devnet** and holds at least 5 USDC plus 0.1 SOL. Sign in to the dashboard with it.
 - [ ] Close other heavy apps. The machine slows down under load.
 
@@ -41,7 +44,7 @@ This file covers:
 - [ ] A reference image is ready on your desktop (PNG/JPG/WebP, 2 MB or less), with a clear visual style.
 
 **Rehearse once, end to end**
-- [ ] Run "Swap 0.01 USDC to SOL" once. This is the first swap on the hardened code (earlier swaps ran on older code), so prove it works before you go live.
+- [ ] Run "Swap 0.01 USDC to SOL" once. Use the current code and verify its own receipts before recording.
 - [ ] After reviewing the three-step quote, approve exactly one carousel rehearsal and check that the draft lands in the TikTok Creator Inbox ("shawndevtesting"). Higgsfield bills real credits.
 - [ ] Keep these tabs open:
   - Solana Explorer (devnet);
@@ -89,7 +92,7 @@ The canonical presentation proposal in `slide_deck.md` has 12 slides, a 5:40 spe
   "To be honest about privacy: the pool hides *which deposit* paid. Amounts, merchant and timing are public, and with a small pool the privacy is weak. We show that warning in the product."
 
 ### Step 2: Limits that hold (45 s) [Workspace] **[F: risk control]**
-- [Show the Workspace cards: Left today, Spent against the cap.]
+- [Show the Workspace cards: Left today, Spent and its cap-used detail.]
   "There are two layers of limits. The workspace has a total and a rolling 24-hour limit. Each agent has its own per-purchase, per-task and total limits. A purchase must fit all of them at once, and it's reserved atomically before anything is signed."
 
 ### Step 3: An agent that swaps (90 s) [Swap Bot chat] **[F: transaction execution, autonomous]**
@@ -99,17 +102,17 @@ The canonical presentation proposal in `slide_deck.md` has 12 slides, a 5:40 spe
   "It refuses. The only swap I approved is USDC to SOL on one pinned Orca pool. The model can't change the pool, the direction or where the SOL goes."
 - Type "Swap 0.01 USDC to SOL"
   "Now it acts on its own, inside my limits. No pop-up and no extra approval: the amount is under its limits and under the maximum I set."
-- [The payment card appears → open the signature in Explorer → show SOL arriving in Phantom.]
+- [Open the payment card, or Activity if chat says “Requested; settling privately.” Inspect the existing payment and its finalized receipts → open Explorer → show SOL arriving in Phantom. Never issue another swap to resolve a pending display.]
   "Two main transaction legs here. First, the pool withdraws the USDC to a fresh wallet; that withdrawal is authorized by a Groth16 proof verified on chain. Then that wallet does one Orca swap, and the SOL lands in my wallet. Before co-signing, the relayer checks that this is exactly the approved swap and nothing else."
 
 ### Step 4: An agent that hires and pays a creative pipeline (2.5 min) [Creator Bot chat] **[F: autonomous ops, transaction execution]**
 - [More options → drag in the reference image → a thumbnail appears.]
 - Type "Read https://github.com/trending?since=weekly. Use the first three repos shown, cite the source links, and propose a five-slide TikTok carousel in my attached image's style. Use only my assigned draft workflow and wait for approval."
-- [Live steps appear: reading GitHub trending → choosing a workflow.]
+- [Live steps appear: reading GitHub trending → choosing a workflow. Confirm a real proposal with the intended inputs; if the model only answers in chat or produces an invalid proposal, stop and use the disclosed rehearsal rather than resubmitting.]
   "It does the research itself with read-only browsing, then picks the workflow I assigned to it."
 - [Open "How I did it".]
   "It read the style from my reference image. The source image stays in the local workspace and is sent to my configured model provider. The workflow receives only a text description of the style. If the model cannot read the image, I disclose that rather than claim a match."
-- [Review → Effect: draft only → Approve and run.]
+- [Review and approve → inspect the draft-only effect and terms → Approve and run → Confirm approval.]
   "This workflow buys three tools from the configured seller: DeepSeek plans the slides, Higgsfield makes the images, and Zernio drops an inbox draft into TikTok. I asked to approve each run, so I approve this one."
 - [The run page updates by itself: Planner → Higgsfield → Zernio. No need to start a second run. Load images.]
 - [Open the payment cards → one Explorer link.]
@@ -118,8 +121,8 @@ The canonical presentation proposal in `slide_deck.md` has 12 slides, a 5:40 spe
   "And here's the carousel as a draft. Nothing was published."
 
 ### Step 5: Guardrails (60 s) [Creator Bot settings] **[F: risk control]**
-- [Set the per-purchase limit to 0.005 → rerun the task.]
-  "I'll set this agent's per-purchase limit below the price. The on-chain purchase is refused before signing; model planning may still use real provider credits."
+- [Use a disposable QA swap agent with a 0.50 USDC per-purchase limit. Request exactly 0.60 USDC, within the workspace-approved swap maximum.]
+  "This request exceeds the agent’s per-purchase limit. Veilo refuses the on-chain purchase before signing. Model calls can still use provider credits."
 - [Revoke a disposable QA agent → new tasks are blocked. Keep Creator Bot usable for the rest of the demo.]
   "Revoking an agent removes its authority to start new work. Payments it had already authorized still settle, or become recoverable by me. The dashboard preserves unresolved states; I inspect and reconcile them rather than blindly retry."
 
@@ -127,7 +130,7 @@ The canonical presentation proposal in `slide_deck.md` has 12 slides, a 5:40 spe
 "Finally, I can exit an eligible pool note using its original refund authority. I wait for live payments to resolve first. This exit is public by design, and the product says so."
 
 ### Step 7: Close (20 s)
-"Budgets instead of blank cheques: private pool payments, standard x402, limits that hold, and an off switch. It's devnet, and it's not audited yet. Thank you."
+"Veilo brings your personal agent workspace, private on-chain payments and an agent marketplace together. Agents act within the permissions you set. This is our Solana devnet prototype. Thank you."
 
 **Topic F coverage:** autonomous operations (steps 3 and 4: the swap runs within prior owner approval; the carousel requires one explicit run approval, then each step is paid within the approved terms), asset management (steps 1 and 2), transaction execution (steps 3 and 4: proof-authorized withdrawals, an Orca swap, x402 settlement), risk control (steps 2 and 5), and an ambitious implementation (private funding inside a working multi-agent workspace).
 
@@ -135,22 +138,28 @@ The canonical presentation proposal in `slide_deck.md` has 12 slides, a 5:40 spe
 
 ## 3. Demo video (3 to 5 min): shot list and voiceover
 
-Record at 1440p or higher with the browser at 90% zoom. Cut waiting time. Show Explorer for at least 2 seconds on each transaction. Add lower-third captions with the transaction signatures.
+Record at 1440p or higher with the browser at 90% zoom. The carousel section shows an explicitly labelled completed rehearsal; its timing is an edited recording target, not a live completion promise. Cut waiting time. Show Explorer for at least 2 seconds on each transaction. Add lower-third captions with the transaction signatures.
 
 | # | Time | Shot | Voiceover |
 |---|---|---|---|
-| 1 | 0:00–0:15 | Landing page; the bots animate | "Agents are starting to spend money. Veilo gives each one a budget, pays privately, and lets you stop it any time. All on Solana devnet." |
+| 1 | 0:00–0:15 | Landing page and workspace | "Agents are starting to spend money. Veilo gives each one a budget, pays privately, and lets you stop it any time. All on Solana devnet." |
 | 2 | 0:15–0:40 | Wallet: balances, then the deposit in Explorer | "I deposit USDC into a private pool. Payments come out through a zero-knowledge proof to a fresh wallet. The pool hides which deposit paid; amounts and merchants stay public." |
 | 3 | 0:40–1:00 | Workspace cards and limits; agent limit fields | "The workspace has daily and total limits, and each agent has its own. Every purchase must fit them all before anything is signed." |
 | 4 | 1:00–1:45 | Swap Bot: "Who are you?" → "Swap SOL to USDC" (refused) → "Swap 0.01 USDC to SOL" → payment card → Explorer → Phantom SOL | "Swap Bot can only do the swap I approved: USDC to SOL on one Orca pool, up to my maximum. It refuses the reverse. When I ask for 0.01, it acts on its own: a proof-authorized withdrawal, then one Orca swap, and the SOL is in my wallet." |
 | 5 | 1:45–3:00 | Creator Bot: drop the reference image → the prompt → live steps → How I did it → approve → run page progressing → images → payment cards → Explorer → TikTok inbox draft | "Creator Bot researches GitHub's trending repos, reads the style of my reference image, and picks a three-step workflow: DeepSeek plans, Higgsfield renders, Zernio sends a draft to TikTok. Real provider credits are separate from devnet settlement. Each step is its own private x402 payment, all within budget. The carousel lands as a draft and is never auto-published." |
-| 6 | 3:00–3:30 | Per-purchase set to 0.005 → refused; Revoke → chat refused | "Lower the limit and the on-chain purchase is refused. Revoke the agent and new authority stops; already released payments may still settle or need recovery." |
-| 7 | 3:30–3:50 | Withdraw to my wallet → Phantom → Explorer | "I can exit an eligible note with my refund authority after live payments resolve. The exit is public, and Veilo tells me so." |
-| 8 | 3:50–4:10 | Logo plus three bullet captions | "Private pool payments. Standard x402. Limits that hold. Veilo: budgets, not blank cheques." |
+| 6 | 3:00–3:30 | Disposable QA swap agent: request 0.60 against a 0.50 per-purchase cap → refused; Revoke → new work refused | "Lower the limit and the on-chain purchase is refused. Revoke the agent and new authority stops; already released payments may still settle or need recovery." |
+| 7 | 3:30–3:50 | Eligible note → Withdraw to my wallet → privacy acknowledgement → Confirm withdrawal in Phantom → Explorer | "I can exit an eligible note with my refund authority after live payments resolve. The exit is public, and Veilo tells me so." |
+| 8 | 3:50–4:10 | Logo plus three bullet captions | "Private pool payments. Standard x402. Limits that hold. Veilo: your personal agent workspace, private payments and agent marketplace." |
 
 **Captions to show on screen (accuracy):** "Solana devnet · USDC"; "ZK proof verified on chain (Groth16)"; "Pool hides which deposit paid; amounts, merchant and timing are public"; "Not audited".
 
 
-## Submission review update, 19 October 2026
+## Final recording gate
 
-The reviewed source is `b155f17`, based on main `55e6404`, with the docs-only CoinGecko label, evidence-export network/provenance correction and documentation alignment. Final automated checks: **994 passed, 1 skipped, 127 files**, root typecheck and lint passed. The earlier 989-pass result remains the main baseline before the five new evidence regressions. The canonical `slide_deck.md` proposes 12 slides and 5:40 of speaking, with no demo slide or embedded demonstration. A website demonstration is separate; the existing PowerPoint remains the earlier draft until the owner approves the content. CoinGecko registration should be shown through Add → Custom MCP server before targeted operator approval. Current-path swap, paid carousel and eligible-note exit rehearsal remain operator QA gates.
+Target **4:10**, leaving 50 seconds under the submission limit for transitions. Cut or disclose waiting time, keep transaction links readable, and show a completed rehearsal only with an explicit “Recorded rehearsal” label. Do not squeeze the optional CoinGecko registration into this cut.
+
+Before recording: pause unrelated agents, leave only intended tabs visible, hide API keys, terminal configuration, wallet recovery phrases and personal notifications. Never open note secrets or proof witnesses on camera. Capture the source commit and run IDs privately with the evidence.
+
+Use a disposable QA agent for limit changes and revocation. Restore any modified limits before filming the main agents. Show a denied request without approving or retrying a paid workflow. For a withdrawal, show the actual eligible note amount and privacy acknowledgement before Phantom signing. Never describe it as withdrawing every remaining fund.
+
+**Ready only when:** the intended model and connector answer, the swap has finalized receipts and the correct owner destination, the workflow has all payment legs and usable outputs plus an inbox draft, and the exit receipt is finalized. A missing gate stays pending. Keep the presentation separate from the video; the deck has 12 slides and the submission video must remain under five minutes.

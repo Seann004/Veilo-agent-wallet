@@ -264,11 +264,13 @@ The current proof setup is deterministic development material with derivable tox
 
 ---
 
-# Eight-step demo and evidence checklist
+# Historical backend rehearsal and evidence checklist
+
+For the current website recording, use the [demo recording guide](https://github.com/Seann004/Veilo-agent-wallet/blob/main/demo_flow.md). This page describes the historical backend scenario and its own receipts. See [current status](./status.md) for outstanding end-to-end verification.
 
 **Status:** one complete devnet run is recorded: `2026-10-17-1eba868c` on program `27Dg…AjFd`, with all 11 acceptance checks passing ([summary.json](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/demo-2026-10-17-1eba868c/summary.json)). It ran before PR #3 merged (`59696dd`); a fresh post-merge run is **not yet run**. It used live DeepSeek V4 Flash inference through the operator's OpenRouter account and no fixture provider call ([inference-receipts.json](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/demo-2026-10-17-1eba868c/inference-receipts.json)). The script signs with owner-local key files, so browser-wallet signing is **not yet run**, and no screenshots of this run are recorded. Amounts are USDC on **Solana devnet**. Local rehearsal remains **verified on local test validator** with a **fixture / mock provider**; M2 has its separate devnet proof/Echo record.
 
-This eight-step script covers the original T00–T16 workspace. The v3.2 marketplace has separate [T17–T23 gates and acceptance checks](./marketplace-triage.md); completing this script does not demonstrate seller hiring, Supabase isolation or marketplace earnings/refunds.
+This eight-step script covers the original T00–T16 workspace. The marketplace has separate [gates and acceptance checks](./marketplace-triage.md); completing this script does not demonstrate seller hiring, Supabase isolation or marketplace earnings/refunds.
 
 ## Prepare once
 
@@ -367,9 +369,9 @@ The recorded run drove the backend only. A dashboard run on devnet with a browse
 
 ## Freeze and review
 
-Export with `pnpm evidence:export`. Retain the exact source commit, lockfile hashes, circuit/setup manifest, UTC execution time and reviewer. Inspect `summary.json`, `ledger.json`, `inference-receipts.json`, useful output artifacts, negative outcomes and screenshots together. The exporter supplies artifact hashes but does not currently attach a source Git commit; add it to the submission record.
+Export with `pnpm evidence:export`. Retain the exact source commit, lockfile hashes, circuit/setup manifest, UTC execution time and reviewer. Inspect `summary.json`, `ledger.json`, `inference-receipts.json`, useful output artifacts, negative outcomes and screenshots together. The exporter records artifact hashes and the exporter checkout commit. That commit does not establish which code produced a historical run; record the execution source commit separately.
 
-The exporter currently adds devnet explorer URLs to every signature it finds, including local integration records. Use each source file's environment to classify it; local signatures do not become devnet evidence. See [handoff gaps](../handoff.md). Secret scanning is useful but does not review private prompts or screenshot contents. Keep notes, witnesses, key files, credentials, decryption roots and encrypted backups owner-local.
+The exporter labels networks from source records and adds public Explorer links only to explicit devnet receipts. Local-validator and unknown receipts remain separate, and the exporter does not recheck finality. See [handoff gaps](../handoff.md). Secret scanning is useful but does not review private prompts or screenshot contents. Keep notes, witnesses, key files, credentials, decryption roots and encrypted backups owner-local.
 
 ---
 
