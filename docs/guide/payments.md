@@ -47,7 +47,7 @@ Managed listings settle on the seller-host gateway profile to the listing's veri
 
 ## Devnet swap
 
-An owner-approved swap is a private purchase whose second leg is an Orca swap instead of an x402 payment. It exists only on Solana devnet and has **not yet run** end to end on devnet; it is unit-tested in control, wallet, relayer and runner against fakes.
+An owner-approved swap is a private purchase whose second leg is an Orca swap instead of an x402 payment. It exists only on Solana devnet. On the earlier code, three swaps finalized on Solana devnet without error on 2026-10-17/18, before the October 19 hardening and agent-chosen-amount changes (relayer ledger; signatures `2ftArMuh…YsNp`, `3V3gg86d…KypN4`, `4XrL1GFp…PyNi6`, checked with `getSignatureStatuses`). The current code (hardened path, agent-chosen amount) is unit-tested in control, wallet, relayer and runner against fakes and has not yet run on devnet.
 
 1. **Approval.** The owner approves one service, `swap:orca-devnet-sol-usdc` with SKU `swap-usdc-to-sol`, whose price is a **maximum per swap** (at most 5,000,000 base units). The pool (whirlpool `5GPCnpWwoDayCP5FVCJT1cS7dePufC5FrjPTVvPoUYnm`), direction (USDC to wrapped SOL), slippage (100 bps) and destination (`OWNER_RECOVERY_ADDRESS`) are fixed in code.
 2. **Authorization.** The agent's input is exactly `{"amountUsdc": "<base units>"}`; any other field is refused. Control checks that the input matches the request digest and does not exceed the approved maximum, then prices the purchase at the requested amount, so the usual atomic reservation applies every cap to it. A swap is funded only through `private_x402`.
