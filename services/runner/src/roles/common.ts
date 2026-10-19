@@ -36,6 +36,27 @@ export interface RoleOutcome {
   summary: Record<string, unknown>;
 }
 
+const nonEmpty = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
+
+/**
+ * A failed outcome always records a plain `failure` reason, so the owner never sees a bare
+ * "Failed". An existing reason wins; otherwise a control error, then the last note is used.
+ */
+export function withFailureReason(outcome: RoleOutcome): RoleOutcome {
+  const s = outcome.summary;
+  if (outcome.taskState !== "failed" || nonEmpty(s.failure)) return outcome;
+  let failure: string;
+  if (nonEmpty(s.error)) failure = s.error;
+  else if (s.error && typeof s.error === "object" && nonEmpty((s.error as { code?: unknown }).code)) {
+    const { code, message } = s.error as { code: string; message?: unknown };
+    failure = `Couldn't finish (${code}${nonEmpty(message) ? `: ${message}` : ""}).`;
+  } else {
+    const note = Array.isArray(s.notes) ? (s.notes as unknown[]).filter(nonEmpty).at(-1) : undefined;
+    failure = note ?? "The agent stopped without giving a reason.";
+  }
+  return { ...outcome, summary: { ...s, failure: failure.replace(/\s+/g, " ").trim().slice(0, 240) } };
+}
+
 /** The host of a URL, or a fixed word when it does not parse; progress labels never carry paths or queries. */
 export function hostOf(url: unknown): string {
   try {
