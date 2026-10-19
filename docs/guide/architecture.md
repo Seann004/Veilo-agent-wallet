@@ -10,6 +10,20 @@ The owner defines the job and spending rules. The **agent runner** decides what 
 
 This separates decision-making from financial authority: a model proposing a purchase cannot grant itself permission to spend. The owner sees agent-level activity locally, while the public payment path avoids publishing those agent identifiers.
 
+### Connected wallet, local wallet service and fresh payment wallet
+
+These are three different parts of the payment flow:
+
+| Part | Role |
+|---|---|
+| Owner's connected wallet, such as Phantom | Signs the owner's deposit into the pool and owner withdrawals; it does not store Veilo's note secrets. |
+| Veilo local wallet service | Stores encrypted pool notes and fresh-wallet signing material in its separate local secrets database, builds proofs and signs permitted payments. |
+| Fresh payment wallet | A per-purchase Solana address that receives the pool payout and pays the merchant. Pool note secrets stay in the local wallet service. |
+
+A **note** is a private record of a claim to funds in the pool. It contains a value, a protocol label and two secret field elements (`noteSecret` and `nullifierSecret`). The USDC itself is held in the pool's on-chain vault; a cryptographic commitment represents the note in the pool's state tree. The local service's encryption and note derivation use its owner-service secret, not the connected wallet's seed phrase.
+
+For example, ignoring separate fees, a 10 USDC note can authorize a 3 USDC payout to a fresh payment wallet and a new 7 USDC change note. The original note is consumed; the change note uses fresh secrets and becomes spendable after insertion and the required approval/state checks. The next purchase uses another fresh payment wallet. Deposit and payout amounts, payment addresses, merchant transfers and timing remain public; the proof avoids publishing the particular spent deposit commitment as a public input. See [privacy](./privacy.md) for correlation limits and [configuration](../configuration.md) for secret storage.
+
 <script setup>
 import architecture from '../diagrams/architecture.mmd?raw'
 import funding from '../diagrams/private-funding.mmd?raw'
