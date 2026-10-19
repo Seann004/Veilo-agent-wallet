@@ -37,7 +37,7 @@ Observed at the earlier baseline and not yet rechecked line by line after the me
 
 ## Marketplace delivery triage
 
-The [marketplace guide](./guide/marketplace.md) covers the buyer/seller experience and cloud/local/payment boundaries. [Implementation triage](./guide/marketplace-triage.md) maps T17–T23 and all fourteen §26.6 checks to the live RLS e2e script, unit tests and devnet smokes. Remaining blockers: no free job path, no credential broker or hosted sandbox, no content-retention cleanup, no live refund transfer or offline-controller drill, and no private-pool-funded hire on devnet. Paid Higgsfield, MakeUGC and Zernio execution is unverified. The configured carousel and free preflight reads do not prove image generation, sufficient provider credits or a delivered TikTok inbox draft.
+The [marketplace guide](./guide/marketplace.md) covers the buyer/seller experience and cloud/local/payment boundaries. [Implementation triage](./guide/marketplace-triage.md) maps T17–T23 and all fourteen marketplace acceptance checks to the live RLS e2e script, unit tests and devnet smokes. Remaining blockers: no free job path, no credential broker or hosted sandbox, no content-retention cleanup, no live refund transfer or offline-controller drill, and no private-pool-funded hire on devnet. Paid Higgsfield, MakeUGC and Zernio execution is unverified. The configured carousel and free preflight reads do not prove image generation, sufficient provider credits or a delivered TikTok inbox draft.
 
 ## Known code gaps found while documenting `59eb491`
 

@@ -80,6 +80,6 @@ No macOS-specific code defect was found: path handling already normalises separa
 - **zod 4.6.7 in `@veilo/contracts`.** `@x402/core` 2.28.0 depends on zod ^3 internally. Each copy is isolated by pnpm, and no zod schemas are passed between the two.
 - **Host Node 22.14.0, image Node 22.22.3.** The image follows the Node version Anchor 1.2.1 tests with. Both satisfy `engines` (>=22.14.0 <23).
 - **The `pnpm install` command is pnpm's built-in.** No root `install` script is defined, because pnpm would run it as a lifecycle hook on every install.
-- **Added variables beyond specification section 19.** `SOLANA_CAIP2_NETWORK` (optional, devnet-only), ports, bind host, data/secrets dirs and per-service credential paths. All are documented in docs/configuration.md.
+- **Additional runtime variables.** `SOLANA_CAIP2_NETWORK` (optional, devnet-only), ports, bind host, data/secrets dirs and per-service credential paths. All are documented in docs/configuration.md.
 - **The provider key reaches only the gateway process.** Every other process removes `OPENROUTER_API_KEY` from its environment at startup. The runner also drops the sponsor/owner/other-service credential paths.
 - **Unfunded program keypair from builds.** `anchor build` (via `cargo build-sbf`) writes an unfunded program keypair to gitignored `target/deploy/`. It was deleted after verification and is not the deployment identity. `declare_id!` uses a keyless placeholder until T09.
