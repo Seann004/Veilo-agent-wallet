@@ -128,3 +128,14 @@ describe("add-to-agent picker", () => {
     expect(names).toEqual(["Choose an agent", "Scout"]);
   });
 });
+
+
+describe("managed planner readiness", () => {
+  it("does not claim a managed planner needs an external provider account", async () => {
+    const workflow = { ...entry, slug: "managed-ready", steps: [{ index: 0, kind: "managed_template", provider: null, providerStatus: "unknown", effect: "read_only", title: "Planner", priceBaseUnits: "20000", inputs: {} }] };
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ workflow })));
+    render(withMarket(<WorkflowDetail slug="managed-ready" />));
+    expect(await screen.findByRole("heading", { name: /Token brief/ })).toBeTruthy();
+    expect(screen.queryByText(/seller has not configured/)).toBeNull();
+  });
+});

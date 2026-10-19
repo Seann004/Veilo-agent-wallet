@@ -45,7 +45,7 @@ export function WorkflowDetail({ slug }: { slug: string }) {
   const w = res.data.workflow;
   const decimals = m.decimalsFor(w.mint, w.network);
   const ww = willAndWont(w);
-  const unavailable = w.steps.filter((s) => s.providerStatus === "not_configured" || s.providerStatus === "unknown" || s.providerStatus === "manifest_changed");
+  const unavailable = w.steps.filter((s) => s.kind !== "managed_template" && (s.providerStatus === "not_configured" || s.providerStatus === "unknown" || s.providerStatus === "manifest_changed"));
   const sections: DetailSection[] = [
     {
       id: "about",
@@ -105,7 +105,7 @@ export function WorkflowDetail({ slug }: { slug: string }) {
                   <p className="chain-title">
                     Step {s.index + 1}: <PlainText text={s.title ?? "Unknown tool"} inline />{" "}
                     {s.effect !== "read_only" ? <span className={effectPillClass(s.effect)}>{effectLabel(s.effect, s.provider)}</span> : null}
-                    {s.providerStatus === "not_configured" || s.providerStatus === "unknown" ? <span className="pill pill-muted">Provider not configured</span> : null}
+                    {s.kind !== "managed_template" && (s.providerStatus === "not_configured" || s.providerStatus === "unknown") ? <span className="pill pill-muted">Provider not configured</span> : null}
                     {s.providerStatus === "manifest_changed" ? <span className="pill pill-danger">Manifest changed</span> : null}
                   </p>
                   <KV

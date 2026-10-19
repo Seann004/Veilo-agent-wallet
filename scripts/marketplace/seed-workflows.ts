@@ -1,3 +1,4 @@
+import { REFERENCE_SLIDE_INPUT, REFERENCE_SLIDE_DESIGN_RULES } from "./carousel-style-definition";
 /**
  * Seeds the workflow marketplace with demo creators, tools and workflows so the catalogue is not
  * empty. Every creator and listing is labeled demo. Managed tools run on Veilo's seller host with
@@ -94,7 +95,7 @@ interface ManagedTool {
 }
 const NUMBERED_SLIDES = CAROUSEL_SLIDE_COUNT_RULE;
 const SLIDE_RANGE = `${CAROUSEL_SLIDES.min} to ${CAROUSEL_SLIDES.max}`;
-const MANAGED: ManagedTool[] = [
+export const MANAGED: ManagedTool[] = [
   { creator: "ledger-lab", slug: "demo-onchain-brief-writer", title: "On-chain brief writer (demo)", summary: "Writes a cited brief from purchased on-chain data with DeepSeek V4 Flash.", template: "research-summary", price: "20000", sections: ["Summary", "Key points", "Sources"] },
   { creator: "ledger-lab", slug: "demo-wallet-analyst", title: "Wallet activity analyst (demo)", summary: "Turns wallet balance and recent signatures into a structured analysis.", template: "structured-analysis", price: "20000", sections: ["Findings", "Risks"] },
   { creator: "studio-north", slug: "demo-content-package", title: "Content package writer (demo)", summary: "Three channel drafts and a seven-day plan from a topic or brief.", template: "content-package", price: "30000", sections: ["Drafts", "Calendar"] },
@@ -158,20 +159,21 @@ const MANAGED: ManagedTool[] = [
     creator: "studio-north",
     slug: "tiktok-slide-planner",
     title: "TikTok slide planner (designed slides)",
-    summary: `Turns a topic and a slide count (${SLIDE_RANGE}) into headline, accent and supporting text for each designed TikTok slide, plus a caption.`,
+    summary: `Turns a topic, reference style and a slide count (${SLIDE_RANGE}) into headline, accent and supporting text for each designed TikTok slide, plus a caption.`,
     template: "content-package",
     price: "20000",
-    revision: 2,
+    revision: 4,
     sections: ["Slides", "Caption"],
     io: {
       inputs: [
         { name: "topic", kind: "text", required: true, maxChars: 500 },
+        { name: "style", kind: "text", required: true, maxChars: 200 },
         { name: "slides", kind: "text", required: true, maxChars: String(CAROUSEL_SLIDES.max).length },
       ],
       output: { kind: "markdown" },
     },
     sellerInstructions: [
-      "The buyer brief has two sections: topic and slides.",
+      REFERENCE_SLIDE_DESIGN_RULES,
       'Under Slides write only one JSON object inside a ```json fence: {"slides": [...], "caption": "..."} with exactly N slides.',
       NUMBERED_SLIDES,
       'Each slide is {"label", "headline", "accent", "body"}: label is one to three lowercase words naming the slide\'s role (for example hook, the problem, repo, verdict) with no number;',
@@ -200,7 +202,7 @@ interface ProviderTool {
 }
 // The carousel tools run on the content creator's own seller host, which holds its Higgsfield and Zernio keys.
 const CAROUSEL_HOST = process.env.CAROUSEL_SELLER_ORIGIN?.trim() || PLACEHOLDER_PROVIDER_HOST;
-const PROVIDERS: ProviderTool[] = [
+export const PROVIDERS: ProviderTool[] = [
   { creator: "clipworks", slug: "demo-higgsfield-image", title: "Higgsfield image (demo, provider not connected)", summary: "Generates an image from a prompt on the seller's own Higgsfield key. Workflow step only.", provider: "higgsfield", price: "50000" },
   { creator: "clipworks", slug: "demo-makeugc-video", title: "MakeUGC video (demo, provider not connected)", summary: "Produces a talking-actor UGC video from a script on the seller's own MakeUGC key.", provider: "makeugc", price: "100000" },
   { creator: "clipworks", slug: "demo-zernio-draft", title: "Zernio post draft (demo, provider not connected)", summary: "Creates a post draft only; nothing is published or scheduled without the owner.", provider: "zernio", price: "5000" },
@@ -239,12 +241,12 @@ const PROVIDERS: ProviderTool[] = [
     creator: "studio-north",
     slug: "tiktok-slide-designer",
     title: "TikTok slide designer",
-    summary: `Renders ${SLIDE_RANGE} designed 1080x1920 slides (dark panel, terracotta accent, optional repo card) from a JSON slide plan and hosts them for posting. Workflow step only.`,
+    summary: `Renders ${SLIDE_RANGE} designed 1080x1920 slides (reference-guided palette, typography and layout; optional repo card) from a JSON slide plan and hosts them for posting. Workflow step only.`,
     provider: "slides",
     toolName: "render_carousel_slides",
     price: "10000",
     origin: CAROUSEL_HOST,
-    revision: 2,
+    revision: 4,
   },
   {
     creator: "studio-north",
@@ -601,37 +603,39 @@ async function main(): Promise<void> {
       title: "TikTok carousel (designed slides)",
       summary: `DeepSeek writes ${SLIDE_RANGE} slides, the slide designer renders them in Studio North's style, Zernio puts a photo draft in your TikTok inbox.`,
       description:
-        "Step 1 writes each slide's label, headline, accent word and supporting line (plus a repo card for a GitHub repository named in your topic) and a caption with DeepSeek V4 Flash. Step 2 renders 1080x1920 slides from a fixed template on the seller's host, so the text is exact, and hosts them through Zernio media. Step 3 sends them to the seller's TikTok inbox as a private draft; a person publishes it in the TikTok app.",
+        "Step 1 writes each slide's label, headline, accent word and supporting line (plus a repo card for a GitHub repository named in your topic) and a caption with DeepSeek V4 Flash. Step 2 renders 1080x1920 slides with reference-guided colors, typography and layout on the seller's host, so the text is exact, and hosts them through Zernio media. Step 3 sends them to the seller's TikTok inbox as a private draft; a person publishes it in the TikTok app.",
       safetyPromise: "Draft only: the slides land in a TikTok inbox as a private draft and are never published by this workflow.",
       runInputs: [
         { name: "topic", label: "Topic", maxChars: 500 },
+        REFERENCE_SLIDE_INPUT,
         { name: "slides", label: `Number of slides (${SLIDE_RANGE})`, maxChars: String(CAROUSEL_SLIDES.max).length },
       ],
       steps: [
-        step_("tiktok-slide-planner", { topic: { from: "run_input", name: "topic" }, slides: { from: "run_input", name: "slides" } }),
+        step_("tiktok-slide-planner", { topic: { from: "run_input", name: "topic" }, style: { from: "run_input", name: "style" }, slides: { from: "run_input", name: "slides" } }),
         step_("tiktok-slide-designer", { plan: { from: "step", step: 0 } }),
         step_("zernio-tiktok-carousel-draft", { carousel: { from: "step", step: 1 } }),
       ],
       sampleOutput: null,
-    }, "workflow.tiktok-carousel-designed.v2");
+    }, "workflow.tiktok-carousel-designed.v4");
     await workflow("studio-north", "tiktok-carousel-designed-publish", {
       category: "social",
       title: "TikTok carousel (designed, posts publicly)",
       summary: `DeepSeek writes ${SLIDE_RANGE} slides, the slide designer renders them, and Zernio publishes the carousel publicly on the creator's TikTok at once.`,
       description:
-        "Step 1 writes each slide's text and a caption with DeepSeek V4 Flash. Step 2 renders 1080x1920 slides from a fixed template on the seller's host and hosts them through Zernio media. Step 3 publishes them publicly to the seller's TikTok account through Zernio straight away: there is no draft and no review after you approve the run. The seller host refuses to publish unless its owner turned public posting on, and posts only slides it rendered itself.",
+        "Step 1 writes each slide's text and a caption with DeepSeek V4 Flash. Step 2 renders 1080x1920 slides with reference-guided colors, typography and layout on the seller's host and hosts them through Zernio media. Step 3 publishes them publicly to the seller's TikTok account through Zernio straight away: there is no draft and no review after you approve the run. The seller host refuses to publish unless its owner turned public posting on, and posts only slides it rendered itself.",
       safetyPromise: "Publishes publicly to the creator's TikTok at once after you approve the run; there is no draft or review step.",
       runInputs: [
         { name: "topic", label: "Topic", maxChars: 500 },
+        REFERENCE_SLIDE_INPUT,
         { name: "slides", label: `Number of slides (${SLIDE_RANGE})`, maxChars: String(CAROUSEL_SLIDES.max).length },
       ],
       steps: [
-        step_("tiktok-slide-planner", { topic: { from: "run_input", name: "topic" }, slides: { from: "run_input", name: "slides" } }),
+        step_("tiktok-slide-planner", { topic: { from: "run_input", name: "topic" }, style: { from: "run_input", name: "style" }, slides: { from: "run_input", name: "slides" } }),
         step_("tiktok-slide-designer", { plan: { from: "step", step: 0 } }),
         step_("zernio-tiktok-carousel-publish", { carousel: { from: "step", step: 1 } }),
       ],
       sampleOutput: null,
-    }, "workflow.tiktok-carousel-designed-publish.v2");
+    }, "workflow.tiktok-carousel-designed-publish.v4");
     await workflow("studio-north", "tiktok-ad-from-photo", {
       category: "social",
       title: "TikTok ad from your product photo",
@@ -681,7 +685,7 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error: unknown) => {
+if (process.argv[1]?.endsWith("seed-workflows.ts")) main().catch((error: unknown) => {
   console.error(`seed aborted: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
 });
