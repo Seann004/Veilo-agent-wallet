@@ -1,10 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../lib/api";
 import { parseUsdcInput, usdc, when } from "../lib/format";
-import type { NoteStatus, WalletNote } from "../lib/types";
+import { percent } from "../lib/spend";
+import type { NoteStatus, PublicState, WalletNote } from "../lib/types";
 import { connect, lastWallet, listWallets, onWalletsChanged, rememberWallet, signAndSend, type OwnerWallet } from "../lib/wallet";
+import { StackedBar, Stat } from "./Charts";
+import { membership } from "./PrivacyPanel";
 import { useCapability, useOwner, type ConnectedWallet } from "./Shell";
 import { useAction, useResource } from "./hooks";
 import { SwapPanel } from "./SwapPanel";
@@ -118,7 +122,7 @@ export function NotesTable({ status }: { status: NoteStatus }) {
           <tr>
             <th scope="col">Added</th>
             <th scope="col">Source</th>
-            <th scope="col">Amount</th>
+            <th scope="col" className="num">Amount</th>
             <th scope="col">Ready to spend</th>
             <th scope="col">Progress</th>
           </tr>
@@ -128,8 +132,10 @@ export function NotesTable({ status }: { status: NoteStatus }) {
             <tr key={n.id}>
               <td title={n.updatedAt ? `Last change ${when(n.updatedAt)}` : undefined}>{n.createdAt ? when(n.createdAt) : "—"}</td>
               <td>{n.origin === "deposit" ? "Deposit" : "Change"}</td>
-              <td>{usdc(n.value.amount)}</td>
-              <td>{n.available ? "Yes" : "No"}</td>
+              <td className="num">{usdc(n.value.amount)}</td>
+              <td>
+                <span className={`pill ${n.available ? "pill-ok" : "pill-muted"}`}>{n.available ? "Yes" : "No"}</span>
+              </td>
               <td>{n.origin === "deposit" ? <DepositStages note={n} /> : n.state.replace(/_/g, " ")}</td>
             </tr>
           ))}
@@ -170,27 +176,12 @@ function OwnerWalletView() {
   return (
     <>
       <div className="stats stats-3">
-        <div className="stat">
-          <span className="stat-label">Ready to spend</span>
-          <span className="stat-value">
-            <Amount value={t ? usdc(t.spendable.amount) : "—"} />
-          </span>
-        </div>
-        <div className="stat">
-          <span className="stat-label">Held for purchases</span>
-          <span className="stat-value">
-            <Amount value={t ? usdc(t.reserved.amount) : "—"} />
-          </span>
-        </div>
-        <div className="stat">
-          <span className="stat-label">On the way</span>
-          <span className="stat-value">
-            <Amount value={t ? usdc(t.pending.amount) : "—"} />
-          </span>
-          {t && t.pending.amount !== "0" ? <span className="stat-sub">Deposits not ready yet</span> : null}
-        </div>
+        <Stat label="Ready to spend" value={t ? usdc(t.spendable.amount) : "—"} sub="Yours, in the private pool" />
+        <Stat label="Held for purchases" value={t ? usdc(t.reserved.amount) : "—"} sub="Reserved by live payments" />
+        <Stat label="On the way" value={t ? usdc(t.pending.amount) : "—"} sub={t && t.pending.amount !== "0" ? "Deposits not ready yet" : "Nothing pending"} />
       </div>
       <ErrorNotice error={notes.error} what="wallet service" onRetry={notes.reload} />
+      <PoolTotal notes={notes.data} />
 
       <Section title="Add funds">
         <p className="hint flush">Deposit USDC into your private pool.</p>
@@ -279,5 +270,77 @@ function OwnerWalletView() {
         )}
       </Section>
     </>
+  );
+}
+
+/**
+ * The whole pool as read from the chain by the relayer: every depositor's funds, not just the
+ * owner's. Its size is what a payment hides among, so a small pool is flagged.
+ */
+export function PoolTotal({ notes }: { notes: NoteStatus | undefined }) {
+  const ps = useResource(() => api<PublicState>("relayer", "/public-state"), "public-state");
+  const m = ps.data ? membership(ps.data) : null;
+  const total = ps.data?.pool.liability;
+  const t = notes?.totals;
+  const mine = t ? BigInt(t.spendable.amount) + BigInt(t.reserved.amount) : null;
+  // The relayer and wallet service read at different moments; a split that does not add up is not drawn.
+  const verified = ps.data?.consistent === true && ps.data.approved.consistent;
+  const split = verified && total !== undefined && mine !== null && t && mine <= BigInt(total) ? { rest: (BigInt(total) - mine).toString(), ready: t.spendable.amount, held: t.reserved.amount } : null;
+  return (
+    <section className="panel pool-card" aria-labelledby="pool-title">
+      <div className="viz-head">
+        <h2 id="pool-title">Pool total (all depositors)</h2>
+        <Link className="viz-link" href="/privacy">
+          How private is it?
+        </Link>
+      </div>
+      {ps.loading && !ps.data ? <Loading label="pool total" /> : null}
+      <ErrorNotice error={ps.error} what="public pool state from the relayer" onRetry={ps.reload} />
+      {ps.data && m && total !== undefined ? (
+        <>
+          <div className="pool-figures">
+            <div>
+              <span className="pool-value">
+                <Amount value={usdc(total)} />
+              </span>
+              <span className="stat-sub">All depositors · public on Solana devnet</span>
+            </div>
+            <dl className="pool-facts">
+              <div>
+                <dt>Approved depositor addresses</dt>
+                <dd>{m.participants}</dd>
+              </div>
+              <div>
+                <dt>Deposits</dt>
+                <dd>{m.deposits}</dd>
+              </div>
+              {split ? (
+                <div>
+                  <dt>Your ready + held share</dt>
+                  <dd>{Math.round(percent(BigInt(split.ready) + BigInt(split.held), total))}%</dd>
+                </div>
+              ) : null}
+            </dl>
+          </div>
+          {split ? (
+            <StackedBar
+              label="Pool total"
+              segments={[
+                { key: "ready", label: "Yours, ready to spend", value: split.ready, slot: 1 },
+                { key: "held", label: "Yours, held for purchases", value: split.held, slot: 2 },
+                { key: "rest", label: "Rest of the pool", value: split.rest, slot: 0, hint: "Other depositors and deposits not ready yet" },
+              ]}
+            />
+          ) : null}
+          <p className="hint flush">Addresses can belong to the same person. Demo depositors are test accounts; this count is not an anonymity score.</p>
+          {!verified ? <p className="notice notice-warn flush" role="status">Pool membership could not be verified. These figures may be incomplete; privacy cannot be assessed.</p> : null}
+          {m.weak && ps.data.consistent && ps.data.approved.consistent ? (
+            <p className="notice notice-warn flush" role="status">
+              Small pool: {m.participants} approved depositor address{m.participants === 1 ? "" : "es"}. A small pool means weak privacy; payments may be easier to trace.
+            </p>
+          ) : null}
+        </>
+      ) : null}
+    </section>
   );
 }

@@ -8,7 +8,7 @@ import { SPECIALIST_SKU } from "@veilo/contracts/marketplace";
 import { CreateAgent } from "../components/CreateAgent";
 import { CUSTOM_INSTRUCTIONS_MAX, CustomAgentPanel, CustomRunForm, TEMPLATE_LABEL, withHiring } from "../components/CustomAgentFields";
 import { MarketContextProvider, type MarketContextValue } from "../components/market/MarketContext";
-import { AgentRow } from "../components/Overview";
+import { AgentCard } from "../components/Overview";
 import { ROLE_TEMPLATES } from "../components/Policy";
 import { OwnerProvider } from "../components/Shell";
 import { ROLE_LABEL } from "../lib/labels";
@@ -147,10 +147,10 @@ describe("custom agent roles and maps", () => {
     expect(withHiring({ ...base, allowedPaymentPaths: [] }, true).allowedPaymentPaths).toEqual(["private_x402"]);
   });
 
-  it("renders a custom agent row with its own label and a link to its page", () => {
+  it("renders a custom agent card with its own label and a link to its page", () => {
     render(
       <ul>
-        <AgentRow agent={customAgent()} budget={undefined} task={undefined} job={undefined} stopped={false} />
+        <AgentCard agent={customAgent()} budget={undefined} task={undefined} job={undefined} stopped={false} />
       </ul>,
     );
     expect(screen.getByText(/Custom agent/)).toBeTruthy();
