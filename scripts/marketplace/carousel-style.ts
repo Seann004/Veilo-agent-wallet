@@ -8,9 +8,10 @@ import { keyFor, web3Session } from "./web3-session";
 
 const root = findRepoRoot();
 const submit = process.argv.includes("--submit");
-const workflow = process.argv.includes("--workflow");
+const preview = process.argv.includes("--preview");
+const workflow = process.argv.includes("--workflow") || preview;
 const slugs = ["tiktok-slide-planner", "tiktok-slide-designer"] as const;
-const workflowSlug = "tiktok-carousel-designed-publish";
+const workflowSlug = preview ? "tiktok-carousel-reference-preview" : "tiktok-carousel-designed-publish";
 
 async function main(): Promise<void> {
   if (!submit && !workflow) {
@@ -78,19 +79,20 @@ async function main(): Promise<void> {
   let saved = state.steps[key] as { workflowId: string; versionId: string; status?: string } | undefined;
   if (!saved) {
     const prior = state.steps[`workflow.${workflowSlug}`] as { workflowId: string } | undefined;
-    if (!prior) throw new Error("Original public-publishing workflow is missing.");
-    const result = await call<{ versionId: string }>("POST", `/creator/workflows/${prior.workflowId}/versions`, {
-      title: "TikTok carousel (designed, posts publicly)", category: "social", summary: "Plans reference-guided slides, renders them and publishes the carousel publicly after run approval.",
-      description: "The local model describes the reference image. The planner maps it to bounded colors, typography, alignment and shapes. The seller renders exact slide text and publishes to its configured TikTok account. This is visual guidance, not exact image reproduction.",
-      safetyPromise: "Publishes publicly after run approval. No intermediate draft or editing stop; review topic, style, destination and total before approval.",
-      payoutVersionId: creator.payoutVersionId, totalMaxBaseUnits: "40000", runInputs: [{ name: "topic", label: "Topic", maxChars: 500 }, REFERENCE_SLIDE_INPUT, { name: "slides", label: `Number of slides (${CAROUSEL_SLIDES.min}–${CAROUSEL_SLIDES.max})`, maxChars: String(CAROUSEL_SLIDES.max).length }],
+    if (!prior && !preview) throw new Error("Original public-publishing workflow is missing.");
+    const workflowId = prior?.workflowId ?? (await call<{ workflowId: string }>("POST", "/creator/workflows", { slug: workflowSlug, category: "social" })).workflowId;
+    const result = await call<{ versionId: string }>("POST", `/creator/workflows/${workflowId}/versions`, {
+      title: preview ? "TikTok carousel (reference-style preview)" : "TikTok carousel (designed, posts publicly)", category: "social", summary: preview ? "Plans and renders reference-guided carousel images without a publishing step." : "Plans reference-guided slides, renders them and publishes the carousel publicly after run approval.",
+      description: `The local model describes the reference image. The planner maps it to bounded colors, typography, alignment and shapes. The seller renders exact slide text${preview ? " without posting to TikTok" : " and publishes to its configured TikTok account"}. This is visual guidance, not exact image reproduction.`,
+      safetyPromise: preview ? "Generates images only. This preview has no publishing step." : "Publishes publicly after run approval. No intermediate draft or editing stop; review topic, style, destination and total before approval.",
+      payoutVersionId: creator.payoutVersionId, totalMaxBaseUnits: preview ? "30000" : "40000", runInputs: [{ name: "topic", label: "Topic", maxChars: 500 }, REFERENCE_SLIDE_INPUT, { name: "slides", label: `Number of slides (${CAROUSEL_SLIDES.min}–${CAROUSEL_SLIDES.max})`, maxChars: String(CAROUSEL_SLIDES.max).length }],
       steps: [
         { toolKind: "listing", toolId: tool("tiktok-slide-planner"), maxBaseUnits: "20000", inputs: { topic: { from: "run_input", name: "topic" }, style: { from: "run_input", name: "style" }, slides: { from: "run_input", name: "slides" } } },
         { toolKind: "listing", toolId: tool("tiktok-slide-designer"), maxBaseUnits: "10000", inputs: { plan: { from: "step", step: 0 } } },
-        { toolKind: "listing", toolId: tool("zernio-tiktok-carousel-publish"), maxBaseUnits: "10000", inputs: { carousel: { from: "step", step: 1 } } },
+        ...(!preview ? [{ toolKind: "listing", toolId: tool("zernio-tiktok-carousel-publish"), maxBaseUnits: "10000", inputs: { carousel: { from: "step", step: 1 } } }] : []),
       ], sampleOutput: null,
     });
-    saved = { workflowId: prior.workflowId, versionId: result.versionId }; save(key, saved);
+    saved = { workflowId, versionId: result.versionId }; save(key, saved);
   }
   if (!saved.status) { const result = await call<{ status: string }>("POST", `/creator/versions/${saved.versionId}/publish`, {}); saved.status = result.status; save(key, saved); }
   console.log(`Workflow ${saved.versionId}: ${saved.status}`);
