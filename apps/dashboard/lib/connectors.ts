@@ -151,7 +151,7 @@ export async function listConnectors(): Promise<Connector[]> {
   const list = Array.isArray(r?.connectors) ? r.connectors : [];
   return list.filter(isRecord).map((c) => ({
     id: str(c.id),
-    title: str(c.title),
+    title: c.id === "coingecko-docs" ? "CoinGecko docs search only" : str(c.title),
     endpoint: str(c.endpoint),
     transport: str(c.transport),
     manifest_sha256: str(c.manifest_sha256),
@@ -165,7 +165,7 @@ export async function myProposals(): Promise<ConnectorProposalRecord[]> {
   const list = Array.isArray(r?.connectors) ? r.connectors : [];
   return list.filter(isRecord).map((c) => ({
     id: str(c.id),
-    title: str(c.title),
+    title: c.id === "coingecko-docs" ? "CoinGecko docs search only" : str(c.title),
     endpoint: str(c.endpoint),
     reviewStatus: str(c.reviewStatus),
     reviewNote: typeof c.reviewNote === "string" && c.reviewNote !== "" ? c.reviewNote : null,
