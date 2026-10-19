@@ -10,7 +10,7 @@ Updated 19 October 2026. Veilo is a Solana devnet prototype with a personal agen
 | Wallet | Deposits, encrypted notes, proof-authorized payouts, owner withdrawals and an approved USDC-to-SOL swap path |
 | Owner control | Spending limits, reservations, approvals, pause/revoke and reconciliation |
 | Marketplace | Reviewed specialists, workflows, local hiring approval, direct seller payments and private deliverables |
-| Tools | Owner-configured models, restricted browsing, reviewed MCP connectors and reference-image style input |
+| Tools | Owner-configured models, restricted browsing, owner-added personal MCP connections, reviewed marketplace connectors and reference-image style input |
 
 Provider-backed tools require the owner's configured accounts and credits. Current marketplace fees are zero; subscriptions are not implemented.
 

@@ -24,7 +24,7 @@ Veilo separates agent planning from spending authority. This is a team self-asse
 
 Owner sign-in uses a domain-bound wallet challenge with nonce and expiry. Browser mutations require CSRF protection. Worker credentials and internal service credentials have separate scopes. Marketplace sign-in never grants spending authority.
 
-Note secrets, signer material and provider keys remain outside runner-readable state. Model keys are sealed locally. Browsing restricts public destinations, request size and page count. MCP tools require review and digest pins; raw code-execution tools are refused. These controls reduce exposure but do not eliminate prompt injection.
+Note secrets, signer material and provider keys remain outside runner-readable state. Model keys are sealed locally. Browsing restricts public destinations, request size and page count. Personal MCP connections are owner-added to the local workspace without operator review. Supported read-oriented tools are discovered and digest-pinned; calls refuse tool drift and raw code execution. Shared marketplace connector publication retains operator review. Remote tool behavior remains trusted, so read-oriented naming is not proof of no side effects. These controls reduce exposure but do not eliminate prompt injection.
 
 ## Recovery and administrative trust
 

@@ -38,6 +38,8 @@ If the returned workflow is pending, review its actual version ID with `pnpm mar
 
 These commands update catalogue versions; they do not start a paid run or post to TikTok. The renderer manifest changed, so old designer listings need the new reviewed version. Existing workflow assignments stay pinned: add the new version to the agent and remove the old assignment to avoid selecting it accidentally. Do not rerun the full seed for this update.
 
+For an image-only review, prepare **TikTok carousel (reference-style preview)** with `pnpm marketplace:carousel-style --preview`. It uses the planner and renderer, costs up to 0.03 devnet USDC, and has no publishing step. Assign it to the agent and review the generated images before choosing a public workflow.
+
 ## Run from the website
 
 1. Marketplace → **TikTok carousel (designed, posts publicly)** → **Add to an agent**. Choose **Ask me before each run**.

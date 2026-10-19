@@ -240,7 +240,7 @@ Updated 19 October 2026. Veilo is a Solana devnet prototype with a personal agen
 | Wallet | Deposits, encrypted notes, proof-authorized payouts, owner withdrawals and an approved USDC-to-SOL swap path |
 | Owner control | Spending limits, reservations, approvals, pause/revoke and reconciliation |
 | Marketplace | Reviewed specialists, workflows, local hiring approval, direct seller payments and private deliverables |
-| Tools | Owner-configured models, restricted browsing, reviewed MCP connectors and reference-image style input |
+| Tools | Owner-configured models, restricted browsing, owner-added personal MCP connections, reviewed marketplace connectors and reference-image style input |
 
 Provider-backed tools require the owner's configured accounts and credits. Current marketplace fees are zero; subscriptions are not implemented.
 
@@ -415,6 +415,8 @@ pnpm marketplace:operator workflow-queue
 If the returned workflow is pending, review its actual version ID with `pnpm marketplace:operator workflow-review <WORKFLOW_VERSION_ID> approve "Reviewed reference style and public publishing terms"`. A version that already passed publication checks can be live immediately; catalogue publication is not approval of a paid run.
 
 These commands update catalogue versions; they do not start a paid run or post to TikTok. The renderer manifest changed, so old designer listings need the new reviewed version. Existing workflow assignments stay pinned: add the new version to the agent and remove the old assignment to avoid selecting it accidentally. Do not rerun the full seed for this update.
+
+For an image-only review, prepare **TikTok carousel (reference-style preview)** with `pnpm marketplace:carousel-style --preview`. It uses the planner and renderer, costs up to 0.03 devnet USDC, and has no publishing step. Assign it to the agent and review the generated images before choosing a public workflow.
 
 ## Run from the website
 
@@ -633,7 +635,7 @@ Choosing **Update** changes only the maximum. Removing the approval refuses new 
 
 The marketplace connector `coingecko-market` offers three read-only tools that Veilo defines: `coingecko_simple_price` (price and 24-hour change for 1 to 10 coin ids), `coingecko_trending` and `coingecko_search` (find a coin id), plus CoinGecko's docs search. Each tool runs a fixed code template through CoinGecko's `execute` tool; the agent supplies only schema-checked values such as coin ids and currencies, never code. The approval pins the template code digest and the upstream `execute` digest, and calling `execute` directly is refused.
 
-1. Show the existing **CoinGecko docs search only** connector (`coingecko-docs`). To demonstrate adding market data, use **Connectors → Add → Custom MCP server**, enter `https://mcp.api.coingecko.com/mcp`, choose **Load fixed queries**, then **Submit for review**. It stays **In review** until the operator approves it. The targeted command `pnpm marketplace:connector coingecko-market` previews only this connector; after the proposal is shown, the operator may add `--confirm` to approve it. Do not run the full seed for this flow. Catalogue activation and an attached-agent website acceptance run are still outstanding.
+1. Show **CoinGecko docs search only** (`coingecko-docs`), then add market data through **Connectors → Add → Custom MCP server**. Paste `https://mcp.api.coingecko.com/mcp` and click **Add connector**. The control service discovers supported tools and saves a personal connection immediately; attach it to the agent from Discover. No operator approval or marketplace sign-in is needed for this path. Shared marketplace connector publication remains a separate reviewed operation.
 2. Open **Connectors** (`/connectors`), attach CoinGecko market data to a custom agent, then ask it a market question.
 3. The answer cites "CoinGecko (mcp.api.coingecko.com)" as the source. Connector calls are free, keyless and not private: CoinGecko sees the requested coin ids.
 
@@ -1145,7 +1147,7 @@ Veilo separates agent planning from spending authority. This is a team self-asse
 
 Owner sign-in uses a domain-bound wallet challenge with nonce and expiry. Browser mutations require CSRF protection. Worker credentials and internal service credentials have separate scopes. Marketplace sign-in never grants spending authority.
 
-Note secrets, signer material and provider keys remain outside runner-readable state. Model keys are sealed locally. Browsing restricts public destinations, request size and page count. MCP tools require review and digest pins; raw code-execution tools are refused. These controls reduce exposure but do not eliminate prompt injection.
+Note secrets, signer material and provider keys remain outside runner-readable state. Model keys are sealed locally. Browsing restricts public destinations, request size and page count. Personal MCP connections are owner-added to the local workspace without operator review. Supported read-oriented tools are discovered and digest-pinned; calls refuse tool drift and raw code execution. Shared marketplace connector publication retains operator review. Remote tool behavior remains trusted, so read-oriented naming is not proof of no side effects. These controls reduce exposure but do not eliminate prompt injection.
 
 ## Recovery and administrative trust
 
