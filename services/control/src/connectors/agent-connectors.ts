@@ -111,11 +111,39 @@ export interface AgentConnectorsDeps {
 const sha256 = (s: string) => createHash("sha256").update(s, "utf8").digest("hex");
 
 /**
- * Owner-attached, operator-approved, read-only MCP tools that a running task may call. Tools are
+ * Owner-attached, pinned MCP tools from the shared catalogue or personal workspace. Tools are
  * keyless and free: no x402 payment, no credentials and no policy, notes or keys reach them.
  */
 export class AgentConnectors {
   constructor(readonly deps: AgentConnectorsDeps) {}
+
+  custom(workspaceId: string) {
+    requireWorkspace(this.deps.ledger, workspaceId);
+    const rows = this.deps.ledger.db.prepare(`SELECT * FROM workspace_connector WHERE workspace_id = ? ORDER BY created_at_ms DESC`).all(workspaceId) as Array<{ id: string; title: string; endpoint: string; tools_json: string }>;
+    return rows.map((row) => ({ id: row.id, title: row.title, endpoint: row.endpoint, risk: "read_only", scope: "workspace", tools: JSON.parse(row.tools_json) as ConnectorCatalog[number]["tools"] }));
+  }
+
+  async addCustom(owner: { workspaceId: string; ownerPubkey: string }, endpoint: string, title?: string) {
+    requireWorkspace(this.deps.ledger, owner.workspaceId);
+    const problem = mcpEndpointProblem(endpoint);
+    if (problem) throw new ControlError("INVALID_REQUEST", `MCP endpoint ${problem}`);
+    const normalized = new URL(endpoint).toString();
+    const client = this.deps.client(normalized);
+    await client.initialize();
+    const live = await client.listTools();
+    const server = mcpTemplateServerFor(endpoint);
+    // Known code-backed MCPs expose fixed queries; arbitrary execution tools stay unavailable.
+    const candidates = server ? templateServerTools(server, live).tools : live.filter((t) => /^(?:get|search|list|fetch|read|query|lookup|find|resolve|retrieve)(?:[_A-Z.-]|$)/.test(t.name));
+    const tools = candidates.filter((t) => !mcpToolPinProblem(t, normalized)).slice(0, 32).map((t) => ({ ...t, sha256: mcpToolDigest(t) }));
+    if (tools.length === 0) throw new ControlError("SERVICE_NOT_ALLOWED", "This server has no supported read-oriented tools. Code execution and publishing tools cannot be attached through this connector path.");
+    const id = `custom-${sha256(normalized).slice(0, 20)}`;
+    const label = title?.trim() || server?.title || new URL(normalized).hostname;
+    immediate(this.deps.ledger.db, () => {
+      this.deps.ledger.db.prepare(`INSERT INTO workspace_connector (workspace_id,id,title,endpoint,tools_json,added_by,created_at_ms) VALUES (?,?,?,?,?,?,?) ON CONFLICT(workspace_id,endpoint) DO UPDATE SET title=excluded.title, tools_json=excluded.tools_json, added_by=excluded.added_by`).run(owner.workspaceId, id, label, normalized, JSON.stringify(tools), owner.ownerPubkey, this.deps.ledger.now());
+      writeAudit(this.deps.ledger, { workspaceId: owner.workspaceId, scope: `connector:${id}`, actorType: "owner", actorId: owner.ownerPubkey, action: "connector.add_custom", policyResult: "allowed", details: { connectorId: id, tools: tools.map((t) => t.name) } });
+    });
+    return this.custom(owner.workspaceId).find((c) => c.id === id)!;
+  }
 
   #rows(agentId: string): AttachmentRow[] {
     return this.deps.ledger.db.prepare(`SELECT * FROM agent_connector WHERE agent_id = ? ORDER BY connector_id`).all(agentId) as AttachmentRow[];
@@ -183,10 +211,11 @@ export class AgentConnectors {
       return agent;
     };
     assertAttachable();
-    if (!this.deps.catalog) throw new ControlError("NOT_READY", "agent connectors need the marketplace (MARKETPLACE_URL)");
+    const local = this.custom(owner.workspaceId).find((c) => c.id === connectorId);
+    if (!local && !this.deps.catalog) throw new ControlError("NOT_READY", "connector is not available in this workspace");
     let catalog: ConnectorCatalog;
     try {
-      catalog = await this.deps.catalog();
+      catalog = local ? [local] : await this.deps.catalog!();
     } catch (error) {
       if (error instanceof ControlError) throw error;
       throw new ControlError("PROVIDER_UNAVAILABLE", "the marketplace connector catalogue is unavailable");

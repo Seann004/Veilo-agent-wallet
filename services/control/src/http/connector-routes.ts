@@ -56,6 +56,14 @@ export function connectorRouter(deps: AuthDeps & { connectors?: AgentConnectors 
     return requireAgent(deps.ledger, a.workspaceId, a.agentId);
   };
 
+  r.get("/connectors/custom", owner, (_req, res) => {
+    res.json({ connectors: connectors().custom(ownerOf(res).workspaceId) });
+  });
+  r.post("/connectors/custom", owner, async (req, res) => {
+    const body = parse(z.object({ endpoint: z.string().trim().min(1).max(300), title: z.string().trim().max(80).optional() }).strict(), req.body);
+    res.status(201).json({ connector: await connectors().addCustom(ownerOf(res), body.endpoint, body.title) });
+  });
+
   r.get("/agents/:id/connectors", owner, (req, res) => {
     res.json(connectors().list(ownerOf(res).workspaceId, agentParam(req)));
   });

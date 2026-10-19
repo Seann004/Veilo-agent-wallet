@@ -416,3 +416,31 @@ describe("templated connector tools", () => {
     expect((await t.attach("Prince", ["coingecko_simple_price"], "lookalike")).body.error.message).toMatch(/only runs on mcp.api.coingecko.com/);
   });
 });
+
+
+describe("personal custom MCP connections", () => {
+  it("discovers and attaches an owner-added endpoint without marketplace approval", async () => {
+    const t = await start({ catalog: [] });
+    expect((await t.call("/connectors/custom", { method: "POST", body: { endpoint: ENDPOINT } })).status).toBe(401);
+    const first = await t.call("/connectors/custom", { method: "POST", headers: t.owner, body: { endpoint: ENDPOINT, title: "My docs" } });
+    expect(first.status).toBe(201);
+    expect(first.body.connector).toMatchObject({ scope: "workspace", title: "My docs", tools: [{ name: "search_docs" }] });
+    const id = first.body.connector.id;
+    expect((await t.attach("Prince", ["search_docs"], id)).status).toBe(200);
+    const again = await t.call("/connectors/custom", { method: "POST", headers: t.owner, body: { endpoint: ENDPOINT } });
+    expect(again.body.connector.id).toBe(id);
+    expect(t.env.db.prepare("SELECT count(*) FROM workspace_connector").pluck().get()).toBe(1n);
+    const token = t.workerToken("Prince");
+    const taskId = await t.runningTask("Prince", token);
+    expect((await t.connectorCall(token, { taskId, connectorId: id, tool: "search_docs", args: { query: "accounts" } })).status).toBe(200);
+  });
+  it("refuses private endpoints and non-read-oriented tools before attaching anything", async () => {
+    const t = await start({ catalog: [] });
+    const add = (endpoint: string) => t.call("/connectors/custom", { method: "POST", headers: t.owner, body: { endpoint } });
+    expect((await add("https://127.0.0.1/mcp")).status).toBe(400);
+    expect(t.endpoints).toHaveLength(0);
+    t.mcp.tool = { ...DOCS_TOOL, name: "publish_post" };
+    expect((await add(ENDPOINT)).status).toBe(403);
+    expect(t.env.db.prepare("SELECT count(*) FROM workspace_connector").pluck().get()).toBe(0n);
+  });
+});
