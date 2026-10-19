@@ -1,33 +1,48 @@
 # Veilo demo flow and scripts
 
-## Current recording: reference-style public carousel
+## Current recording: wallet, custom MCP and public carousel
 
-Use **TikTok carousel (designed, posts publicly)** with the new reference-style version. The local model describes the attached image; the workflow uses that description for bounded colors, font category, alignment, shapes and headline case. This is reference guidance, not exact image reproduction. The public run has no intermediate draft/editing stop; change the brief before approval.
-
-Recording order (edited target: 4:55):
+Use the existing **Swap Bot** and **Content Writer**. Creating another agent repeats setup without helping this short recording; keep creation as an optional extra. Target an edited **4:45** and cut typing, signing and generation waits.
 
 | Time | Click / action | What to say |
 |---|---|---|
-| 0:00–0:15 | Open workspace | “Veilo combines a personal agent workspace, private on-chain payments and an agent marketplace.” |
-| 0:15–0:40 | Wallet → Add funds → review and sign in Phantom | “I deposit devnet USDC into the private pool. This is my available balance; amounts and timing remain public.” |
-| 0:40–1:10 | Create agent → Custom agent → Review → Create agent → Activate | “I choose its instructions, tools, hiring permission and spending limits before activating it.” |
-| 1:10–1:55 | Connectors → Add → Custom MCP server → paste CoinGecko URL → Add connector; attach it and ask for BTC price | “Adding the URL discovers its tools and connects it to my workspace immediately.” |
-| 1:55–2:30 | Wallet → Agent swaps; request exactly 0.01 USDC → open completed receipt and Explorer | “A fresh wallet calls Orca, and SOL goes to my owner wallet. This is the actual swap output; returned account rent is separate.” |
-| 2:30–2:55 | Marketplace → public designed carousel → Add to an agent → Ask me before each run | “The agent can propose this workflow, but every public run waits for approval.” |
-| 2:55–3:30 | Attach reference image; send the research/carousel request below | “It retrieves the first three repositories on GitHub’s weekly Trending page and uses my image’s visual style.” |
-| 3:30–3:55 | Review and approve → inspect inputs, cost, account and public effect → Approve and run → Confirm approval | “I approve the topic, style, slide count, price and public publishing destination before execution.” |
-| 3:55–4:40 | Run → Show output → Load images → payments → actual TikTok post | “Each step has its own output and payment receipt. Here is the public post.” Say accepted/scheduled instead if publication is unconfirmed. |
-| 4:40–4:55 | Workspace / completed run | “Agents execute the approved workflow, while I control permissions and spending.” |
+| 0:00–0:15 | Landing page → Open workspace | “Veilo combines a personal agent workspace, private on-chain payments and an agent marketplace.” |
+| 0:15–0:40 | Wallet → Add funds → deposit devnet USDC → confirm Ready to spend | “I fund the private pool once, then my agents can pay within the permissions and spending limits I set.” |
+| 0:40–1:25 | Connectors → Add → Custom MCP server → paste CoinGecko URL → Add connector → Add to agent → Swap Bot; ask the SOL question below | “I can connect an external MCP server by adding its URL. Here, Swap Bot uses CoinGecko for current market data.” |
+| 1:25–2:05 | Swap Bot → send swap prompt → open its completed receipt → swap transaction in Solana Explorer | “The agent swapped 0.01 USDC through Orca. This receipt shows the actual SOL output and my receiving wallet. The transaction hash lets me verify it on-chain.” |
+| 2:05–2:40 | Marketplace → TikTok carousel (designed, posts publicly) → Add to an agent → Content Writer → Ask me before each run | “This marketplace workflow researches and plans a carousel, renders its slides and publishes to the connected TikTok account. I give my agent access, with approval required for each run.” |
+| 2:40–3:05 | Content Writer → More options → attach reference image → send carousel prompt below | “I describe the result I want and attach a visual reference. The agent prepares the workflow inputs for me.” |
+| 3:05–3:40 | Review and approve → inspect slide count, style, topic, steps, total and destination → Approve and run → Confirm approval | “Before anything runs, I review what will be created, what it costs and where it will be published. Then I approve this run.” |
+| 3:40–4:30 | Open run → Show output → Load images → inspect step receipts → open confirmed public post | “Here are the five slides, the workflow steps and their payment receipts. This is the finished post.” |
+| 4:30–4:45 | Completed run / workspace | “From a simple request to a finished result: agents use tools, pay for services and hire workflows, while I control their permissions.” |
 
-Cut typing and generation waits. Label any earlier completed run as a recorded rehearsal. Do not issue a duplicate payment or post merely because the current run is pending. Model and provider credits cost real money separately from devnet settlement.
+### Copyable prompts
 
-Agent prompt:
+CoinGecko endpoint: `https://mcp.api.coingecko.com/mcp`
 
-> Read https://github.com/trending?since=weekly. Use the first three repositories shown, preserving their order and source links. Propose five slides: cover, one per repository, and a close. Include the source links in the caption. Use my attached image as visual-style guidance and only my assigned “TikTok carousel (designed, posts publicly)” workflow. Wait for run approval. Do not invent repositories, star counts or scores.
+SOL market data:
 
-For the CoinGecko shot, use **Connectors → Add → Custom MCP server**, paste `https://mcp.api.coingecko.com/mcp`, and click **Add connector**. No operator command or marketplace sign-in is needed for a personal connection. It appears immediately in Discover; attach it to the agent and ask for a cited Bitcoin USD price and 24-hour change. The docs-search-only connector remains separate. Personal connections stay in the local workspace; shared marketplace connector publication keeps its separate review process.
+> What is SOL's current price in USD and its 24-hour change? Use CoinGecko and include the source.
 
-For the reference-style catalogue upgrade and version-pinned assignments, see [reference publishing](docs/guide/reference-publishing.md). Public publishing must be enabled on the seller host. A reference image requires a model that can read it; stop if the model reports the image was not used.
+Swap:
+
+> Swap exactly 0.01 USDC to SOL.
+
+Carousel, with the reference image attached:
+
+> Create a 5-slide TikTok carousel about the top 3 repositories on GitHub Trending this week: https://github.com/trending?since=weekly. Include a cover, one slide per repository, and a final call to action. Match the visual style of my attached image and include the repository links in the caption.
+
+### Check before recording
+
+- Attach the newly added CoinGecko market-data connection to Swap Bot, rather than the docs-search-only connector. The custom connection adds immediately without operator approval or marketplace sign-in. It was already added during QA: show the existing connection honestly, or reuse Add to show the actual update; do not claim a first-time registration.
+- Swap Bot must have the USDC-to-SOL purchase enabled and sufficient agent/workspace limits. CoinGecko's market price is separate from the devnet pool's swap rate.
+- On the completed swap receipt, distinguish actual SOL output from returned token-account rent. If the wallet's total SOL increase is larger, say: “The additional SOL is returned account rent, shown separately.” Use the swap signature to demonstrate the trade; the private-pool funding signature is a separate transaction.
+- Assign the current reference-style public workflow to Content Writer with **Ask me before each run**. Confirm its model can read the attachment and that the actual review screen contains a usable reference-style description. The renderer follows bounded colors, font category, alignment and shapes; it does not reproduce every image detail.
+- Review the actual publishing account and public effect before approval. This workflow proceeds through publication after approval; adjust the request before approving. It has no intermediate image-editing stop.
+- Use the run's displayed quote, not a memorized price. Owner model and seller-provider credits may cost real money separately from devnet settlement.
+- Rehearse one complete run before filming. Only call it published after opening the confirmed public post. If still pending, say “The run is processing” and show a clearly identified completed rehearsal; do not create a duplicate run or post to fill the wait.
+
+The image-only **TikTok carousel (reference-style preview)** is available for rehearsal without posting. The last automated attempt did not upload the reference image because Chrome file access was disabled, so it did not generate images or publish. See [reference publishing](docs/guide/reference-publishing.md) for version setup.
 
 ---
 
