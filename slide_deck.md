@@ -1,6 +1,6 @@
 # Veilo: presentation content and speaker notes for owner review
 
-Reviewed with GPT-6 Astra at low reasoning effort against the exact Topic F statement supplied by the owner on 19 October 2026. This replaces the earlier budget-first proposal. This is the canonical presentation-content proposal, pending owner approval. The existing PowerPoint remains an earlier draft and must be rebuilt only after content approval. There is no demo slide or embedded demo segment.
+The previous content was reviewed with GPT-6 Astra at low reasoning effort against the exact Topic F statement supplied by the owner on 19 October 2026. This revision incorporates the owner's subsequent slide-by-slide edits and has not had a new Astra review. This replaces the earlier budget-first proposal. This is the canonical presentation-content proposal, pending owner approval. The PowerPoint and native Keynote versions include the revised visual design and a spoken script on each slide. Presenter notes contain only the spoken script; references and review context remain in this source document. There is no demo slide or embedded demo segment.
 
 ## Exact organizer statement
 
@@ -12,21 +12,23 @@ This is the supplied statement, not an independently verified competition page. 
 
 Veilo is a personal agent workspace, private on-chain funding wallet and marketplace. Audience: individuals, builders and business owners. Wallet execution is the core Topic F connection. Spending controls support the product rather than define it.
 
-12 slides, target speaking time **5 minutes 40 seconds**. A website demonstration is separate. Rehearse the complete session below the organizer's ten-minute presentation maximum if showing the website during the presentation slot.
+12 slides, target speaking time **about 7–8 minutes**, depending on pace. Architecture and proof mechanics receive more time in this revision. A website demonstration is separate. Rehearse the complete session below the organizer's ten-minute presentation maximum if showing the website during the presentation slot.
 
 ## 1. Veilo (0:15)
 
 **On slide**
 
-**Your personal agent workspace, with private on-chain funding and a marketplace**
+Small topic label: **Autonomous on-chain wallet**
 
-Create agents. Fund their work. Hire specialists and run workflows.
+**Veilo**
 
-Footer: Solana devnet prototype.
+**Your personal agent workspace, private on-chain payments and agent marketplace**
+
+Create agents. Pay for their work. Hire specialists and run workflows.
 
 **Speaker notes**
 
-“Veilo brings personal AI agents, an on-chain wallet and a marketplace into one workspace. Owners give agents jobs and permission to acquire the tools or specialist help they need, using private pool funding.”
+Hi, this is Veilo. We're building a personal agent workspace with private on-chain payments and an agent marketplace. The idea is simple: you can create your own agents, let them pay for the services they need, and hire other agents to help get work done.
 
 ## 2. Who it is for (0:25)
 
@@ -40,43 +42,36 @@ Shared need: useful automation, payment privacy and owner control.
 
 **Speaker notes**
 
-“Our intended users include individuals, builders and business owners. An agent needs more than a conversation to complete work: it needs access to resources, a way to pay and sometimes specialist help. Owners need visibility and control without manually coordinating every step.”
+Veilo is for anyone who wants their own agent workspace. That could be an individual using an agent for everyday tasks, a builder connecting agents to tools, or a business owner hiring specialists. The shared need is getting useful work done, with payment privacy and control over what the agent can do.
 
-These are intended audiences, not claimed customer traction.
+## 3. Our solution (0:30)
 
-## 3. Our solution (0:25)
+**On slide: one Veilo container with three columns**
 
-**On slide**
-
-**Personal agent workspace + private on-chain wallet + marketplace**
-
-Describe the outcome, authorize the work, and let agents coordinate permitted tools, specialists and payments.
-
-Review the results and spending in one place.
+| Personal agent workspace | Private on-chain payments | Agent marketplace |
+|---|---|---|
+| Create agents and coordinate their work. | Pay approved services using ZK pool withdrawals. | Hire specialists and run reusable workflows. |
+| Review results and activity in one place. | Keep spending within owner permissions. | Automate hiring within explicit owner grants. |
 
 **Speaker notes**
 
-“The workspace is where you create and direct agents. The wallet funds approved on-chain actions through the private pool. The marketplace supplies specialists and reusable workflows. Together they connect a task to the resources, payments and outputs needed to complete it.”
-
-Do not imply that the entire workspace, prompts or marketplace relationship is cryptographically private.
+Our solution has three parts in one workspace. First, you create and manage your personal agents. Second, those agents can pay for approved services through our private pool. Third, there's a marketplace where you can hire specialist agents and run workflows. So the agent has somewhere to work, a way to pay, and access to help when it needs it.
 
 ## 4. Features (0:30)
 
 **On slide**
 
 - Personal agents with configurable instructions and tools.
-- Private pool funding and on-chain service payments.
-- Marketplace specialists and multi-step workflows.
+- **ZK-proof-based private pool payments.**
+- Agent marketplace specialists and multi-step workflows.
 - Automated hiring within explicit owner grants.
-- MCP connectors, browsing and owner spending controls.
+- Third-party MCP connectors, browsing, spending controls and recovery.
 
-Footnote: Components implemented; current end-to-end verification varies.
+Small evidence qualification: Components implemented; end-to-end verification varies.
 
 **Speaker notes**
 
-“Owners can configure agents, connect read-only tools and discover specialists or workflows. Hiring requires local approval or an explicit listing grant. Within a grant, an agent can request the permitted hire without repeating every approval. It cannot create its own spending authority. Private-funded marketplace hiring still needs its current devnet acceptance run.”
-
-Sources: docs/guide/agents.md; docs/guide/marketplace.md; docs/guide/status.md. Keep pause, revoke, monitoring and recovery available in the supporting product explanation.
+Here are the main features. You can configure agents with their own instructions and tools, connect third-party MCP servers, browse, and hire specialists from the marketplace. For payments, we use zero-knowledge proofs. Automated hiring stays within permissions you explicitly grant. These components are implemented, but we're still completing the full private-funded marketplace acceptance run on devnet.
 
 ## 5. Autonomous on-chain operations (0:30)
 
@@ -90,123 +85,158 @@ Designed for autonomous execution within owner-defined permissions.
 
 **Speaker notes**
 
-“This directly addresses the Autonomous On-chain Wallet topic. Asset management here means allocating allowances and tracking funds and exposure, not claiming portfolio optimization. Transaction execution connects pool withdrawals to seller payment. Risk controls decide which actions are permitted. Triggered replenishment is implemented, but a manual trigger does not prove unattended initiation.”
+This is how Veilo connects to the autonomous on-chain wallet topic. For asset management, we track funding, agent allowances and spending exposure. For transaction execution, we have proof-authorized pool payouts and x402 payments. For risk control, we check spending caps, recipients and expiry, with revocation and replay protection. The agent can act within the permissions you set; it can't give itself more authority.
 
-The marketplace and useful agent workflows explain implementation ambition. The 0–5 challenge bonus is an organizer decision and is not a promised outcome.
+## 6. Technical architecture (0:50)
 
-## 6. Technical architecture (0:35)
+**On slide: editable technical diagram**
 
-**On slide**
+```mermaid
+flowchart LR
+  A["AI agent runner"] -->|"Purchase intent"| C["Control service<br/>Policy checks and atomic reservation"]
+  A -->|"Request resource"| S["Seller API"]
+  S -->|"HTTP 402 and payment terms"| A
+  C -->|"Authorized operation"| W["Local wallet service<br/>Encrypted notes, Groth16 prover and signer"]
+  W -->|"Proof and public inputs"| R["Relayer"]
+  R -->|"spend_private transaction"| P["Solana privacy pool<br/>Groth16 verifier"]
+  P -->|"USDC payout"| F["Fresh payment wallet"]
+  F -->|"Signed x402 payment"| S
+  S -->|"Verify and settle"| X["x402 facilitator"]
+  X -->|"Submit token settlement"| T["Solana settlement<br/>Seller USDC account"]
+  S -->|"Resource after settlement"| A
+```
 
-Agent proposes → control checks and reserves → wallet proves and signs → Solana pool verifies → fresh wallet pays → seller delivers.
-
-**The model cannot grant itself spending authority.**
-
-**Speaker notes**
-
-“Control checks permissions and reserves the budget atomically. The wallet protects the private notes, generates the proof locally and validates the transaction before signing. The pool verifies the proof on Solana and funds a fresh payout wallet. That wallet settles with the seller through standard x402. Marketplace identity records are separate from local signing authority.”
-
-Sources: docs/guide/architecture.md; docs/guide/policy.md. Budgets and revocation are owner-service controls, not cryptographic spending caps. The Orca swap path is separate from x402 merchant settlement.
-
-## 7. How private funding works (0:35)
-
-**On slide**
-
-- Commit a deposit note to the shared pool.
-- Prove control of an eligible note without naming the spent deposit.
-- Use a nullifier to prevent double spending.
-- Fund a fresh payout wallet and retain private change.
-
-**Public:** amounts, merchant payments and timing. Small pools give weak privacy.
+**Diagram callout:** Groth16 authorizes the pool withdrawal. x402 handles the merchant-payment leg.
 
 **Speaker notes**
 
-“The proof removes the explicit spent-deposit identifier from the withdrawal. Its intent binds the payout, and a nullifier stops the same note being spent twice. The merchant payment remains an ordinary public transaction. Distinctive amounts and timing can still correlate activity. Sellers and providers see the jobs they process, and the owner retains local attribution.”
+Here's the payment flow. The agent proposes a purchase, then control checks the terms and reserves the budget. The local wallet service stores the encrypted notes and creates a Groth16 proof. The relayer submits that proof to the Solana pool, which verifies it and pays out to a fresh payment wallet. That fresh wallet then signs the x402 payment, and the facilitator verifies and settles the merchant payment. There are two different things called wallet here: the local service keeps the notes and signing material, while the fresh payment wallet is a new Solana address for that purchase. Groth16 handles the pool withdrawal; x402 handles paying the seller.
 
-Sources: docs/guide/privacy.md; docs/protocol.md. Do not describe ordinary wallet rotation or public x402 alone as the private mechanism. Credit zx402 as architectural inspiration in the notes and source attribution.
+Sources: docs/guide/architecture.md; docs/protocol.md; docs/guide/payments.md. Budget enforcement is off chain, on the trusted owner-controlled host.
 
-## 8. Technology stack (0:30)
+## 7. How private payments work (0:50)
 
-**On slide**
+**On slide: proof boundary diagram**
 
-- **Interface and services:** Next.js, TypeScript and Express.
-- **Local durable state:** SQLite.
-- **On-chain program:** Solana, Rust and Anchor.
-- **Privacy proofs:** Circom, snarkjs and Groth16.
-- **Marketplace:** Supabase identity, database and storage.
-- **Integrations:** x402 service payments and MCP connectors.
+```mermaid
+flowchart LR
+  subgraph L["Private witness: local wallet service"]
+    N["Note secrets and value"]
+    M["State and approved-set<br/>Merkle paths"]
+    G["Groth16 prover<br/>BN254"]
+    N --> G
+    M --> G
+  end
+  G -->|"Proof and public inputs"| V["Solana Groth16 verifier"]
+  V --> Q["Check public intent<br/>and unused nullifier"]
+  Q --> F["Fresh-wallet payout"]
+  Q --> H["New change commitment<br/>Change stays in pool"]
+```
 
-**Speaker notes**
+**The proof establishes**
 
-“The stack separates the interface, durable state, financial authority and on-chain verification. Supabase supports marketplace identity and records, while local control and wallet retain spending authority. The owner host is trusted. Current proving setup and deployment are for devnet, and this is not an externally audited system.”
+- Knowledge of the note secrets and membership in the state tree and approved set.
+- Value conservation: note value equals withdrawal plus change.
+- A nullifier tied to the spent note and a new change commitment.
 
-Source: docs/guide/architecture.md. This is a role-based stack overview, not a list of claims that every integration has a live paid run.
-
-## 9. Evidence and current limits (0:30)
-
-**On slide**
-
-- Recorded devnet proof withdrawals, x402 payments and public exits.
-- Reviewed local tree: **994 tests passed, 1 skipped**.
-- Fresh evidence still needed for unattended initiation, the hardened swap path and private-funded marketplace hiring.
-
-**Devnet only. Unaudited. Development trusted setup.**
-
-**Speaker notes**
-
-“Historical receipts establish real recorded transactions. The reviewed local tree, source b155f17, based on main 55e6404 plus the submission fixes, passed 994 tests with one skipped across 127 files. That does not retroactively move older receipts onto the current code. Current swap and marketplace paths still need new execution evidence. Sponsor and fee-accounting gaps remain documented.”
-
-Sources: docs/submission-review-2026-10-19.md; docs/guide/status.md; artifacts/evidence. Attach the final tested revision before submission. Change the evidence wording only after a reviewed finalized receipt exists.
-
-## 10. Intended impact (0:25)
-
-**On slide**
-
-- Owners coordinate work through personal agents.
-- Agents access specialists and tools within granted authority.
-- Owners retain spending visibility and control.
-- Pool funding reduces explicit public deposit-to-payment linkage.
+**Public:** roots, nullifier, withdrawal value, intent context and change commitment. Merchant payments and timing also remain public.
 
 **Speaker notes**
 
-“The intended impact is connecting delegated work to the resources and payments it needs. An individual can organize personal tasks, a builder can connect agent services, and a business owner can coordinate specialist work. We aim to reduce manual coordination while retaining accountability. These are benefits to validate, not measured time savings, user adoption or revenue.”
+A note is basically a private record of your claim to funds in the pool. The USDC stays in the pool vault, and the note secrets stay encrypted in the local wallet service. Say you have a 10 USDC note and want to pay 3, ignoring separate fees. The service proves it can spend that note, the pool pays 3 to a fresh wallet, and a new 7 USDC change note stays in the pool. That change becomes available after the required insertion and checks. Groth16 proves the note is valid and the values add up, without publishing which deposit was spent. A nullifier prevents spending the same note twice. The amounts, merchant payment and timing are still public, so this reduces the direct deposit-to-payment link rather than making everything anonymous.
 
-Do not use invented market size, customers, cost savings or productivity statistics.
+Sources: circuits/src/spend.circom; docs/protocol.md sections 7 and 9; docs/guide/privacy.md. Credit zx402 architectural inspiration in attribution/notes. Do not say the ZK circuit enforces per-agent budgets.
 
-## 11. Proposed business model (0:25)
-
-**On slide**
-
-- Workspace subscriptions for advanced agent and team operations.
-- Optional managed infrastructure and support.
-- Potential marketplace revenue share as the ecosystem develops.
-
-**Current platform fee: zero. Pricing and demand need validation.**
-
-**Speaker notes**
-
-“These are business-model proposals. Individuals could begin with a personal workspace, while builders and businesses could pay for advanced operational features or managed support. We could later explore marketplace revenue share. Current code enforces a zero platform fee. Seller prices, provider credits and network charges are separate, and we have not established willingness to pay or unit economics.”
-
-Source for current fee: packages/contracts/src/marketplace/limits.ts. Subscription tiers, hosted services and a future fee are not claims about current shipped paid products.
-
-## 12. Five-year direction (0:35)
+## 8. Technology stack (0:20)
 
 **On slide**
 
-- **Year 1:** reliable personal agents, complete execution evidence and independent security review.
-- **Year 2:** controlled production pilots after security and setup gates.
-- **Year 3:** developer SDK, more specialists and reusable workflows.
-- **Year 4:** broader business administration and operating controls.
-- **Year 5:** stronger privacy and wider settlement integrations, guided by demand.
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js |
+| Blockchain | Built on Solana |
+| Privacy | Groth16 zero-knowledge proofs |
+| Marketplace database and identity | Supabase |
+| Third-party integrations | x402 payments and MCP connectors |
 
-Direction, not guaranteed delivery dates.
+**Speaker notes / Q&A**
+
+The frontend is Next.js, and the payment layer is built on Solana. Groth16 provides the privacy proofs. Supabase handles marketplace data and identity, while local wallet state stays on the owner's machine. We use x402 for service payments and MCP for third-party tool connections.
+
+Sources: circuits/src/spend.circom; circuits/scripts/build.ts; docs/protocol.md; https://github.com/iden3/snarkjs .
+
+## 9. Execution evidence (0:35)
+
+**On slide: three receipt panels**
+
+1. **Private pool withdrawal** — Groth16 proof verified; 0.01 devnet USDC paid to a fresh wallet.
+2. **x402 merchant payment** — same fresh wallet paid 0.01 devnet USDC to PayAI Echo. Echo is a smoke merchant and refunds payments.
+3. **Owner withdrawal** — 0.20 devnet USDC returned from a separate eligible pool note to its owner through a public on-chain transaction.
+
+Use the captured real Explorer screenshots, shortened clickable hashes, slots and finalized status. Keep full transaction hashes in the notes and an evidence table.
+
+**Visible label:** Recorded 17 October 2026, Solana devnet. Rechecked 19 October: all three finalized, no on-chain error. Public exit is separate from the paid-purchase path.
+
+- **Private pool withdrawal**, slot `512001315`: [2fbWQ6ws2y2sHFUgBeELnKVsdVKZwpBnx6ma9kkwhkHtdw9ki2fBq14UN3nqdFMBcGsLQKUVK36aE1w7DBcPJLE3](https://explorer.solana.com/tx/2fbWQ6ws2y2sHFUgBeELnKVsdVKZwpBnx6ma9kkwhkHtdw9ki2fBq14UN3nqdFMBcGsLQKUVK36aE1w7DBcPJLE3?cluster=devnet)
+- **x402 merchant payment**, slot `512001369`: [3mChKemwTiirm9TvVpFMzbKiMQAkDB8SMX74nWgkmjhzijY2TRszZQpkET6PU6EQD5p6oEQt7jds2JmwSWLJWReA](https://explorer.solana.com/tx/3mChKemwTiirm9TvVpFMzbKiMQAkDB8SMX74nWgkmjhzijY2TRszZQpkET6PU6EQD5p6oEQt7jds2JmwSWLJWReA?cluster=devnet)
+- **Owner withdrawal**, slot `512001396`: [52EVL9oes4qKYArNqEFySbC7g5pNwEVxAo9bMZ7JXNNRqoVC6yeeBoPGarvequ2sDT78Xb2YRarN5t8XLmT8BEZu](https://explorer.solana.com/tx/52EVL9oes4qKYArNqEFySbC7g5pNwEVxAo9bMZ7JXNNRqoVC6yeeBoPGarvequ2sDT78Xb2YRarN5t8XLmT8BEZu?cluster=devnet)
 
 **Speaker notes**
 
-“The first year focuses on reliability, evidence and closing known gaps. Production pilots follow security review and a suitable trusted setup. Then we can grow developer integrations and the specialist ecosystem, expand team operations and explore stronger privacy and broader settlement support. Each stage depends on demonstrated demand and safe operation.”
+These are real devnet transaction receipts. The first shows a 0.01 USDC pool payout to a fresh wallet. The second shows that wallet paying the PayAI Echo test merchant through x402. Echo refunds its test payments. The third is a separate 0.20 USDC owner withdrawal, which returns an eligible note's funds to its owner. All three were finalized with no on-chain error when checked on October 19. This run used operator commands for the control stages, so it proves those transaction steps, rather than a fully unattended marketplace hire.
 
-This is the final slide. No fundraising ask or additional next-milestone slide.
+Evidence sources: artifacts/evidence/m2-spend.json, m2-merchant.json, m2-exits.json. Recheck: public Solana devnet RPC getSignatureStatuses, searchTransactionHistory=true, 19 October 2026. Existing screenshot assets: outputs/veilo-presentation/.build/assets/receipt-0.png through receipt-2.png (local build assets).
 
-## Astra review outcome
+## 10. Impact: win, win, win (0:25)
 
-Conceptually aligned with the exact topic's asset-management, transaction-execution and risk-control requirements. The wallet's actual on-chain execution must stay explicit within the broader workspace and marketplace story. Ambition does not guarantee bonus points. Current evidence is incomplete for the strongest unattended-autonomy and private-marketplace claims. Devnet and reference-reuse eligibility are separate organizer questions.
+**On slide: three beneficiaries around Veilo**
+
+```mermaid
+flowchart TB
+  V["Veilo<br/>Work, payments and an agent marketplace"]
+  V --- U["Users win<br/>Delegate work with owner controls<br/>and less explicit public funding linkage"]
+  V --- B["Agent builders win<br/>Share agents and workflows<br/>and offer paid specialist work"]
+  V --- S["Service providers win<br/>Reach agent customers<br/>and receive on-chain service payments"]
+```
+
+**Speaker notes**
+
+The impact we're aiming for is a win for all three sides. Users can delegate useful work and keep control of spending. Builders can share agents and workflows and earn from specialist work. Service providers can reach agent customers and receive on-chain payments. That's the ecosystem we want to grow; these are intended benefits, rather than traction we're claiming today.
+
+## 11. Business model (0:30)
+
+**On slide: proposed pricing**
+
+**One subscription: $9 per month**
+
+Use the personal agent workspace and publish/share agents or workflows.
+
+**Marketplace commission: 3%**
+
+Deducted from seller revenue on completed marketplace sales. No Veilo percentage fee on payments outside the marketplace.
+
+**Speaker notes**
+
+For the business model, we're proposing one workspace subscription at 9 dollars a month, plus a 3 percent commission on completed marketplace sales. For example, on a 10 dollar sale, the seller gets 9 dollars 70 and Veilo gets 30 cents, before separate costs. We wouldn't take a percentage from other payments. This is proposed pricing: subscriptions aren't implemented yet, and the current marketplace fee is zero. Model and external service costs would be separate.
+
+## 12. Five-year direction (0:40)
+
+**On slide: five-year timeline**
+
+- **Year 1:** independent smart-contract and circuit audits, close known gaps and onboard early users to devnet pilots.
+- **Year 2:** controlled mainnet pilots after audit fixes and a suitable trusted setup; validate the single subscription and marketplace commission.
+- **Year 3:** grow the agent marketplace, seller ecosystem and developer SDK.
+- **Year 4:** expand business workspaces, collaboration and operational controls.
+- **Year 5:** broaden payment integrations and strengthen privacy as usage grows.
+
+**Speaker notes**
+
+For the five-year direction, year one is about auditing the contracts and circuits, fixing gaps, and onboarding early users on devnet. In year two, we'd work toward controlled mainnet pilots after the security and setup requirements are met, and validate pricing. Year three is about growing the marketplace and developer SDK. Year four expands business workspaces and collaboration. By year five, we'd aim for more payment integrations and stronger privacy. That's the direction, with production use depending on the security work being completed first.
+
+## Content-review status
+
+This revision follows the owner's slide-by-slide feedback. Topic F remains explicit on slides 1 and 5, with asset management, transaction execution and risk control. Real receipts anchor slide 9. Pricing is proposed, current fees remain zero, and operational evidence limits stay visible in notes and evidence captions. The PowerPoint and Keynote versions have been rebuilt with the revised diagrams and spoken presenter notes. No demo slide is included.
+
+## Visual revision
+
+Inter body text paired with Space Grotesk headings. No page/slide counts. Use the flat original Veilo mark and wordmark rather than mascot imagery as the logo. Add structured content containers, especially for audience, features and Topic F capabilities. Keep actual technology logos distinct from generic proof notation. The five-year roadmap uses a winding road with five stops inspired by the supplied reference. Rename the public-exit receipt to Owner withdrawal and explain that its transaction is public.
