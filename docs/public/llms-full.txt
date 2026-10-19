@@ -52,9 +52,9 @@ The required first release includes:
 | Private job board, requests for missing inputs, downloadable deliverables and receipts | Assigned-job access and a history of finalized earnings receipts |
 | Manual hiring or discovery within owner-approved permissions | Managed templates or reviewed remote endpoints, with read-only connectors by default |
 
-In the dashboard, the open marketplace lives under `/marketplace`: workflows (`/marketplace`, `/marketplace/w/<slug>`, categories at `/marketplace/c/<category>`), the five-step builder (`/marketplace/create`), the tool library (`/marketplace/tools`), runs, specialists, private jobs, the seller console, agent pages and the **Local approval** page (`/marketplace/approvals`). The in-app catalogue at `/market` is different: it lists the workspace's role templates and the seeded gateway services, not seller listings. `/connectors` manages read-only MCP connectors for agents.
+In the dashboard, the open marketplace lives under `/marketplace`: workflows (`/marketplace`, `/marketplace/w/<slug>`, categories at `/marketplace/c/<category>`), the five-step builder (`/marketplace/create`), the tool library (`/marketplace/tools`), runs, specialists, private jobs, the seller console, agent pages and the **Local approval** page (`/marketplace/approvals`). Role templates for the workspace's own agents are listed in the marketplace too; the old `/market` address redirects to `/marketplace`. `/connectors` manages read-only MCP connectors for agents, including CoinGecko market data (`coingecko-market`, templated tools; not yet seeded live) and result destinations.
 
-Execution supports the credit-manager, research and content roles plus a `custom` role with `marketplace_search` and `propose_hire` tools. There is no free (zero-price) job path yet; every listing is paid.
+Execution supports the credit-manager, research and content roles plus a `custom` role with `marketplace_search` and `propose_hire` tools. Custom agents do the work themselves on the owner's model key and propose a hire or an assigned workflow run only when outside help is needed; a reference image's style is included in the hire brief. There is no free (zero-price) job path yet; every listing is paid.
 
 ## Two sign-ins, two responsibilities
 
@@ -100,7 +100,7 @@ Hosted execution needs isolation and controlled network access without wallet se
 
 These are marketplace requirements, not changes to the existing gateway's 600-second quote default. `MARKETPLACE_QUOTE_TTL_SECONDS` is configured separately (see [configuration](../configuration.md)). Content-retention cleanup is not implemented, and timeout evidence remains outstanding.
 
-Auctions, reputation, escrow, automatic refunds, arbitrary uploaded code/open code hosting, multi-seller bundles and nonzero fees are deferred. Read-only connector access is the default; external publishing is not authorized by a hire.
+Auctions, reputation, escrow, automatic refunds, arbitrary uploaded code/open code hosting, multi-seller bundles and nonzero fees are deferred. Read-only connector access is the default; external publishing is not authorized by a hire. The one exception is a seller's own opt-in: a seller host with `ZERNIO_PUBLISH_MODE=publish` can post a carousel publicly to that seller's TikTok account as a listed workflow step (unverified live).
 
 Before release, close the remaining [delivery and acceptance gates](./marketplace-triage.md). No pool-contract change is required solely for this marketplace extension.
 
@@ -113,7 +113,7 @@ Before release, close the remaining [delivery and acceptance gates](./marketplac
 Evidence kinds used below:
 
 - **RLS e2e (live):** `pnpm test:marketplace-rls` (`scripts/marketplace/rls-e2e.ts`), 84/84 passed against the Supabase project with real Web3 sign-ins. Its chain reads use a labeled fixture, so it proves identity, RLS, Storage and transitions, not settlement.
-- **Unit (fakes):** Vitest suites such as `services/control/test/marketplace.test.ts`, `services/marketplace/test/marketplace.test.ts` and `services/gateway/test/seller-host.test.ts`, part of the 643 passing tests.
+- **Unit (fakes):** Vitest suites such as `services/control/test/marketplace.test.ts`, `services/marketplace/test/marketplace.test.ts` and `services/gateway/test/seller-host.test.ts`, part of `pnpm test` (921 passing on `59eb491`; see [current status](./status.md)).
 - **Devnet smoke (public funding):** two `marketplace-devnet-smoke-*.json` records in `artifacts/evidence/`, before PR #3 merged. The payer was funded publicly, not from the pool.
 
 ## Delivery gates T17–T23
@@ -163,22 +163,30 @@ Supabase's [Web3 sign-in](https://supabase.com/docs/guides/auth/auth-web3), [RLS
 
 # Evidence and current status
 
-This page reflects `main` at merge commit `59696dd` (PR #3, integration of the parallel worktrees). It separates what the merged tree was checked against from evidence recorded earlier on the branches that were merged. Recorded results are not an independent audit, and the PRD describes requirements, not completion. All amounts are USDC on **Solana devnet**; they have no monetary value.
+This page reflects `main` at merge commit `59eb491` (PR #5, spend-control gaps, owner-approved swaps and templated connectors). It separates what that tree was checked against from evidence recorded earlier. Recorded results are not an independent audit, and the PRD describes requirements, not completion. All amounts are USDC on **Solana devnet**; they have no monetary value.
 
-## Checks on the merged tree
+## Checks on the current tree
 
-Measured on the integration branch, whose tree is identical to `main` at `59696dd` (Node 22, pnpm 10.34.6, `.env` loaded):
+Measured on `59eb491` on macOS (Node 24, pnpm 10.34.6, `.env` loaded):
 
 | Check | Result | Limit |
 |---|---|---|
-| `pnpm install --frozen-lockfile` | pass | — |
 | `pnpm check` (typecheck and lint) | pass | — |
-| `pnpm test` | 643 passed, 8 skipped (74 files passed, 1 skipped) | The 8 skips are the relayer/wallet real-proof tests; they need the gitignored `circuits/build/` |
-| `pnpm test:marketplace-rls` | 84/84 checks passed against the Supabase project | Chain reads in this script use a labeled fixture; it tests identity, RLS, Storage and transitions, not settlement |
-| `next build` (apps/dashboard) | pass | A build is not a funded browser run |
-| Supabase migrations | all 19 in `supabase/migrations/` applied to the project | — |
+| `pnpm test` | 944 passed, 1 skipped (118 files) on the PR #5 head `bff924e`; `16b7f5d` changed one test, which passes | Full runs on a heavily loaded machine time out in several suites; those suites pass when run on their own |
+| `pnpm test:marketplace-rls` | not rerun; 84/84 recorded at `59696dd` | Chain reads in this script use a labeled fixture; it tests identity, RLS, Storage and transitions, not settlement |
 
-`pnpm test:integration`, `pnpm test:program`, `pnpm test:circuits` and a devnet demo run were **not rerun** after the merge.
+`pnpm test:integration`, `pnpm test:program`, `pnpm test:circuits` and a devnet demo run were **not rerun** after PR #3.
+
+## Behaviour added since the recorded runs
+
+| Feature | Status | Evidence and limits |
+|---|---|---|
+| Owner-approved devnet swap (USDC to SOL on the pinned Orca whirlpool, agent picks an amount up to the owner's maximum per swap) | **not yet run** on devnet | Unit tests in control, wallet, relayer and runner against fakes. No swap evidence exists under `artifacts/evidence/`. Known gaps are listed in [payments](./payments.md#devnet-swap). |
+| Agents on the owner's own model key | in code; tested against fakes | Live provider tests through Settings were made by the developer (OpenRouter GLM models); no recorded evidence file |
+| Read-only web browsing for custom agents | in code; tested with a real local Chrome refusal check | No recorded devnet or production run |
+| Result delivery to Telegram, Slack or Discord | in code; tested against fakes | No recorded live delivery |
+| CoinGecko market data (`coingecko-market` templated tools) | one live call of each template through control on 2026-10-19 (HTTP 200) | Not seeded into the live marketplace; the work/marketplace-seed state has no `coingecko-market` step |
+| Reference image style for custom agents | in code; tested against fakes | Requires the owner's model key; no recorded run |
 
 ## Recorded evidence (pre-merge)
 
@@ -192,8 +200,8 @@ Measured on the integration branch, whose tree is identical to `main` at `59696d
 | Dashboard with funded devnet activity and browser-wallet (Phantom) signing | **not yet run** | Local backend-driven UI checks and unfunded screenshots exist (build status T14). The demo run signed with owner-local key files, not a browser wallet. |
 | Marketplace direct hire, public funding | **verified on devnet** (pre-merge) | [Smoke 05:47](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/marketplace-devnet-smoke-2026-10-17T05-47-34-935Z.json) and [smoke 06:55](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/marketplace-devnet-smoke-2026-10-17T06-55-19-957Z.json): 10,000 base units each to the seller's payout ATA, chain-verified receipt, one job succeeded, earnings with platform fee 0. The payer was funded publicly, **not** from the private pool. |
 | Marketplace hire funded from the private pool through the control bridge | **not yet run** on devnet | Implemented and tested against fakes (build status T20). |
-| Workflow run, QuickNode x402 paid call, MCP tool through a seller host | **not yet run** on devnet | QuickNode returned a live 402 challenge on 17 October; no paid call recorded. One live read-only MCP docs-search call went through control (build status T26); no seller-host MCP run. |
-| Higgsfield, MakeUGC and Zernio | **unverified** | No live provider calls. The demo shows these tools as "Provider not configured" by owner decision; Zernio's drafting connector is not built. |
+| Workflow run, QuickNode x402 paid call, MCP tool through a seller host | **not yet run** on devnet | QuickNode returned a live 402 challenge on 17 October; no paid call recorded. One live read-only MCP docs-search call went through control (build status T26), and each CoinGecko template once on 19 October; no seller-host MCP run. |
+| Higgsfield, MakeUGC and Zernio | **unverified** | No paid or posting call is recorded. Zernio TikTok carousel drafting, the slide designer and opt-in public posting (`ZERNIO_PUBLISH_MODE=publish`) are seller-host tools in code, tested against fakes; the only live Zernio contact recorded in commits is the free creator-info read made by `pnpm marketplace:carousel-preflight`. Without seller keys these tools show as "Provider not configured". |
 | Policy/session/runner/program negative cases outside the integration report | **fixture / mock provider** where applicable | Unit, real-proof and LiteSVM results are recorded in [build status](../build-status.md). |
 
 No page claims audit, mainnet readiness, proof-enforced budgets or metadata anonymity.
@@ -337,7 +345,7 @@ The exporter currently adds devnet explorer URLs to every signature it finds, in
 
 # Handoff and submission gaps
 
-Updated after PR #3 merged the parallel worktrees into `main` (`59696dd`). [Current status](./guide/status.md), [demo checklist](./guide/demo.md) and [security evidence](./security/evidence.md) are the public record. One complete devnet demo run with live inference is recorded from before the merge; the marketplace is implemented with devnet acceptance incomplete; see [marketplace triage](./guide/marketplace-triage.md).
+Updated after PR #3 merged the parallel worktrees into `main` (`59696dd`) and rechecked against `59eb491` (PR #5). [Current status](./guide/status.md), [demo checklist](./guide/demo.md) and [security evidence](./security/evidence.md) are the public record. One complete devnet demo run with live inference is recorded from before the merge; the marketplace is implemented with devnet acceptance incomplete; see [marketplace triage](./guide/marketplace-triage.md).
 
 ## Pending operator evidence
 
@@ -348,6 +356,8 @@ Run `2026-10-17-1eba868c` filled the deposit/approval, Shawn, Prince, Mira, dupl
 - An unattended scheduler top-up, if submission claims autonomous execution; the script invokes Shawn's check explicitly.
 - A funded-wallet recovery scenario, separate from the script's public exit.
 - Marketplace: a private-pool-funded hire, a multi-step workflow run, a paid QuickNode x402 call and an MCP tool run through a seller host, all on devnet.
+- A first owner-approved devnet swap end to end (none recorded), and seeding `coingecko-market` into the live marketplace with `pnpm marketplace:seed --confirm`.
+- A clean full `pnpm test` run on `59eb491`: the recorded run had 9 timeouts during a host pause, which passed when their files were rerun alone.
 
 Attach tested source commit, UTC time, reviewer, lockfile/artifact hashes and every failure/skip. The integration JSON and the evidence export do not record the tested source commit. M2 is a separate synthetic-participant pool/Echo run and cannot fill agent gateway placeholders.
 
@@ -373,6 +383,14 @@ Observed at the earlier baseline and not yet rechecked line by line after the me
 ## Marketplace delivery triage
 
 The [marketplace guide](./guide/marketplace.md) covers the buyer/seller experience and cloud/local/payment boundaries. [Implementation triage](./guide/marketplace-triage.md) maps T17–T23 and all fourteen §26.6 checks to the live RLS e2e script, unit tests and devnet smokes. Remaining blockers: no free job path, no credential broker or hosted sandbox, no content-retention cleanup, no live refund transfer or offline-controller drill, and no private-pool-funded hire on devnet. Higgsfield, MakeUGC and Zernio are unverified and shown as "Provider not configured" by owner decision.
+
+## Known code gaps found while documenting `59eb491`
+
+- The relayer does not reserve sponsor capacity for a swap when it accepts the swap's funding withdrawal.
+- A failed swap's sponsor fee is recorded by the relayer but not passed to control's purchase record.
+- `services/relayer/src/withdrawals.ts` skips a withdrawal's sponsor fee, and records a recovery's as 0, when `getTransaction` returns nothing.
+
+These are described in [payments](./guide/payments.md#devnet-swap); no code was changed by the documentation pass.
 
 ## Owner decisions
 
@@ -422,7 +440,7 @@ An owner-controlled workspace for AI agents that buy approved resources within d
 
 ## Current verification status
 
-The recorded M2 pool/Echo smoke and one complete Shawn/Prince/Mira run with live inference (`2026-10-17-1eba868c`, before PR #3 merged) are **verified on devnet**. Integrated payments/recovery are **verified on local test validator** with a **fixture / mock provider**. The marketplace is implemented on `main` and passes its live RLS e2e checks; a private-pool-funded hire, a fresh post-merge run and browser-wallet signing are **not yet run**. See [current status](./guide/status.md), [running Veilo](./guide/running.md), the [demo checklist](./guide/demo.md) and [handoff gaps](./handoff.md). The setup is deterministic and for development test funds only; this is not an audited or mainnet-ready system.
+The recorded M2 pool/Echo smoke and one complete Shawn/Prince/Mira run with live inference (`2026-10-17-1eba868c`, before PR #3 merged) are **verified on devnet**. Integrated payments/recovery are **verified on local test validator** with a **fixture / mock provider**. The marketplace is implemented on `main` and passes its live RLS e2e checks; a private-pool-funded hire, a fresh post-merge run and browser-wallet signing are **not yet run**. Owner-approved devnet swaps, agents on the owner's model key, read-only browsing, reference images and CoinGecko market data are in code and tested against fakes, with no recorded devnet run. See [current status](./guide/status.md), [running Veilo](./guide/running.md), the [demo checklist](./guide/demo.md) and [handoff gaps](./handoff.md). The setup is deterministic and for development test funds only; this is not an audited or mainnet-ready system.
 
 ## Marketplace scope in v3.2
 
@@ -467,7 +485,7 @@ The merchant payment wallet and transfer are public. The intended privacy proper
 
 ## Create your own agents
 
-The workspace lets owners create and configure named agents using credit-manager, research, content and custom role templates. Shawn, Prince and Mira are seeded examples. Custom agents can search the marketplace and propose hires that the owner approves locally. All agents remain subject to workspace-wide limits.
+The workspace lets owners create and configure named agents using research, content and custom role templates (the credit-manager role remains for the seeded Shawn). Shawn, Prince and Mira are seeded examples. Custom agents do the work on the owner's own model key and, when the owner enables them, can read public web pages, call attached read-only connectors such as CoinGecko market data, swap USDC to SOL up to an owner-approved maximum per swap, and propose hires or workflow runs that the owner approves locally. See [agent workflows](./guide/agents.md). All agents remain subject to workspace-wide limits.
 
 ### Demo examples
 
@@ -482,10 +500,10 @@ The model proposes work. An independent wallet/control service authorizes money.
 ## Network and service boundaries
 
 - Settlement uses USDC on Solana devnet, which has no monetary value. SOL pays chain costs separately.
-- Real inference is paid for by the gateway operator's OpenRouter account. Devnet USDC does not replenish commercial provider funds.
+- Agent model work runs on the owner's own provider key, billed by that provider. The operator's OpenRouter account pays only for the sponsored planning trial, paid gateway inference SKUs and the recorded demo run. Devnet USDC does not replenish commercial provider funds.
 - Gateway credits are application service entitlements, not OpenRouter account credits or redeemable money.
 - Research fixtures must be labeled demo data; fixture output does not prove live search.
-- Content scheduling means planning dates and local editable posts. External social publishing is outside the current scope.
+- Content scheduling means planning dates and local editable posts. Agents have no social publishing tool; TikTok drafting and opt-in public posting exist only as marketplace seller-host tools, unverified live.
 
 ---
 
@@ -495,11 +513,52 @@ The model proposes work. An independent wallet/control service authorizes money.
 
 ## Owner-created agents
 
-Creation/configuration is implemented through owner control routes and the dashboard (`/agents/new`, `/agents/<id>`; role templates are browsable at `/market`). Execution uses the credit-manager, research, content and `custom` roles; it is not an arbitrary code runtime. New agents also need scoped worker credentials in the runner configuration; `demo:seed` initially provisions the seeded Prince/Mira roles. The create form can draft limits from a plain-language description with a deterministic rule-based parser (not a model); the result is only a draft until the owner reviews, creates and activates it. Guests (`VEILO_GUEST_PUBKEYS`) can run agents within their policies but cannot create or configure them.
+Creation/configuration is implemented through owner control routes and the dashboard (`/agents/new`, `/agents/<id>`; role templates are listed in the marketplace under `/marketplace`). Execution uses the credit-manager, research, content and `custom` roles; it is not an arbitrary code runtime. The dashboard no longer offers the credit-manager role for new agents; the seeded Shawn still uses it. New agents need scoped worker credentials in the runner configuration: `demo:seed` provisions the seeded roles, and with `CONTROL_PROVISION_RUNNER_CREDENTIALS=1` control issues one for each activated agent and the runner reloads the file without a restart. The create form can draft limits from a plain-language description with a deterministic rule-based parser (not a model); the result is only a draft until the owner reviews, creates and activates it. Guests (`VEILO_GUEST_PUBKEYS`) can run agents within their policies but cannot create or configure them or attach a reference image.
 
 Owners create and configure agents with their own names, jobs, triggers, budgets and service permissions. The examples below demonstrate three useful workflows; they do not limit the agents an owner can create. Each agent operates within its configured tools and services and the workspace's shared financial limits.
 
 One runner uses different role instructions, tools and independently enforced policies. Names are editable display fields, not authority identities. Owner-created agents cannot autonomously create spending subagents or expand their own permissions.
+
+### The owner's model key
+
+Agent model work runs on the owner's own provider, set once in **Settings** (`/settings`): OpenRouter, Anthropic, OpenAI, Z.ai (GLM) or any OpenAI-compatible URL, a model id and an API key. Control seals the key with AES-256-GCM under `<VEILO_SECRETS_DIR>/control/ai-provider.key` and is its only holder; reads show only the last four characters. Agents get completions through control (`POST /worker/planning`, `POST /worker/ai`), never the key. Each task may make at most four such model calls besides its planning calls, and the calls are audited without their content. Model work costs no USDC; the provider bills the owner directly. When no provider is set, planning falls back to the operator-sponsored trial on the gateway, and Prince and Mira fall back to a paid gateway SKU only if their policy allows one. A model server on loopback is refused unless the operator sets `AI_ALLOW_LOCAL_PROVIDER=1`.
+
+### What a custom agent is told
+
+A custom agent's planner prompt carries the agent's name, the owner's description and only the capabilities its policy enables: attached connector tools, read-only browsing, assigned workflows, marketplace hiring and the devnet swap. A capability that is off is not offered. Text that comes from someone other than the owner (connector tool descriptions and schemas, connector output, web pages, assigned workflow titles, marketplace listings) is fenced as untrusted data; a value carrying the fence marker is discarded rather than passed on.
+
+| Capability | Default | Bound |
+|---|---|---|
+| Read public web pages | Off (per-agent "Can browse the web") | Control issues a permit per page: active agent, running task, public `http(s)` URL with no credentials or custom port, at most 3 pages per task (the custom planner asks for at most 2). Pages open in a fresh cookie-less installed Chrome context (GET/HEAD only, no downloads, nothing clicked or typed). Chrome resolves hosts itself, so a DNS-rebinding window remains between the check and the load. `RUNNER_BROWSER=off` disables browsing. |
+| Read-only connector tools | None attached | At most 2 planner-chosen calls per custom task; control caps calls per task (`CONNECTOR_CALLS_PER_TASK`, default 5) and per agent per day, pins tool digests and refuses changed tools. |
+| Devnet USDC to SOL swap | Off | Only after the owner approves a maximum per swap and adds the swap to the agent's allowed purchases (see below). |
+| Assigned workflows | None | The owner assigns a workflow with a budget or with approval for each run (`askEachRun`); proposals outside it wait for the owner. |
+| Marketplace hiring | Off for new custom agents | Each hire needs local approval or a listing grant. |
+
+Finished results can also be sent to one destination per agent (a Telegram bot chat, or a Slack or Discord incoming webhook) that the owner configures on **Connectors** or the agent's page. Control seals the secrets, accepts webhooks only on those services' fixed hosts, and sends the task's saved outputs once as plain text after the task completes. Agents and the model cannot reach this path.
+
+## Owner how-to: swaps, market data and reference images
+
+### Approve agent swaps (maximum per swap)
+
+1. Open **Wallet** and find **Agent swaps**. Enter a maximum per swap (up to 5 USDC) and choose **Approve swaps**. This approves one fixed swap only: USDC to SOL on the pinned Orca devnet whirlpool `5GPCnpWwoDayCP5FVCJT1cS7dePufC5FrjPTVvPoUYnm`, 1% slippage, with the SOL sent to `OWNER_RECOVERY_ADDRESS`.
+2. In the agent's spending limits, add "Swap USDC to SOL" (group Swaps) to its allowed purchases and activate the policy. Swaps and hiring are off by default for new custom agents. The agent is offered the swap only while both the approval and the allowed purchase are in place.
+3. Ask the agent, for example, "swap 0.5 USDC to SOL". The agent may request any amount up to the approved maximum; it cannot choose the pool, direction or destination. Control refuses an amount above the maximum, binds the amount into the request digest and prices the purchase at the requested amount, so every per-purchase, task, agent and workspace limit applies to it.
+4. The answer reports "Swapped", or "Requested; settling privately" while control finishes the swap after the task ends. The transaction appears under Wallet activity.
+
+Choosing **Update** changes only the maximum. Removing the approval refuses new swaps at authorization and cancels a reserved swap whose proof was not yet released; a swap whose funding was already released keeps settling or becomes recoverable. Devnet pool prices are not market prices. The swap runs only when the wallet has swaps configured and `OWNER_RECOVERY_ADDRESS` is set. A swap has **not yet run** end to end on devnet; see [payments](./payments.md#devnet-swap) for the flow and its known gaps.
+
+### Attach CoinGecko market data
+
+The marketplace connector `coingecko-market` offers three read-only tools that Veilo defines: `coingecko_simple_price` (price and 24-hour change for 1 to 10 coin ids), `coingecko_trending` and `coingecko_search` (find a coin id), plus CoinGecko's docs search. Each tool runs a fixed code template through CoinGecko's `execute` tool; the agent supplies only schema-checked values such as coin ids and currencies, never code. The approval pins the template code digest and the upstream `execute` digest, and calling `execute` directly is refused.
+
+1. The connector must first be approved in the marketplace catalogue. `pnpm marketplace:seed --confirm` proposes and approves it after re-reading CoinGecko's live tool list; this has **not yet been run** against the live marketplace, so the connector is not listed there yet. `coingecko-docs` (docs search only) is unchanged.
+2. Open **Connectors** (`/connectors`), attach CoinGecko market data to a custom agent, then ask it a market question.
+3. The answer cites "CoinGecko (mcp.api.coingecko.com)" as the source. Connector calls are free, keyless and not private: CoinGecko sees the requested coin ids.
+
+### Attach a reference image
+
+On a custom agent's composer, drag a PNG, JPEG or WebP image (up to 2 MB) onto the **Reference image** zone or browse for one. The dashboard re-encodes it as JPEG at most 1280 px on its longest side; control refuses anything over 1.5 MB or whose bytes do not match its type. Control stores the image apart from the task input, so the runner never receives it. During the task, control asks the owner's model to describe the image's visual style; the agent receives only that short text, treated as untrusted model output. The style fills a workflow's declared `style` input and is included in a specialist hire brief. Only the owner's model provider sees the image. It requires a configured model key.
 
 ## Marketplace agents and specialists — in code, devnet acceptance pending
 
@@ -515,17 +574,17 @@ Read a fresh balance/version. If low and allowed, create one stable purchase ope
 
 ## Prince — paid research
 
-The owner supplies the question, optional sources and deadline. Prince proposes a plan, chooses at least one relevant approved fixed-price data service and purchases permitted inference through credits or a separate direct payment. Save a brief with evidence links and purchase references. Label licensed fixture data explicitly and mark unsupported claims; do not fabricate citations.
+The owner supplies the question, optional sources and deadline. Prince proposes a plan, chooses at least one relevant approved fixed-price data service and runs its analysis on the owner's model key; without a configured key it may buy inference through credits or a separate direct payment when its policy allows. Save a brief with evidence links and purchase references. Label licensed fixture data explicitly and mark unsupported claims; do not fabricate citations.
 
 ## Mira — content creation
 
-The owner supplies topic, audience, channels, voice and deliverables, or explicitly approves a Prince handoff. Mira chooses an approved content SKU and, in this example workflow, pays directly through the private devnet x402 path. The local rehearsal uses a **fixture / mock provider** to produce three editable channel-specific posts and a seven-day calendar. Devnet run `2026-10-17-1eba868c` (before PR #3 merged) paid the content package by direct private x402 and used live DeepSeek V4 Flash inference; see the [demo checklist](./demo.md).
+The owner supplies topic, audience, channels, voice and deliverables, or explicitly approves a Prince handoff. Mira writes the content package on the owner's model key; without one she chooses an approved content SKU and, in this example workflow, pays directly through the private devnet x402 path. The local rehearsal uses a **fixture / mock provider** to produce three editable channel-specific posts and a seven-day calendar. Devnet run `2026-10-17-1eba868c` (before PR #3 merged) paid the content package by direct private x402 and used live DeepSeek V4 Flash inference; see the [demo checklist](./demo.md).
 
-Track editable, needs review, approved for export and archived. Editing, approving or changing a planning date does not buy inference. Regeneration is a new budgeted operation. The current scope has no social credentials or publishing tool.
+Track editable, needs review, approved for export and archived. Editing, approving or changing a planning date does not buy inference. Regeneration is a new budgeted operation. Mira has no social credentials or publishing tool. (TikTok drafting and opt-in public posting exist only as marketplace seller-host tools; see [configuration](../configuration.md#tiktok-carousel-workflow-run-checklist).)
 
 ## Bounded execution
 
-Default limits per task: eight tool calls, three paid purchases and ten minutes. Sponsored planning permits at most two bounded calls with a fixed allowlisted model; report this cost separately. Execution must remain within the configured owner policy.
+Default limits per task: eight tool calls, three paid purchases and ten minutes. Planning permits at most two bounded calls per task, on the owner's model key or, without one, the operator-sponsored trial model; report sponsored cost separately. Execution must remain within the configured owner policy.
 
 A model refusal is not a financial control. Malicious retrieved text remains untrusted, and the independent policy/signing boundary must reject unauthorized requests even if the model follows that text.
 
@@ -560,14 +619,17 @@ This separates decision-making from financial authority: a model proposing a pur
 | Component | Responsibility | Boundary |
 |---|---|---|
 | Owner dashboard | Wallet session, agent configuration, approvals, monitoring | Authenticated UI; never asks for the owner's seed phrase |
-| Control service | Policies, scheduler, atomic reservations, audit events, revocation epochs | Single authority for workspace/agent/task spending allowances |
-| Agent runner | Bounded planning, catalog selection, requesting purchases, saving outputs | No note database, provider key, arbitrary signer or policy mutation |
+| Control service | Policies, scheduler, atomic reservations, audit events, revocation epochs; the owner's sealed model key and model calls; browse permits; connector calls; result delivery; swap approval | Single authority for workspace/agent/task spending allowances; agents receive completions and fenced data, never keys |
+| Agent runner | Bounded planning, catalog selection, requesting purchases, reading permitted public pages in a cookie-less Chrome context, saving outputs | No note database, provider key, reference image, arbitrary signer or policy mutation |
 | Wallet service | Encrypted notes, local proofs, constrained fresh-wallet signing, recovery | Checks current policy before releasing financial authority |
-| Relayer / indexer | Sponsor permitted chain costs, submit withdrawals, rebuild public tree state | Does not receive note secrets; indexer cannot invent accepted roots |
+| Relayer / indexer | Sponsor permitted chain costs, submit withdrawals, co-sign the one permitted devnet swap shape, rebuild public tree state | Does not receive note secrets; indexer cannot invent accepted roots |
 | Privacy pool program | Verify proofs, conserve value, consume nullifiers, enforce bound destinations and owner exits | On-chain enforcement; PDA controls the SPL vault |
 | Service gateway | Immutable quotes, settlement reconciliation, durable credits, delivery/result cache | Merchant is the gateway operator; credits stay linked to an authenticated workspace |
 | x402 facilitator | Verify and settle standard exact SVM payment | Merchant leg only; distinct from the private-withdrawal relayer |
-| OpenRouter / data adapter | Bounded real inference or explicitly labeled research data | Provider availability and commercial funding are operator dependencies |
+| Owner's model provider | Planning, analysis, content and reference-image style, called by control with the owner's key | Billed to the owner; sees prompts, gathered data and the reference image |
+| OpenRouter / data adapter | Operator-sponsored planning trial, paid inference SKUs or explicitly labeled research data | Provider availability and commercial funding are operator dependencies |
+| MCP connector servers | Read-only tools pinned by digest; CoinGecko market data through Veilo templates | Third-party text, fenced as untrusted; servers see the requested arguments |
+| Orca whirlpool (devnet) | USDC to SOL for an owner-approved swap from a fresh wallet | One pinned pool; devnet prices are not market prices |
 
 ## Implemented stack and source layout
 
@@ -596,6 +658,8 @@ Marketplace Web3 sign-in and the existing local wallet challenge are deliberatel
 ## Enforcement placement
 
 The chain/proofs enforce ownership, approved-set membership for private spends, value conservation, nullifier uniqueness, withdrawal intent and owner exit. The wallet/control service enforces budgets, merchant selection, revocation and signing policy. The gateway enforces paid delivery, credit issuance/debit, request binding and provider cost limits. The model is not a security authority.
+
+The devnet swap is enforced at three points: control (owner approval, maximum per swap, caps), the wallet (decodes the quoted swap before signing) and the relayer (accepts only the exact five-instruction transaction). See [payments](./payments.md#devnet-swap).
 
 Off-chain spending caps are not proof-enforced caps. Compromise of the owner wallet service can bypass its local policy and expose its notes.
 
@@ -650,6 +714,30 @@ A marketplace quote must bind the reviewed listing, runtime and payout versions,
 
 Managed listings settle on the seller-host gateway profile to the listing's verified payout address, never through the operator's gateway merchant. Receipt-to-job uniqueness is enforced in the database (checked in the live RLS e2e script). Two devnet smokes settled directly to a seller's payout ATA with a publicly funded payer; a private-pool-funded hire is not yet run on devnet. One finalized receipt may fund one job and one earnings event. Refunds are separate seller-funded, finalized transfers to an owner-verified destination, cumulatively capped at the settled amount; failed delivery must remain visibly paid. Refund rules pass the live RLS e2e script; no live refund transfer is recorded. See the [marketplace guide](./marketplace.md).
 
+## Devnet swap
+
+An owner-approved swap is a private purchase whose second leg is an Orca swap instead of an x402 payment. It exists only on Solana devnet and has **not yet run** end to end on devnet; it is unit-tested in control, wallet, relayer and runner against fakes.
+
+1. **Approval.** The owner approves one service, `swap:orca-devnet-sol-usdc` with SKU `swap-usdc-to-sol`, whose price is a **maximum per swap** (at most 5,000,000 base units). The pool (whirlpool `5GPCnpWwoDayCP5FVCJT1cS7dePufC5FrjPTVvPoUYnm`), direction (USDC to wrapped SOL), slippage (100 bps) and destination (`OWNER_RECOVERY_ADDRESS`) are fixed in code.
+2. **Authorization.** The agent's input is exactly `{"amountUsdc": "<base units>"}`; any other field is refused. Control checks that the input matches the request digest and does not exceed the approved maximum, then prices the purchase at the requested amount, so the usual atomic reservation applies every cap to it. A swap is funded only through `private_x402`.
+3. **Private funding.** The pool withdrawal funds a fresh wallet exactly as for an x402 purchase; the stored funding binding names the whirlpool and swap terms.
+4. **Authority before signing.** Control records `sign_merchant` (rechecking policy and revocation) and asks the wallet to sign (`POST /fundings/:id/swap`).
+5. **Wallet checks.** The wallet requires control's funding `finalized` and merchant `signed`. It reads the fresh wallet's USDC balance and swaps the **whole balance**, because anyone can send tokens to the public account and the same transaction must close it empty. It quotes on Orca, decodes the quoted `swapV2` and refuses it unless it sells exactly that balance of the fresh wallet's own USDC on the pinned whirlpool for the quoted minimum. It records `swap.signature_produced` before signing, so a crash never leads to a second signature.
+6. **Relayer co-signing (`POST /swaps`).** The relayer accepts exactly five instructions: compute-unit limit; the sponsor creating the fresh wallet's wrapped-SOL account; one Orca `swapV2` on the pinned whirlpool; closing the wrapped-SOL account to the stated destination; closing the emptied USDC account with its rent to the sponsor. It verifies the fresh-wallet signature, checks the sponsor cap counting in-flight swaps at their worst case, and rechecks both the swap id and the cap inside the transaction that records it, so a concurrent retry neither re-broadcasts nor counts twice. Its crank marks a swap finalized only once it can read the fee from the finalized transaction.
+7. **Settlement.** A finalized swap records the merchant leg finalized at the requested amount and the fulfilment delivered, with the minimum and estimated SOL output and the signature. A failed or expired swap moves the merchant leg to `expired_unsettled` and fulfilment to `abandoned`, and marks the purchase recoverable; the USDC stays in the fresh wallet. A wallet refusal (`recovery_required`) keeps the merchant leg `signed`, because the refusal alone does not prove whether a signature exists.
+
+**Recovery of a swap that was never signed.** If the wallet holds no stored swap and no `swap.signature_produced` record for the purchase, owner recovery calls control's `POST /internal/wallet/purchases/:id/swap-not-signed` under the same lock that signs swaps. Control moves the merchant leg from `signed` to `expired_unsettled` with reason `swap_never_signed` and abandons fulfilment, and the wallet refuses to sign afterwards. The funded USDC is then recovered to `OWNER_RECOVERY_ADDRESS` like any funded wallet.
+
+**Withdrawing approval** refuses new swaps at authorization and cancels a reserved swap whose proof was not released. A swap already released keeps settling or becomes recoverable.
+
+**Privacy.** The swap is paid by a fresh wallet funded from the pool, but the SOL lands publicly at the owner's configured address, which links that swap to the owner.
+
+**Known gaps (in code, not fixed):**
+
+- The relayer does not reserve sponsor capacity for the later swap when it accepts the funding withdrawal, so a swap can be refused `BUDGET_EXCEEDED` after its funding settled; the USDC then stays recoverable in the fresh wallet.
+- A failed swap's sponsor fee is recorded by the relayer but not passed to control's purchase record.
+- In `services/relayer/src/withdrawals.ts`, a withdrawal fee is not recorded, and a recovery fee is recorded as 0, when `getTransaction` returns nothing.
+
 ## Recovery and failure handling
 
 | Boundary | Required handling |
@@ -660,6 +748,8 @@ Managed listings settle on the seller-host gateway profile to the listing's veri
 | Settlement finalized, issuance interrupted | Reconcile and issue the same pack once |
 | Provider request outcome unknown | Record uncertain or paid-without-result; no blind retry without upstream idempotency |
 | Agent stopped with a funded wallet | Recover only to the configured owner destination after conflicting authority is resolved |
+| Swap leg never signed | Owner recovery records `swap_never_signed` in control, then recovers the funded USDC |
+| Swap failed or expired on chain | Merchant leg `expired_unsettled`; USDC stays in the fresh wallet, recoverable by the owner |
 
 Quote expiry, transaction last-valid block height and proof `valid_until_slot` are different bounds. Expiring a transaction does not necessarily invalidate a released proof that can be placed in another transaction. Release its reservation only after finalized chain evidence proves the authorization is no longer usable and no spend settled.
 
@@ -767,6 +857,16 @@ Funding privacy and owner monitoring serve different audiences: the owner retain
 
 Persistent gateway accounts deliberately link service usage off chain. The protocol does not hide prompts from the provider or establish network-level anonymity.
 
+## Agent tools added after the merge
+
+| Path | Who else sees what |
+|---|---|
+| Owner's model provider | Prompts, gathered page and connector text, outputs and any reference image. The provider bills and identifies the owner. |
+| Read-only browsing | Each site sees a request from the runner host's address; control's audit keeps only the host. |
+| Connectors (including CoinGecko market data) | The connector server sees the call arguments, such as coin ids. Calls are keyless and not private. |
+| Result destinations | Telegram, Slack or Discord receive the task's saved outputs as plain text. |
+| Devnet swap | A fresh wallet funded from the pool pays the swap, but the SOL lands publicly at `OWNER_RECOVERY_ADDRESS`, linking that swap to the owner's address. |
+
 ## Marketplace observer boundary — accepted v3.2 scope
 
 Marketplace identity and job records create additional off-chain linkage. The marketplace operator, sellers, facilitators and model providers can see the buyer–seller relationship and plaintext job content they process. Supabase Web3 identity does not hide a buyer from the cloud operator. Private Storage and RLS restrict application access; they do not establish transaction or metadata anonymity.
@@ -824,7 +924,7 @@ The service key stays in the marketplace process only.
 
 ## Application quickstart
 
-Use Node **>=22.14.0 <23**, **pnpm 10.34.6**, and Docker with a running Linux daemon. Native Rust, Solana, Anchor and circom are provided by the pinned Docker toolchain. Allow time/disk/network for the first image and proof builds.
+Use Node **24 LTS** (`>=22.14.0 <25`), **pnpm 10.34.6**, and Docker with a running Linux daemon. Native Rust, Solana, Anchor and circom are provided by the pinned Docker toolchain. Allow time/disk/network for the first image and proof builds.
 
 From the repository root:
 
@@ -856,20 +956,22 @@ pnpm test
 pnpm dev
 ```
 
-Seed policies start as drafts and seeding never issues credits. Open the dashboard at `http://localhost:3000`; it must match `VEILO_DASHBOARD_ORIGIN`, which binds the sign-in challenge and rejects mutating requests from another origin. Control/runner/wallet/gateway/relayer use ports 4101–4105; the marketplace uses 4106 and the seller host 4107 in `.env.example`.
+Seed policies start as drafts and seeding never issues credits. Open the dashboard at `http://localhost:3000`; it must match `VEILO_DASHBOARD_ORIGIN`, which binds the sign-in challenge and rejects mutating requests from another origin. `pnpm dev` starts the dashboard (Next.js dev server on webpack, port 3000) and control/runner/wallet/gateway/relayer on ports 4101–4105; with Supabase configured it also starts the marketplace (4106) and the seller host (4107 in `.env.example`), plus the optional carousel seller host when its `CAROUSEL_SELLER_*` settings are present. The runner reads public pages through an installed Chrome; set `RUNNER_BROWSER=off` if none is installed.
 
 | Path | Screen |
 |---|---|
 | `/` | Public landing page |
 | `/workspace` | Owner workspace: agents, policies, shared treasury, emergency stop |
-| `/agents/new`, `/agents/<id>` | Create or configure an agent |
-| `/market` | In-app catalogue of role templates and the seeded gateway services |
-| `/connectors` | Read-only MCP connectors attached to agents |
-| `/activity`, `/content` | Activity log; editable content drafts and calendar |
-| `/wallet`, `/recovery`, `/privacy` | Pool balance, deposit and exit; recovery center; privacy limits |
-| `/marketplace/…` | Open marketplace: workflows, create, tools, runs, specialists, jobs, seller console, agents, Local approval |
+| `/agents/new`, `/agents/<id>` | Create or configure an agent; the agent's chat, live steps and results |
+| `/connectors` | Read-only MCP connectors attached to agents, and result destinations (Telegram, Slack, Discord) |
+| `/outputs` | Saved results, editable content drafts and calendar |
+| `/wallet` | Pool balance, deposit and exit, activity, recovery and the Agent swaps approval |
+| `/settings` | The owner's AI model key and privacy limits |
+| `/marketplace/…` | Open marketplace: workflows, role templates, create, tools, runs, jobs, seller console, agents, Local approval |
 
-Sign in with the configured owner wallet, then review/activate workspace and agent policies. Wallets listed in `VEILO_GUEST_PUBKEYS` sign in as guests: they can run agents within their policies (rate-limited by `VEILO_GUEST_RUNS_PER_HOUR`) but cannot configure, fund, recover or approve. `VEILO_PUBLIC_VIEW=1` adds a redacted read-only view without sign-in. The header toggles light/dark mode; without a choice the system setting applies. Run [deployment instructions](../deployment.md) to provision/fund roles and deploy a pool before attempting private purchases. A clean clone has no funded keys, proving keys, databases or provider credentials.
+Older addresses redirect: `/activity` and `/recovery` to `/wallet`, `/privacy` to `/settings`, `/content` to `/outputs`, `/market` to `/marketplace`.
+
+Sign in with the configured owner wallet, then review/activate workspace and agent policies. Add a model provider key in **Settings** so agents can do model work; without one only the operator-sponsored planning trial is available. How to approve swaps, attach CoinGecko market data and attach a reference image is in [agent workflows](./agents.md#owner-how-to-swaps-market-data-and-reference-images). Wallets listed in `VEILO_GUEST_PUBKEYS` sign in as guests: they can run agents within their policies (rate-limited by `VEILO_GUEST_RUNS_PER_HOUR`) but cannot configure, fund, recover or approve. `VEILO_PUBLIC_VIEW=1` adds a redacted read-only view without sign-in. The header toggles light/dark mode; without a choice the system setting applies. Run [deployment instructions](../deployment.md) to provision/fund roles and deploy a pool before attempting private purchases. A clean clone has no funded keys, proving keys, databases or provider credentials.
 
 ## Proofs, rehearsal and devnet recording
 
@@ -928,15 +1030,27 @@ Veilo separates agent planning, owner authority, wallet signing, on-chain verifi
 
 ## Assessment scope and conclusion
 
-Team self-assessment of source snapshot `fe13778`, reviewed against the recorded evidence on 17 October 2026. M2 demonstrates the proof-based devnet funding rail; local integration reports 30/30 cases with mock inference. Neither establishes live agent inference, a completed submission gate, an independent audit or production safety. Permission tiers below are implemented controls with local test coverage; full devnet agent acceptance is **not yet run**.
+Team self-assessment first written for source snapshot `fe13778` (17 October 2026); the agent-tool section below was added for `59eb491` (19 October 2026) from the source, not from a new review. M2 demonstrates the proof-based devnet funding rail; local integration reports 30/30 cases with mock inference. Neither establishes live agent inference, a completed submission gate, an independent audit or production safety. Permission tiers below are implemented controls with local test coverage; full devnet agent acceptance is **not yet run**.
 
 Assets include devnet USDC principal, note/signing/encryption secrets, owner authority, provider quota, ledger integrity and private prompts. Threat actors include malicious services/prompts, impersonating workers, replaying/concurrent callers, compromised gateway/relayer/indexer, hostile host access and faulty circuits/setup/program administrators.
 
-## Marketplace threat and authority extension — pending
+## Marketplace threat and authority extension — in code, devnet acceptance incomplete
 
-The accepted v3.2 design adds independent buyers/sellers and Supabase identity/product records while keeping one owner per workspace. Cloud sign-in is separate from the existing local challenge and never releases spending authority. RLS, explicit grants, sanitized public catalogue projections and private participant Storage are required; direct client writes to quote/job/payment/earnings state are prohibited. Service keys stay server-side. These cloud controls are not implemented or tested here.
+The accepted v3.2 design adds independent buyers/sellers and Supabase identity/product records while keeping one owner per workspace. Cloud sign-in is separate from the existing local challenge and never releases spending authority. RLS, explicit grants, sanitized public catalogue projections and private participant Storage are required; direct client writes to quote/job/payment/earnings state are prohibited. Service keys stay server-side. These cloud controls are implemented and pass the live RLS end-to-end script (84/84, with fixture chain reads); a private-pool-funded hire and the offline-controller drill are not yet run.
 
-New threats include cross-tenant reads, forged seller callbacks, payout/version substitution, duplicate receipt attribution, stale workers, malicious result files and compromised hosted execution. The local runner’s restricted tools do not establish a hosted sandbox. The operator/seller/provider can see job content and relationships. [All 14 marketplace acceptance checks](../guide/marketplace-triage.md) remain open; existing CAP/IDEM/REC results are supporting local foundations only.
+New threats include cross-tenant reads, forged seller callbacks, payout/version substitution, duplicate receipt attribution, stale workers, malicious result files and compromised hosted execution. The local runner’s restricted tools do not establish a hosted sandbox. The operator/seller/provider can see job content and relationships. The [14 marketplace acceptance checks](../guide/marketplace-triage.md) are mapped to their recorded coverage there; none is closed with devnet settlement evidence for a private-pool-funded hire.
+
+## Agent tools added after the merge
+
+| Path | Control in code | Limit |
+|---|---|---|
+| Owner's model key | Sealed by control (AES-256-GCM, key file under the secrets directory); agents get completions only; per-task call cap; audit without content | A model reply is untrusted text; control still authorizes every purchase |
+| Read-only browsing | Off by default; a control permit per page (public host, no credentials or custom port, page cap); cookie-less Chrome context, GET/HEAD only | Chrome resolves hosts itself, so a DNS-rebinding window remains after control's check |
+| Connector tools | Operator-approved, digest-pinned, read-only; tool descriptions and outputs fenced; per-task and per-agent caps; drift refused | A fence reduces, but does not remove, prompt-injection influence on the model |
+| Templated connector tools (CoinGecko) | The approval pins the template code digest and the upstream `execute` digest; agents send only schema-checked values; code-execution tools are refused when proposed, attached or called directly | Correctness depends on the upstream `execute` tool running the submitted template as published |
+| Result destinations | Owner-only routes; sealed secrets; fixed service hosts | Outputs leave the host as plain text |
+| Devnet swap | Owner approval with a maximum per swap; amount bound to the request digest and priced into every cap; the wallet decodes the quoted swap before signing and records it before signing; the relayer accepts one exact transaction shape and rechecks the sponsor cap | Not run on devnet. Sponsor capacity is not reserved at funding time; a failed swap's sponsor fee does not reach control's record |
+| Reference image | Owner-only; type and size checked; stored apart from the task input so the runner never receives it | The style text the agent gets is model output and is treated as untrusted |
 
 ## Permission tiers
 
@@ -952,7 +1066,7 @@ New threats include cross-tenant reads, forged seller callbacks, payout/version 
 | Layer | Security responsibility |
 |---|---|
 | Owner control | Authenticate actions, bind worker scope, check policy versions and reserve budgets atomically |
-| Wallet service | Protect note secrets, generate proofs locally and validate the complete merchant transaction before signing |
+| Wallet service | Protect note secrets, generate proofs locally and validate the complete merchant transaction, or the decoded swap instruction, before signing |
 | Pool program | Verify proof/context, enforce value conservation, reject reused nullifiers and bind owner exits |
 | Gateway | Bind quote/account/request, reconcile settlement, issue credits once and bound provider execution |
 | Runner | Use restricted tools; treat retrieved content and service responses as untrusted input |
@@ -995,6 +1109,8 @@ A security design describes required behavior; it does not establish that an imp
 | Backup and restore | Lost change or reused wallet material can lose funds or duplicate authority | Wallet/control snapshots are separate and omit the gateway ledger; quiesce writers, retain matching gateway state/credentials and reconcile after restore |
 | Dependencies | Devnet, RPC, facilitator or provider outages interrupt work | Health checks, bounded retries/cost and explicit pause states |
 | Public exit/recovery | Reveals value or linkage | Use bound owner destinations and explain the public nature of the operation |
+| Devnet swap | A swap may be refused for sponsor budget after its funding settled; the SOL output links to the owner's address; the swap is untested on devnet | Funded USDC stays recoverable to the owner; recovery of a never-signed swap is explicit (`swap_never_signed`); disclose the public destination |
+| Owner's model provider and connectors | Prompts, gathered data and reference images reach third parties; injected text may steer the model | Keys stay in control; third-party text is fenced; policy and signing do not trust model output |
 
 Independent review and execution evidence are needed to evaluate implementation safety. Privacy depends on correct cryptography and operational behavior; it does not hide every transaction detail from every observer.
 

@@ -1,6 +1,6 @@
 # Handoff and submission gaps
 
-Updated after PR #3 merged the parallel worktrees into `main` (`59696dd`). [Current status](./guide/status.md), [demo checklist](./guide/demo.md) and [security evidence](./security/evidence.md) are the public record. One complete devnet demo run with live inference is recorded from before the merge; the marketplace is implemented with devnet acceptance incomplete; see [marketplace triage](./guide/marketplace-triage.md).
+Updated after PR #3 merged the parallel worktrees into `main` (`59696dd`) and rechecked against `59eb491` (PR #5). [Current status](./guide/status.md), [demo checklist](./guide/demo.md) and [security evidence](./security/evidence.md) are the public record. One complete devnet demo run with live inference is recorded from before the merge; the marketplace is implemented with devnet acceptance incomplete; see [marketplace triage](./guide/marketplace-triage.md).
 
 ## Pending operator evidence
 
@@ -11,6 +11,8 @@ Run `2026-10-17-1eba868c` filled the deposit/approval, Shawn, Prince, Mira, dupl
 - An unattended scheduler top-up, if submission claims autonomous execution; the script invokes Shawn's check explicitly.
 - A funded-wallet recovery scenario, separate from the script's public exit.
 - Marketplace: a private-pool-funded hire, a multi-step workflow run, a paid QuickNode x402 call and an MCP tool run through a seller host, all on devnet.
+- A first owner-approved devnet swap end to end (none recorded), and seeding `coingecko-market` into the live marketplace with `pnpm marketplace:seed --confirm`.
+- A clean full `pnpm test` run on `59eb491`: the recorded run had 9 timeouts during a host pause, which passed when their files were rerun alone.
 
 Attach tested source commit, UTC time, reviewer, lockfile/artifact hashes and every failure/skip. The integration JSON and the evidence export do not record the tested source commit. M2 is a separate synthetic-participant pool/Echo run and cannot fill agent gateway placeholders.
 
@@ -36,6 +38,14 @@ Observed at the earlier baseline and not yet rechecked line by line after the me
 ## Marketplace delivery triage
 
 The [marketplace guide](./guide/marketplace.md) covers the buyer/seller experience and cloud/local/payment boundaries. [Implementation triage](./guide/marketplace-triage.md) maps T17–T23 and all fourteen §26.6 checks to the live RLS e2e script, unit tests and devnet smokes. Remaining blockers: no free job path, no credential broker or hosted sandbox, no content-retention cleanup, no live refund transfer or offline-controller drill, and no private-pool-funded hire on devnet. Higgsfield, MakeUGC and Zernio are unverified and shown as "Provider not configured" by owner decision.
+
+## Known code gaps found while documenting `59eb491`
+
+- The relayer does not reserve sponsor capacity for a swap when it accepts the swap's funding withdrawal.
+- A failed swap's sponsor fee is recorded by the relayer but not passed to control's purchase record.
+- `services/relayer/src/withdrawals.ts` skips a withdrawal's sponsor fee, and records a recovery's as 0, when `getTransaction` returns nothing.
+
+These are described in [payments](./guide/payments.md#devnet-swap); no code was changed by the documentation pass.
 
 ## Owner decisions
 

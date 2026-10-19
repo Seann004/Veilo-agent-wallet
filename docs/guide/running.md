@@ -47,20 +47,22 @@ pnpm test
 pnpm dev
 ```
 
-Seed policies start as drafts and seeding never issues credits. Open the dashboard at `http://localhost:3000`; it must match `VEILO_DASHBOARD_ORIGIN`, which binds the sign-in challenge and rejects mutating requests from another origin. Control/runner/wallet/gateway/relayer use ports 4101–4105; the marketplace uses 4106 and the seller host 4107 in `.env.example`.
+Seed policies start as drafts and seeding never issues credits. Open the dashboard at `http://localhost:3000`; it must match `VEILO_DASHBOARD_ORIGIN`, which binds the sign-in challenge and rejects mutating requests from another origin. `pnpm dev` starts the dashboard (Next.js dev server on webpack, port 3000) and control/runner/wallet/gateway/relayer on ports 4101–4105; with Supabase configured it also starts the marketplace (4106) and the seller host (4107 in `.env.example`), plus the optional carousel seller host when its `CAROUSEL_SELLER_*` settings are present. The runner reads public pages through an installed Chrome; set `RUNNER_BROWSER=off` if none is installed.
 
 | Path | Screen |
 |---|---|
 | `/` | Public landing page |
 | `/workspace` | Owner workspace: agents, policies, shared treasury, emergency stop |
-| `/agents/new`, `/agents/<id>` | Create or configure an agent |
-| `/market` | In-app catalogue of role templates and the seeded gateway services |
-| `/connectors` | Read-only MCP connectors attached to agents |
-| `/activity`, `/content` | Activity log; editable content drafts and calendar |
-| `/wallet`, `/recovery`, `/privacy` | Pool balance, deposit and exit; recovery center; privacy limits |
-| `/marketplace/…` | Open marketplace: workflows, create, tools, runs, specialists, jobs, seller console, agents, Local approval |
+| `/agents/new`, `/agents/<id>` | Create or configure an agent; the agent's chat, live steps and results |
+| `/connectors` | Read-only MCP connectors attached to agents, and result destinations (Telegram, Slack, Discord) |
+| `/outputs` | Saved results, editable content drafts and calendar |
+| `/wallet` | Pool balance, deposit and exit, activity, recovery and the Agent swaps approval |
+| `/settings` | The owner's AI model key and privacy limits |
+| `/marketplace/…` | Open marketplace: workflows, role templates, create, tools, runs, jobs, seller console, agents, Local approval |
 
-Sign in with the configured owner wallet, then review/activate workspace and agent policies. Wallets listed in `VEILO_GUEST_PUBKEYS` sign in as guests: they can run agents within their policies (rate-limited by `VEILO_GUEST_RUNS_PER_HOUR`) but cannot configure, fund, recover or approve. `VEILO_PUBLIC_VIEW=1` adds a redacted read-only view without sign-in. The header toggles light/dark mode; without a choice the system setting applies. Run [deployment instructions](../deployment.md) to provision/fund roles and deploy a pool before attempting private purchases. A clean clone has no funded keys, proving keys, databases or provider credentials.
+Older addresses redirect: `/activity` and `/recovery` to `/wallet`, `/privacy` to `/settings`, `/content` to `/outputs`, `/market` to `/marketplace`.
+
+Sign in with the configured owner wallet, then review/activate workspace and agent policies. Add a model provider key in **Settings** so agents can do model work; without one only the operator-sponsored planning trial is available. How to approve swaps, attach CoinGecko market data and attach a reference image is in [agent workflows](./agents.md#owner-how-to-swaps-market-data-and-reference-images). Wallets listed in `VEILO_GUEST_PUBKEYS` sign in as guests: they can run agents within their policies (rate-limited by `VEILO_GUEST_RUNS_PER_HOUR`) but cannot configure, fund, recover or approve. `VEILO_PUBLIC_VIEW=1` adds a redacted read-only view without sign-in. The header toggles light/dark mode; without a choice the system setting applies. Run [deployment instructions](../deployment.md) to provision/fund roles and deploy a pool before attempting private purchases. A clean clone has no funded keys, proving keys, databases or provider credentials.
 
 ## Proofs, rehearsal and devnet recording
 

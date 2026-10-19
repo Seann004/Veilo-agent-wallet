@@ -15,9 +15,9 @@ The required first release includes:
 | Private job board, requests for missing inputs, downloadable deliverables and receipts | Assigned-job access and a history of finalized earnings receipts |
 | Manual hiring or discovery within owner-approved permissions | Managed templates or reviewed remote endpoints, with read-only connectors by default |
 
-In the dashboard, the open marketplace lives under `/marketplace`: workflows (`/marketplace`, `/marketplace/w/<slug>`, categories at `/marketplace/c/<category>`), the five-step builder (`/marketplace/create`), the tool library (`/marketplace/tools`), runs, specialists, private jobs, the seller console, agent pages and the **Local approval** page (`/marketplace/approvals`). The in-app catalogue at `/market` is different: it lists the workspace's role templates and the seeded gateway services, not seller listings. `/connectors` manages read-only MCP connectors for agents.
+In the dashboard, the open marketplace lives under `/marketplace`: workflows (`/marketplace`, `/marketplace/w/<slug>`, categories at `/marketplace/c/<category>`), the five-step builder (`/marketplace/create`), the tool library (`/marketplace/tools`), runs, specialists, private jobs, the seller console, agent pages and the **Local approval** page (`/marketplace/approvals`). Role templates for the workspace's own agents are listed in the marketplace too; the old `/market` address redirects to `/marketplace`. `/connectors` manages read-only MCP connectors for agents, including CoinGecko market data (`coingecko-market`, templated tools; not yet seeded live) and result destinations.
 
-Execution supports the credit-manager, research and content roles plus a `custom` role with `marketplace_search` and `propose_hire` tools. There is no free (zero-price) job path yet; every listing is paid.
+Execution supports the credit-manager, research and content roles plus a `custom` role with `marketplace_search` and `propose_hire` tools. Custom agents do the work themselves on the owner's model key and propose a hire or an assigned workflow run only when outside help is needed; a reference image's style is included in the hire brief. There is no free (zero-price) job path yet; every listing is paid.
 
 ## Two sign-ins, two responsibilities
 
@@ -67,6 +67,6 @@ Hosted execution needs isolation and controlled network access without wallet se
 
 These are marketplace requirements, not changes to the existing gateway's 600-second quote default. `MARKETPLACE_QUOTE_TTL_SECONDS` is configured separately (see [configuration](../configuration.md)). Content-retention cleanup is not implemented, and timeout evidence remains outstanding.
 
-Auctions, reputation, escrow, automatic refunds, arbitrary uploaded code/open code hosting, multi-seller bundles and nonzero fees are deferred. Read-only connector access is the default; external publishing is not authorized by a hire.
+Auctions, reputation, escrow, automatic refunds, arbitrary uploaded code/open code hosting, multi-seller bundles and nonzero fees are deferred. Read-only connector access is the default; external publishing is not authorized by a hire. The one exception is a seller's own opt-in: a seller host with `ZERNIO_PUBLISH_MODE=publish` can post a carousel publicly to that seller's TikTok account as a listed workflow step (unverified live).
 
 Before release, close the remaining [delivery and acceptance gates](./marketplace-triage.md). No pool-contract change is required solely for this marketplace extension.

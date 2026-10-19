@@ -1,21 +1,29 @@
 # Evidence and current status
 
-This page reflects `main` at merge commit `59696dd` (PR #3, integration of the parallel worktrees). It separates what the merged tree was checked against from evidence recorded earlier on the branches that were merged. Recorded results are not an independent audit, and the PRD describes requirements, not completion. All amounts are USDC on **Solana devnet**; they have no monetary value.
+This page reflects `main` at merge commit `59eb491` (PR #5, spend-control gaps, owner-approved swaps and templated connectors). It separates what that tree was checked against from evidence recorded earlier. Recorded results are not an independent audit, and the PRD describes requirements, not completion. All amounts are USDC on **Solana devnet**; they have no monetary value.
 
-## Checks on the merged tree
+## Checks on the current tree
 
-Measured on the integration branch, whose tree is identical to `main` at `59696dd` (Node 22, pnpm 10.34.6, `.env` loaded):
+Measured on `59eb491` on macOS (Node 24, pnpm 10.34.6, `.env` loaded):
 
 | Check | Result | Limit |
 |---|---|---|
-| `pnpm install --frozen-lockfile` | pass | — |
 | `pnpm check` (typecheck and lint) | pass | — |
-| `pnpm test` | 643 passed, 8 skipped (74 files passed, 1 skipped) | The 8 skips are the relayer/wallet real-proof tests; they need the gitignored `circuits/build/` |
-| `pnpm test:marketplace-rls` | 84/84 checks passed against the Supabase project | Chain reads in this script use a labeled fixture; it tests identity, RLS, Storage and transitions, not settlement |
-| `next build` (apps/dashboard) | pass | A build is not a funded browser run |
-| Supabase migrations | all 19 in `supabase/migrations/` applied to the project | — |
+| `pnpm test` | 944 passed, 1 skipped (118 files) on the PR #5 head `bff924e`; `16b7f5d` changed one test, which passes | Full runs on a heavily loaded machine time out in several suites; those suites pass when run on their own |
+| `pnpm test:marketplace-rls` | not rerun; 84/84 recorded at `59696dd` | Chain reads in this script use a labeled fixture; it tests identity, RLS, Storage and transitions, not settlement |
 
-`pnpm test:integration`, `pnpm test:program`, `pnpm test:circuits` and a devnet demo run were **not rerun** after the merge.
+`pnpm test:integration`, `pnpm test:program`, `pnpm test:circuits` and a devnet demo run were **not rerun** after PR #3.
+
+## Behaviour added since the recorded runs
+
+| Feature | Status | Evidence and limits |
+|---|---|---|
+| Owner-approved devnet swap (USDC to SOL on the pinned Orca whirlpool, agent picks an amount up to the owner's maximum per swap) | **not yet run** on devnet | Unit tests in control, wallet, relayer and runner against fakes. No swap evidence exists under `artifacts/evidence/`. Known gaps are listed in [payments](./payments.md#devnet-swap). |
+| Agents on the owner's own model key | in code; tested against fakes | Live provider tests through Settings were made by the developer (OpenRouter GLM models); no recorded evidence file |
+| Read-only web browsing for custom agents | in code; tested with a real local Chrome refusal check | No recorded devnet or production run |
+| Result delivery to Telegram, Slack or Discord | in code; tested against fakes | No recorded live delivery |
+| CoinGecko market data (`coingecko-market` templated tools) | one live call of each template through control on 2026-10-19 (HTTP 200) | Not seeded into the live marketplace; the work/marketplace-seed state has no `coingecko-market` step |
+| Reference image style for custom agents | in code; tested against fakes | Requires the owner's model key; no recorded run |
 
 ## Recorded evidence (pre-merge)
 
@@ -29,8 +37,8 @@ Measured on the integration branch, whose tree is identical to `main` at `59696d
 | Dashboard with funded devnet activity and browser-wallet (Phantom) signing | **not yet run** | Local backend-driven UI checks and unfunded screenshots exist (build status T14). The demo run signed with owner-local key files, not a browser wallet. |
 | Marketplace direct hire, public funding | **verified on devnet** (pre-merge) | [Smoke 05:47](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/marketplace-devnet-smoke-2026-10-17T05-47-34-935Z.json) and [smoke 06:55](https://github.com/Seann004/Veilo-agent-wallet/blob/59696dd/artifacts/evidence/marketplace-devnet-smoke-2026-10-17T06-55-19-957Z.json): 10,000 base units each to the seller's payout ATA, chain-verified receipt, one job succeeded, earnings with platform fee 0. The payer was funded publicly, **not** from the private pool. |
 | Marketplace hire funded from the private pool through the control bridge | **not yet run** on devnet | Implemented and tested against fakes (build status T20). |
-| Workflow run, QuickNode x402 paid call, MCP tool through a seller host | **not yet run** on devnet | QuickNode returned a live 402 challenge on 17 October; no paid call recorded. One live read-only MCP docs-search call went through control (build status T26); no seller-host MCP run. |
-| Higgsfield, MakeUGC and Zernio | **unverified** | No live provider calls. The demo shows these tools as "Provider not configured" by owner decision; Zernio's drafting connector is not built. |
+| Workflow run, QuickNode x402 paid call, MCP tool through a seller host | **not yet run** on devnet | QuickNode returned a live 402 challenge on 17 October; no paid call recorded. One live read-only MCP docs-search call went through control (build status T26), and each CoinGecko template once on 19 October; no seller-host MCP run. |
+| Higgsfield, MakeUGC and Zernio | **unverified** | No paid or posting call is recorded. Zernio TikTok carousel drafting, the slide designer and opt-in public posting (`ZERNIO_PUBLISH_MODE=publish`) are seller-host tools in code, tested against fakes; the only live Zernio contact recorded in commits is the free creator-info read made by `pnpm marketplace:carousel-preflight`. Without seller keys these tools show as "Provider not configured". |
 | Policy/session/runner/program negative cases outside the integration report | **fixture / mock provider** where applicable | Unit, real-proof and LiteSVM results are recorded in [build status](../build-status.md). |
 
 No page claims audit, mainnet readiness, proof-enforced budgets or metadata anonymity.

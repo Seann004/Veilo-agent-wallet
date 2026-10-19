@@ -33,14 +33,17 @@ import delivery from '../diagrams/service-delivery.mmd?raw'
 | Component | Responsibility | Boundary |
 |---|---|---|
 | Owner dashboard | Wallet session, agent configuration, approvals, monitoring | Authenticated UI; never asks for the owner's seed phrase |
-| Control service | Policies, scheduler, atomic reservations, audit events, revocation epochs | Single authority for workspace/agent/task spending allowances |
-| Agent runner | Bounded planning, catalog selection, requesting purchases, saving outputs | No note database, provider key, arbitrary signer or policy mutation |
+| Control service | Policies, scheduler, atomic reservations, audit events, revocation epochs; the owner's sealed model key and model calls; browse permits; connector calls; result delivery; swap approval | Single authority for workspace/agent/task spending allowances; agents receive completions and fenced data, never keys |
+| Agent runner | Bounded planning, catalog selection, requesting purchases, reading permitted public pages in a cookie-less Chrome context, saving outputs | No note database, provider key, reference image, arbitrary signer or policy mutation |
 | Wallet service | Encrypted notes, local proofs, constrained fresh-wallet signing, recovery | Checks current policy before releasing financial authority |
-| Relayer / indexer | Sponsor permitted chain costs, submit withdrawals, rebuild public tree state | Does not receive note secrets; indexer cannot invent accepted roots |
+| Relayer / indexer | Sponsor permitted chain costs, submit withdrawals, co-sign the one permitted devnet swap shape, rebuild public tree state | Does not receive note secrets; indexer cannot invent accepted roots |
 | Privacy pool program | Verify proofs, conserve value, consume nullifiers, enforce bound destinations and owner exits | On-chain enforcement; PDA controls the SPL vault |
 | Service gateway | Immutable quotes, settlement reconciliation, durable credits, delivery/result cache | Merchant is the gateway operator; credits stay linked to an authenticated workspace |
 | x402 facilitator | Verify and settle standard exact SVM payment | Merchant leg only; distinct from the private-withdrawal relayer |
-| OpenRouter / data adapter | Bounded real inference or explicitly labeled research data | Provider availability and commercial funding are operator dependencies |
+| Owner's model provider | Planning, analysis, content and reference-image style, called by control with the owner's key | Billed to the owner; sees prompts, gathered data and the reference image |
+| OpenRouter / data adapter | Operator-sponsored planning trial, paid inference SKUs or explicitly labeled research data | Provider availability and commercial funding are operator dependencies |
+| MCP connector servers | Read-only tools pinned by digest; CoinGecko market data through Veilo templates | Third-party text, fenced as untrusted; servers see the requested arguments |
+| Orca whirlpool (devnet) | USDC to SOL for an owner-approved swap from a fresh wallet | One pinned pool; devnet prices are not market prices |
 
 ## Implemented stack and source layout
 
@@ -69,6 +72,8 @@ Marketplace Web3 sign-in and the existing local wallet challenge are deliberatel
 ## Enforcement placement
 
 The chain/proofs enforce ownership, approved-set membership for private spends, value conservation, nullifier uniqueness, withdrawal intent and owner exit. The wallet/control service enforces budgets, merchant selection, revocation and signing policy. The gateway enforces paid delivery, credit issuance/debit, request binding and provider cost limits. The model is not a security authority.
+
+The devnet swap is enforced at three points: control (owner approval, maximum per swap, caps), the wallet (decodes the quoted swap before signing) and the relayer (accepts only the exact five-instruction transaction). See [payments](./payments.md#devnet-swap).
 
 Off-chain spending caps are not proof-enforced caps. Compromise of the owner wallet service can bypass its local policy and expose its notes.
 
