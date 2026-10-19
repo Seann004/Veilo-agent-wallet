@@ -6196,3 +6196,10 @@ td.num {
     transform: none;
   }
 }
+
+/* Live swap outcome, using the same surface and type as the surrounding conversation. */
+.swap-receipt { padding: 1.25rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--surface); }
+.swap-receipt-top, .swap-receipt-links { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+.swap-receipt .swap-receipt-amount { margin: 1rem 0 .5rem; font-size: clamp(1.15rem, 3vw, 1.7rem); font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.swap-receipt-amount > span { color: var(--ink-2); margin: 0 .25rem; }
+.swap-receipt-links { justify-content: flex-start; margin-top: 1rem; }

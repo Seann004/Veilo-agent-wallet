@@ -247,7 +247,7 @@ export interface WalletNote {
 export interface NoteStatus {
   notes: WalletNote[];
   totals: { spendable: { amount: string }; reserved: { amount: string }; pending: { amount: string } };
-  sync?: { synced: boolean; reason?: string };
+  sync?: { synced: boolean; refreshing?: boolean; checkedAt?: string | null; reason?: string };
 }
 
 export interface PublicState {

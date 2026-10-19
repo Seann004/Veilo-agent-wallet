@@ -517,8 +517,8 @@ export async function runCustom(ctx: RoleContext): Promise<RoleOutcome> {
       ? [
           `Swap: ${swap.outcome}.`,
           ...(swapAmount !== undefined ? [`Amount: ${usdc(swapAmount.toString())} USDC to SOL.`] : []),
-          ...(swap.result && typeof swap.result.minOutLamports === "string" ? [`At least ${lamportsToSol(swap.result.minOutLamports)} SOL goes to your wallet.`] : []),
-          ...(swap.result && typeof swap.result.signature === "string" ? [`Transaction: ${swap.result.signature} (Solana devnet).`] : []),
+          ...(swap.result && typeof swap.result.actualOutLamports === "string" ? [`Received ${lamportsToSol(swap.result.actualOutLamports)} SOL in your wallet.`] : swap.result && typeof swap.result.minOutLamports === "string" ? [`Quoted minimum: ${lamportsToSol(swap.result.minOutLamports)} SOL. Actual output appears in the swap receipt after confirmation.`] : []),
+          "Open the swap receipt for the transaction and payment details (Solana devnet).",
           "",
         ]
       : []),
@@ -666,7 +666,11 @@ export function agentIdentity(agent: { name?: unknown; description?: unknown } |
 /** Separates the answer from how it was made; the dashboard shows only what comes before it. */
 export const DETAILS_MARKER = "— Details —";
 
-const lamportsToSol = (raw: string): string => (Number(BigInt(raw)) / 1e9).toFixed(4);
+const lamportsToSol = (raw: string): string => {
+  const n = BigInt(raw);
+  const decimal = (n % 1_000_000_000n).toString().padStart(9, "0").replace(/0+$/, "");
+  return `${n / 1_000_000_000n}${decimal ? `.${decimal}` : ""}`;
+};
 
 /**
  * Gathered data within the planner's input budget. Each source's text is clipped before it is

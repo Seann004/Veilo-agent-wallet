@@ -7,6 +7,7 @@ import { useAgentAvatar, setAgentAvatar } from "../lib/avatars";
 import { parseUsdcInput, usdc, when } from "../lib/format";
 import { REVIEW_LABEL, ROLE_LABEL, agentStateLabel, purchaseLabel, runBlockedReason, skuLabel, taskStateLabel } from "../lib/labels";
 import type { Activity, Agent, Balances, ContentItem, Handoff, Job, LimitUsage, Purchase, Task } from "../lib/types";
+import { SwapReceipt } from "./SwapReceipt";
 import { ActivityDrawer } from "./Activity";
 import { RUN_SETTLED, runStatusLine, summarizeResult, workflowRunOf, type ProposedWorkflowRun } from "../lib/results";
 import type { LocalRun } from "../lib/market/workflows";
@@ -436,7 +437,7 @@ function buildThread(
       ),
     });
   }
-  const card = (p: Purchase): ReactNode => (
+  const card = (p: Purchase): ReactNode => p.sku === "swap-usdc-to-sol" ? <li className="thread-item" key={p.id}><SwapReceipt purchase={p} onDetails={() => openPurchase(p.id)} /></li> : (
     <li className="thread-item" key={p.id}>
       <button type="button" className="attachment" aria-haspopup="dialog" onClick={() => openPurchase(p.id)}>
         <span className="attachment-icon">
@@ -462,6 +463,8 @@ function buildThread(
     });
   }
   for (const c of items) {
+    // The live receipt replaces the runner's immutable swap snapshot, including old chat history.
+    if (answerOf(c.content).startsWith("Swap:") && purchases.some((p) => p.sku === "swap-usdc-to-sol" && p.taskId === c.taskId)) continue;
     const answer = c.kind === "content_calendar" ? "" : answerOf(c.content);
     const steps = stepsOf(c.content);
     const taskState = tasks.find((t) => t.id === c.taskId)?.state;

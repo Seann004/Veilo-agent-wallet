@@ -10,7 +10,7 @@ import { connect, lastWallet, listWallets, onWalletsChanged, rememberWallet, sig
 import { StackedBar, Stat } from "./Charts";
 import { membership } from "./PrivacyPanel";
 import { useCapability, useOwner, type ConnectedWallet } from "./Shell";
-import { useAction, useResource } from "./hooks";
+import { useAction, usePolling, useResource } from "./hooks";
 import { SwapPanel } from "./SwapPanel";
 import { Amount } from "./UsdcIcon";
 import { ErrorNotice, Loading, Section, Spinner, TxLink } from "./ui";
@@ -172,14 +172,16 @@ function OwnerWalletView() {
   const action = useAction();
   const base = parseUsdcInput(amount);
   const t = notes.data?.totals;
+  usePolling(notes.reload, "wallet-notes", true, 3000);
 
   return (
     <>
       <div className="stats stats-3">
         <Stat label="Ready to spend" value={t ? usdc(t.spendable.amount) : "—"} sub="Yours, in the private pool" />
         <Stat label="Held for purchases" value={t ? usdc(t.reserved.amount) : "—"} sub="Reserved by live payments" />
-        <Stat label="On the way" value={t ? usdc(t.pending.amount) : "—"} sub={t && t.pending.amount !== "0" ? "Deposits not ready yet" : "Nothing pending"} />
+        <Stat label="On the way" value={t ? usdc(t.pending.amount) : "—"} sub={!t ? "Loading balances…" : t.pending.amount !== "0" ? "Deposits not ready yet" : "Nothing pending"} />
       </div>
+      <p className="hint" role="status">{!t ? "Loading wallet balances…" : notes.data?.sync?.refreshing ? "Showing last known balances · refreshing from chain…" : notes.data?.sync?.checkedAt ? `Balances checked ${when(notes.data.sync.checkedAt)}` : "Showing last known balances"}</p>
       <ErrorNotice error={notes.error} what="wallet service" onRetry={notes.reload} />
       <PoolTotal notes={notes.data} />
 
@@ -260,7 +262,7 @@ function OwnerWalletView() {
       >
         {notes.data ? (
           <>
-            {notes.data.sync && !notes.data.sync.synced ? <p className="notice notice-warn">Couldn&apos;t sync with the chain: {notes.data.sync.reason}</p> : null}
+            {notes.data.sync && !notes.data.sync.synced && !notes.data.sync.refreshing ? <p className="notice notice-warn">Couldn&apos;t sync with the chain: {notes.data.sync.reason}</p> : null}
             <NotesTable status={notes.data} />
           </>
         ) : notes.loading ? (
