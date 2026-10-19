@@ -542,10 +542,13 @@ describe("leased jobs", () => {
     expect(claimed?.state).toBe("leased");
     expect(claimNextJob(env.ledger, "w2", 30_000)).toBeNull();
     expectDenied(() => heartbeatJob(env.ledger, claimed!.id, "w2", claimed!.version, 30_000), "IDEMPOTENCY_CONFLICT");
+    expectDenied(() => completeJob(env.ledger, claimed!.id, "w2", claimed!.version, "completed", {}), "IDEMPOTENCY_CONFLICT");
     const hb = heartbeatJob(env.ledger, claimed!.id, "w1", claimed!.version, 30_000);
+    expectDenied(() => completeJob(env.ledger, claimed!.id, "w1", claimed!.version, "completed", {}), "IDEMPOTENCY_CONFLICT");
     expectDenied(() => heartbeatJob(env.ledger, claimed!.id, "w1", claimed!.version, 30_000), "IDEMPOTENCY_CONFLICT");
 
     env.clock.t += 31_000;
+    expectDenied(() => completeJob(env.ledger, claimed!.id, "w1", hb.version, "completed", {}), "IDEMPOTENCY_CONFLICT");
     expect(expireLeases(env.ledger)).toEqual([claimed!.id]);
     expectDenied(() => completeJob(env.ledger, claimed!.id, "w1", hb.version, "completed", {}), "IDEMPOTENCY_CONFLICT");
     expect(claimNextJob(env.ledger, "w1", 30_000)).toBeNull();

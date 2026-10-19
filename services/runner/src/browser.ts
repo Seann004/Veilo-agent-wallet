@@ -1,12 +1,7 @@
-import { lookup as dnsLookup } from "node:dns";
 import { lookup } from "node:dns/promises";
-import { request as httpRequest, type IncomingMessage } from "node:http";
-import { request as httpsRequest } from "node:https";
-import { isIP, type LookupFunction } from "node:net";
-import type { Transform } from "node:stream";
-import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
+import { isIP } from "node:net";
 import type { Browser, BrowserContext } from "playwright-core";
-import { isPublicAddress } from "@veilo/mcp-client";
+import { isPublicAddress, requestBounded, type BoundedResponse } from "@veilo/mcp-client";
 
 /** What one page visit returns: visible text and links, both untrusted data. */
 export interface PageRead {
@@ -30,8 +25,6 @@ const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
 const SKIPPED_TYPES = new Set(["image", "media", "font", "manifest", "texttrack", "eventsource", "websocket", "other"]);
 /** Only these page request headers are forwarded; cookies and custom headers are dropped. */
 const FORWARDED_HEADERS = ["accept", "accept-language", "referer", "user-agent"];
-/** Headers that describe the transfer, not the decoded body handed to the page. */
-const DROPPED_RESPONSE_HEADERS = new Set(["content-encoding", "content-length", "transfer-encoding", "connection", "set-cookie"]);
 
 // Runs in the page: visible text and outgoing http(s) links only.
 const EXTRACT = `(() => {
@@ -71,88 +64,15 @@ export async function publicUrl(u: URL, cache: Map<string, boolean> = new Map())
 
 class Refused extends Error {}
 
-interface Fetched {
-  status: number;
-  headers: Record<string, string>;
-  body: Buffer;
-}
+type Fetched = BoundedResponse;
 
-/**
- * One GET/HEAD with no redirects, where the address check runs in the connection's own DNS
- * lookup: the address checked is the address connected to, so rebinding cannot reach a private
- * host. The decoded body is streamed and refused once it passes MAX_RESPONSE_BYTES, and the whole
- * exchange is bounded by NAV_TIMEOUT_MS and by `signal`, not only by socket idleness.
- */
-export function pinnedFetch(
-  u: URL,
-  method: string,
-  headers: Record<string, string>,
-  allowAddress: (ip: string) => boolean = isPublicAddress,
-  signal?: AbortSignal,
-): Promise<Fetched> {
-  return new Promise((resolve, reject) => {
-    const literal = u.hostname.replace(/^\[|\]$/g, "");
-    if (isIP(literal) && !allowAddress(literal)) return reject(new Refused("non-public address"));
-    if (signal?.aborted) return reject(new Refused("aborted"));
-    const request = u.protocol === "https:" ? httpsRequest : httpRequest;
-    let res: IncomingMessage | undefined;
-    let decoder: Transform | null = null;
-    const settle = () => {
-      clearTimeout(deadline);
-      signal?.removeEventListener("abort", onAbort);
-    };
-    const fail = (err: unknown) => {
-      settle();
-      req.destroy();
-      res?.destroy();
-      decoder?.destroy();
-      reject(err);
-    };
-    const onAbort = () => fail(new Refused("aborted"));
-    const deadline = setTimeout(() => fail(new Refused("timed out")), NAV_TIMEOUT_MS);
-    signal?.addEventListener("abort", onAbort, { once: true });
-    const req = request(
-      u,
-      {
-        method,
-        headers: { ...headers, "accept-encoding": "gzip, deflate, br" },
-        timeout: NAV_TIMEOUT_MS,
-        lookup: ((host: string, opts: { all?: boolean }, cb: (err: Error | null, address: unknown, family?: number) => void) => {
-          dnsLookup(host, { all: true }, (err, addrs) => {
-            if (err) return cb(err, opts.all ? [] : "", 4);
-            if (addrs.length === 0 || addrs.some((a) => !allowAddress(a.address))) return cb(new Refused("non-public address"), opts.all ? [] : "", 4);
-            if (opts.all) cb(null, addrs);
-            else cb(null, addrs[0]!.address, addrs[0]!.family);
-          });
-        }) as unknown as LookupFunction,
-      },
-      (incoming: IncomingMessage) => {
-        res = incoming;
-        if (Number(res.headers["content-length"] ?? "0") > MAX_RESPONSE_BYTES) return fail(new Refused("response too large"));
-        const encoding = String(res.headers["content-encoding"] ?? "").trim().toLowerCase();
-        decoder = encoding === "gzip" || encoding === "x-gzip" ? createGunzip() : encoding === "deflate" ? createInflate() : encoding === "br" ? createBrotliDecompress() : null;
-        const stream = decoder ? res.pipe(decoder) : res;
-        const chunks: Buffer[] = [];
-        let total = 0;
-        stream.on("data", (c: Buffer) => {
-          total += c.length;
-          if (total > MAX_RESPONSE_BYTES) return fail(new Refused("response too large"));
-          chunks.push(c);
-        });
-        stream.on("error", fail);
-        res.on("error", fail);
-        stream.on("end", () => {
-          const out: Record<string, string> = {};
-          for (const [k, v] of Object.entries(incoming.headers)) if (v !== undefined && !DROPPED_RESPONSE_HEADERS.has(k)) out[k] = Array.isArray(v) ? v.join(", ") : v;
-          settle();
-          resolve({ status: incoming.statusCode ?? 502, headers: out, body: Buffer.concat(chunks) });
-        });
-      },
-    );
-    req.on("timeout", () => fail(new Refused("timed out")));
-    req.on("error", fail);
-    req.end();
-  });
+/** Read-only page transport shared with MCP and tool fetches; redirects are checked by the caller. */
+export async function pinnedFetch(u: URL, method: string, headers: Record<string, string>, allowAddress: (ip: string) => boolean = isPublicAddress, signal?: AbortSignal): Promise<Fetched> {
+  try {
+    return await requestBounded(u, { method, headers, allowAddress, signal, maxBytes: MAX_RESPONSE_BYTES, timeoutMs: NAV_TIMEOUT_MS });
+  } catch (error) {
+    throw new Refused(error instanceof Error ? error.message : "request failed");
+  }
 }
 
 /**
