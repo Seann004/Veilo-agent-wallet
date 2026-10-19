@@ -1,4 +1,7 @@
-# Veilo
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="apps/dashboard/public/brand/logo-wordmark-dark.svg">
+  <img src="apps/dashboard/public/brand/logo-wordmark-light.svg" alt="Veilo" width="180" height="42">
+</picture>
 
 A personal agent workspace with private on-chain payments and an agent marketplace, built on Solana devnet.
 
@@ -13,16 +16,7 @@ Create agents, connect tools, set permissions and hire specialists. Local contro
 
 ## Architecture
 
-```mermaid
-flowchart LR
-  Agent[Personal agent] --> Control[Local control<br/>Permissions and limits]
-  Agent -. Discover and hire .-> Market[Marketplace<br/>Supabase]
-  Market -. Approved terms .-> Control
-  Control --> Wallet[Local wallet service<br/>Encrypted notes and proofs]
-  Wallet -->|Groth16 proof via relayer| Pool[Solana privacy pool]
-  Pool -->|USDC payout| Fresh[Fresh payment wallet]
-  Fresh -->|x402 settlement| Seller[Seller or tool]
-```
+![Veilo architecture: agents request work, local services authorize spending, and a privacy-pool payout funds a fresh wallet for x402 settlement](docs/public/images/readme-architecture.png)
 
 The local wallet service holds note secrets; the fresh wallet is a per-purchase payment address. Groth16 authorizes the pool withdrawal; x402 settles the merchant payment. [Technical details](docs/guide/architecture.md).
 
