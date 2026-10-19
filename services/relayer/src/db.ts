@@ -163,6 +163,7 @@ CREATE TABLE swap (
 ) STRICT;
 `,
   },
+  { version: 4, sql: `ALTER TABLE swap ADD COLUMN actual_out_lamports INTEGER;` },
 ];
 
 export function openRelayerDb(path: string): RelayerDb {

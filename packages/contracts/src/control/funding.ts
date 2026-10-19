@@ -72,7 +72,7 @@ export type SwapResult =
   | { status: "not_ready"; reason: string }
   | { status: "recovery_required"; reason: string }
   | { status: "submitted"; signature: string; minOutLamports: bigint; estOutLamports: bigint; destination: string }
-  | { status: "finalized"; signature: string; minOutLamports: bigint; estOutLamports: bigint; destination: string; sponsorLamports: bigint }
+  | { status: "finalized"; signature: string; minOutLamports: bigint; estOutLamports: bigint; destination: string; sponsorLamports: bigint; actualOutLamports?: bigint }
   | { status: "failed"; signature: string | null; reason: string };
 
 export interface FundingRequest {
@@ -214,7 +214,7 @@ export const swapResultWire = z.discriminatedUnion("status", [
   z.object({ status: z.literal("not_ready"), reason: z.string() }),
   z.object({ status: z.literal("recovery_required"), reason: z.string() }),
   z.object({ status: z.literal("submitted"), signature: z.string(), minOutLamports: baseUnitString, estOutLamports: baseUnitString, destination: z.string() }),
-  z.object({ status: z.literal("finalized"), signature: z.string(), minOutLamports: baseUnitString, estOutLamports: baseUnitString, destination: z.string(), sponsorLamports: baseUnitString }),
+  z.object({ status: z.literal("finalized"), signature: z.string(), minOutLamports: baseUnitString, estOutLamports: baseUnitString, destination: z.string(), sponsorLamports: baseUnitString, actualOutLamports: baseUnitString.optional() }),
   z.object({ status: z.literal("failed"), signature: z.string().nullable(), reason: z.string() }),
 ]);
 export type SwapResultWire = z.infer<typeof swapResultWire>;

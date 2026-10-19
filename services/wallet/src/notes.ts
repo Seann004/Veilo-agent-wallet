@@ -34,6 +34,17 @@ export interface PreparedDeposit {
 export class NoteService {
   constructor(private readonly d: WalletDeps) {}
 
+  private syncing: Promise<{ synced: boolean; reason?: string }> | undefined;
+  private lastSync: { synced: boolean; reason?: string } | undefined;
+  private checkedAt = 0;
+
+  /** Owner reads never wait on RPC; only verified sync can promote notes to spendable. */
+  snapshot(): Record<string, unknown> {
+    if (!this.syncing && Date.now() - this.checkedAt >= 10_000) void this.sync().catch(() => undefined);
+    return { ...this.status(), sync: { synced: this.lastSync?.synced ?? false, ...this.lastSync,
+      refreshing: this.syncing !== undefined, checkedAt: this.checkedAt ? new Date(this.checkedAt).toISOString() : null } };
+  }
+
   private get now(): number {
     return (this.d.now ?? Date.now)();
   }
@@ -127,7 +138,19 @@ export class NoteService {
    * approved (label in the current approved root) → spendable (witness rebuilt against the
    * finalized root and registered with control). Change notes follow the same insertion rule.
    */
-  async sync(): Promise<{ synced: boolean; reason?: string }> {
+  sync(): Promise<{ synced: boolean; reason?: string }> {
+    if (this.syncing) return this.syncing;
+    this.syncing = this.syncOnce().then((result) => {
+      this.lastSync = result;
+      return result;
+    }, (error: unknown) => {
+      this.lastSync = { synced: false, reason: (error as Error).message };
+      throw error;
+    }).finally(() => { this.checkedAt = Date.now(); this.syncing = undefined; });
+    return this.syncing;
+  }
+
+  private async syncOnce(): Promise<{ synced: boolean; reason?: string }> {
     let ps: VerifiedPublicState;
     try {
       const ctx = await this.d.pool();

@@ -15,7 +15,7 @@ export interface RelayerChain {
   account(addr: Address): Promise<{ data: Uint8Array; lamports: bigint; owner: string; executable: boolean } | null>;
   /** All finalized signatures touching `addr`, oldest first. */
   signaturesForAddress(addr: Address): Promise<TxRecord[]>;
-  transaction(signature: string): Promise<{ slot: bigint; err: unknown; logs: string[]; fee: bigint } | null>;
+  transaction(signature: string): Promise<{ slot: bigint; err: unknown; logs: string[]; fee: bigint; tokenTransfers?: Array<{ mint: string; destination: string; amount: bigint }> } | null>;
   signatureStatus(signature: string): Promise<{ confirmationStatus: "processed" | "confirmed" | "finalized"; err: unknown } | null>;
   rentExemptMinimum(bytes: number): Promise<bigint>;
   /** Sends a fully signed wire transaction; the caller persisted its signature first. */
@@ -48,9 +48,9 @@ export function createRpcRelayerChain(rpcUrl: string): RelayerChain {
       return out.reverse();
     },
     async transaction(sig) {
-      const tx = await rpc.getTransaction(toSignature(sig), { commitment: "finalized", encoding: "json", maxSupportedTransactionVersion: 0 }).send();
+      const tx = await rpc.getTransaction(toSignature(sig), { commitment: "finalized", encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }).send();
       if (!tx) return null;
-      return { slot: tx.slot, err: tx.meta?.err ?? null, logs: [...(tx.meta?.logMessages ?? [])], fee: tx.meta?.fee ?? 0n };
+      return { slot: tx.slot, err: tx.meta?.err ?? null, logs: [...(tx.meta?.logMessages ?? [])], fee: tx.meta?.fee ?? 0n, tokenTransfers: parsedTokenTransfers(tx) };
     },
     async signatureStatus(sig) {
       const { value } = await rpc.getSignatureStatuses([toSignature(sig)], { searchTransactionHistory: true }).send();
@@ -63,4 +63,14 @@ export function createRpcRelayerChain(rpcUrl: string): RelayerChain {
       await rpc.sendTransaction(wire as Base64EncodedWireTransaction, { encoding: "base64", preflightCommitment: "confirmed" }).send();
     },
   };
+}
+
+/** Exact SPL amounts from executed inner instructions, never a quote or account-rent delta. */
+export function parsedTokenTransfers(tx: unknown): Array<{ mint: string; destination: string; amount: bigint }> {
+  const raw = tx as { meta?: { innerInstructions?: Array<{ instructions: Array<{ program?: string; parsed?: { type?: string; info?: { mint?: string; destination?: string; tokenAmount?: { amount?: string } } } }> }> } };
+  return (raw.meta?.innerInstructions ?? []).flatMap((group) => group.instructions.flatMap((ix) => {
+    const info = ix.parsed?.info;
+    return ix.program === "spl-token" && ix.parsed?.type === "transferChecked" && info?.mint && info.destination && /^\d+$/.test(info.tokenAmount?.amount ?? "")
+      ? [{ mint: info.mint, destination: info.destination, amount: BigInt(info.tokenAmount!.amount!) }] : [];
+  }));
 }

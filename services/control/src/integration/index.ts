@@ -15,6 +15,7 @@ import type { PermitSigner } from "./permits";
 
 export interface Integration {
   orchestrator: PurchaseOrchestrator;
+  swap?: SwapRunner | undefined;
   gateway: GatewayClient | undefined;
   scheduler: Scheduler;
   /** Present only when MARKETPLACE_URL is configured. */
@@ -110,5 +111,5 @@ export function createIntegration(
     ...(o.leaseMs !== undefined ? { leaseMs: o.leaseMs } : {}),
     ...(o.purchaseSweepMs !== undefined ? { purchaseSweepMs: o.purchaseSweepMs } : {}),
   });
-  return { orchestrator, gateway: o.gateway, scheduler, marketplace, external, workflows };
+  return { orchestrator, swap, gateway: o.gateway, scheduler, marketplace, external, workflows };
 }

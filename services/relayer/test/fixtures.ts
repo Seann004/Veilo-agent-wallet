@@ -75,7 +75,7 @@ export class FakeRelayerChain implements RelayerChain {
   height = 300_000_000n;
   accounts = new Map<string, { data: Uint8Array; lamports: bigint; owner: string; executable: boolean }>();
   statuses = new Map<string, { confirmationStatus: "processed" | "confirmed" | "finalized"; err: unknown }>();
-  txs = new Map<string, { slot: bigint; err: unknown; logs: string[]; fee: bigint }>();
+  txs = new Map<string, { slot: bigint; err: unknown; logs: string[]; fee: bigint; tokenTransfers?: Array<{ mint: string; destination: string; amount: bigint }> }>();
   sigsByAddress = new Map<string, Array<{ signature: string; slot: bigint; err: unknown }>>();
   sent: Array<{ wire: string; persistedSignatures: string[] }> = [];
   db: RelayerDb | null = null;

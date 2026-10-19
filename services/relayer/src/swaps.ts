@@ -42,8 +42,24 @@ export class SwapService {
       sponsorFeeLamports: String(r.fee_lamports),
       sponsorRentLamports: String(r.wsol_rent_lamports),
       rentRecoveredLamports: r.state === "finalized" ? String(r.usdc_rent_lamports) : "0",
+      ...(r.actual_out_lamports !== null && r.actual_out_lamports !== undefined ? { actualOutLamports: String(r.actual_out_lamports) } : {}),
       error: (r.error as string | null) ?? null,
     };
+  }
+
+  /** Backfills finalized historical swaps without signing or broadcasting anything. */
+  async receipt(id: string): Promise<SwapViewWire | null> {
+    const view = this.view(id);
+    if (view?.state === "finalized" && view.actualOutLamports === undefined) {
+      const row = this.c.db.prepare(`SELECT fresh_wallet FROM swap WHERE id = ?`).get(id) as { fresh_wallet: string };
+      const tx = await this.c.chain.transaction(view.signature);
+      if (tx && tx.err === null) {
+        const ata = (await associatedTokenAddress(address(row.fresh_wallet), address(WRAPPED_SOL_MINT))).address;
+        const transfers = (tx.tokenTransfers ?? []).filter((t) => t.mint === WRAPPED_SOL_MINT && t.destination === ata);
+        if (transfers.length === 1) this.c.db.prepare(`UPDATE swap SET actual_out_lamports = ? WHERE id = ?`).run(transfers[0]!.amount, id);
+      }
+    }
+    return this.view(id);
   }
 
   async submit(req: SwapRequestWire): Promise<SwapViewWire> {

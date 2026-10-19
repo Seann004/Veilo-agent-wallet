@@ -119,6 +119,7 @@ export const swapViewWire = z
     /** Wrapped-SOL account rent the sponsor funded; it leaves with the output and is not recovered. */
     sponsorRentLamports: u64,
     rentRecoveredLamports: u64,
+    actualOutLamports: u64.optional(),
     error: z.string().nullable(),
   })
   .strict();

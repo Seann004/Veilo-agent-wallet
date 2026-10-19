@@ -717,7 +717,11 @@ export class FundingService {
   async #swapProgress(s: SwapRow): Promise<SwapResult> {
     const { store, relayer } = this.d;
     const amounts = { minOutLamports: s.min_out, estOutLamports: s.est_out, destination: s.destination };
-    if (s.state === "finalized") return { status: "finalized", signature: s.signature!, sponsorLamports: s.sponsor_lamports, ...amounts };
+    if (s.state === "finalized") {
+      const receipt = await relayer.swap(s.swap_id).catch(() => null);
+      return { status: "finalized", signature: s.signature!, sponsorLamports: s.sponsor_lamports, ...amounts,
+        ...(receipt?.actualOutLamports !== undefined ? { actualOutLamports: BigInt(receipt.actualOutLamports) } : {}) };
+    }
     if (s.state === "failed" || s.state === "expired") {
       const reason = s.state === "expired" ? "the swap expired before landing" : s.signature === null ? "the relayer refused the swap; nothing was broadcast" : "the swap failed on-chain";
       return { status: "failed", signature: s.signature, reason };
@@ -745,7 +749,7 @@ export class FundingService {
       const sponsorLamports = BigInt(view.sponsorFeeLamports) + BigInt(view.sponsorRentLamports);
       store.updateSwap(s.purchase_id, { state: "finalized", signature: view.signature, sponsorLamports });
       store.event("swap.finalized", s.purchase_id, { signature: view.signature });
-      return { status: "finalized", signature: view.signature, sponsorLamports, ...amounts };
+      return { status: "finalized", signature: view.signature, sponsorLamports, ...amounts, ...(view.actualOutLamports !== undefined ? { actualOutLamports: BigInt(view.actualOutLamports) } : {}) };
     }
     store.updateSwap(s.purchase_id, { state: view.state, signature: view.signature });
     return { status: "failed", signature: view.signature, reason: view.error ?? `the swap ${view.state}` };

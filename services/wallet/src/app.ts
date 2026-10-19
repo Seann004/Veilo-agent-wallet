@@ -168,8 +168,7 @@ export function createApp(health: ServiceHealth, deps?: WalletAppDeps): Express 
     res.json(deps.notes.registerDeposit(ownerOf(res), b.depositId, b.signature));
   });
   app.get("/notes/status", owner, async (_req, res) => {
-    const sync = await deps.notes.sync();
-    res.json({ ...deps.notes.status(), sync });
+    res.json(deps.notes.snapshot());
   });
   app.post("/exits/prepare", owner, async (req, res) => {
     const b = parse(z.object({ noteId: z.uuid() }).strict(), req.body);
@@ -216,7 +215,7 @@ function wireSwap(r: SwapResult): unknown {
     ...r,
     minOutLamports: r.minOutLamports.toString(),
     estOutLamports: r.estOutLamports.toString(),
-    ...(r.status === "finalized" ? { sponsorLamports: r.sponsorLamports.toString() } : {}),
+    ...(r.status === "finalized" ? { sponsorLamports: r.sponsorLamports.toString(), ...(r.actualOutLamports !== undefined ? { actualOutLamports: r.actualOutLamports.toString() } : {}) } : {}),
   };
 }
 

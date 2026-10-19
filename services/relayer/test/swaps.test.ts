@@ -120,6 +120,29 @@ describe("devnet swap co-signing", () => {
     expect(t.rentRecovered).toBe(2_039_280n);
   });
 
+  it("backfills actual output from the finalized wrapped-SOL transfer, excluding rent and unrelated transfers", async () => {
+    const { sponsor, m, chain, db, svc } = await setup();
+    const dest = randomAddress();
+    const s = await swapTx(sponsor, m, dest);
+    chain.accounts.set(s.freshUsdc, { data: new Uint8Array(165), lamports: 2_039_280n, owner: "Tokenkeg", executable: false });
+    const ok = await svc.submit({ swapId: id(), transaction: s.wire, lastValidBlockHeight: "10", freshWallet: s.fresh, destination: dest });
+    chain.statuses.set(ok.signature, { confirmationStatus: "finalized", err: null });
+    chain.txs.set(ok.signature, { slot: 5n, err: null, logs: [], fee: 10_000n });
+    await svc.advance(ok.swapId);
+    expect((await svc.receipt(ok.swapId))?.actualOutLamports).toBeUndefined();
+    const ata = (await associatedTokenAddress(s.fresh, address(WRAPPED_SOL_MINT))).address;
+    chain.txs.set(ok.signature, { slot: 5n, err: null, logs: [], fee: 10_000n, tokenTransfers: [
+      { mint: WRAPPED_SOL_MINT, destination: ata, amount: 726596n },
+      { mint: WRAPPED_SOL_MINT, destination: randomAddress(), amount: 999999n },
+      { mint: m.token.mint, destination: ata, amount: 10000n },
+    ] });
+    expect(await svc.receipt(ok.swapId)).toMatchObject({ actualOutLamports: "726596", state: "finalized" });
+    chain.txs.delete(ok.signature);
+    expect((await svc.receipt(ok.swapId))?.actualOutLamports).toBe("726596");
+    expect(chain.sent).toHaveLength(1);
+    db.close();
+  });
+
   it("keeps a finalized swap in flight until its transaction (and fee) can be read", async () => {
     const { sponsor, m, chain, db, svc } = await setup();
     const dest = randomAddress();

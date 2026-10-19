@@ -175,7 +175,10 @@ export class WalletFundingProvider implements FundingProvider {
     if (!parsed.success) return { status: "not_ready", reason: "wallet service returned an unrecognized swap state" };
     const v = parsed.data;
     if (v.status === "submitted") return { ...v, minOutLamports: BigInt(v.minOutLamports), estOutLamports: BigInt(v.estOutLamports) };
-    if (v.status === "finalized") return { ...v, minOutLamports: BigInt(v.minOutLamports), estOutLamports: BigInt(v.estOutLamports), sponsorLamports: BigInt(v.sponsorLamports) };
+    if (v.status === "finalized") {
+      const { actualOutLamports, ...rest } = v;
+      return { ...rest, minOutLamports: BigInt(v.minOutLamports), estOutLamports: BigInt(v.estOutLamports), sponsorLamports: BigInt(v.sponsorLamports), ...(actualOutLamports !== undefined ? { actualOutLamports: BigInt(actualOutLamports) } : {}) };
+    }
     return v;
   }
 

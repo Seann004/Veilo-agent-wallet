@@ -603,7 +603,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
     });
   });
 
-  r.get("/purchases/:id", anyActor, (req, res) => {
+  r.get("/purchases/:id", anyActor, async (req, res) => {
     const a = actorOf(res);
     const p = getPurchaseRow(ledger, param(req, "id"));
     if (a.kind === "worker" && p.agent_id !== a.agentId) {
@@ -617,6 +617,7 @@ export function controlRouter(deps: AuthDeps & { integration?: Integration | und
       res.json({ purchase: redactPurchase(purchaseView(ledger, p)) });
       return;
     }
+    await integration?.swap?.refreshReceipt(p).catch(() => undefined);
     res.json({ purchase: purchaseView(ledger, p), ...(integration ? { execution: integration.orchestrator.view(p.id) } : {}) });
   });
 

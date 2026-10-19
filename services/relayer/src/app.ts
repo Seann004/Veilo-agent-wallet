@@ -86,8 +86,8 @@ export function createApp(health: ServiceHealth, deps?: RelayerAppDeps): Express
   app.post("/swaps", wallet, async (req, res) => {
     res.status(202).json(await deps.swaps.submit(parse(swapRequestWire, req.body)));
   });
-  app.get("/swaps/:id", wallet, (req, res) => {
-    const v = deps.swaps.view(idParam(req));
+  app.get("/swaps/:id", wallet, async (req, res) => {
+    const v = await deps.swaps.receipt(idParam(req));
     if (!v) throw new RelayerError("NOT_FOUND", "swap not found");
     res.json(v);
   });

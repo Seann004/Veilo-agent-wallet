@@ -130,6 +130,15 @@ export class SwapRunner {
     private readonly funding: FundingProvider,
   ) {}
 
+  /** Read-only receipt enrichment for completed swaps, including older recorded purchases. */
+  async refreshReceipt(p: PurchaseRow): Promise<void> {
+    if (p.sku !== SWAP_SKU || p.merchant_state !== "finalized" || !this.funding.swapOutcome) return;
+    const ex = this.ledger.db.prepare(`SELECT result_json FROM purchase_execution WHERE purchase_id = ?`).get(p.id) as { result_json: string | null } | undefined;
+    if (ex?.result_json && JSON.parse(ex.result_json).actualOutLamports !== undefined) return;
+    const r = await this.funding.swapOutcome(p.id);
+    if (r.status === "finalized") this.#recordAttempt(p.id, r);
+  }
+
   async step(p: PurchaseRow, binding: FundingBinding): Promise<boolean> {
     if (p.merchant_state === "not_started") {
       advanceAuthority(this.ledger, p.id, "sign_merchant");
@@ -203,6 +212,7 @@ export function swapResultView(r: Exclude<SwapResult, { status: "not_ready" | "r
     ...(r.status === "failed"
       ? { reason: r.reason }
       : { minOutLamports: r.minOutLamports.toString(), estOutLamports: r.estOutLamports.toString(), destination: r.destination }),
+    ...(r.status === "finalized" && r.actualOutLamports !== undefined ? { actualOutLamports: r.actualOutLamports.toString() } : {}),
     linkability: "The swap is paid by a fresh wallet funded from the private pool; the SOL lands publicly at the owner's address.",
   };
 }
