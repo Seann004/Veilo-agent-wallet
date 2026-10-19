@@ -145,7 +145,7 @@ flowchart LR
 
 A note is basically a private record of your claim to funds in the pool. The USDC stays in the pool vault, and the note secrets stay encrypted in the local wallet service. Say you have a 10 USDC note and want to pay 3, ignoring separate fees. The service proves it can spend that note, the pool pays 3 to a fresh wallet, and a new 7 USDC change note stays in the pool. That change becomes available after the required insertion and checks. Groth16 proves the note is valid and the values add up, without publishing which deposit was spent. A nullifier prevents spending the same note twice. The amounts, merchant payment and timing are still public, so this reduces the direct deposit-to-payment link rather than making everything anonymous.
 
-Sources: circuits/src/spend.circom; docs/protocol.md sections 7 and 9; docs/guide/privacy.md. Credit zx402 architectural inspiration in attribution/notes. Do not say the ZK circuit enforces per-agent budgets.
+Sources: circuits/src/spend.circom; docs/protocol.md sections 7 and 9; docs/guide/privacy.md. Do not say the ZK circuit enforces per-agent budgets.
 
 ## 8. Technology stack (0:20)
 

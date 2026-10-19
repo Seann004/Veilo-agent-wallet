@@ -1,14 +1,6 @@
-# Source provenance and license map
+# Dependency license map
 
-Reviewed 17 October 2026 against source snapshot `fe13778`, PRD Part VI and the exact published dependency archives noted below. Root `NOTICE` retains the complete zx402 MIT notice; it does not license all of Veilo. **Owner decision: select Veilo's own license.** No root `LICENSE` has been added.
-
-## Architecture and adapted invariants
-
-[zx402](https://github.com/Marcussy34/zx402/tree/9da88d099bb1ad28c0de3e2b0b7e15e2a1fd198d), by Marcus Tan, is the architectural reference pinned by PRD sections 18/23 and Part VI. That local corpus includes its MIT license, copyright 2026 Marcus Tan. Its pooled-note/spend/insert/public-exit flow, private change, fresh-payer x402 and privacy/trust explanations inform Veilo's circuits, privacy SDK, wallet/relayer and guides. The adaptation changes Cardano/BLS12 to Solana accounts/BN254 and adds delegated policies, shared credits and durable multi-agent workflows.
-
-The source map is PRD section 23: `circuits/src/{spend,insert,ragequit}.circom`, `packages/crypto`, `packages/sdk/src/{sdk,x402}.ts` and the reference privacy/payment/trust guides. Veilo's counterparts are `circuits/src/{spend,insert,exit}.circom`, `packages/privacy-sdk`, `packages/x402-client`, `services/{wallet,relayer}` and the public guides. This is a reference/adaptation map, not proof of which lines were copied. The companion upstream archive was not present in this worktree; the MIT notice was checked against the embedded corpus. Retain notices if additional reused files are identified.
-
-Privacy Pools is acknowledged as architectural lineage; this checkout does not identify directly vendored Privacy Pools contracts. zx402's Cardano transactions and performance claims must never be presented as Veilo Solana evidence.
+Reviewed 17 October 2026 against source snapshot `fe13778` and the exact published dependency archives noted below. Required third-party copyright and license notices remain in the root `NOTICE`.
 
 ## Direct reuse and tooling
 

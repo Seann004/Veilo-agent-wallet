@@ -1,6 +1,6 @@
 # Marketplace implementation triage
 
-**Reassessed against `main` at `59696dd` (PR #3).** The marketplace is implemented in code: `services/marketplace`, 19 Supabase migrations (all applied to the project), the seller-host gateway profile, the control bridge and the `/marketplace/*` dashboard pages. This page maps each gate and each §26.6 check to the evidence that exists. It is source inspection plus recorded runs, not a new test run. The required product scope is [PRD v3.2 §26](./marketplace.md); none of it is dropped.
+**Reassessed against `main` at `59696dd` (PR #3).** The marketplace is implemented in code: `services/marketplace`, 19 Supabase migrations (all applied to the project), the seller-host gateway profile, the control bridge and the `/marketplace/*` dashboard pages. This page maps each gate and each §26.6 check to the evidence that exists. It is source inspection plus recorded runs, not a new test run. The required product scope is [marketplace requirements](./marketplace.md); none of it is dropped.
 
 Evidence kinds used below:
 

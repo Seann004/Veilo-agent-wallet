@@ -4,23 +4,10 @@ Veilo's own project license has not been selected by the owner. This NOTICE
 preserves reference attribution; it does not assign the whole project an MIT,
 Apache or GPL license, and is not a complete transitive dependency inventory.
 
-Architectural reference and adaptations
+Third-party source notice
 
-zx402 by Marcus Tan: https://github.com/Marcussy34/zx402
-Inspected snapshot: 9da88d099bb1ad28c0de3e2b0b7e15e2a1fd198d
-Source of the notice below: PRD_latest.md Part VI, SOURCE: LICENSE.
-
-The reference/adaptation areas are pooled notes, approved membership, local
-spend/insert/exit proofs, nullifiers, hidden change, pool-to-fresh-payer-to-x402
-settlement, owner public exit, and the privacy/trust documentation. Veilo
-translates these invariants to Solana accounts, BN254 circuits and its own
-control/wallet/gateway services. The reference map is in PRD section 23.
-This attribution does not assert a line-by-line copying inventory.
-Privacy Pools is the architectural lineage credited by the reference; its
-contracts are not identified as directly vendored in this checkout. Original
-Cardano evidence belongs to zx402 and is not Veilo execution evidence.
-
-Upstream zx402 license (applies to that source and reused/adapted portions)
+Source: https://github.com/Marcussy34/zx402/blob/9da88d099bb1ad28c0de3e2b0b7e15e2a1fd198d/LICENSE
+The following notice applies to the upstream source and reused/adapted portions.
 
 MIT License
 

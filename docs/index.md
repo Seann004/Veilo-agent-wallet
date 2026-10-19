@@ -1,6 +1,6 @@
 # Veilo documentation
 
-An owner-controlled workspace for AI agents that buy approved resources within delegated budgets, using a shared private funding pool on Solana devnet. PRD v3.2 extends it with a marketplace of reviewed, paid specialist agents.
+An owner-controlled workspace for AI agents that buy approved resources within delegated budgets, using a shared private funding pool on Solana devnet. The workspace includes a marketplace of reviewed, paid specialist agents.
 
 ## Current verification status
 

@@ -4,7 +4,7 @@
 
 Status: the recorded M2 pool/PayAI Echo run and one complete Shawn/Prince/Mira demo run with live inference (2026-10-17-1eba868c, recorded before PR #3 merged) are verified on devnet. Integrated flows are verified on local test validator with a fixture / mock provider. A fresh post-merge devnet run, browser-wallet signing and a private-pool-funded marketplace hire are not yet run. Amounts are USDC on Solana devnet. The deterministic development setup has derivable toxic waste and is for devnet funds only.
 
-PRD v3.2 accepts a marketplace of reviewed paid specialists: searchable listings, seller review, private jobs/deliverables, direct seller x402 settlement, zero platform fee and receipt-based earnings. Supabase holds marketplace identity/product records; local control/wallet retain spending authority. Cloud sign-in cannot authorize money, and the local P0 stack still works without Supabase. These capabilities are implemented in code and pass live RLS checks; their devnet acceptance is incomplete.
+Veilo includes a marketplace of reviewed paid specialists: searchable listings, seller review, private jobs/deliverables, direct seller x402 settlement, zero platform fee and receipt-based earnings. Supabase holds marketplace identity/product records; local control/wallet retain spending authority. Cloud sign-in cannot authorize money, and the local P0 stack still works without Supabase. These capabilities are implemented in code and pass live RLS checks; their devnet acceptance is incomplete.
 
 Execution uses credit-manager, research, content and custom roles; custom agents can propose marketplace hires that the owner approves locally. Owners configure names, jobs, triggers, budgets and approved services. Shawn, Prince and Mira are workflow examples, not a fixed list of agents. The model proposes resources; independent control and wallet services authorize purchases.
 
@@ -18,7 +18,7 @@ The private flow aims to remove the explicit link from a particular deposited no
 - [Current status](./guide/status.html): Merged-tree checks, M2 and pre-merge demo devnet evidence, local validator/mock workflows and outstanding runs.
 - [Eight-step demo](./guide/demo.html): Operator commands, the recorded devnet run and pending browser-wallet screenshots.
 - [Handoff gaps](./handoff.html): Outstanding evidence, merged branches, owner decisions and known documentation inconsistencies.
-- [Attribution](./references/attribution.html): Pinned architectural reference, direct reuse and unresolved license decisions.
+- [Attribution](./references/attribution.html): Direct dependency licenses and unresolved review decisions.
 - [Overview](./): Product purpose, owner-created agents, user flow and benefits.
 - [Agent workflows](./guide/agents.html): Custom agents and example research, credit and content workflows.
 - [Architecture](./guide/architecture.html): Planning, policy, wallet, pool, settlement and service boundaries.
@@ -95,7 +95,7 @@ Baseline before the exporter fix: full Vitest **989 passed, 1 skipped, 126 files
 
 # Specialist-agent marketplace
 
-**Status: implemented in code on `main`; devnet acceptance is incomplete.** PRD v3.2 §26 adds this marketplace to the existing private-wallet workspace without removing the original payment, privacy or recovery requirements. Identity and data isolation pass the live RLS end-to-end script (84/84), and a direct hire with a **publicly funded** payer settled on Solana devnet. A hire funded from the private pool, a devnet workflow run and live refunds are **not yet run**. [Current status](./status.md) and [marketplace triage](./marketplace-triage.md) record the gates.
+**Status: implemented in code on `main`; devnet acceptance is incomplete.** The marketplace extends the existing private-wallet workspace without removing the original payment, privacy or recovery requirements. Identity and data isolation pass the live RLS end-to-end script (84/84), and a direct hire with a **publicly funded** payer settled on Solana devnet. A hire funded from the private pool, a devnet workflow run and live refunds are **not yet run**. [Current status](./status.md) and [marketplace triage](./marketplace-triage.md) record the gates.
 
 ## Buy work or offer a specialist
 
@@ -166,7 +166,7 @@ Before release, close the remaining [delivery and acceptance gates](./marketplac
 
 # Marketplace implementation triage
 
-**Reassessed against `main` at `59696dd` (PR #3).** The marketplace is implemented in code: `services/marketplace`, 19 Supabase migrations (all applied to the project), the seller-host gateway profile, the control bridge and the `/marketplace/*` dashboard pages. This page maps each gate and each §26.6 check to the evidence that exists. It is source inspection plus recorded runs, not a new test run. The required product scope is [PRD v3.2 §26](./marketplace.md); none of it is dropped.
+**Reassessed against `main` at `59696dd` (PR #3).** The marketplace is implemented in code: `services/marketplace`, 19 Supabase migrations (all applied to the project), the seller-host gateway profile, the control bridge and the `/marketplace/*` dashboard pages. This page maps each gate and each §26.6 check to the evidence that exists. It is source inspection plus recorded runs, not a new test run. The required product scope is [marketplace requirements](./marketplace.md); none of it is dropped.
 
 Evidence kinds used below:
 
@@ -221,7 +221,7 @@ Supabase's [Web3 sign-in](https://supabase.com/docs/guides/auth/auth-web3), [RLS
 
 # Evidence and current status
 
-Reviewed on 19 October 2026 against source `b155f17`, based on merged `main` `55e6404`, plus the accompanying submission documentation. Recorded results are not an independent audit. The PRD describes requirements, not completion. USDC payments use **Solana devnet** test tokens with no monetary value. CoinGecko market data concerns real public market prices and is separate from devnet pool pricing.
+Reviewed on 19 October 2026 against source `b155f17`, based on merged `main` `55e6404`, plus the accompanying submission documentation. Recorded results are not an independent audit. The specification describes requirements, not completion. USDC payments use **Solana devnet** test tokens with no monetary value. CoinGecko market data concerns real public market prices and is separate from devnet pool pricing.
 
 ## Checks on the reviewed tree
 
@@ -456,17 +456,9 @@ These are described in [payments](./guide/payments.md#devnet-swap); no code was 
 
 ---
 
-# Source provenance and license map
+# Dependency license map
 
-Reviewed 17 October 2026 against source snapshot `fe13778`, PRD Part VI and the exact published dependency archives noted below. Root `NOTICE` retains the complete zx402 MIT notice; it does not license all of Veilo. **Owner decision: select Veilo's own license.** No root `LICENSE` has been added.
-
-## Architecture and adapted invariants
-
-[zx402](https://github.com/Marcussy34/zx402/tree/9da88d099bb1ad28c0de3e2b0b7e15e2a1fd198d), by Marcus Tan, is the architectural reference pinned by PRD sections 18/23 and Part VI. That local corpus includes its MIT license, copyright 2026 Marcus Tan. Its pooled-note/spend/insert/public-exit flow, private change, fresh-payer x402 and privacy/trust explanations inform Veilo's circuits, privacy SDK, wallet/relayer and guides. The adaptation changes Cardano/BLS12 to Solana accounts/BN254 and adds delegated policies, shared credits and durable multi-agent workflows.
-
-The source map is PRD section 23: `circuits/src/{spend,insert,ragequit}.circom`, `packages/crypto`, `packages/sdk/src/{sdk,x402}.ts` and the reference privacy/payment/trust guides. Veilo's counterparts are `circuits/src/{spend,insert,exit}.circom`, `packages/privacy-sdk`, `packages/x402-client`, `services/{wallet,relayer}` and the public guides. This is a reference/adaptation map, not proof of which lines were copied. The companion upstream archive was not present in this worktree; the MIT notice was checked against the embedded corpus. Retain notices if additional reused files are identified.
-
-Privacy Pools is acknowledged as architectural lineage; this checkout does not identify directly vendored Privacy Pools contracts. zx402's Cardano transactions and performance claims must never be presented as Veilo Solana evidence.
+Reviewed 17 October 2026 against source snapshot `fe13778` and the exact published dependency archives noted below. Required third-party copyright and license notices remain in the root `NOTICE`.
 
 ## Direct reuse and tooling
 
@@ -490,7 +482,7 @@ PayAI Echo and the facilitator, Solana devnet/RPC and OpenRouter are remote serv
 
 # Veilo documentation
 
-An owner-controlled workspace for AI agents that buy approved resources within delegated budgets, using a shared private funding pool on Solana devnet. PRD v3.2 extends it with a marketplace of reviewed, paid specialist agents.
+An owner-controlled workspace for AI agents that buy approved resources within delegated budgets, using a shared private funding pool on Solana devnet. The workspace includes a marketplace of reviewed, paid specialist agents.
 
 ## Current verification status
 
@@ -842,7 +834,7 @@ Recovery and owner exit remain available through their separate authenticated pa
 
 ## Marketplace approval and offline control
 
-PRD v3.2 keeps every local limit in force for specialist hires. A cloud identity session or cloud policy record cannot authorize spending: local control must install/acknowledge policy proposals and validate an approved seller plus immutable listing/payout/quote/runtime versions. A changed recipient or unapproved seller must stop locally. Concurrent hires share the same local allowance authority.
+Specialist hiring keeps every local limit in force for specialist hires. A cloud identity session or cloud policy record cannot authorize spending: local control must install/acknowledge policy proposals and validate an approved seller plus immutable listing/payout/quote/runtime versions. A changed recipient or unapproved seller must stop locally. Concurrent hires share the same local allowance authority.
 
 The required cloud connection uses authenticated, digest-bound, expiring requests initiated outbound by local control. New automatic spending pauses when control is offline; already released authority remains live exposure. Local approval bound to the operation, quote digest, recipient and total, owner-installed listing grants, concurrent-cap checks and revocation are implemented and unit-tested against fakes; lease and callback rules pass the live RLS e2e script. An offline-controller drill and a devnet run of these paths are still outstanding. See [triage](./marketplace-triage.md).
 
@@ -1277,7 +1269,7 @@ Use real proof artifacts and the deployed verifier for privacy checks. Include p
 
 ## Marketplace acceptance is separate
 
-PRD v3.2 adds T17–T23 and fourteen §26.6 checks. The complete [marketplace acceptance matrix](../guide/marketplace-triage.md) assigns documentation IDs MKT-01–MKT-14, specifies closure evidence and records which rows the live RLS e2e script and unit tests cover and which still need devnet evidence. It covers identity/tenant isolation, immutable seller quotes, concurrent hires, receipt uniqueness, failure recovery, refunds, leases, malicious files, offline control and unchanged pool invariants. These are requirement labels, not passing test names.
+Marketplace acceptance covers T17–T23 and fourteen checks. The complete [marketplace acceptance matrix](../guide/marketplace-triage.md) assigns documentation IDs MKT-01–MKT-14, specifies closure evidence and records which rows the live RLS e2e script and unit tests cover and which still need devnet evidence. It covers identity/tenant isolation, immutable seller quotes, concurrent hires, receipt uniqueness, failure recovery, refunds, leases, malicious files, offline control and unchanged pool invariants. These are requirement labels, not passing test names.
 
 The 30-case local P0 report does not prove Supabase RLS/Storage, a seller job, cloud/local replay handling, earnings or a hosted sandbox; those rely on the marketplace records above, and no hosted sandbox exists. A free/fixture demonstration cannot satisfy genuine devnet seller settlement. Keep marketplace evidence separate from the existing P0/M2 records and attach the exact implemented commit, environment and actors.
 

@@ -7,7 +7,7 @@ const pages = [
   ['guide/status.md', 'Current status', 'Merged-tree checks, M2 and pre-merge demo devnet evidence, local validator/mock workflows and outstanding runs.'],
   ['guide/demo.md', 'Eight-step demo', 'Operator commands, the recorded devnet run and pending browser-wallet screenshots.'],
   ['handoff.md', 'Handoff gaps', 'Outstanding evidence, merged branches, owner decisions and known documentation inconsistencies.'],
-  ['references/attribution.md', 'Attribution', 'Pinned architectural reference, direct reuse and unresolved license decisions.'],
+  ['references/attribution.md', 'Attribution', 'Direct dependency licenses and unresolved review decisions.'],
   ['index.md', 'Overview', 'Product purpose, owner-created agents, user flow and benefits.'],
   ['guide/agents.md', 'Agent workflows', 'Custom agents and example research, credit and content workflows.'],
   ['guide/architecture.md', 'Architecture', 'Planning, policy, wallet, pool, settlement and service boundaries.'],
@@ -26,7 +26,7 @@ const index = `# Veilo
 
 Status: the recorded M2 pool/PayAI Echo run and one complete Shawn/Prince/Mira demo run with live inference (2026-10-17-1eba868c, recorded before PR #3 merged) are verified on devnet. Integrated flows are verified on local test validator with a fixture / mock provider. A fresh post-merge devnet run, browser-wallet signing and a private-pool-funded marketplace hire are not yet run. Amounts are USDC on Solana devnet. The deterministic development setup has derivable toxic waste and is for devnet funds only.
 
-PRD v3.2 accepts a marketplace of reviewed paid specialists: searchable listings, seller review, private jobs/deliverables, direct seller x402 settlement, zero platform fee and receipt-based earnings. Supabase holds marketplace identity/product records; local control/wallet retain spending authority. Cloud sign-in cannot authorize money, and the local P0 stack still works without Supabase. These capabilities are implemented in code and pass live RLS checks; their devnet acceptance is incomplete.
+Veilo includes a marketplace of reviewed paid specialists: searchable listings, seller review, private jobs/deliverables, direct seller x402 settlement, zero platform fee and receipt-based earnings. Supabase holds marketplace identity/product records; local control/wallet retain spending authority. Cloud sign-in cannot authorize money, and the local P0 stack still works without Supabase. These capabilities are implemented in code and pass live RLS checks; their devnet acceptance is incomplete.
 
 Execution uses credit-manager, research, content and custom roles; custom agents can propose marketplace hires that the owner approves locally. Owners configure names, jobs, triggers, budgets and approved services. Shawn, Prince and Mira are workflow examples, not a fixed list of agents. The model proposes resources; independent control and wallet services authorize purchases.
 

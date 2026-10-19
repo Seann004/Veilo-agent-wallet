@@ -12,7 +12,7 @@ Copy the text into your assistant, or give it the published file URL if it can r
 
 ## Important context
 
-- PRD v3.2 adds a paid specialist-agent marketplace. It is implemented in code on `main`; its devnet acceptance (T17–T23) is incomplete. See [marketplace](./guide/marketplace.md) and [triage](./guide/marketplace-triage.md).
+- Veilo includes a paid specialist-agent marketplace. It is implemented in code on `main`; its devnet acceptance (T17–T23) is incomplete. See [marketplace](./guide/marketplace.md) and [triage](./guide/marketplace-triage.md).
 - Execution uses coded credit-manager, research and content roles plus a `custom` role that does the work on the owner's model key and can propose marketplace hires. The named agents are examples. Custom agents may also browse public pages, call read-only connectors (CoinGecko market data through pinned templates) and request an owner-approved devnet USDC to SOL swap up to a maximum per swap; none of these has a recorded devnet run.
 - Supabase holds marketplace identity/product records; local control/wallet retain money authority. The local P0 stack works without Supabase.
 - Seller payments must be direct, with zero platform fee and receipt-based earnings. Marketplace sign-in cannot authorize spending.

@@ -5,11 +5,11 @@
 | Status | Draft-frozen for T06/T07/T08 implementation. Values marked **M2** are measured defaults that must be confirmed before trusted-artifact generation. |
 | Protocol version | `1` (`PROTOCOL_VERSION: u8 = 1`), encoding/vector version `v1` |
 | Scope | Note model, encodings, hashes, trees, circuits (spend, insert, exit), Anchor program `privacy-pool` accounts and instructions, Groth16 verification, events, errors, deployment manifest, cross-language vectors |
-| Normative source | PRD_latest.md Part I (sections 6.2a, 7, 8.1, 13, 15, 22, 23). Where this file says **Veilo decision (v1)** the PRD left the choice to the implementer. |
+| Normative source | Product requirements, sections 6.2a, 7, 8.1, 13, 15, 22 and 23. **Veilo decision (v1)** identifies an implementation choice. |
 
-Conventions: MUST/SHOULD as in the PRD. `||` is byte concatenation. `u8`, `u64_be` are fixed-width unsigned big-endian. `be32(x)` is the 32-byte big-endian encoding of a field element `x`. `int_be(b)` reads bytes as an unsigned big-endian integer. Hex is lowercase. Decimal is used for field elements in vectors. ASCII tags carry no terminator or length prefix.
+Conventions: MUST/SHOULD as in the specification. `||` is byte concatenation. `u8`, `u64_be` are fixed-width unsigned big-endian. `be32(x)` is the 32-byte big-endian encoding of a field element `x`. `int_be(b)` reads bytes as an unsigned big-endian integer. Hex is lowercase. Decimal is used for field elements in vectors. ASCII tags carry no terminator or length prefix.
 
-Rule of precedence: if code and this file disagree, fix one of them in the same change and regenerate vectors. Any change to sections 2–7 is a protocol change: it requires new vectors, new circuit artifacts and a new deployment manifest (PRD 7.1, 24.1).
+Rule of precedence: if code and this file disagree, fix one of them in the same change and regenerate vectors. Any change to sections 2–7 is a protocol change: it requires new vectors, new circuit artifacts and a new deployment manifest (specification 7.1, 24.1).
 
 ---
 
@@ -109,7 +109,7 @@ A note is `(value, label, nullifier_secret, note_secret)`. The SDK backup also k
 
 ```text
 precommitment  = H2(nullifier_secret, note_secret)
-commitment     = H3(value, label, precommitment)          # PRD 7.2, verbatim
+commitment     = H3(value, label, precommitment)          # specification 7.2, verbatim
 nullifier_hash = H2(nullifier_secret, label)              # Veilo decision (v1)
 ```
 
@@ -123,7 +123,7 @@ nullifier_hash = H2(nullifier_secret, label)              # Veilo decision (v1)
 
 - Pool scoping is cryptographic. The label commits to the pool PoolState address and mint (section 4). Every leaf in a pool's tree carries a label derived for that pool: deposit leaves get a program-derived label, and change leaves inherit it in-circuit. So a nullifier hash is bound to its pool without an extra public input or a raw-pubkey-to-field mapping.
 - The namespace is also scoped on-chain. `SpentNullifier` PDAs are seeded by `(PoolState, nullifier_hash)`.
-- Spend and exit share the namespace: both circuits compute the identical `H2(nullifier_secret, label)` from the same note, and both instructions `init` the same `SpentNullifier` PDA. So a note is consumed exactly once by either path (PRIV-03, PRD 7.2a).
+- Spend and exit share the namespace: both circuits compute the identical `H2(nullifier_secret, label)` from the same note, and both instructions `init` the same `SpentNullifier` PDA. So a note is consumed exactly once by either path (PRIV-03, specification 7.2a).
 - Unlinkability: the observer knows `label` and `precommitment` from the deposit, but `nullifier_hash` additionally depends on the secret `nullifier_secret`.
 - SDK rule: `note_secret != label` (otherwise `precommitment == nullifier_hash` and the public deposit would link to its spend). With random secrets this has negligible probability. The SDK still checks it and re-derives at the next index.
 
@@ -139,7 +139,7 @@ N'.note_secret   = fresh
 new_commitment   = H3(remainder, N.label, H2(N'.nullifier_sec, N'.note_secret))
 ```
 
-A change note is always created, including when `remainder = 0`, so a full spend is not distinguishable on-chain. The circuit can enforce only inequality with the parent's nullifier secret. Freshness is an SDK obligation (section 3.4). The change becomes spendable only after its `insert_leaf` is finalized and the SDK has rebuilt its Merkle witness (PRD 6.2a).
+A change note is always created, including when `remainder = 0`, so a full spend is not distinguishable on-chain. The circuit can enforce only inequality with the parent's nullifier secret. Freshness is an SDK obligation (section 3.4). The change becomes spendable only after its `insert_leaf` is finalized and the SDK has rebuilt its Merkle witness (specification 6.2a).
 
 ### 3.4 SDK key derivation
 
@@ -152,11 +152,11 @@ A change note is always created, including when `remainder = 0`, so a full spend
 | deposit `salt_i` | `veilo/salt/v1/<i>` | 32 | raw 32 bytes |
 | one-time payment key `j` | `veilo/onetime/v1/<j>` | 32 | Ed25519 seed |
 
-Indices are allocated monotonically and persisted durably before first use (PRD 7.3, 9). Deposits and change notes draw from the same `i` counter. A restore MUST NOT reuse an allocated index. The seed alone is not promised to recover every change note; the encrypted backup is authoritative (PRD 9).
+Indices are allocated monotonically and persisted durably before first use (specification 7.3, 9). Deposits and change notes draw from the same `i` counter. A restore MUST NOT reuse an allocated index. The seed alone is not promised to recover every change note; the encrypted backup is authoritative (specification 9).
 
 ---
 
-## 4. Label (PRD 7.2a, verbatim construction)
+## 4. Label (specification 7.2a, verbatim construction)
 
 ```text
 label_preimage = "veilo/label/v1"      14 bytes ASCII  (76 65 69 6c 6f 2f 6c 61 62 65 6c 2f 76 31)
@@ -200,7 +200,7 @@ pub struct WithdrawalIntent {
 }
 ```
 
-Context-only fields (program id, pool, genesis, mint) are taken from the program and PoolState, never from the instruction. No task, agent, workspace, quote or gateway account identifier exists in the intent (PRD 3.3, 7.2).
+Context-only fields (program id, pool, genesis, mint) are taken from the program and PoolState, never from the instruction. No task, agent, workspace, quote or gateway account identifier exists in the intent (specification 3.3, 7.2).
 
 ### 5.2 Serialization and hash
 
@@ -231,7 +231,7 @@ Intent validity rules (program, `spend_private`; SDK MUST pre-check identically)
 2. `relayer = None` implies `relayer_fee == 0` and `relayer_fee_token_account = None`.
 3. `relayer = Some(k)` requires the transaction signer `relayer` account to equal `k`. If `relayer_fee > 0`, then `relayer_fee_token_account = Some(a)` and `a` is a token account of the pinned mint with owner `k`. If `relayer_fee == 0`, then `relayer_fee_token_account = None`.
 4. `relayer_fee <= PoolState.max_relayer_fee`. The default is 0, so the zero-fee default rejects any fee.
-5. Slot bound (PRD 7.2a/7.2b): let `s = Clock::get()?.slot`. Reject if `s > valid_until_slot` (`IntentExpired`). Reject if `valid_until_slot - s > MAX_INTENT_SLOTS` (750) (`IntentTooFarInFuture`). The SDK sets `valid_until_slot <= finalized_slot_observed + 750`. Since the on-chain slot is at least the finalized slot, the on-chain check is never stricter for an honest issuer.
+5. Slot bound (specification 7.2a/7.2b): let `s = Clock::get()?.slot`. Reject if `s > valid_until_slot` (`IntentExpired`). Reject if `valid_until_slot - s > MAX_INTENT_SLOTS` (750) (`IntentTooFarInFuture`). The SDK sets `valid_until_slot <= finalized_slot_observed + 750`. Since the on-chain slot is at least the finalized slot, the on-chain check is never stricter for an honest issuer.
 6. A proof whose intent fields are changed (including `valid_until_slot`) yields a different `context` and fails verification (EXP-01). Putting an old proof in a fresh-blockhash transaction does not extend the bound.
 
 Draft known answers (to be reproduced by `intent[0..1]`). Both use program = `aa`×32, pool = `11`×32, devnet genesis bytes, devnet USDC mint `3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7`, destination token account = `55`×32, destination owner = `66`×32, valid_until_slot = 400000750:
@@ -247,10 +247,10 @@ Draft known answers (to be reproduced by `intent[0..1]`). Both use program = `aa
 
 | Constant | Value | Status |
 |---|---|---|
-| `TREE_DEPTH` (commitment tree) | 16, capacity `TREE_CAPACITY = 65,536` leaves | PRD default; **M2** confirm |
-| `APPROVED_TREE_DEPTH` (approved label tree) | 16 | **Veilo decision (v1)**, matches PRD "approved-set depth matches configured label-tree depth"; **M2** |
-| `ROOT_HISTORY` | 32 commitment roots (newest 32, including current) | PRD default |
-| Approved root history | none: only the current approved root is accepted | PRD 7.2b |
+| `TREE_DEPTH` (commitment tree) | 16, capacity `TREE_CAPACITY = 65,536` leaves | specification default; **M2** confirm |
+| `APPROVED_TREE_DEPTH` (approved label tree) | 16 | **Veilo decision (v1)**, matches specification "approved-set depth matches configured label-tree depth"; **M2** |
+| `ROOT_HISTORY` | 32 commitment roots (newest 32, including current) | specification default |
+| Approved root history | none: only the current approved root is accepted | specification 7.2b |
 
 - Node: `parent = H2(left, right)`. Empty leaf: `0`.
 - Zero values: `Z[0] = 0`, `Z[i+1] = H2(Z[i], Z[i])`. Empty commitment root = empty approved root = `Z[16]`. The program embeds `EMPTY_ROOT = be32(Z[16])` as a constant that is tested against `zeros[16]` in the vectors. It is not recomputed on-chain.
@@ -263,7 +263,7 @@ Capacity (**Veilo decision (v1)**). Let `live = queue_tail - queue_head` and `re
 
 - `deposit` requires `reserved + 1 <= TREE_CAPACITY - CHANGE_RESERVE`, else `TreeCapacityExhausted`.
 - `spend_private` requires `reserved + 1 <= TREE_CAPACITY`, else `TreeCapacityExhausted`.
-- `exit_public` and `refund_pending_deposit` need no capacity, so funds always remain exitable or refundable. Over-capacity paths reject before any transfer. Tree slots are never overwritten (PRD 7.2b).
+- `exit_public` and `refund_pending_deposit` need no capacity, so funds always remain exitable or refundable. Over-capacity paths reject before any transfer. Tree slots are never overwritten (specification 7.2b).
 
 ---
 
@@ -278,7 +278,7 @@ General rules:
 
 ### 7.1 `spend` (depth 16)
 
-Public inputs, in order (6). The order follows PRD 7.2's listing:
+Public inputs, in order (6). The order follows specification 7.2's listing:
 
 | # | Signal | Source on-chain |
 |---|---|---|
@@ -348,7 +348,7 @@ All three fit 2^14; power 15 is kept for headroom. Proving with snarkjs 0.7.6 `g
 
 ## 8. Program `privacy-pool`
 
-Anchor/Rust. Every instruction verifies canonical PDA bumps (`seeds` + `bump` constraints), account owner = program for program accounts, `token_program == spl_token::ID` (original SPL Token, `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`), `mint == PoolState.mint`, and that every pool-scoped account's `pool` field equals the PoolState key (PRD 7.2c). Token-2022 is rejected. There is no `sweep`, `admin_withdraw`, `close_pool` or key-replacement instruction. All arithmetic is `checked_*`. A failing instruction reverts all state, including CPI transfers (Solana transaction atomicity).
+Anchor/Rust. Every instruction verifies canonical PDA bumps (`seeds` + `bump` constraints), account owner = program for program accounts, `token_program == spl_token::ID` (original SPL Token, `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`), `mint == PoolState.mint`, and that every pool-scoped account's `pool` field equals the PoolState key (specification 7.2c). Token-2022 is rejected. There is no `sweep`, `admin_withdraw`, `close_pool` or key-replacement instruction. All arithmetic is `checked_*`. A failing instruction reverts all state, including CPI transfers (Solana transaction atomicity).
 
 ### 8.1 Seeds (exact byte strings)
 
@@ -357,7 +357,7 @@ Anchor/Rust. Every instruction verifies canonical PDA bumps (`seeds` + `bump` co
 | PoolState | `[b"pool", pool_id]` | `pool_id: [u8; 32]` chosen once by the deployer, recorded in the manifest (`POOL_ID`) |
 | VaultAuthority | `[b"vault_authority", pool_state.key()]` | PDA with no data. Signs vault transfers via `invoke_signed` |
 | TokenVault | ATA of (VaultAuthority, mint) under SPL Token | created in `initialize_pool`. No delegate, no close authority |
-| PendingDeposit | `[b"deposit", pool_state.key(), queue_seq.to_le_bytes()]` | `queue_seq: u64` is the "deposit sequence" (PRD 7.2c). It is drawn from the shared queue counter, so deposit sequences have gaps where change records were enqueued |
+| PendingDeposit | `[b"deposit", pool_state.key(), queue_seq.to_le_bytes()]` | `queue_seq: u64` is the "deposit sequence" (specification 7.2c). It is drawn from the shared queue counter, so deposit sequences have gaps where change records were enqueued |
 | SeenPrecommitment | `[b"precommitment", pool_state.key(), precommitment_be32]` | permanent |
 | PendingChange | `[b"change", pool_state.key(), nullifier_hash_be32]` | one per consumed note |
 | SpentNullifier | `[b"nullifier", pool_state.key(), nullifier_hash_be32]` | permanent, shared by spend and exit, never closed |
@@ -452,7 +452,7 @@ Checks, in order:
 
 1. `!deposits_paused`.
 2. `min_deposit <= amount <= max_deposit`.
-3. `liability + amount <= liability_cap` (pending deposits count, per PRD 7.2c).
+3. `liability + amount <= liability_cap` (pending deposits count, per specification 7.2c).
 4. Capacity (section 6) and `live < QUEUE_MAX_LIVE_DEPOSITS`.
 5. `precommitment` canonical and nonzero.
 6. Derive `label` (section 4) and require it nonzero.
@@ -477,7 +477,7 @@ Checks: `record.pool == pool_state`; `record.queue_seq == pool.queue_head`, else
 
 Effects: `record.state = Inserted`, `record.leaf_index = next_leaf_index`; push `new_root` to the history; `next_leaf_index += 1`; `queue_head += 1`. Emit `LeafInserted`.
 
-#### 8.4.5 `skip_refunded_deposit()` (Veilo addition, PRD 7.2b "queue transitions include canceled records deterministically")
+#### 8.4.5 `skip_refunded_deposit()` (Veilo addition, specification 7.2b "queue transitions include canceled records deterministically")
 
 Accounts: `submitter (s)`; `pool_state (m)`; `pending_deposit (m)`.
 
@@ -493,7 +493,7 @@ Checks: signer equals `approval_state.approval_authority`; `new_root` canonical.
 
 Effects: `approved_root = new_root`, `version += 1`, `updated_slot = slot`. Emit `ApprovedRootUpdated`. This instruction touches nothing else.
 
-Prototype approval rule (published): the operator approves labels of finalized, inserted deposits made by the configured synthetic/test participants. There is no sanctions or compliance screening, and none is claimed (PRD 7.2).
+Prototype approval rule (published): the operator approves labels of finalized, inserted deposits made by the configured synthetic/test participants. There is no sanctions or compliance screening, and none is claimed (specification 7.2).
 
 #### 8.4.7 `spend_private(proof, state_root: [u8;32], nullifier_hash: [u8;32], new_commitment: [u8;32], intent: WithdrawalIntent)`
 
@@ -522,7 +522,7 @@ Effects (all-or-nothing):
 
 Accounts: `refund_authority (s)`; `payer (s, m)` (may equal refund_authority); `pool_state (m)`; `vault (m)`; `vault_authority`; `destination (m)` = ATA(refund_authority, mint), initialized; `spent_nullifier (init, seeds)`; `token_program`, `system_program`.
 
-Checks: canonical inputs; `state_root` known; `value > 0`; `label = derive(pool, mint, refund_authority, salt)`, nonzero; `liability >= value`; `EXIT_VK` verifies `[state_root, be32(label), be32(value), nullifier_hash]`. ApprovalState is not read. `deposits_paused` and config do not apply. The global stop does not disable exit (PRD 6.4).
+Checks: canonical inputs; `state_root` known; `value > 0`; `label = derive(pool, mint, refund_authority, salt)`, nonzero; `liability >= value`; `EXIT_VK` verifies `[state_root, be32(label), be32(value), nullifier_hash]`. ApprovalState is not read. `deposits_paused` and config do not apply. The global stop does not disable exit (specification 6.4).
 
 Effects: create `SpentNullifier {kind: 2}`; transfer `value` to destination; `liability -= value`; `cumulative_outflow += value`. Emit `PublicExit`. This works for original and change notes alike, because both carry the original label (PRIV-06, EXIT-01).
 
@@ -534,7 +534,7 @@ Accounts: `config_authority (s)`; `pool_state (m)`.
 
 Checks on the resulting values: `1 <= min_deposit <= max_deposit <= HARD_MAX_DEPOSIT`, `liability_cap <= HARD_LIABILITY_CAP`, `max_relayer_fee <= HARD_MAX_RELAYER_FEE`. A cap below the current liability is allowed; it blocks new deposits only. This instruction cannot change the mint, token program, vault, authorities, roots, queue, nullifiers or verifying keys, cannot move tokens and cannot affect exit. Emit `ConfigUpdated`.
 
-v1 has no authority-rotation instruction. The upgrade authority remains a disclosed risk (PRD 7.2, 7.2c).
+v1 has no authority-rotation instruction. The upgrade authority remains a disclosed risk (specification 7.2, 7.2c).
 
 ### 8.5 Liability and solvency
 
@@ -560,7 +560,7 @@ Field elements are emitted as `[u8;32]`. No note secret, value of a hidden note,
 
 `NonCanonicalFieldElement`, `ZeroValueNotAllowed`, `ZeroLabel`, `ZeroCommitment`, `InvalidGenesis`, `InvalidMint`, `InvalidTokenProgram`, `InvalidTokenAccount`, `InvalidVault`, `InvalidDestination`, `PoolMismatch`, `Unauthorized`, `NotUpgradeAuthority`, `DepositsPaused`, `DepositBelowMinimum`, `DepositAboveMaximum`, `LiabilityCapExceeded`, `TreeCapacityExhausted`, `QueueFull`, `TransferAmountMismatch`, `DepositNotPending`, `InvalidQueueItem`, `NotQueueHead`, `QueueItemNotPending`, `QueueItemNotRefunded`, `UnknownStateRoot`, `InvalidProof`, `PayoutZero`, `AmountOverflow`, `RelayerMismatch`, `RelayerFeeNotAllowed`, `RelayerFeeAccountMismatch`, `IntentExpired`, `IntentTooFarInFuture`, `LiabilityUnderflow`, `ConfigOutOfBounds`.
 
-Off-chain services map these to PRD 11 API codes (e.g. `InvalidMint` → `WRONG_MINT`). On-chain codes are not API codes.
+Off-chain services map these to specification 11 API codes (e.g. `InvalidMint` → `WRONG_MINT`). On-chain codes are not API codes.
 
 ---
 
@@ -597,7 +597,7 @@ The VK uses the same rules: G1 is `x || y` and G2 is `c1 || c0` per coordinate. 
 
 ### 9.3 Verifying keys
 
-VKs are embedded in the binary as `pub const SPEND_VK / INSERT_VK / EXIT_VK: Groth16Verifyingkey<'static>` in `programs/veilo-crypto/src/vk/{spend,insert,exit}.rs`, re-exported as `veilo_crypto::vk::{SPEND_VK, INSERT_VK, EXIT_VK}` with `{SPEND,INSERT,EXIT}_NR_INPUTS`, and wrapped by `veilo_crypto::{verify_spend, verify_insert, verify_exit}` (which call `verify()`). The `privacy-pool` program depends on the `veilo-crypto` crate. `nr_pubinputs` holds the number of public inputs; groth16-solana 0.2.0 does not read it. They are generated from snarkjs `verification_key.json` by a repository script (T06), never edited by hand. No instruction accepts a VK. The manifest records the SHA-256 of each `verification_key.json`, each generated `.rs` file, `.zkey`, `.wasm` and `.r1cs`. A circuit change requires a new program build and a new manifest (PRD 7.2b, 24.1).
+VKs are embedded in the binary as `pub const SPEND_VK / INSERT_VK / EXIT_VK: Groth16Verifyingkey<'static>` in `programs/veilo-crypto/src/vk/{spend,insert,exit}.rs`, re-exported as `veilo_crypto::vk::{SPEND_VK, INSERT_VK, EXIT_VK}` with `{SPEND,INSERT,EXIT}_NR_INPUTS`, and wrapped by `veilo_crypto::{verify_spend, verify_insert, verify_exit}` (which call `verify()`). The `privacy-pool` program depends on the `veilo-crypto` crate. `nr_pubinputs` holds the number of public inputs; groth16-solana 0.2.0 does not read it. They are generated from snarkjs `verification_key.json` by a repository script (T06), never edited by hand. No instruction accepts a VK. The manifest records the SHA-256 of each `verification_key.json`, each generated `.rs` file, `.zkey`, `.wasm` and `.r1cs`. A circuit change requires a new program build and a new manifest (specification 7.2b, 24.1).
 
 ### 9.4 Compute budget (verifier measured M2; full instructions measured in T07)
 
@@ -626,7 +626,7 @@ Instruction-data size for spend is 8 + 256 + 96 + 154 = 514 bytes, comfortably b
 
 ## 10. Deployment manifest (`artifacts/deployment/devnet-manifest.json`)
 
-The manifest is generated by `deploy:devnet` and verified at startup. A mismatch stops proof and payment generation (PRD 7.2b). JSON Schema (draft 2020-12):
+The manifest is generated by `deploy:devnet` and verified at startup. A mismatch stops proof and payment generation (specification 7.2b). JSON Schema (draft 2020-12):
 
 ```json
 {
@@ -729,32 +729,32 @@ Checkers (all run by `pnpm vectors:check`; `pnpm test:circuits` also runs the `g
 
 The section 4 and 5 draft known answers and `poseidon[0]` were reproduced exactly by all checkers; no hand-computed value needed correction. snarkjs 0.7.6 `groth16.verify` also rejects a public signal `x + r` (it does not reduce modulo r). The SDK still checks canonicality before verifying.
 
-Rule: an implementation is correct only if it reproduces every vector. Vectors are never edited to make a test pass (CLAUDE.md, PRD 15).
+Rule: an implementation is correct only if it reproduces every vector. Vectors are never edited to make a test pass (CLAUDE.md, specification 15).
 
 ---
 
-## 12. Deviations from the reference design (zx402 @ 9da88d0, Cardano) and why
+## 12. Protocol design decisions
 
 | # | Reference | Veilo v1 | Reason |
 |---|---|---|---|
-| 1 | BLS12-381, Poseidon255, `circom --prime bls12381` | BN254, circomlib Poseidon | Solana has alt_bn128 and Poseidon syscalls only for BN254 (PRD 7.1) |
+| 1 | BLS12-381, Poseidon255, `circom --prime bls12381` | BN254, circomlib Poseidon | Solana has alt_bn128 and Poseidon syscalls only for BN254 (specification 7.1) |
 | 2 | blake2b_256 for label/context | SHA-256 | `sol_sha256` syscall; one primitive for label and context |
-| 3 | Label from pool NFT, deposit tx id/output index, refund key hash; derived at Insert | Label from PoolState, mint, refund pubkey, salt; derived at deposit | PRD 7.2a fixed construction; no UTXO ids on Solana |
-| 4 | `nullifierHash = H1(nullifier)` | `H2(nullifier_secret, label)` + per-pool PDA | PRD requires pool-scoped nullifier; label carries pool binding with no extra public input |
+| 3 | Label from pool NFT, deposit tx id/output index, refund key hash; derived at Insert | Label from PoolState, mint, refund pubkey, salt; derived at deposit | specification 7.2a fixed construction; no UTXO ids on Solana |
+| 4 | `nullifierHash = H1(nullifier)` | `H2(nullifier_secret, label)` + per-pool PDA | specification requires pool-scoped nullifier; label carries pool binding with no extra public input |
 | 5 | Nullifier set in a Merkle Patricia Forestry root | One `SpentNullifier` PDA per hash | Account `init` gives atomic uniqueness on Solana |
-| 6 | Depth 32, insert batch 4 with in-circuit H3 of deposits | Depth 16, one leaf per insert; deposit H3 computed on-chain via syscall | PRD 7.2 prototype; Poseidon is cheap on Solana (the reference avoided it for Cardano cost) |
-| 7 | Multiple payouts, bps fees, crank fee, fees_accrued, CollectFees, submitter keeps `withdrawn − paid − fee` | One payout + optional relayer fee, `withdrawn == payout + fee` exactly, no protocol fee, no treasury | PRD 6.2a debit equality; zero-fee default; no sweep |
-| 8 | `valid_until` POSIX ms vs tx validity interval | `valid_until_slot` checked against `Clock.slot`, ≤ 750 slots ahead | PRD 7.2a/7.2b |
-| 9 | Intent binds pool + payout addresses | Also binds program id, genesis, mint, destination owner | PRD 7.2 |
-| 10 | Root history 16 | 32 | PRD 7.2b |
-| 11 | Ragequit label from deposit ref and refund key | Exit label re-derived from signer + disclosed salt, payout only to signer's ATA | PRD 7.2a |
+| 6 | Depth 32, insert batch 4 with in-circuit H3 of deposits | Depth 16, one leaf per insert; deposit H3 computed on-chain via syscall | specification 7.2 prototype; Poseidon is cheap on Solana (the reference avoided it for Cardano cost) |
+| 7 | Multiple payouts, bps fees, crank fee, fees_accrued, CollectFees, submitter keeps `withdrawn − paid − fee` | One payout + optional relayer fee, `withdrawn == payout + fee` exactly, no protocol fee, no treasury | specification 6.2a debit equality; zero-fee default; no sweep |
+| 8 | `valid_until` POSIX ms vs tx validity interval | `valid_until_slot` checked against `Clock.slot`, ≤ 750 slots ahead | specification 7.2a/7.2b |
+| 9 | Intent binds pool + payout addresses | Also binds program id, genesis, mint, destination owner | specification 7.2 |
+| 10 | Root history 16 | 32 | specification 7.2b |
+| 11 | Ragequit label from deposit ref and refund key | Exit label re-derived from signer + disclosed salt, payout only to signer's ATA | specification 7.2a |
 | 12 | VKs as immutable script parameters | VKs compiled into an upgradeable program | Solana model; upgrade authority disclosed |
 | 13 | Admin multisig, ASP operator multisig | Single config authority and single approval authority keys | Prototype scope; disclosed |
 | 14 | Circuit public outputs first | All public signals are inputs in declared order | Removes ordering ambiguity |
-| 15 | Deposits refundable while unabsorbed via UTXO spend | `refund_pending_deposit` tombstone + `skip_refunded_deposit` | Deterministic queue (PRD 7.2b) |
-| 16 | Pool cap excludes pending deposits | Pending deposits count toward cap | PRD 7.2c |
+| 15 | Deposits refundable while unabsorbed via UTXO spend | `refund_pending_deposit` tombstone + `skip_refunded_deposit` | Deterministic queue (specification 7.2b) |
+| 16 | Pool cap excludes pending deposits | Pending deposits count toward cap | specification 7.2c |
 
-The reference's Cardano validators, byte orders, NFT genesis, BLS artifacts and test-vector answers are not reused (PRD 23).
+The reference's Cardano validators, byte orders, NFT genesis, BLS artifacts and test-vector answers are not reused (specification 23).
 
 ---
 
@@ -767,7 +767,7 @@ The reference's Cardano validators, byte orders, NFT genesis, BLS artifacts and 
 5. ~~Confirm circom public-signal order.~~ Done in T06: `circuits/test/artifacts.test.ts` asserts that wires 1..n of each compiled `.sym` are the declared public inputs in order, and every proof test asserts that snarkjs `publicSignals` equal the witness's expected order.
 6. `groth16-solana` 0.2.0 has no audit claim in its README (it is provided "as-is"). light-poseidon reports a Veridise audit. Record this in docs/security.md.
 7. The program cannot read the genesis hash on-chain. Binding relies on the compile-time `EXPECTED_GENESIS`, the stored value and off-chain RPC checks. Program-id reuse on another cluster is mitigated only by those checks.
-8. Devnet USDC freeze authority can freeze the vault. Disclose this, or use a demo mint without a freeze authority (labeled, PRD 8.1).
+8. Devnet USDC freeze authority can freeze the vault. Disclose this, or use a demo mint without a freeze authority (labeled, specification 8.1).
 9. The insert crank is a single submitter. Concurrent insert proofs race on `current_root`, and the loser must re-prove.
 10. Event log truncation: switch to `emit_cpi!` if logs prove unreliable for the indexer.
 11. If the Poseidon syscall misbehaves on the target runtime, fall back to computing the deposit leaf `H3(v, l, x)` in the insert circuit, with `leaf` replaced by `value, label, precommitment` and 6 public inputs. That fallback is a protocol revision.
@@ -852,4 +852,3 @@ over the template in `packages/contracts/src/marketplace/mcp-templates.ts`. A ca
 - groth16-solana proof-A negation in tests: https://github.com/Lightprotocol/groth16-solana/blob/master/src/groth16.rs
 - circom main component and public inputs: https://docs.circom.io/circom-language/the-main-component/
 - Solana PDAs and CPI: https://solana.com/docs/core/pda, https://solana.com/docs/core/cpi
-- zx402 reference (pinned): https://github.com/Marcussy34/zx402/tree/9da88d099bb1ad28c0de3e2b0b7e15e2a1fd198d (docs/SPEC.md sections 4–6; circuits/src/spend.circom, insert.circom, ragequit.circom). Lineage: Privacy Pools; MIT license notices preserved per PRD 18.

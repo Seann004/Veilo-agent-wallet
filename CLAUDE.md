@@ -16,7 +16,7 @@ Build Veilo as a Solana-devnet multi-agent workspace with a real ZK private pool
 
 - Write comments only when they clarify an invariant, non-obvious behavior or a necessary constraint.
 - Keep comments short, accurate and specific to this codebase. Do not narrate obvious code.
-- Do not mention the PRD, zx402, this conversation, implementation tasks or AI generation in explanatory source comments.
+- Do not mention external planning documents, reference projects, this conversation, implementation tasks or AI generation in explanatory source comments.
 - Explain what the code guarantees or why an edge case matters. Do not claim safety, privacy or performance beyond what the implementation proves.
 - Keep architectural context in documentation. Keep reference attribution in README, NOTICE and license files; preserve legally required notices in reused code.
 

@@ -45,7 +45,7 @@ describe("release whose relayer request was never recorded", () => {
   });
 });
 
-describe("expired_unsettled, then a new attempt of the same logical operation (PRD 8.2a step 5)", () => {
+describe("expired_unsettled, then a new attempt of the same logical operation", () => {
   it("after the bound passes with the nullifier unused, a new attempt gets a new proof and fresh wallet; the old proof is never resent", async () => {
     await depositAndApprove(world, w, 1_000_000n);
     world.relayer.mode = "error_unrecorded";

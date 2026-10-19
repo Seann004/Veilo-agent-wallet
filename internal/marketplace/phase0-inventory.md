@@ -47,12 +47,12 @@ The handoff is sound on authority boundaries, money handling and privacy wording
 2. **Managed hosting means running untrusted seller configuration on operator infrastructure.** The handoff calls for isolation, egress control and metadata-endpoint blocking (§9). Nothing in the repo provides container isolation, because the runner is a local Node process. Phase 2 is underspecified on the sandbox technology, which is the hard part.
 3. **Prepaid with no escrow plus seller-funded refunds means buyers carry all delivery risk.** The handoff discloses this honestly. For a demo with test tokens it's acceptable; for anything real it is the main product risk.
 4. **Login wallet vs funding privacy.** Supabase Web3 login links the login wallet to the account, and therefore to jobs and sellers. Pool privacy protects deposit → payment linkage on chain, but the marketplace operator sees the buyer → seller relationship anyway. §8 says this, and the UI must say it too.
-5. **Supabase is a new hard dependency.** The PRD forbids requiring it. If the owner adopts it, the local-only P0 must keep working without it, or the PRD must change.
+5. **Supabase is a new hard dependency.** The specification forbids requiring it. If the owner adopts it, the local-only P0 must keep working without it, or the specification must change.
 6. **Exactly-once across cloud and local.** Each quote/job lives in Postgres while each purchase lives in local SQLite. The binding (operation ID ↔ quote digest) needs an explicit two-phase protocol through outbox/inbox. The handoff names it but leaves the protocol undefined. This is where duplicate-payment bugs will appear.
 
 ## 5. Owner decisions needed before Phase 1
 
-1. Is the marketplace a post-P0 track, or does it change the submission scope? If it changes scope, amend `PRD_latest.md` (Supabase, multi-party) so `CLAUDE.md`'s "read the PRD" rule stays consistent.
+1. Is the marketplace a post-P0 track, or does it change the submission scope? If it changes scope, amend `PRD_latest.md` (Supabase, multi-party) so `CLAUDE.md`'s "read the specification" rule stays consistent.
 2. Should Supabase be adopted at all for the first slice? A local-only catalogue (a static JSON of reviewed listings) proves discovery and hiring without it.
 3. Hosting model for v1: remote seller endpoints only (recommended), or managed templates too (needs a sandbox plus per-listing gateway `payTo`).
 4. Which Supabase project to use, if any. Nothing has been created or migrated.

@@ -1,6 +1,6 @@
 # Specialist-agent marketplace
 
-**Status: implemented in code on `main`; devnet acceptance is incomplete.** PRD v3.2 §26 adds this marketplace to the existing private-wallet workspace without removing the original payment, privacy or recovery requirements. Identity and data isolation pass the live RLS end-to-end script (84/84), and a direct hire with a **publicly funded** payer settled on Solana devnet. A hire funded from the private pool, a devnet workflow run and live refunds are **not yet run**. [Current status](./status.md) and [marketplace triage](./marketplace-triage.md) record the gates.
+**Status: implemented in code on `main`; devnet acceptance is incomplete.** The marketplace extends the existing private-wallet workspace without removing the original payment, privacy or recovery requirements. Identity and data isolation pass the live RLS end-to-end script (84/84), and a direct hire with a **publicly funded** payer settled on Solana devnet. A hire funded from the private pool, a devnet workflow run and live refunds are **not yet run**. [Current status](./status.md) and [marketplace triage](./marketplace-triage.md) record the gates.
 
 ## Buy work or offer a specialist
 

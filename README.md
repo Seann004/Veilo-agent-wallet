@@ -1,6 +1,6 @@
 # Veilo
 
-Veilo is a single-owner workspace for AI agents on Solana devnet. Owners configure jobs, approved services and spending limits; an independent control/wallet service authorizes purchases. A Groth16 note pool can fund fresh payment wallets, which make ordinary x402 merchant transfers. PRD v3.2 adds a marketplace where buyers hire reviewed specialist agents and run published workflows, and sellers receive direct payments; it is implemented in code on `main`, with devnet acceptance still incomplete. The owner retains local attribution; amounts, wallets, merchant payments and timing remain public.
+Veilo is a single-owner workspace for AI agents on Solana devnet. Owners configure jobs, approved services and spending limits; an independent control/wallet service authorizes purchases. A Groth16 note pool can fund fresh payment wallets, which make ordinary x402 merchant transfers. The marketplace lets buyers hire reviewed specialist agents and run published workflows, and sellers receive direct payments; it is implemented in code on `main`, with devnet acceptance still incomplete. The owner retains local attribution; amounts, wallets, merchant payments and timing remain public.
 
 ## Current status
 
@@ -14,7 +14,7 @@ Amounts are USDC on **Solana devnet**. Full detail: [current status](docs/guide/
 
 This is an unaudited prototype with a deterministic development trusted setup whose toxic waste is derivable. Use Solana devnet funds only. Local caps are off-chain controls; pool membership is not an anonymity score. See [current status](docs/guide/status.md), [build status](docs/build-status.md) and [known risks](docs/security/risks.md).
 
-## Marketplace (PRD v3.2)
+## Marketplace
 
 Reviewed specialist listings, seller onboarding, one specialist per hire, private jobs/deliverables/receipts, published workflows over reviewed tools, read-only MCP connectors, direct x402 seller payments with an explicit zero platform fee, and earnings shown as finalized receipt history. Supabase Auth/Postgres/private Storage hold marketplace identity and product data; local control/wallet remain the spending authority. Every workspace still has one owner, and the local stack runs without Supabase.
 
@@ -128,9 +128,3 @@ npm run preview
 ```
 
 Default base: `/Veilo-agent-wallet/`; use `DOCS_BASE=/ npm run build` for a custom domain root. Builds regenerate `llms.txt`, the intentional `llms.text` compatibility alias and `llms-full.txt`. Documentation builds do not execute product tests.
-
-## Attribution and license status
-
-[zx402](https://github.com/Marcussy34/zx402) by Marcus Tan is the architectural reference (snapshot `9da88d099bb1ad28c0de3e2b0b7e15e2a1fd198d`): note pools, proof-based withdrawal, hidden change, fresh-payer x402 and owner exit. Privacy Pools supplies architectural lineage; Veilo does not claim invention of these ideas. Original Cardano transactions are not Veilo Solana evidence.
-
-[NOTICE](NOTICE) preserves the upstream MIT notice and identifies reused/adapted sources and dependency licenses. The [source/license map](docs/references/attribution.md) records direct dependencies and review gaps. **The owner has not selected Veilo's own license; no root LICENSE is assigned here.** Dependency licenses, including GPL components, retain their own terms.

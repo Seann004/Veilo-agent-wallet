@@ -362,7 +362,7 @@ Proof latency on this host: spend ≈1.0 s, exit ≈0.55 s, insert 0.8–2.8 s (
 
 Requirements: Docker running, `target/deploy/privacy_pool.so` built and `circuits/build` present (`pnpm test:circuits`). The command writes `artifacts/evidence/integration-<date>.json` with:
 
-- counts, environment and PRD IDs
+- counts, environment and specification IDs
 - failed and skipped tests
 - per-scenario evidence
 
@@ -376,7 +376,7 @@ Extra arguments go to vitest, for example `--bail=1`.
 
 ## Demo run (`pnpm demo:run`)
 
-`pnpm demo:run` drives the PRD §16 script through the real backend services: control, runner, wallet, relayer and gateway as processes. No dashboard events are faked.
+`pnpm demo:run` drives the specification §16 script through the real backend services: control, runner, wallet, relayer and gateway as processes. No dashboard events are faked.
 
 - **Demo owner:** the funding wallet (`FUNDING_KEY_PATH`). It signs the owner session challenge, the deposits and the exit.
 - **Isolation:** each run gets its own control, gateway, relayer and wallet databases and service credentials under `work/demo/devnet/<runId>/`.

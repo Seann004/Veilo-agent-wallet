@@ -1,6 +1,6 @@
 # Evidence and current status
 
-Reviewed on 19 October 2026 against source `b155f17`, based on merged `main` `55e6404`, plus the accompanying submission documentation. Recorded results are not an independent audit. The PRD describes requirements, not completion. USDC payments use **Solana devnet** test tokens with no monetary value. CoinGecko market data concerns real public market prices and is separate from devnet pool pricing.
+Reviewed on 19 October 2026 against source `b155f17`, based on merged `main` `55e6404`, plus the accompanying submission documentation. Recorded results are not an independent audit. The specification describes requirements, not completion. USDC payments use **Solana devnet** test tokens with no monetary value. CoinGecko market data concerns real public market prices and is separate from devnet pool pricing.
 
 ## Checks on the reviewed tree
 

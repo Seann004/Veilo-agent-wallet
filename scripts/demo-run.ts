@@ -266,7 +266,7 @@ function demoGatewayDbs(): string[] {
 }
 
 function printPlan(): void {
-  log("\nPlan (backend paths, PRD §16):");
+  log("\nPlan (backend paths):");
   log(`  a. owner deposits ${DEPOSITS.map((d) => usdc(d)).join(" + ")} as separate notes; relayer inserts; approval authority approves the owner's labels`);
   log(`  b. Shawn: gateway credits start at 0 (< 200,000 threshold); "Check now" runs the scheduled check → private pool → fresh wallet → x402 ${usdc(CREDIT_PACK)} → one 1,000,000-credit issuance`);
   log(`  c. Prince: research task; buys research-expanded (${usdc(RESEARCH)}) or research-basic (${usdc(RESEARCH_BASIC)}) via private x402; analyze via prepaid credits (real bounded inference); cited brief; requests a handoff to Mira`);

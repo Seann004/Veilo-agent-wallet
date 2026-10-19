@@ -15,7 +15,7 @@ Recovery and owner exit remain available through their separate authenticated pa
 
 ## Marketplace approval and offline control
 
-PRD v3.2 keeps every local limit in force for specialist hires. A cloud identity session or cloud policy record cannot authorize spending: local control must install/acknowledge policy proposals and validate an approved seller plus immutable listing/payout/quote/runtime versions. A changed recipient or unapproved seller must stop locally. Concurrent hires share the same local allowance authority.
+Specialist hiring keeps every local limit in force for specialist hires. A cloud identity session or cloud policy record cannot authorize spending: local control must install/acknowledge policy proposals and validate an approved seller plus immutable listing/payout/quote/runtime versions. A changed recipient or unapproved seller must stop locally. Concurrent hires share the same local allowance authority.
 
 The required cloud connection uses authenticated, digest-bound, expiring requests initiated outbound by local control. New automatic spending pauses when control is offline; already released authority remains live exposure. Local approval bound to the operation, quote digest, recipient and total, owner-installed listing grants, concurrent-cap checks and revocation are implemented and unit-tested against fakes; lease and callback rules pass the live RLS e2e script. An offline-controller drill and a devnet run of these paths are still outstanding. See [triage](./marketplace-triage.md).
 
