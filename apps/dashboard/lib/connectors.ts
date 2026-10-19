@@ -176,7 +176,7 @@ export interface ConnectorProposal {
   id: string;
   title: string;
   endpoint: string;
-  tools: Array<{ name: string; description: string; inputSchema: Record<string, unknown> }>;
+  tools: Array<{ name: string; description: string; inputSchema: Record<string, unknown>; template?: { upstream: string; codeSha256: string; upstreamSha256: string } }>;
 }
 
 export function proposeConnector(p: ConnectorProposal): Promise<{ connectorId: string; status: string }> {
@@ -384,4 +384,17 @@ export async function attachMany(agentId: string, items: Array<{ connectorId: st
     }
     return { connectorId: item.connectorId, state: confirmed?.has(item.connectorId) ? "connected" : "unconfirmed" };
   });
+}
+
+
+export interface TemplateConnectorPreview {
+  connectorId: string;
+  title: string;
+  endpoint: string;
+  explanation: string;
+  tools: ConnectorProposal["tools"];
+}
+
+export function previewTemplateConnector(endpoint: string): Promise<TemplateConnectorPreview> {
+  return marketplace("/tools/connectors/template-preview", { method: "POST", body: { endpoint }, signedIn: true });
 }

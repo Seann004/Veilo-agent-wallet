@@ -382,6 +382,33 @@ describe("templated connector tools", () => {
     expect((await t.call(`/agents/${t.env.agents.Prince.id}/connectors`, { headers: t.owner })).body.attached[0].status).toBe("changed");
   });
 
+  it("previews a CoinGecko proposal from the live list: templates pinned to execute, never execute itself", async () => {
+    const t = await ready();
+    const r = await t.call("/connectors/template-preview", { method: "POST", headers: t.owner, body: { endpoint: "https://mcp.api.coingecko.com/mcp/" } });
+    expect(r.status).toBe(200);
+    expect(t.endpoints).toEqual([COINGECKO]);
+    expect(r.body).toMatchObject({ connectorId: "coingecko-market", title: "CoinGecko market data", endpoint: COINGECKO, explanation: expect.stringMatching(/never code/) });
+    expect(r.body.tools.map((x: Json) => x.name)).toEqual(["coingecko_simple_price", "coingecko_trending", "coingecko_search"]);
+    expect(r.body.tools[0]).toEqual({ ...PRICE, sha256: mcpToolDigest(PRICE) });
+    expect(r.body.omitted).toEqual([
+      { name: "execute", reason: "runs caller-supplied code; Veilo offers its fixed queries instead" },
+      { name: "other", reason: "not on Veilo's reviewed list for this server" },
+    ]);
+    // The fake lists no search_docs, so the preview says so instead of inventing it.
+    expect(r.body.missing).toEqual(["search_docs"]);
+  });
+
+  it("previews only registered template servers and only for the owner", async () => {
+    const t = await ready();
+    const other = await t.call("/connectors/template-preview", { method: "POST", headers: t.owner, body: { endpoint: "https://mcp.example.com/mcp" } });
+    expect(other.status).toBe(403);
+    expect(other.body.error.message).toMatch(/no fixed queries/);
+    const worker = await t.call("/connectors/template-preview", { method: "POST", headers: { authorization: `Bearer ${t.token}` }, body: { endpoint: COINGECKO } });
+    expect(worker.status).toBe(403);
+    expect((await t.call("/connectors/template-preview", { method: "POST", body: { endpoint: COINGECKO } })).status).toBe(401);
+    expect(t.endpoints).toEqual([]);
+  });
+
   it("refuses a templated pin whose template code or host does not match this build", async () => {
     const stale = { ...PRICE, template: { ...PRICE.template, codeSha256: "0".repeat(64) } };
     const t = await ready([marketEntry([stale]), { ...marketEntry(), id: "lookalike", endpoint: "https://mcp.coingecko.example/mcp" }]);

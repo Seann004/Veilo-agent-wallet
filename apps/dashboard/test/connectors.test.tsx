@@ -3,10 +3,11 @@ import { clearResourceCache } from "../components/hooks";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentConnectors } from "../components/AgentConnectors";
+import { AddCustomDialog } from "../components/ConnectorFlows";
 import { ConnectorsPage } from "../components/Connectors";
 import { CreateAgent } from "../components/CreateAgent";
 import { ApiError } from "../lib/api";
-import { endpointProblem, isNotAvailable, parseInputSchema, parseToolsList, reviewChip, validateProposal } from "../lib/connectors";
+import { endpointProblem, isNotAvailable, parseInputSchema, parseToolsList, reviewChip, setMarketplaceTokenSource, validateProposal } from "../lib/connectors";
 import { withRole } from "./access-fixtures";
 import { MIRA, PRINCE, SHAWN, agent, workspace } from "./fixtures";
 
@@ -65,6 +66,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+  setMarketplaceTokenSource(null);
 });
 
 const cards = () => screen.getAllByRole("listitem").filter((li) => li.classList.contains("connector-card"));
@@ -420,5 +422,31 @@ describe("create agent with connectors", () => {
     await waitFor(() => expect(screen.queryByText(/couldn.t be added/)).toBeNull());
     expect(calls.filter((c) => c.method === "PUT").map((c) => c.url.split("/").at(-1))).toEqual(["solana-developer-docs", "meteora-docs", "meteora-docs"]);
     expect(screen.getAllByText(/Connected/)).toHaveLength(2);
+  });
+});
+
+
+describe("CoinGecko fixed-query proposal", () => {
+  it("loads and submits the fixed pins, never a code editor or an approval", async () => {
+    setMarketplaceTokenSource(async () => "marketplace-test-session");
+    const endpoint = "https://mcp.api.coingecko.com/mcp";
+    const tools = [{ name: "coingecko_simple_price", description: "Get a price", inputSchema: { type: "object" }, template: { upstream: "execute", codeSha256: "a".repeat(64), upstreamSha256: "b".repeat(64) } }, { name: "search_docs", description: "Search docs", inputSchema: { type: "object" } }];
+    const calls = serve(c => {
+      if (c.url.endsWith("/template-preview")) return { body: { connectorId: "coingecko-market", title: "CoinGecko market data", endpoint, explanation: "Fixed queries", tools } };
+      if (c.url.endsWith("/tools/connectors")) return { body: { connectorId: "coingecko-market", status: "pending" } };
+      return undefined;
+    });
+    render(<AddCustomDialog onClose={() => {}} />);
+    fireEvent.change(screen.getByLabelText("Endpoint (https)"), { target: { value: endpoint } });
+    expect(screen.getByText(/Veilo runs fixed CoinGecko queries/)).toBeTruthy();
+    expect(screen.queryByLabelText("Input schema (JSON)")).toBeNull();
+    expect((screen.getByRole("button", { name: "Submit for review" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Load fixed queries" }));
+    await screen.findByText("coingecko_simple_price");
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+    await screen.findByText(/Submitted/);
+    expect(calls.map(c => c.url)).toEqual([`${MARKET}/tools/connectors/template-preview`, `${MARKET}/tools/connectors`]);
+    expect(calls[1]!.body).toEqual({ id: "coingecko-market", title: "CoinGecko market data", endpoint, tools });
+    expect(screen.getByText("In review")).toBeTruthy();
   });
 });

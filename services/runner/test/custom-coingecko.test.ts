@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mcpToolDigest, templatedToolPin, type McpToolPin } from "@veilo/contracts/marketplace";
+import { mcpTemplateServer, mcpToolDigest, templateServerTools, type McpToolPin } from "@veilo/contracts/marketplace";
 import { McpClient } from "@veilo/mcp-client";
 import { FakeMcp } from "@veilo/mcp-client/testing";
 import { runCreditCheck } from "../../control/src/agents/shawn";
@@ -14,7 +14,8 @@ const EXECUTE_TOOL: McpToolPin = {
   description: "Run TypeScript against the CoinGecko SDK client",
   inputSchema: { type: "object", properties: { code: { type: "string" }, intent: { type: "string" } }, required: ["code"] },
 };
-const PRICE = templatedToolPin("coingecko_simple_price", mcpToolDigest(EXECUTE_TOOL));
+// What the Connectors page proposes for the CoinGecko server and the operator approves, built from its live list.
+const OFFERED = templateServerTools(mcpTemplateServer("coingecko-market")!, [EXECUTE_TOOL]).tools;
 const OBJECTIVE = "What's the BTC price right now?";
 
 let s: Stack | undefined;
@@ -35,7 +36,7 @@ describe("custom agent reading live prices through a templated connector tool", 
       connectors: (ledger) =>
         new AgentConnectors({
           ledger,
-          catalog: async () => [{ id: "coingecko-market", endpoint: "https://mcp.api.coingecko.com/mcp", risk: "read_only", tools: [{ ...PRICE, sha256: mcpToolDigest(PRICE) }] }],
+          catalog: async () => [{ id: "coingecko-market", endpoint: "https://mcp.api.coingecko.com/mcp", risk: "read_only", tools: OFFERED.map((t) => ({ ...t, sha256: mcpToolDigest(t) })) }],
           client: () => new McpClient(fake.url),
           limits: { perTask: 5, perAgentDay: 50, maxTextChars: 16_000 },
         }),
@@ -80,7 +81,7 @@ describe("custom agent reading live prices through a templated connector tool", 
       return undefined;
     };
     const owner = await st.login();
-    expect((await st.call(`/agents/${nova.id}/connectors/coingecko-market`, { method: "PUT", headers: st.ownerHeaders(owner), body: { tools: ["coingecko_simple_price"] } })).status).toBe(200);
+    expect((await st.call(`/agents/${nova.id}/connectors/coingecko-market`, { method: "PUT", headers: st.ownerHeaders(owner), body: { tools: OFFERED.map((t) => t.name) } })).status).toBe(200);
     const run = await st.call(`/agents/${nova.id}/run`, { method: "POST", headers: st.ownerHeaders(owner), body: { objective: OBJECTIVE, input: {} } });
     expect(run.status).toBe(202);
 
@@ -96,6 +97,7 @@ describe("custom agent reading live prices through a templated connector tool", 
     expect(plannerPrompts[0]).toMatch(/<<<CONNECTOR_OUTPUT_[0-9a-f]{24}\n- connectorId=coingecko-market tool=coingecko_simple_price: Live price/);
     expect(plannerPrompts[0]).toContain('"pattern":"^[a-z0-9-]{1,64}$"');
     expect(plannerPrompts[0]).not.toMatch(/tool=execute/);
+    for (const name of ["coingecko_trending", "coingecko_search"]) expect(plannerPrompts[0]).toContain(`tool=${name}`);
     // Upstream received only the fixed template with the validated id.
     expect(fake.calls).toEqual([{ code: 'async function run(client) { return await client.simple.price.get({"ids":"bitcoin","vs_currencies":"usd","include_24hr_change":true}); }' }]);
     const analysis = analyzeInputs.find((x) => x.includes('"usd":81099'));

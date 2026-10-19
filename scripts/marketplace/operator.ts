@@ -17,7 +17,7 @@
 import { readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { findRepoRoot, loadDotEnv } from "@veilo/contracts";
-import { mcpToolDigest, type McpToolPin } from "@veilo/contracts/marketplace";
+import { mcpToolDigest, mcpToolPinProblem, type McpToolPin } from "@veilo/contracts/marketplace";
 import { McpClient } from "@veilo/mcp-client";
 
 const rootDir = findRepoRoot();
@@ -57,7 +57,18 @@ const actions: Record<string, () => Promise<unknown>> = {
     const client = new McpClient(c.endpoint, { publicOnly: true });
     await client.initialize();
     const live = new Map((await client.listTools()).map((t) => [t.name, mcpToolDigest(t)]));
-    return { endpoint: c.endpoint, tools: c.tools.map((t) => ({ name: t.name, proposed: mcpToolDigest(t), live: live.get(t.name) ?? null, matches: live.get(t.name) === mcpToolDigest(t) })) };
+    return {
+      endpoint: c.endpoint,
+      tools: c.tools.map((t) => {
+        const problem = mcpToolPinProblem(t, c.endpoint);
+        // A templated tool is not listed by the server; its pin records the upstream code tool's digest instead.
+        if (t.template) {
+          const upstream = live.get(t.template.upstream) ?? null;
+          return { name: t.name, template: t.template.upstream, proposedUpstream: t.template.upstreamSha256, liveUpstream: upstream, problem, matches: problem === null && upstream === t.template.upstreamSha256 };
+        }
+        return { name: t.name, proposed: mcpToolDigest(t), live: live.get(t.name) ?? null, problem, matches: problem === null && live.get(t.name) === mcpToolDigest(t) };
+      }),
+    };
   },
 };
 const action = cmd ? actions[cmd] : undefined;

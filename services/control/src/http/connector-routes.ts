@@ -10,6 +10,7 @@ const toolName = z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/);
 const attachSchema = z
   .object({ tools: z.array(toolName).min(1).max(32).refine((t) => new Set(t).size === t.length, "tool names must be unique") })
   .strict();
+const previewSchema = z.object({ endpoint: z.string().min(1).max(300) }).strict();
 const callSchema = z
   .object({ taskId: z.uuid(), connectorId, tool: toolName, args: z.record(z.string(), z.unknown()) })
   .strict();
@@ -57,6 +58,11 @@ export function connectorRouter(deps: AuthDeps & { connectors?: AgentConnectors 
 
   r.get("/agents/:id/connectors", owner, (req, res) => {
     res.json(connectors().list(ownerOf(res).workspaceId, agentParam(req)));
+  });
+
+  r.post("/connectors/template-preview", owner, async (req, res) => {
+    ownerOf(res);
+    res.json(await connectors().templatePreview(parse(previewSchema, req.body).endpoint));
   });
 
   r.put("/agents/:id/connectors/:connectorId", owner, async (req, res) => {

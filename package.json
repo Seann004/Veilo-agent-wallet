@@ -36,6 +36,7 @@
     "marketplace:devnet-smoke": "tsx scripts/marketplace/devnet-smoke.ts",
     "marketplace:operator": "tsx scripts/marketplace/operator.ts",
     "marketplace:seed": "tsx scripts/marketplace/seed-workflows.ts",
+    "marketplace:connector": "tsx scripts/marketplace/connector.ts",
     "marketplace:carousel-preflight": "tsx scripts/marketplace/carousel-preflight.ts"
   },
   "devDependencies": {
