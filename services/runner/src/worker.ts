@@ -43,15 +43,17 @@ export async function runOnce(cred: AgentCredential, o: WorkerOptions): Promise<
   let leaseLost = false;
   let inflight: Promise<void> = Promise.resolve();
   const beat = setInterval(() => {
-    inflight = inflight.then(() =>
-      client.heartbeat(job.id, o.workerId, version, leaseMs).then(
-        (r) => {
-          if (r.status === 200) version = r.body.job.version as string;
-          else leaseLost = true;
-        },
-        () => undefined,
-      ),
-    );
+    inflight = inflight.then(async () => {
+      if (leaseLost) return;
+      try {
+        const r = await client.heartbeat(job.id, o.workerId, version, leaseMs);
+        if (r.status === 200 && typeof r.body?.job?.version === "string") version = r.body.job.version;
+        // Control rejects a missing/scoped job or stale/expired lease with 404/403/409.
+        else if ([403, 404, 409].includes(r.status)) leaseLost = true;
+      } catch {
+        // A transient transport failure leaves completion to validate the last known version.
+      }
+    });
   }, Math.max(1_000, Math.floor(leaseMs / 3)));
   beat.unref();
 
