@@ -123,7 +123,7 @@ function AddMenu({ disabled, reason, onCustom }: { disabled: boolean; reason: st
             <Icon name="plug" size={16} />
             <span>
               Custom MCP server
-              <span className="menu-hint">Keyless, read-only, reviewed before use</span>
+              <span className="menu-hint">Paste a URL to add to your workspace</span>
             </span>
           </button>
           <button type="button" role="menuitem" className="menu-item" tabIndex={-1} aria-disabled="true" onClick={(e) => e.preventDefault()}>
@@ -198,7 +198,7 @@ function ApprovedTools({ connectors, query, map, canEdit, onOpen, onAttach }: { 
   if (connectors.loading && !connectors.data) return <Loading label="connectors" />;
   if (connectors.error && !connectors.data) return <ErrorNotice error={connectors.error} what="connectors could not be loaded" onRetry={connectors.reload} />;
   const all = connectors.data ?? [];
-  if (all.length === 0) return <EmptyState>No connectors are approved yet. Propose one with Add → Custom MCP server.</EmptyState>;
+  if (all.length === 0) return <EmptyState>No connectors yet. Add one with Add → Custom MCP server.</EmptyState>;
   const shown = all.filter((c) => matchesQuery(c, query));
   if (shown.length === 0) return <EmptyState>No connectors match “{query.trim()}”.</EmptyState>;
   return (
@@ -316,7 +316,7 @@ function Yours({ connectors, map, mapError, mapLoading, reloadMap, isOwner, quer
       {hasMarketplaceSignIn() ? (
         <section className="connector-section" aria-labelledby="yours-proposals">
           <h2 id="yours-proposals" className="section-title">
-            Your proposals
+            Marketplace submissions
           </h2>
           <Proposals query={query} />
         </section>

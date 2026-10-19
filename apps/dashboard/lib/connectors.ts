@@ -18,6 +18,7 @@ export interface Connector {
   transport?: string;
   manifest_sha256?: string;
   risk?: string;
+  scope?: string;
   tools: ConnectorTool[];
 }
 
@@ -146,9 +147,13 @@ function toolsOf(v: unknown): ConnectorTool[] {
 }
 
 /** Approved connectors only. Fields are coerced to strings so nothing but text reaches the page. */
-export async function listConnectors(): Promise<Connector[]> {
-  const r = await marketplace<{ connectors?: unknown }>("/marketplace/connectors");
-  const list = Array.isArray(r?.connectors) ? r.connectors : [];
+export async function listConnectors(includePersonal = false): Promise<Connector[]> {
+  const results = await Promise.allSettled([
+    marketplace<{ connectors?: unknown }>("/marketplace/connectors"),
+    ...(includePersonal ? [api<{ connectors?: unknown }>("control", "/connectors/custom")] : []),
+  ]);
+  const list = results.flatMap((result) => result.status === "fulfilled" && Array.isArray(result.value?.connectors) ? result.value.connectors : []);
+  if (results.every((result) => result.status === "rejected")) throw (results[0] as PromiseRejectedResult).reason;
   return list.filter(isRecord).map((c) => ({
     id: str(c.id),
     title: c.id === "coingecko-docs" ? "CoinGecko docs search only" : str(c.title),
@@ -156,6 +161,7 @@ export async function listConnectors(): Promise<Connector[]> {
     transport: str(c.transport),
     manifest_sha256: str(c.manifest_sha256),
     risk: str(c.risk),
+    scope: str(c.scope),
     tools: toolsOf(c.tools),
   }));
 }

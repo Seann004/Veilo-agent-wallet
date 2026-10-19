@@ -43,6 +43,8 @@ export const ROUTES: Record<UpstreamService, Route[]> = {
     r("PUT", `/agents/${ID}/connectors/${CONNECTOR}`),
     r("DELETE", `/agents/${ID}/connectors/${CONNECTOR}`),
     r("POST", "/connectors/template-preview"),
+    r("GET", "/connectors/custom"),
+    r("POST", "/connectors/custom"),
     r("GET", `/purchases/${ID}`),
     r("POST", `/purchases/${ID}/(decision|reconcile)`),
     r("GET", "/content"),

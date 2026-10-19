@@ -36,6 +36,19 @@ const req = (path: string, init: { method?: string; headers?: Record<string, str
   });
 
 describe("dashboard proxy", () => {
+  it("forwards personal connector discovery with owner session and CSRF", async () => {
+    const u = upstream();
+    const headers = { origin: ORIGIN, "sec-fetch-site": "same-origin", cookie: "veilo_session=vos_o; veilo_csrf=tokO", "x-csrf-token": "tokO" };
+    for (const method of ["GET", "POST"]) {
+      const res = await proxy(req("control/connectors/custom", { method, headers, ...(method === "POST" ? { body: { endpoint: "https://example.com/mcp" } } : {}) }), "control", ["connectors", "custom"], { config, fetchImpl: u.fetchImpl });
+      expect(res.status).toBe(200);
+    }
+    expect(u.seen.map((s) => [s.method, s.url, s.headers.get("cookie")])).toEqual([
+      ["GET", "http://127.0.0.1:4101/connectors/custom", "veilo_session=vos_o"],
+      ["POST", "http://127.0.0.1:4101/connectors/custom", "veilo_session=vos_o"],
+    ]);
+    expect(u.seen[1]!.headers.get("x-csrf-token")).toBe("tokO");
+  });
   it("forwards the session cookie, CSRF header and dashboard Origin to control, and nothing else", async () => {
     const u = upstream();
     const res = await proxy(

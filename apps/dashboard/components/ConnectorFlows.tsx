@@ -1,39 +1,28 @@
 "use client";
 
-import { mcpTemplateServerFor } from "@veilo/contracts/marketplace";
 import { brandForConnector, type Brand } from "../lib/brands";
 import { useEffect, useId, useRef, useState } from "react";
-import type { ApiError } from "../lib/api";
+import { api, type ApiError } from "../lib/api";
 import {
-  KEYED_UNSUPPORTED,
   PINNED_TOOLS_NOTE,
   attachConnector,
   attachmentStatusText,
   detachConnector,
-  hasMarketplaceSignIn,
   hostOf,
   isActive,
   isNotAvailable,
   listConnectors,
   monogram,
-  parseToolsList,
-  proposeConnector,
-  previewTemplateConnector,
-  type TemplateConnectorPreview,
   shortDigest,
-  validateProposal,
   workspaceAttachments,
   type Attachment,
   type Connector,
-  type ProposalProblems,
-  type ToolDraft,
 } from "../lib/connectors";
 import { ROLE_LABEL } from "../lib/labels";
 import type { Agent } from "../lib/types";
+import { useCapability } from "./Shell";
 import { Icon } from "./Icon";
 import { Modal } from "./Modal";
-import { EnsureMarket, useOptionalMarket } from "./market/MarketContext";
-import { MarketAccountBar } from "./market/MarketAccountBar";
 import { Select } from "./Select";
 import { useAction, useResource, type Resource } from "./hooks";
 import { ConfirmButton, ErrorNotice, Spinner } from "./ui";
@@ -44,7 +33,8 @@ export type AttachmentMap = Map<string, Attachment[]> | "unavailable";
 export const attachable = (agents: Agent[]) => agents.filter((a) => a.status !== "archived" && a.status !== "revoked");
 
 export function useApprovedConnectors(): Resource<Connector[]> {
-  return useResource(listConnectors, "approved-connectors");
+  const personal = useCapability("connectors").allowed;
+  return useResource(() => listConnectors(personal), `approved-connectors-${personal}`);
 }
 
 /** Loads attachments only when `enabled` (the owner); others get undefined and no request is made. */
@@ -410,281 +400,22 @@ export function AttachDialog({
   );
 }
 
-const EMPTY_TOOL: ToolDraft = { name: "", description: "", schema: '{\n  "type": "object",\n  "properties": {}\n}' };
-
-function FieldError({ id, text }: { id: string; text: string | undefined }) {
-  return text ? (
-    <p id={id} className="field-error">
-      {text}
-    </p>
-  ) : null;
-}
-
-/** Propose a remote MCP server for operator review; registered fixed queries can be discovered first. */
-export function AddCustomDialog(props: { onClose: () => void; onSubmitted?: () => void }) {
-  return <EnsureMarket><CustomConnectorDialog {...props} /></EnsureMarket>;
-}
-
-function CustomConnectorDialog({ onClose, onSubmitted }: { onClose: () => void; onSubmitted?: () => void }) {
-  const market = useOptionalMarket();
-  const tokenSource = market?.configured ? market.accessToken : undefined;
-  const needsSignIn = market?.configured === true && !market.canAct;
+/** Add a personal connection directly; it is never published to the shared marketplace. */
+export function AddCustomDialog({ onClose, onSubmitted }: { onClose: () => void; onSubmitted?: () => void }) {
   const fid = useId();
-  const [id, setId] = useState("");
-  const [title, setTitle] = useState("");
   const [endpoint, setEndpoint] = useState("");
-  const [tools, setTools] = useState<ToolDraft[]>([EMPTY_TOOL]);
-  const [problems, setProblems] = useState<ProposalProblems | null>(null);
-  const [paste, setPaste] = useState(false);
-  const [pasted, setPasted] = useState("");
-  const [pasteProblem, setPasteProblem] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
-  const [preview, setPreview] = useState<TemplateConnectorPreview | null>(null);
-  const latestEndpoint = useRef(endpoint);
-  latestEndpoint.current = endpoint;
-  const templateServer = mcpTemplateServerFor(endpoint.trim());
+  const [title, setTitle] = useState("");
+  const [done, setDone] = useState<Connector | null>(null);
   const act = useAction();
-  const doneRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (done) doneRef.current?.focus();
-  }, [done]);
-  const setTool = (i: number, patch: Partial<ToolDraft>) => setTools(tools.map((t, j) => (j === i ? { ...t, ...patch } : t)));
-  const submit = () => {
-    if (needsSignIn) return;
-    if (templateServer) {
-      if (!preview) return;
-      void act.run(async () => {
-        const res = await proposeConnector({ id: id || preview.connectorId, title: title || preview.title, endpoint: preview.endpoint, tools: preview.tools }, tokenSource);
-        setDone(res.connectorId);
-        onSubmitted?.();
-      });
-      return;
-    }
-    const r = validateProposal({ id, title, endpoint, tools });
-    setProblems(r.problems);
-    if (!r.proposal) return;
-    const proposal = r.proposal;
-    void act.run(async () => {
-      const res = await proposeConnector(proposal, tokenSource);
-      setDone(res.connectorId || proposal.id);
-      onSubmitted?.();
-    });
-  };
-  const err = (key: string) => `${fid}-${key}-err`;
-  return (
-    <Modal
-      title="Custom MCP server"
-      onClose={onClose}
-      footer={
-        done ? (
-          <button ref={doneRef} type="button" className="btn" onClick={onClose}>
-            Done
-          </button>
-        ) : (
-          <>
-            <button type="button" className="btn" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" form={`${fid}-form`} className="btn btn-primary" disabled={act.busy || needsSignIn || (!!templateServer && !preview)}>
-              {act.busy ? <Spinner /> : null}
-              Submit for review
-            </button>
-          </>
-        )
-      }
-    >
-      {done ? (
-        <p className="notice notice-help" role="status">
-          Submitted <span className="mono">{done}</span>. Status: <strong>In review</strong>. It appears in Discover only after the operator approves it.
-        </p>
-      ) : (
-        <form
-          id={`${fid}-form`}
-          noValidate
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit();
-          }}
-        >
-          <ul className="small connector-rules">
-            <li>Read-only tools only.</li>
-            <li>The operator checks the live server before approving it. Fixed-query previews contact only registered servers.</li>
-            <li>
-              Status starts as <strong>In review</strong>.
-            </li>
-            <li>{KEYED_UNSUPPORTED}</li>
-          </ul>
-          {market?.configured ? <MarketAccountBar /> : null}
-          {!market?.configured && !hasMarketplaceSignIn() ? (
-            <p className="notice notice-warn small" role="note">
-              Sending needs marketplace sign-in. Configure the marketplace for this dashboard first; you can still check the details here.
-            </p>
-          ) : null}
-          <div className="grid-2">
-            <div className="field">
-              <label htmlFor={`${fid}-id`}>ID</label>
-              <input
-                id={`${fid}-id`}
-                data-autofocus
-                value={id}
-                placeholder="my-docs-server"
-                autoComplete="off"
-                spellCheck={false}
-                aria-invalid={problems?.id ? true : undefined}
-                aria-describedby={problems?.id ? err("id") : undefined}
-                onChange={(e) => setId(e.target.value)}
-              />
-              <FieldError id={err("id")} text={problems?.id} />
-            </div>
-            <div className="field">
-              <label htmlFor={`${fid}-title`}>Title</label>
-              <input
-                id={`${fid}-title`}
-                value={title}
-                maxLength={80}
-                aria-invalid={problems?.title ? true : undefined}
-                aria-describedby={problems?.title ? err("title") : undefined}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-              <FieldError id={err("title")} text={problems?.title} />
-            </div>
-          </div>
-          <div className="field">
-            <label htmlFor={`${fid}-ep`}>Endpoint (https)</label>
-            <input
-              id={`${fid}-ep`}
-              type="url"
-              inputMode="url"
-              value={endpoint}
-              placeholder="https://mcp.example.com/mcp"
-              spellCheck={false}
-              aria-invalid={problems?.endpoint ? true : undefined}
-              aria-describedby={problems?.endpoint ? err("ep") : `${fid}-ep-hint`}
-              onChange={(e) => {
-                setEndpoint(e.target.value);
-                setPreview(null);
-                setProblems(null);
-                const server = mcpTemplateServerFor(e.target.value.trim());
-                if (server) { setId(server.id); setTitle(server.title); }
-              }}
-            />
-            <FieldError id={err("ep")} text={problems?.endpoint} />
-            {!problems?.endpoint ? (
-              <p id={`${fid}-ep-hint`} className="hint flush">
-                A public streamable-HTTP MCP endpoint. No keys, tokens or passwords.
-              </p>
-            ) : null}
-          </div>
-
-          {templateServer ? (
-            <div className="notice notice-help">
-              <p className="flush">{templateServer.explanation}</p>
-              <p className="hint">Load the live tool pins, then submit them for operator review.</p>
-              <button type="button" className="btn btn-small" disabled={act.busy || needsSignIn} onClick={() => {
-                const requested = endpoint;
-                void act.run(async () => {
-                  const next = await previewTemplateConnector(requested.trim(), tokenSource);
-                  if (latestEndpoint.current === requested) setPreview(next);
-                });
-              }}>{act.busy ? <Spinner /> : null}Load fixed queries</button>
-              {preview ? <ul>{preview.tools.map((t) => <li key={t.name}><strong>{t.name}</strong><p className="small flush">{t.description}</p></li>)}</ul> : null}
-            </div>
-          ) : <>
-          <div className="tools-head">
-            <h3 className="section-title flush">Tools</h3>
-            <button type="button" className="link-btn" aria-expanded={paste} onClick={() => setPaste(!paste)}>
-              {paste ? "Edit tools one by one" : "Paste tools/list JSON"}
-            </button>
-          </div>
-          {paste ? (
-            <div className="field">
-              <label htmlFor={`${fid}-paste`}>tools/list result</label>
-              <textarea id={`${fid}-paste`} rows={8} className="mono" spellCheck={false} value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder='{"tools": [{"name": "...", "description": "...", "inputSchema": {"type": "object"}}]}' />
-              {pasteProblem ? <p className="field-error">{pasteProblem}</p> : null}
-              <span>
-                <button
-                  type="button"
-                  className="btn btn-small"
-                  disabled={pasted.trim() === ""}
-                  onClick={() => {
-                    const r = parseToolsList(pasted);
-                    if ("problem" in r) {
-                      setPasteProblem(r.problem);
-                      return;
-                    }
-                    setPasteProblem(null);
-                    setTools(r.tools);
-                    setProblems(null);
-                    setPaste(false);
-                  }}
-                >
-                  Use these tools
-                </button>
-              </span>
-            </div>
-          ) : (
-            <>
-              {problems?.tools ? <p className="field-error">{problems.tools}</p> : null}
-              <ol className="tool-editor">
-                {tools.map((t, i) => {
-                  const p = problems?.tool[i];
-                  const k = `${fid}-t${i}`;
-                  return (
-                    <li key={i} className="tool-editor-row">
-                      <div className="tools-head">
-                        <span className="small muted">Tool {i + 1}</span>
-                        {tools.length > 1 ? (
-                          <button type="button" className="link-btn" aria-label={`Remove tool ${i + 1}`} onClick={() => setTools(tools.filter((_, j) => j !== i))}>
-                            Remove
-                          </button>
-                        ) : null}
-                      </div>
-                      <div className="field">
-                        <label htmlFor={`${k}-name`}>Name</label>
-                        <input id={`${k}-name`} className="mono" spellCheck={false} value={t.name} aria-invalid={p?.name ? true : undefined} aria-describedby={p?.name ? `${k}-name-err` : undefined} onChange={(e) => setTool(i, { name: e.target.value })} />
-                        <FieldError id={`${k}-name-err`} text={p?.name} />
-                      </div>
-                      <div className="field">
-                        <label htmlFor={`${k}-desc`}>Description</label>
-                        <textarea id={`${k}-desc`} rows={2} value={t.description} aria-invalid={p?.description ? true : undefined} onChange={(e) => setTool(i, { description: e.target.value })} />
-                        <FieldError id={`${k}-desc-err`} text={p?.description} />
-                      </div>
-                      <div className="field">
-                        <label htmlFor={`${k}-schema`}>Input schema (JSON)</label>
-                        <textarea
-                          id={`${k}-schema`}
-                          rows={5}
-                          className="mono"
-                          spellCheck={false}
-                          value={t.schema}
-                          aria-invalid={p?.schema ? true : undefined}
-                          aria-describedby={p?.schema ? `${k}-schema-err` : undefined}
-                          onChange={(e) => setTool(i, { schema: e.target.value })}
-                        />
-                        <FieldError id={`${k}-schema-err`} text={p?.schema} />
-                      </div>
-                    </li>
-                  );
-                })}
-              </ol>
-              {tools.length < 32 ? (
-                <button type="button" className="btn btn-small" onClick={() => setTools([...tools, EMPTY_TOOL])}>
-                  <Icon name="plus" size={14} /> Add tool
-                </button>
-              ) : null}
-            </>
-          )}
-          </>}
-          {problems && !validateProposal({ id, title, endpoint, tools }).proposal ? (
-            <p className="field-error" role="alert">
-              Fix the highlighted fields to submit.
-            </p>
-          ) : null}
-          <ErrorNotice error={act.error} what="the proposal was not sent" />
-        </form>
-      )}
-    </Modal>
-  );
+  return <Modal title="Custom MCP server" onClose={onClose} footer={done ? <button type="button" className="btn" onClick={onClose}>Done</button> : <><button type="button" className="btn" onClick={onClose}>Cancel</button><button type="submit" form={`${fid}-custom`} className="btn btn-primary" disabled={act.busy || !endpoint.trim()}>{act.busy ? <Spinner /> : null}Add connector</button></>}>
+    {done ? <div role="status"><p><strong>{done.title}</strong> added to your workspace. No operator review needed.</p><p className="small">Attach it to an agent to use its {done.tools.length} tools.</p></div> : <form id={`${fid}-custom`} onSubmit={(e) => { e.preventDefault(); void act.run(async () => { const result = await api<{ connector: Connector }>("control", "/connectors/custom", { method: "POST", body: { endpoint: endpoint.trim(), ...(title.trim() ? { title: title.trim() } : {}) } }); setDone(result.connector); onSubmitted?.(); }); }}>
+      <p className="small">Paste a public MCP URL. Veilo discovers its supported tools and adds the connection to this workspace.</p>
+      <div className="field"><label htmlFor={`${fid}-url`}>Endpoint (https)</label><input id={`${fid}-url`} type="url" required data-autofocus value={endpoint} onChange={(e) => setEndpoint(e.target.value)} placeholder="https://mcp.api.coingecko.com/mcp" /></div>
+      <div className="field"><label htmlFor={`${fid}-title`}>Name (optional)</label><input id={`${fid}-title`} maxLength={80} value={title} onChange={(e) => setTitle(e.target.value)} /></div>
+      <p className="hint">Keyless, read-oriented tools. Tool definitions are pinned and checked on each call.</p>
+    </form>}
+    <ErrorNotice error={act.error} />
+  </Modal>;
 }
 
 /** Approved connectors this agent doesn't use yet; choosing one opens the attach step for it. */

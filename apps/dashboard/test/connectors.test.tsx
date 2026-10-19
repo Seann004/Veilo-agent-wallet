@@ -3,7 +3,6 @@ import { clearResourceCache } from "../components/hooks";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentConnectors } from "../components/AgentConnectors";
-import { MarketContextProvider, type MarketContextValue } from "../components/market/MarketContext";
 import { AddCustomDialog } from "../components/ConnectorFlows";
 import { ConnectorsPage } from "../components/Connectors";
 import { CreateAgent } from "../components/CreateAgent";
@@ -101,7 +100,7 @@ describe("Discover", () => {
   it("says so when nothing is approved, and when the marketplace isn't configured, and never offers sign-in apps", async () => {
     serve(catalogue([]));
     render(withRole(<ConnectorsPage />));
-    expect(await screen.findByText(/No connectors are approved yet/)).toBeTruthy();
+    expect(await screen.findByText(/No connectors yet/)).toBeTruthy();
     cleanup();
     clearResourceCache();
     vi.stubEnv("NEXT_PUBLIC_MARKETPLACE_URL", "");
@@ -198,56 +197,22 @@ describe("Add custom MCP server", () => {
     return screen.findByRole("dialog", { name: "Custom MCP server" });
   };
 
-  it("rejects non-https endpoints and bad JSON schemas before sending anything", async () => {
-    const calls = serve(catalogue([SOLANA]));
+  it("adds a URL through the owner workspace without a marketplace token or review queue", async () => {
+    const calls = serve((c) => c.url === "/api/control/connectors/custom" && c.method === "POST" ? { body: { connector: { ...SOLANA, id: "custom-docs", title: "Personal docs" } } } : catalogue([SOLANA])(c));
     render(withRole(<ConnectorsPage />));
     const dialog = await openDialog();
-    expect(within(dialog).getByText("Read-only tools only.")).toBeTruthy();
-    expect(within(dialog).getByText(/operator checks the live server before approving it/)).toBeTruthy();
-    expect(within(dialog).getByText("In review")).toBeTruthy();
-    expect(within(dialog).queryByLabelText(/key|token|password/i)).toBeNull();
-    fireEvent.change(within(dialog).getByLabelText("ID"), { target: { value: "my-docs" } });
-    fireEvent.change(within(dialog).getByLabelText("Title"), { target: { value: "My docs" } });
-    fireEvent.change(within(dialog).getByLabelText("Endpoint (https)"), { target: { value: "http://mcp.example.com/mcp" } });
-    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "search" } });
-    fireEvent.change(within(dialog).getByLabelText("Input schema (JSON)"), { target: { value: '{"type": "object",' } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Submit for review" }));
-    expect(await within(dialog).findByText("The endpoint must use https.")).toBeTruthy();
-    expect(within(dialog).getByText("Not valid JSON.")).toBeTruthy();
-    expect(within(dialog).getByLabelText("Endpoint (https)").getAttribute("aria-invalid")).toBe("true");
-
-    fireEvent.change(within(dialog).getByLabelText("Endpoint (https)"), { target: { value: "https://localhost/mcp" } });
-    fireEvent.change(within(dialog).getByLabelText("Input schema (JSON)"), { target: { value: "[1, 2]" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Submit for review" }));
-    expect(await within(dialog).findByText(/must be a public domain name/)).toBeTruthy();
-    expect(within(dialog).getByText("The schema must be a JSON object.")).toBeTruthy();
-    expect(calls.some((c) => c.url.includes("/tools/connectors"))).toBe(false);
-  });
-
-  it("fills tools from pasted tools/list JSON and says sending isn't available without a marketplace sign-in", async () => {
-    const calls = serve(catalogue([SOLANA]));
-    render(withRole(<ConnectorsPage />));
-    const dialog = await openDialog();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Paste tools/list JSON" }));
-    fireEvent.change(within(dialog).getByLabelText("tools/list result"), {
-      target: { value: JSON.stringify({ jsonrpc: "2.0", id: 1, result: { tools: [{ name: "a", description: "A", inputSchema: { type: "object" } }, { name: "b", inputSchema: { type: "object" } }] } }) },
-    });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Use these tools" }));
-    expect(within(dialog).getAllByLabelText("Name").map((n) => (n as HTMLInputElement).value)).toEqual(["a", "b"]);
-    fireEvent.change(within(dialog).getByLabelText("ID"), { target: { value: "my-docs" } });
-    fireEvent.change(within(dialog).getByLabelText("Title"), { target: { value: "My docs" } });
     fireEvent.change(within(dialog).getByLabelText("Endpoint (https)"), { target: { value: "https://mcp.example.com/mcp" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Submit for review" }));
-    expect(await within(dialog).findByText(/marketplace sign-in is not part of this dashboard yet/)).toBeTruthy();
-    expect(within(dialog).queryByText(/Submitted/)).toBeNull();
-    expect(calls.some((c) => c.url.includes("/tools/connectors"))).toBe(false);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add connector" }));
+    expect(await screen.findByText(/No operator review needed/)).toBeTruthy();
+    const writes = calls.filter((c) => c.method === "POST");
+    expect(writes).toEqual([{ url: "/api/control/connectors/custom", method: "POST", body: { endpoint: "https://mcp.example.com/mcp" } }]);
   });
 
   it("closes on Escape and returns focus to the Add button", async () => {
     serve(catalogue([SOLANA]));
     render(withRole(<ConnectorsPage />));
     const dialog = await openDialog();
-    expect(document.activeElement).toBe(within(dialog).getByLabelText("ID"));
+    expect(document.activeElement).toBe(within(dialog).getByLabelText("Endpoint (https)"));
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Add" }));
@@ -427,54 +392,13 @@ describe("create agent with connectors", () => {
 });
 
 
-describe("CoinGecko fixed-query proposal", () => {
-  it("loads and submits the fixed pins, never a code editor or an approval", async () => {
-    setMarketplaceTokenSource(async () => "marketplace-test-session");
-    const endpoint = "https://mcp.api.coingecko.com/mcp";
-    const tools = [{ name: "coingecko_simple_price", description: "Get a price", inputSchema: { type: "object" }, template: { upstream: "execute", codeSha256: "a".repeat(64), upstreamSha256: "b".repeat(64) } }, { name: "search_docs", description: "Search docs", inputSchema: { type: "object" } }];
-    const calls = serve(c => {
-      if (c.url.endsWith("/template-preview")) return { body: { connectorId: "coingecko-market", title: "CoinGecko market data", endpoint, explanation: "Fixed queries", tools } };
-      if (c.url.endsWith("/tools/connectors")) return { body: { connectorId: "coingecko-market", status: "pending" } };
-      return undefined;
-    });
+describe("custom connector failures", () => {
+  it("shows discovery errors without claiming the connector was added", async () => {
+    serve(() => ({ status: 400, body: { error: { code: "INVALID_REQUEST", message: "MCP endpoint must use https" } } }));
     render(<AddCustomDialog onClose={() => {}} />);
-    fireEvent.change(screen.getByLabelText("Endpoint (https)"), { target: { value: endpoint } });
-    expect(screen.getByText(/Veilo runs fixed CoinGecko queries/)).toBeTruthy();
-    expect(screen.queryByLabelText("Input schema (JSON)")).toBeNull();
-    expect((screen.getByRole("button", { name: "Submit for review" }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "Load fixed queries" }));
-    await screen.findByText("coingecko_simple_price");
-    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
-    await screen.findByText(/Submitted/);
-    expect(calls.map(c => c.url)).toEqual([`${MARKET}/tools/connectors/template-preview`, `${MARKET}/tools/connectors`]);
-    expect(calls[1]!.body).toEqual({ id: "coingecko-market", title: "CoinGecko market data", endpoint, tools });
-    expect(screen.getByText("In review")).toBeTruthy();
-  });
-});
-
-
-describe("custom connector marketplace identity", () => {
-  it("submits through the existing marketplace session without a global token bridge", async () => {
-    const accessToken = vi.fn(async () => "existing-marketplace-session");
-    const market = { configured: true, ready: true, canAct: true, me: { address: "Owner1111111111111111111111111111111111111" }, wallet: null, mismatch: null, accessToken } as unknown as MarketContextValue;
-    const calls = serve(c => c.url.endsWith("/tools/connectors") ? { body: { connectorId: "my-docs", status: "pending" } } : undefined);
-    render(<MarketContextProvider value={market}><AddCustomDialog onClose={() => {}} /></MarketContextProvider>);
-    expect(screen.getByText(/Signed in to the marketplace as/)).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("ID"), { target: { value: "my-docs" } });
-    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "My docs" } });
-    fireEvent.change(screen.getByLabelText("Endpoint (https)"), { target: { value: "https://mcp.example.com/mcp" } });
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "search" } });
-    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
-    await screen.findByText(/Submitted/);
-    expect(accessToken).toHaveBeenCalledOnce();
-    expect(calls.map(c => c.url)).toEqual([`${MARKET}/tools/connectors`]);
-  });
-
-  it("pauses proposal actions when the marketplace wallet switched", () => {
-    const market = { configured: true, ready: true, canAct: false, me: { address: "Original" }, wallet: null, mismatch: "Different", accessToken: vi.fn() } as unknown as MarketContextValue;
-    render(<MarketContextProvider value={market}><AddCustomDialog onClose={() => {}} /></MarketContextProvider>);
-    fireEvent.change(screen.getByLabelText("Endpoint (https)"), { target: { value: "https://mcp.api.coingecko.com/mcp" } });
-    expect((screen.getByRole("button", { name: "Submit for review" }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: "Load fixed queries" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Endpoint (https)"), { target: { value: "http://mcp.example.com/mcp" } });
+    fireEvent.submit(screen.getByLabelText("Endpoint (https)").closest("form")!);
+    expect(await screen.findByText(/MCP endpoint must use https/)).toBeTruthy();
+    expect(screen.queryByText(/No operator review needed/)).toBeNull();
   });
 });
