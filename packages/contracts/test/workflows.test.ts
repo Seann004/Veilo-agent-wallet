@@ -194,8 +194,8 @@ describe("workflow approval terms", () => {
     for (const m of Object.values(PROVIDER_MANIFESTS)) expect(toolManifestSchema.parse(m)).toEqual(m);
   });
 
-  it("keeps the slide designer and public publish manifests unchanged when the slide range moves", () => {
-    expect(toolManifestDigest(PROVIDER_MANIFESTS.slides)).toBe("33eb1d6eb7c1e8630e0b3d3dd48c16a7d89c935ff5097ec87d5515c102f2711c");
+  it("versions the reference-style renderer manifest while preserving the public publisher manifest", () => {
+    expect(toolManifestDigest(PROVIDER_MANIFESTS.slides)).toBe("582158526ebdc2ead614729346c1fe82570202d8af0f595e478edd22396f153c");
     expect(toolManifestDigest(PROVIDER_MANIFESTS.zernio_publish)).toBe("e55fc504ed93decfd5d800d5398d47a6f006783c20c907bb3613f03bc3e4cf5e");
   });
 });

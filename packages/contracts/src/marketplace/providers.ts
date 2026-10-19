@@ -65,13 +65,13 @@ export const PROVIDER_MANIFESTS: Readonly<Record<ToolProvider, ToolManifest>> = 
   },
   slides: {
     provider: "slides",
-    adapterVersion: "1.0.0",
+    adapterVersion: "1.1.0",
     // Slides are rendered locally; only the finished PNGs are uploaded, through Zernio media storage.
     upstream: "https://zernio.com/api/v1",
     tools: [
       {
         // Renders a JSON slide plan ({"slides": [...], "caption"}, CAROUSEL_SLIDES.min to .max slides) into 1080x1920 PNGs
-        // from a fixed template and uploads them; outputs {"images": public URLs, "caption"}.
+        // with bounded reference-guided design tokens and uploads them; outputs {"images": public URLs, "caption"}.
         name: "render_carousel_slides",
         effect: "read_only",
         io: { inputs: [{ name: "plan", kind: "text", required: true, maxChars: 12000 }], output: { kind: "json" } },

@@ -24,9 +24,45 @@ export interface Slide {
   imageUrl: string | null;
 }
 
+export interface SlideDesign {
+  canvas: string; panel: string; text: string; secondary: string; muted: string;
+  accent: string; card: string; border: string;
+  font: "sans" | "serif" | "mono";
+  align: "left" | "center";
+  corners: "square" | "soft" | "rounded";
+  headlineCase: "preserve" | "lowercase" | "uppercase";
+}
+
+export const DEFAULT_SLIDE_DESIGN: SlideDesign = {
+  canvas: "#dcd9d4", panel: "#1f1e1c", text: "#f1ede6", secondary: "#b8b2a8", muted: "#8f8a82",
+  accent: "#c97b5a", card: "#292826", border: "#3a3835",
+  font: "sans", align: "left", corners: "rounded", headlineCase: "preserve",
+};
+
+/** Only bounded design tokens can cross from model output into CSS. */
+export function parseSlideDesign(raw: unknown): SlideDesign | { problem: string } {
+  if (raw === undefined) return { ...DEFAULT_SLIDE_DESIGN };
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return { problem: "design must be an object of supported visual settings" };
+  const tokens = raw as Record<string, unknown>;
+  const design = { ...DEFAULT_SLIDE_DESIGN };
+  const colors = ["canvas", "panel", "text", "secondary", "muted", "accent", "card", "border"] as const;
+  const enums = { font: ["sans", "serif", "mono"], align: ["left", "center"], corners: ["square", "soft", "rounded"], headlineCase: ["preserve", "lowercase", "uppercase"] } as const;
+  for (const [key, value] of Object.entries(tokens)) {
+    if ((colors as readonly string[]).includes(key)) {
+      if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) return { problem: `design.${key} must be a six-digit hex color` };
+      Object.assign(design, { [key]: value.toLowerCase() });
+    } else if (key in enums && Object.hasOwn(enums, key)) {
+      if (typeof value !== "string" || !(enums[key as keyof typeof enums] as readonly string[]).includes(value)) return { problem: `design.${key} is not supported` };
+      Object.assign(design, { [key]: value });
+    } else return { problem: `design.${key} is not supported` };
+  }
+  return design;
+}
+
 export interface SlidePlan {
   slides: Slide[];
   caption: string;
+  design: SlideDesign;
 }
 
 const LIMITS = { label: 24, headline: 90, accent: 40, body: 240, owner: 39, repo: 100, description: 200, language: 30, stars: 12, score: 4, caption: 2200 } as const;
@@ -71,6 +107,8 @@ export function allowedImageUrl(value: unknown, hosts: ReadonlySet<string>): str
  * MAX_SLIDES slides, or a slide without a headline, is refused before anything is rendered.
  */
 export function parseSlidePlan(plan: Record<string, unknown> | null, imageHosts: ReadonlySet<string>): SlidePlan | { problem: string } {
+  const design = parseSlideDesign(plan?.design);
+  if ("problem" in design) return design;
   const raw = Array.isArray(plan?.slides) ? (plan.slides as unknown[]) : [];
   if (raw.length < MIN_SLIDES || raw.length > MAX_SLIDES) return { problem: `the plan needs a "slides" array of ${MIN_SLIDES} to ${MAX_SLIDES} slides` };
   const slides: Slide[] = [];
@@ -94,7 +132,7 @@ export function parseSlidePlan(plan: Record<string, unknown> | null, imageHosts:
     });
   }
   const caption = typeof plan?.caption === "string" ? stripUnsafe(plan.caption.slice(0, LIMITS.caption), true).trim() : "";
-  return { slides, caption };
+  return { slides, caption, design };
 }
 
 /** Headline split around the first case-insensitive match of the accent, each part escaped. */
@@ -137,7 +175,13 @@ h1{font-weight:800;letter-spacing:-.035em;line-height:1.02;text-transform:lowerc
  * One slide as a self-contained document. Every model-supplied value is escaped text; the only URL
  * is an allowlisted image, and the content security policy forbids scripts and any other load.
  */
-export function slideHtml(slide: Slide, index: number, total: number, imageHosts: ReadonlySet<string>): string {
+export function slideHtml(slide: Slide, index: number, total: number, imageHosts: ReadonlySet<string>, requestedDesign?: SlideDesign): string {
+  const design = parseSlideDesign(requestedDesign);
+  if ("problem" in design) throw new Error(design.problem);
+  const fonts = { sans: '"Helvetica Neue",Helvetica,Arial,"Liberation Sans",system-ui,sans-serif', serif: 'Georgia,"Times New Roman","Liberation Serif",serif', mono: '"SF Mono",Menlo,"DejaVu Sans Mono",monospace' };
+  const radius = { square: 0, soft: 16, rounded: 40 }[design.corners];
+  const themedCss = `html,body{background:${design.canvas}}body{font-family:${fonts[design.font]}}.panel{background:${design.panel};color:${design.text};border-radius:${radius}px;text-align:${design.align}}h1{color:${design.text};text-transform:${design.headlineCase === "preserve" ? "none" : design.headlineCase}}.accent,.pill{color:${design.accent}}.pill{border-color:${design.accent}}.body,.desc{color:${design.secondary}}.top,.meta,.repo .owner{color:${design.muted}}.repo{color:${design.text}}.card,.shot{background:${design.card};border-color:${design.border};border-radius:${Math.min(radius, 28)}px}.dot{background:${design.accent}}.content{align-items:${design.align === "center" ? "center" : "stretch"}}.card,.shot{width:100%}`;
+
   const n = String(index + 1).padStart(2, "0");
   const label = slide.label === "" ? n : `${n} · ${slide.label.replace(/^\d{1,2}\s*[·.:-]\s*/, "")}`;
   const imgSrc = [...imageHosts].map((h) => `https://${h}`).join(" ");
@@ -146,12 +190,12 @@ export function slideHtml(slide: Slide, index: number, total: number, imageHosts
         slide.card.description ? `<div class="desc">${escapeHtml(slide.card.description)}</div>` : ""
       }<div class="meta mono">${slide.card.language ? `<span><span class="dot"></span>${escapeHtml(slide.card.language)}</span>` : ""}${slide.card.stars ? `<span>★ ${escapeHtml(slide.card.stars)}</span>` : ""}</div></div>`
     : "";
-  const pill = slide.card ? `<div class="pill mono">my score ${slide.score ? escapeHtml(slide.score) : "__"} / 10</div>` : "";
+  const pill = slide.card && slide.score ? `<div class="pill mono">my score ${escapeHtml(slide.score)} / 10</div>` : "";
   const shot = slide.imageUrl ? `<div class="shot"><img alt="" src="${escapeHtml(slide.imageUrl)}"></div>` : "";
   return [
     "<!doctype html><html><head><meta charset=\"utf-8\">",
     `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src ${imgSrc || "'none'"}">`,
-    `<style>${CSS}</style></head><body><div class="panel">`,
+    `<style>${CSS}${themedCss}</style></head><body><div class="panel">`,
     `<div class="top mono"><span>${escapeHtml(label)}</span><span>${index + 1}/${total}</span></div>`,
     `<div class="content">`,
     `<h1 style="font-size:${headlineSize(slide.headline)}px">${headlineHtml(slide.headline, slide.accent)}</h1>`,

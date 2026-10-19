@@ -257,6 +257,7 @@ describe("TikTok carousel tools", () => {
 
 describe("designed slides and public publishing", () => {
   const PLAN = {
+    referenceStyle: "default",
     slides: [
       { label: "hook", headline: "Five repos I use every day", accent: "every day", body: "Small tools, big wins." },
       { label: "repo", headline: "Fast search", accent: "search", body: "Grep, but quicker.", card: { owner: "BurntSushi", repo: "ripgrep", description: "Recursive search", language: "Rust", stars: "50k" }, score: "9" },
@@ -301,6 +302,28 @@ describe("designed slides and public publishing", () => {
     expect(new Headers(f.calls[1]!.init?.headers).get("authorization")).toBeNull();
     expect(f.calls.every((c) => c.init?.redirect === "error")).toBe(true);
     expect(media.has("https://media.zernio.com/temp/2.png")).toBe(true);
+  });
+
+  it("carries reference styling through rendering and permits only those generated slides to publish", async () => {
+    const renderer = fakeRenderer();
+    const media = new RenderedMedia();
+    const upload = fakeFetch([presign(1), [200, {}], presign(2), [200, {}], presign(3), [200, {}]]);
+    const adapter = new SlidesAdapter({ apiKey: "test-key" }, { ...opts(upload.fn), renderer, media });
+    const plan = { ...PLAN, referenceStyle: "White editorial, blue accent, centered serif headings, square cards", design: { canvas: "#ffffff", panel: "#eeeeee", text: "#111111", accent: "#2244aa", font: "serif", align: "center", corners: "square" } };
+    const rendered = await adapter.run("render_carousel_slides", { plan: fenced(plan) }, ctx);
+    if (rendered.status !== "succeeded") throw new Error("expected rendered slides");
+    expect(renderer.pages.every((page) => page.includes("font-family:Georgia") && page.includes("text-align:center"))).toBe(true);
+    const publisher = fakeFetch([[200, CREATOR_INFO(["PUBLIC_TO_EVERYONE"])], [201, { post: { _id: "styled-post", status: "published" } }]]);
+    const result = await new ZernioPublishAdapter({ apiKey: "test-key", tiktokAccountId: "account" }, media, opts(publisher.fn)).run("publish_tiktok_carousel", { carousel: rendered.artifact.text! }, ctx);
+    expect(result).toMatchObject({ status: "succeeded" });
+    expect(JSON.parse(publisher.calls[1]!.init!.body as string)).toMatchObject({ publishNow: true, tiktokSettings: { privacy_level: "PUBLIC_TO_EVERYONE" } });
+  });
+
+  it("does not silently use the default theme if the planner omitted a requested reference design", async () => {
+    const fetcher = fakeFetch([]);
+    const adapter = new SlidesAdapter({ apiKey: "test-key" }, { ...opts(fetcher.fn), renderer: fakeRenderer() });
+    expect(await adapter.run("render_carousel_slides", { plan: fenced({ ...PLAN, referenceStyle: "Light serif editorial" }) }, ctx)).toMatchObject({ status: "failed", code: "INPUT_REQUIRED" });
+    expect(fetcher.calls).toHaveLength(0);
   });
 
   it("uploads nothing when a slide fails to render or the plan is unusable", async () => {

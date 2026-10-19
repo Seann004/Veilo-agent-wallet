@@ -356,12 +356,20 @@ export class SlidesAdapter extends BaseAdapter {
     if (!this.key) return { status: "failed", code: "PROVIDER_UNAVAILABLE", message: PROVIDER_NOT_CONFIGURED };
     const bad = this.checkInputs(tool, inputs);
     if (bad) return bad;
-    const plan = parseSlidePlan(lastJsonObject(inputs.plan!), this.imageHosts);
+    const rawPlan = lastJsonObject(inputs.plan!);
+    const referenceStyle = rawPlan?.referenceStyle;
+    if (typeof referenceStyle !== "string" || referenceStyle.trim() === "" || referenceStyle.length > 200) {
+      return { status: "failed", code: "INPUT_REQUIRED", message: "the slide plan must carry its referenceStyle (or default) from the planner" };
+    }
+    if (referenceStyle.trim().toLowerCase() !== "default" && rawPlan?.design === undefined) {
+      return { status: "failed", code: "INPUT_REQUIRED", message: "the reference style needs a design object in the slide plan; it was not silently replaced by the default template" };
+    }
+    const plan = parseSlidePlan(rawPlan, this.imageHosts);
     if ("problem" in plan) return { status: "failed", code: "INPUT_REQUIRED", message: plan.problem };
     // Every slide is rendered before any upload, so a template or browser failure uploads nothing.
     const pngs: Uint8Array[] = [];
     try {
-      for (const [i, slide] of plan.slides.entries()) pngs.push(await this.#renderer.render(slideHtml(slide, i, plan.slides.length, this.imageHosts), this.imageHosts));
+      for (const [i, slide] of plan.slides.entries()) pngs.push(await this.#renderer.render(slideHtml(slide, i, plan.slides.length, this.imageHosts, plan.design), this.imageHosts));
     } catch (error) {
       return { status: "failed", code: "PROVIDER_UNAVAILABLE", message: `slide rendering failed: ${(error as Error).name}` };
     }

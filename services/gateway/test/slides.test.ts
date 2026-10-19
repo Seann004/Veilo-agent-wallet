@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allowedImageUrl, ChromeSlideRenderer, escapeHtml, MAX_SLIDES, parseSlidePlan, slideHtml, type Slide } from "../src/seller-host/slides";
+import { allowedImageUrl, ChromeSlideRenderer, escapeHtml, MAX_SLIDES, parseSlidePlan, parseSlideDesign, slideHtml, type Slide } from "../src/seller-host/slides";
 
 const NO_HOSTS = new Set<string>();
 const slide = (over: Partial<Slide> = {}): Slide => ({ label: "hook", headline: "Five repos I use every day", accent: "every day", body: "Small tools.", card: null, score: "", imageUrl: null, ...over });
@@ -49,6 +49,28 @@ describe("slide plan", () => {
   });
 });
 
+describe("reference-guided design", () => {
+  it("maps reference settings into the renderer without changing repository content", () => {
+    const parsed = parseSlidePlan({ slides: [{ headline: "Owner/Repo", card: { owner: "Owner", repo: "Repo" } }, { headline: "Second" }, { headline: "Last" }], design: { canvas: "#ffffff", panel: "#f0f0f0", text: "#111111", accent: "#2244aa", font: "serif", align: "center", corners: "square", headlineCase: "preserve" } }, NO_HOSTS);
+    if ("problem" in parsed) throw new Error(parsed.problem);
+    const html = slideHtml(parsed.slides[0]!, 0, 3, NO_HOSTS, parsed.design);
+    expect(html).toContain("html,body{background:#ffffff}");
+    expect(html).toContain("font-family:Georgia");
+    expect(html).toContain("border-radius:0px;text-align:center");
+    expect(html).toContain("color:#2244aa");
+    expect(html).toContain("text-transform:none");
+    expect(html).toContain("Owner/Repo");
+    expect(html).toContain("default-src 'none'");
+  });
+
+  it("refuses arbitrary CSS, URLs, imports and unsupported design keys before rendering", () => {
+    for (const design of [null, { panel: "red; background:url(https://evil.example)" }, { font: "@import url(https://evil.example)" }, { align: "left;position:fixed" }, { css: "body{}" }, JSON.parse('{"__proto__":{"font":"evil"}}')]) {
+      expect(parseSlideDesign(design)).toHaveProperty("problem");
+    }
+    expect(parseSlideDesign(undefined)).toMatchObject({ panel: "#1f1e1c" });
+  });
+});
+
 describe("slide template", () => {
   it("escapes model text so it can never become markup", () => {
     expect(escapeHtml(`<img src=x onerror="a">&'`)).toBe("&lt;img src=x onerror=&quot;a&quot;&gt;&amp;&#39;");
@@ -82,7 +104,7 @@ describe("slide template", () => {
     expect(html).toContain("#1f1e1c");
     expect(html).toContain("#dcd9d4");
     expect(html).toContain("#c97b5a");
-    expect(slideHtml(slide({ card: { owner: "", repo: "r", description: "", language: "", stars: "" } }), 0, 5, NO_HOSTS)).toContain("my score __ / 10");
+    expect(slideHtml(slide({ card: { owner: "", repo: "r", description: "", language: "", stars: "" } }), 0, 5, NO_HOSTS)).not.toContain("my score");
     expect(slideHtml(slide(), 0, 5, NO_HOSTS)).not.toContain("my score");
   });
 });
